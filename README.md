@@ -26,11 +26,17 @@ Entry types: Email, Account, API Key, or Custom
 
 ### API Key Management & Connectivity Testing
 As AI agents and LLM-powered applications become essential tools in daily workflows, managing API keys securely has never been more important. Novara provides a dedicated API Key entry type that stores your keys in an encrypted database — keeping them safe from plaintext leaks, screenshot accidents, or prying eyes.
+
 But storage is only half the story. An invalid or expired API key can break your workflows at the worst possible moment. That is why every API Key entry comes with a built-in connectivity test: right-click any API Key entry, select "Test Connectivity," and Novara automatically probes the endpoint with a GET /v1/models request (idempotent, no cost incurred). It intelligently tries Bearer token authentication first, and if the server responds with 401 or 403, it retries without Bearer — ensuring compatibility with both OpenAI-standard and domestic Chinese providers.
+
 Five test states: Testing (theme color) / Success (green) / Auth Failed (red) / No Models Endpoint (yellow) / Network Error (red)
 Advanced configuration available only after a failed test — choose between OpenAI Standard (Bearer), Domestic Compatible (No Bearer), or RAW (testing disabled)
 Successful tests automatically save the working protocol; failed tests never alter your saved configuration
 Every API Key card displays its endpoint URL on the second line for quick identification
+
+<p align="center">
+  <img src="images/API.png" alt="API Key Management" width="500" />
+</p>
 
 ## File Path Manager
 A dedicated page for saving and organizing file and folder paths that you frequently access. Instead of digging through Explorer every time, store your important locations here — project directories, configuration files, log folders, or any other path you need to reach quickly.
@@ -71,90 +77,48 @@ All checked states are saved to disk and survive app restarts. Star and pin prio
 </p>
 
 ## Rich Text Diary
-WebView2-based WYSIWYG editor, supporting bold, italic, underline and image insertion.
-Built-in strict HTML sanitization to eliminate XSS risks during both save and load operations.
+A full-featured rich-text diary editor built on WebView2 that turns journaling into a polished writing experience. Whether you are keeping a personal journal, drafting meeting notes, or writing detailed project documentation, the editor provides the tools you need to express yourself clearly.
+
+### Rich-Text Editing Tools
+The toolbar floats as a compact capsule above your content, staying accessible without scrolling back to the top. All formatting options are applied instantly with visual feedback:
+Bold, Italic, Underline — toggle styles with one click or keyboard shortcuts; selected state syncs with cursor position
+Font Color — choose any color to highlight or differentiate text
+Image Insertion — paste or upload images directly into the editor; base64-encoded and stored within the database
+HTML Import — paste formatted content from other sources; automatically sanitized to remove scripts and dangerous attributes
+
+### Auto-Save & Data Safety
+The editor automatically preserves your content when you navigate away or close the app. Title and body are saved independently, and the system prevents blank overwrites — if the editor is not ready or content fails to load, saving is blocked to protect existing data. All HTML content is double-sanitized on save and load with a strict whitelist (b, strong, i, em, u, span, font, div, br, p, img, ul, ol, li), stripping any script tags, event handlers, and dangerous protocols to keep your diary safe from XSS.
+
+<p align="center">
+  <img src="images/Diary%20Editor%20Page.png" alt="Diary Editor Page" width="500" />
+</p>
 
 ## Dual-Language UI
-Fully localized Simplified Chinese / English interface.
-Static resource dictionary architecture, no runtime XAML merging to avoid program crashes. Language changes take effect after restart.
+Novara ships with full English and Chinese interface support, with more languages planned for future releases. Switching languages is instantaneous — select your preferred language from the Settings page, confirm the change, and the app restarts with the new language applied across every page, dialog, and menu.
+English and Chinese (zh-CN) fully supported
+Static resource dictionary architecture — no runtime XAML merging, zero crash risk
+Fallback chain: stored preference → system language → Chinese (default)
+All user data remains language-independent; only UI text is translated
 
 ## Theme System
-Three display modes: Dark, Light, Follow System. User theme preferences are saved persistently.
+Novara offers three theme options — Light, Dark, and Follow System — with seamless switching from the Settings page. Every color, border, and surface has been carefully tuned across multiple rounds of refinement to ensure a polished, premium look in both modes. Dark mode is rich and comfortable for late-night use; Light mode is crisp and clean for daytime productivity. The theme applies globally across all pages, dialogs, and menus, and persists across app restarts.
+Light, Dark, and Follow System modes
+Carefully calibrated color palettes with balanced contrast
+Consistent accent colors, hover states, and surface elevations
+Theme persistence across app restarts
 
 ## Data Import & Export
-Complete database backup and recovery. All exported files are plaintext for cross-device compatibility.
-Imported data is auto-sanitized and merged without overwriting local security files.
+Your data should move with you — freely, securely, and without friction. Novara provides full database backup and restore capabilities, ensuring your memos, todos, diary entries, and settings are never locked into a single machine.
+Exports are always generated in plaintext with a complete MD5 integrity header, making them human-readable, easily inspectable, and compatible across versions. Whether you are migrating to a new device, reinstalling Windows, or simply keeping an offline archive, the export process preserves every piece of your data with zero loss.
+Imports are handled with equal care. The system performs thorough validation before merging — duplicate IDs are automatically regenerated, null partitions are normalized, and orphaned references are cleaned up. If the import process fails at any point, the database is safely rolled back to its previous state, ensuring your data is never left in a half-imported, corrupted condition.
+For encrypted databases, both import and export require password verification, ensuring your data stays protected even during transfer. The result is a backup system that is both powerful and transparent — your data, always within your control, always ready to move with you.
 
-## System Tray
-Two window close modes available: Minimize to tray or Exit directly.
-
-## Auto Startup
-Optional auto-launch with Windows, implemented via registry entries.
-
-## Tech Stack
-- Language: C# / XAML
-- UI Framework: WinUI 3 / Windows App SDK 1.6
-- Runtime: .NET 8 LTS
-- Target OS: Windows 10 (Build 19041, 2004) & Windows 11
-- Deployment: Self-contained publish + Inno Setup installer
-- Storage: Single-file JSON database with optional AES256-GZip encryption
-- Rich Text Engine: WebView2 (Edge Chromium)
-
-## Installation Guide
-Download the latest installer from the Releases page.
-1. Run `Novara-Setup.exe`
-2. Follow the setup wizard
-3. Launch Novara from desktop shortcut or Start Menu
-
-### System Requirements
-- Windows 10 Version 2004 (Build 19041) or newer / Windows 11
-- WebView2 Runtime (will auto-install if missing)
-- .NET 8 Runtime (bundled inside self-contained package)
-
-## Local Data Directory
-All user data is stored in this local path:# Novara
-Novara is a local all-in-one memo application built with C# / WinUI 3. It integrates memos, file paths, to-do lists, sticky notes and rich-text diaries into a single encrypted database. All your data is stored entirely on your local machine.
-
-No cloud servers. No telemetry. Your data stays under your full control.
-
-## Features
-### Privacy Lock
-Optional 6-digit numeric PIN protection powered by AES256-GCM encryption. Once enabled, all database content is encrypted at rest.
-5 consecutive wrong password attempts trigger a 30-minute lockout. The failure counter and lock timer persist across program restarts and cannot be bypassed.
-There is no password recovery backdoor. If you forget your PIN, the only solution is to wipe the entire database and rebuild it empty.
-
-### Memo Manager
-Supports group classification, star/pin priority marking and full-text search.
-Dedicated API Key entry type built-in, with connectivity detection compatible with standard OpenAI interfaces.
-
-### File Path Manager
-Store and categorize local files & folders. Visual green/red border indicators show path validity.
-One-click copy full path and one-click open folder with file highlighted in File Explorer.
-
-### Task Dashboard
-Hierarchical to-do cards with automatic completion logic for subtasks.
-Sticky notes support expand/collapse for long text. All tick states are persisted permanently.
-
-### Rich Text Diary
-WebView2-based WYSIWYG editor, supporting bold, italic, underline and image insertion.
-Built-in strict HTML sanitization to eliminate XSS risks during both save and load operations.
-
-### Dual-Language UI
-Fully localized Simplified Chinese / English interface.
-Static resource dictionary architecture, no runtime XAML merging to avoid program crashes. Language changes take effect after restart.
-
-### Theme System
-Three display modes: Dark, Light, Follow System. User theme preferences are saved persistently.
-
-### Data Import & Export
-Complete database backup and recovery. All exported files are plaintext for cross-device compatibility.
-Imported data is auto-sanitized and merged without overwriting local security files.
-
-### System Tray
-Two window close modes available: Minimize to tray or Exit directly.
-
-### Auto Startup
-Optional auto-launch with Windows, implemented via registry entries.
+## Startup & Tray Options
+Novara adapts to the way you work. Enable automatic startup with Windows so your notes are always ready when you log in. For users who prefer quick access without cluttering the taskbar, the system tray mode keeps Novara running silently in the background — click the tray icon to show or hide the main window, or right-click for quick actions.
+Optional auto-start with Windows (registry-based, reliable detection)
+Tray mode: minimize to system tray instead of closing
+Click tray icon to restore window; right-click for exit and show options
+Both settings persist across app restarts
 
 ## Tech Stack
 - Language: C# / XAML
@@ -165,11 +129,11 @@ Optional auto-launch with Windows, implemented via registry entries.
 - Storage: Single-file JSON database with optional AES256-GZip encryption
 - Rich Text Engine: WebView2 (Edge Chromium)
 
-## Installation Guide
-Download the latest installer from the Releases page.
-1. Run `Novara-Setup.exe`
-2. Follow the setup wizard
-3. Launch Novara from desktop shortcut or Start Menu
+## Installation
+Download the latest installer from the Releases page, then follow these steps:
+- Run Novara-Setup.exe
+- Follow the setup wizard to complete installation
+- Launch Novara from the desktop shortcut or Start Menu
 
 ### System Requirements
 - Windows 10 Version 2004 (Build 19041) or newer / Windows 11
@@ -200,14 +164,9 @@ You can migrate all your notes by copying this entire folder to another PC.
 - Unified theme rendering via `App.GetBrush()` to maintain consistent colors across all UI elements
 - Double HTML sanitization for diaries to block XSS injection vectors
 
-## Development Guide
-### Prerequisites
-- Visual Studio 2022 (17.8+)
-- Windows App SDK 1.6
-- .NET 8 SDK (locked via global.json: 8.0.402)
-
 ### Contact Us
-For business cooperation, technical consulting, bug feedback, feature suggestions and other communications, please contact us via the following mailboxes:
-owner@novara.xin
-novara.xin@outlook.com
-Novara_xin@163.com
+For business inquiries, technical support, bug reports, feature suggestions, or any other feedback, please reach out to us
+- owner@novara.xin
+- novara.xin@outlook.com
+- Novara_xin@163.com
+We read every message and appreciate your input.
