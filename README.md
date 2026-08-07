@@ -83,6 +83,10 @@ All checked states are saved to disk and survive app restarts. Star and pin prio
 ## Rich Text Diary
 A full-featured rich-text diary editor built on WebView2 that turns journaling into a polished writing experience. Whether you are keeping a personal journal, drafting meeting notes, or writing detailed project documentation, the editor provides the tools you need to express yourself clearly.
 
+<p align="center">
+  <img src="images/Diary%20Page.png" alt="Diary Page" width="500" />
+</p>
+
 ### Rich-Text Editing Tools
 The toolbar floats as a compact capsule above your content, staying accessible without scrolling back to the top. All formatting options are applied instantly with visual feedback:
 Bold, Italic, Underline — toggle styles with one click or keyboard shortcuts; selected state syncs with cursor position
