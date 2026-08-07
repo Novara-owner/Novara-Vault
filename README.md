@@ -14,15 +14,21 @@ There is no password recovery backdoor. If you forget your PIN, the only solutio
 ### Memo Manager
 Supports group classification, star/pin priority marking and full-text search.
 Dedicated API Key entry type built-in, with connectivity detection compatible with standard OpenAI interfaces.
-
+<p align="center">
+  <img src="images/Backup%20Page.png" alt="Backup Page" width="500" />
+</p>
 ### File Path Manager
 Store and categorize local files & folders. Visual green/red border indicators show path validity.
 One-click copy full path and one-click open folder with file highlighted in File Explorer.
-
+<p align="center">
+  <img src="images/File%20Backup.png" alt="File Backup" width="500" />
+</p>
 ### Task Dashboard
 Hierarchical to-do cards with automatic completion logic for subtasks.
 Sticky notes support expand/collapse for long text. All tick states are persisted permanently.
-
+<p align="center">
+  <img src="images/Plan%20Page.png" alt="Plan Page" width="500" />
+</p>
 ### Rich Text Diary
 WebView2-based WYSIWYG editor, supporting bold, italic, underline and image insertion.
 Built-in strict HTML sanitization to eliminate XSS risks during both save and load operations.
