@@ -8,7 +8,7 @@ No cloud servers. No telemetry. Your data stays under your full control.
 Optional 6-digit numeric PIN protection powered by AES256-GCM encryption. Once enabled, all database content is encrypted at rest.
 5 consecutive wrong password attempts trigger a 30-minute lockout. The failure counter and lock timer persist across program restarts and cannot be bypassed.
 There is no password recovery backdoor. If you forget your PIN, the only solution is to wipe the entire database and rebuild it empty.
-
+![Privacy Lock Settings](images/Privacy%20Lock.png)
 ### Memo Manager
 Supports group classification, star/pin priority marking and full-text search.
 Dedicated API Key entry type built-in, with connectivity detection compatible with standard OpenAI interfaces.
