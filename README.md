@@ -32,42 +32,63 @@ Advanced configuration available only after a failed test — choose between Ope
 Successful tests automatically save the working protocol; failed tests never alter your saved configuration
 Every API Key card displays its endpoint URL on the second line for quick identification
 
+## File Path Manager
+A dedicated page for saving and organizing file and folder paths that you frequently access. Instead of digging through Explorer every time, store your important locations here — project directories, configuration files, log folders, or any other path you need to reach quickly.
+Each path card displays the name, full path, and optional remarks in a clean three-line layout. One click copies the path to your clipboard, another opens the location in Explorer with the file or folder automatically highlighted.
 
-### File Path Manager
-Store and categorize local files & folders. Visual green/red border indicators show path validity.
-One-click copy full path and one-click open folder with file highlighted in File Explorer.
+### Real-Time Path Validity Detection
+Paths change. Files get moved, renamed, or deleted. A saved path is only useful if it still points to something that actually exists. Novara continuously monitors every saved path and gives you instant visual feedback:
+Green border — the path exists and is accessible
+Red border — the file or folder is missing, moved, or inaccessible
+
+Validity checks run automatically in five scenarios: when you create or edit a path entry, on a 30-minute background timer, during app startup, when you trigger a full scan from the empty area, or via right-click on an individual card. This means you will always know — at a glance — whether your saved locations are still valid, so you never waste time clicking into a dead path.
 
 <p align="center">
   <img src="images/File%20Backup.png" alt="File Backup" width="500" />
 </p>
 
-### Task Dashboard
-Hierarchical to-do cards with automatic completion logic for subtasks.
-Sticky notes support expand/collapse for long text. All tick states are persisted permanently.
+## Task Dashboard
+A lightweight productivity board that combines to-do lists and sticky notes in one place. Use it for project planning, daily task tracking, or simply jotting down quick thoughts that do not deserve a full memo entry.
+
+### Todo Cards
+Each todo card consists of a main task and optional subtasks. Subtasks are displayed inline beneath the main item, and the card can be collapsed or expanded with a single click.
+Subtasks all checked → main task automatically checked → card collapses to save space
+Uncheck any subtask → main task unchecks automatically → card expands to show everything
+Manually uncheck the main task → subtasks remain unchanged, card expands
+No subtasks → expand/collapse button is hidden; checking the main task marks the card complete and collapses it
+
+### Sticky Notes
+For quick, unstructured notes that do not fit into a todo format. Each note can hold longer text content.
+Content exceeds 240 characters or contains line breaks → an expand button appears
+Expanded view removes MaxLines restriction to show the full content
+Expand/collapse state is persisted across app restarts
+
+### Persistent State & Priority
+All checked states are saved to disk and survive app restarts. Star and pin priority work the same as other pages — starred or pinned cards appear at the top, with golden badges clearly marking their status.
 
 <p align="center">
   <img src="images/Plan%20Page.png" alt="Plan Page" width="500" />
 </p>
 
-### Rich Text Diary
+## Rich Text Diary
 WebView2-based WYSIWYG editor, supporting bold, italic, underline and image insertion.
 Built-in strict HTML sanitization to eliminate XSS risks during both save and load operations.
 
-### Dual-Language UI
+## Dual-Language UI
 Fully localized Simplified Chinese / English interface.
 Static resource dictionary architecture, no runtime XAML merging to avoid program crashes. Language changes take effect after restart.
 
-### Theme System
+## Theme System
 Three display modes: Dark, Light, Follow System. User theme preferences are saved persistently.
 
-### Data Import & Export
+## Data Import & Export
 Complete database backup and recovery. All exported files are plaintext for cross-device compatibility.
 Imported data is auto-sanitized and merged without overwriting local security files.
 
-### System Tray
+## System Tray
 Two window close modes available: Minimize to tray or Exit directly.
 
-### Auto Startup
+## Auto Startup
 Optional auto-launch with Windows, implemented via registry entries.
 
 ## Tech Stack
