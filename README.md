@@ -157,7 +157,8 @@ You can migrate all your notes by copying this entire folder to another PC.
 - Windows App SDK 1.6
 - .NET 8 SDK (locked via global.json: 8.0.402)
 
-### Build Commands
-```shell
-dotnet restore
-dotnet build
+### Contact Us
+For business cooperation, technical consulting, bug feedback, feature suggestions and other communications, please contact us via the following mailboxes:
+owner@novara.xin
+novara.xin@outlook.com
+Novara_xin@163.com
