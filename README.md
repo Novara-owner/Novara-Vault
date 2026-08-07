@@ -1,6 +1,10 @@
 # Novara
 Novara is a local-first, privacy-focused memo application built with C# and WinUI 3 for Windows. It consolidates memos, file paths, to-do lists, sticky notes, and a rich-text diary into a single encrypted database — all stored entirely on your local machine with no cloud uploads, no telemetry, and no account registration. Your data lives in %LocalAppData%\Novara\ as a portable single-file database, optionally protected by AES256-GCM encryption with a 6-digit PIN. Whether you are managing daily notes, tracking project tasks, saving frequently used file paths, writing a private diary, or storing API keys with built-in connectivity testing, Novara brings everything together in one native Windows app that feels fast, responsive, and reliably offline. With deep system integration, dark/light theme support, bilingual interface (English/Chinese), and a strong commitment to long-term stability — backed by a comprehensive development specification document that tracks over 60 UI state rules and 70+ bug fixes — Novara is designed to be the last note-taking tool you will ever need.
 
+<p align="center">
+  <img src="images/English%20+%20Light%20Welcome%20Page.png" alt="English + Light Welcome Page" width="500" />
+</p>
+
 ## Privacy Lock
 Optional 6-digit PIN protection powered by AES256-GCM encryption. Once enabled, all database content is encrypted at rest. The PIN is never stored in plaintext — only a salted SHA256 hash is kept locally. There is no backdoor, no recovery mechanism, and no cloud dependency. If you forget your PIN, the only option is to wipe the entire database and start fresh.
 Auto-locks after 5 consecutive failed attempts (30-minute lockout, persists across app restarts)
@@ -100,12 +104,20 @@ Static resource dictionary architecture — no runtime XAML merging, zero crash 
 Fallback chain: stored preference → system language → Chinese (default)
 All user data remains language-independent; only UI text is translated
 
+<p align="center">
+  <img src="images/Chinese%20+%20Light%20Welcome%20Page.png" alt="Chinese + Light Welcome Page" width="500" />
+</p>
+
 ## Theme System
 Novara offers three theme options — Light, Dark, and Follow System — with seamless switching from the Settings page. Every color, border, and surface has been carefully tuned across multiple rounds of refinement to ensure a polished, premium look in both modes. Dark mode is rich and comfortable for late-night use; Light mode is crisp and clean for daytime productivity. The theme applies globally across all pages, dialogs, and menus, and persists across app restarts.
 Light, Dark, and Follow System modes
 Carefully calibrated color palettes with balanced contrast
 Consistent accent colors, hover states, and surface elevations
 Theme persistence across app restarts
+
+<p align="center">
+  <img src="images/English%20+%20Dark%20Welcome%20Page.png" alt="English + Dark Welcome Page" width="500" />
+</p>
 
 ## Data Import & Export
 Your data should move with you — freely, securely, and without friction. Novara provides full database backup and restore capabilities, ensuring your memos, todos, diary entries, and settings are never locked into a single machine.
