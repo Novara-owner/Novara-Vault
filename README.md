@@ -1,12 +1,12 @@
 # Novara
-Novara is a local-first, privacy-focused memo application built with C# and WinUI 3 for Windows. It consolidates memos, file paths, to-do lists, sticky notes, and a rich-text diary into a single encrypted database — all stored entirely on your local machine with no cloud uploads, no telemetry, and no account registration. Your data lives in %LocalAppData%\Novara\ as a portable single-file database, optionally protected by AES256-GCM encryption with a 6-digit PIN. Whether you are managing daily notes, tracking project tasks, saving frequently used file paths, writing a private diary, or storing API keys with built-in connectivity testing, Novara brings everything together in one native Windows app that feels fast, responsive, and reliably offline. With deep system integration, dark/light theme support, bilingual interface (English/Chinese), and a strong commitment to long-term stability, Novara is designed to be the last note-taking tool you will ever need.
+Novara is a local-first, privacy-focused memo application built with C# and WinUI 3 for Windows. It consolidates memos, file paths, to-do lists, sticky notes, and a rich-text diary into a single encrypted database — all stored entirely on your local machine with no cloud uploads, no telemetry, and no account registration. Your data lives in %LocalAppData%\Novara\ as a portable single-file database, optionally protected by AES-256 encryption with a 6-digit PIN. Whether you are managing daily notes, tracking project tasks, saving frequently used file paths, writing a private diary, or storing API keys with built-in connectivity testing, Novara brings everything together in one native Windows app that feels fast, responsive, and reliably offline. With deep system integration, dark/light theme support, bilingual interface (English/Chinese), and a strong commitment to long-term stability, Novara is designed to be the last note-taking tool you will ever need.
 
 <p align="center">
   <img src="images/English%20+%20Light%20Welcome%20Page.png" alt="English + Light Welcome Page" width="500" />
 </p>
 
 ## Privacy Lock
-Optional 6-digit PIN protection powered by AES256-GCM encryption. Once enabled, your entire database is encrypted at rest — every memo, path, todo, and diary entry becomes unreadable without the correct PIN. The PIN itself is never stored in plaintext; only a salted SHA256 hash is kept locally. There is no backdoor, no password recovery mechanism, and no cloud dependency. If you forget your PIN, the only way forward is to wipe the database and start over.
+Optional 6-digit PIN protection powered by AES-256 encryption. Once enabled, your entire database is encrypted at rest — every memo, path, todo, and diary entry becomes unreadable without the correct PIN. The PIN itself is never stored in plaintext; only a salted SHA256 hash is kept locally. There is no backdoor, no password recovery mechanism, and no cloud dependency. If you forget your PIN, the only way forward is to wipe the database and start over.
 
 Security is further reinforced by a 30-minute lockout after 5 consecutive failed attempts — the counter and lock state persist across app restarts, preventing brute-force bypass attempts. Changing your PIN requires verification of the current PIN, ensuring that no one can alter your security settings without your knowledge. The lock screen follows your system theme and covers the entire application window, leaving no visual clues about its state. As an added layer of protection, the input field clears automatically when the window loses focus, preventing shoulder-surfing attacks in shared environments.
 
@@ -15,9 +15,9 @@ Security is further reinforced by a 30-minute lockout after 5 consecutive failed
 </p>
 
 ## Memo Manager
-The home page where all your memos live — the central hub of Novara. Organize entries into custom groups, star or pin important ones for instant access, and search across everything in real time. Each entry supports a title, content, tags, and optional remarks, making it flexible enough for passwords, account credentials, code snippets, API keys, or any other text-based information you need to keep close.
+The home page where all your memos live — the central hub of Novara. Organize entries into custom groups, star or pin important ones for instant access, and search across everything in real time. Each entry supports a title, content, and optional remarks, making it flexible enough for passwords, account credentials, code snippets, API keys, or any other text-based information you need to keep close.
 
-Entries are organized into custom groups with drag-to-move support, so you can structure your data the way you think. The star and pin priority system puts your most important items right at the top, while real-time full-text search ensures you never waste time hunting for that one piece of information. Four built-in entry types — Email, Account, API Key, and Custom — cover the majority of use cases, with the Custom type offering unlimited flexibility for anything else.
+Entries are organized into custom groups — move them between groups via the context menu to structure your data the way you think. The star and pin priority system puts your most important items right at the top, while real-time full-text search ensures you never waste time hunting for that one piece of information. Four built-in entry types — Email, Account, API Key, and Custom — cover the majority of use cases, with the Custom type offering unlimited flexibility for anything else.
 
 <p align="center">
   <img src="images/Backup%20Page.png" alt="Backup Page" width="500" />
@@ -78,7 +78,7 @@ A full-featured rich-text diary editor built on WebView2 that turns journaling i
 
 ### Rich-Text Editing Tools
 The toolbar floats as a compact capsule above your content, staying accessible without scrolling back to the top. All formatting options are applied instantly with visual feedback:
-Bold, Italic, Underline — toggle styles with one click or keyboard shortcuts; selected state syncs with cursor position
+Bold, Italic, Underline — toggle styles with one click; selected state syncs with cursor position
 Font Color — choose any color to highlight or differentiate text
 Image Insertion — paste or upload images directly into the editor; base64-encoded and stored within the database
 HTML Import — paste formatted content from other sources; automatically sanitized to remove scripts and dangerous attributes
@@ -124,7 +124,7 @@ Novara adapts to the way you work. Enable automatic startup with Windows so your
 - Runtime: .NET 8 LTS
 - Target OS: Windows 10 (Build 19041, 2004) & Windows 11
 - Deployment: Self-contained publish + Inno Setup installer
-- Storage: Single-file JSON database with optional AES256-GZip encryption
+- Storage: Single-file JSON database with optional AES-256 encryption (GZip compressed)
 - Rich Text Engine: WebView2 (Edge Chromium)
 
 ## Installation
@@ -149,7 +149,7 @@ File breakdown:
 You can migrate all your notes by copying this entire folder to another PC.
 
 ## Security Specifications
-- Local-only AES256-GCM encryption, PBKDF2 key derivation with 100,000 iterations
+- Local-only AES-256 encryption, PBKDF2 key derivation with 100,000 iterations
 - Passwords are stored as salted SHA256 hashes; plaintext passwords are never saved on disk
 - Database protected by exclusive file lock + Hidden / Read-only file attributes
 - Diary HTML content double-sanitized on save & load, strips `<script>`, inline event attributes and malicious protocols like `javascript:`
@@ -171,14 +171,14 @@ For business inquiries, technical support, bug reports, feature suggestions, or 
 We read every message and appreciate your input.
 
 # Novara
-Novara 是一款基于 C# / WinUI 3 构建的本地优先、隐私至上的备忘录应用，专为 Windows 平台打造。它将备忘、文件路径、待办、便签和富文本日记整合在单一加密数据库中 — 所有数据全部存储于本地设备，无云端上传、无数据追踪、无需注册账号。数据位于 %LocalAppData%\Novara\ 目录下，以可移植的单文件数据库形式存在，并可选择以 6 位数字 PIN 码配合 AES256-GCM 加密进行保护。无论你是在管理日常备忘、跟踪项目任务、保存常用文件路径、撰写私人日记，还是存储 API 密钥并随时检测其连通性，Novara 都将这一切整合在原生 Windows 应用中，带来流畅、即时响应且完全离线的可靠体验。深度系统集成、深色/浅色主题支持、中英文双语界面，以及贯穿长期维护的稳定性承诺，Novara 的设计目标，就是成为你最后需要的那款备忘录工具。
+Novara 是一款基于 C# / WinUI 3 构建的本地优先、隐私至上的备忘录应用，专为 Windows 平台打造。它将备忘、文件路径、待办、便签和富文本日记整合在单一加密数据库中 — 所有数据全部存储于本地设备，无云端上传、无数据追踪、无需注册账号。数据位于 %LocalAppData%\Novara\ 目录下，以可移植的单文件数据库形式存在，并可选择以 6 位数字 PIN 码配合 AES-256 加密进行保护。无论你是在管理日常备忘、跟踪项目任务、保存常用文件路径、撰写私人日记，还是存储 API 密钥并随时检测其连通性，Novara 都将这一切整合在原生 Windows 应用中，带来流畅、即时响应且完全离线的可靠体验。深度系统集成、深色/浅色主题支持、中英文双语界面，以及贯穿长期维护的稳定性承诺，Novara 的设计目标，就是成为你最后需要的那款备忘录工具。
 
 <p align="center">
   <img src="images/English%20+%20Light%20Welcome%20Page.png" alt="English + Light Welcome Page" width="500" />
 </p>
 
 ## 隐私锁
-可选 6 位数字 PIN 码保护，采用 AES256-GCM 加密技术。启用后，整个数据库处于静止状态时完全加密 — 每一条备忘、路径、待办和日记条目，在未输入正确 PIN 码之前均无法读取。PIN 码本身永不存储明文，本地仅保留加盐 SHA256 哈希值。无后门，无密码恢复机制，不依赖任何云服务。若遗忘 PIN 码，唯一的选择是清空整个数据库重新开始。
+可选 6 位数字 PIN 码保护，采用 AES-256 加密技术。启用后，整个数据库处于静止状态时完全加密 — 每一条备忘、路径、待办和日记条目，在未输入正确 PIN 码之前均无法读取。PIN 码本身永不存储明文，本地仅保留加盐 SHA256 哈希值。无后门，无密码恢复机制，不依赖任何云服务。若遗忘 PIN 码，唯一的选择是清空整个数据库重新开始。
 
 安全性进一步强化：连续 5 次输入错误后触发 30 分钟锁定 — 失败计数与锁定状态跨应用重启持久化，有效防止暴力破解企图。修改 PIN 码需验证当前密码，确保无人能在未经授权的情况下更改安全设置。锁屏界面跟随系统主题，全屏遮挡整个应用窗口，不暴露任何状态线索。作为额外防护层，窗口失焦时输入框自动清空，有效防止旁窥攻击。
 
@@ -187,9 +187,9 @@ Novara 是一款基于 C# / WinUI 3 构建的本地优先、隐私至上的备�
 </p>
 
 ## 备忘管理
-这是所有备忘的首页 — Novara 的核心枢纽。将条目整理到自定义分组中，通过星标或置顶标记重要内容以便快速访问，并实时搜索所有条目。每条备忘均支持标题、内容、标签和可选备注，足够灵活地容纳密码、账户凭证、代码片段、API 密钥或任何其他需要随时调用的文本信息。
+这是所有备忘的首页 — Novara 的核心枢纽。将条目整理到自定义分组中，通过星标或置顶标记重要内容以便快速访问，并实时搜索所有条目。每条备忘均支持标题、内容和可选备注，足够灵活地容纳密码、账户凭证、代码片段、API 密钥或任何其他需要随时调用的文本信息。
 
-条目通过自定义分组进行组织，支持拖拽移动，让你按照自己的思维方式构建数据结构。星标与置顶优先级系统将最重要的内容置顶显示，实时全文搜索确保你永远不会在查找某条信息上浪费时。四种内置条目类型 — 邮箱、账户、API 密钥和自定义 — 覆盖绝大多数使用场景，其中自定义类型为其他任何需求提供了无限灵活性。
+条目通过自定义分组进行组织，可通过右键菜单在分组间移动，让你按照自己的思维方式构建数据结构。星标与置顶优先级系统将最重要的内容置顶显示，实时全文搜索确保你永远不会在查找某条信息上浪费时。四种内置条目类型 — 邮箱、账户、API 密钥和自定义 — 覆盖绝大多数使用场景，其中自定义类型为其他任何需求提供了无限灵活性。
 
 <p align="center">
   <img src="images/Backup%20Page.png" alt="Backup Page" width="500" />
@@ -247,7 +247,7 @@ Novara 是一款基于 C# / WinUI 3 构建的本地优先、隐私至上的备�
 
 ### 富文本编辑工具
 工具栏以紧凑的胶囊形态悬浮在内容上方，无需滚动回顶部即可随时取用 — 格式化工具始终精准地出现在你需要的位置。所有格式选项即时生效，并伴有清晰的视觉反馈：
-- 加粗、倾斜、下划线 — 一键或快捷键切换样式；选中状态与光标位置实时同步
+- 加粗、倾斜、下划线 — 一键切换样式；选中状态与光标位置实时同步
 - 字体颜色 — 自由选取颜色以高亮、强调或区分文本
 - 图片插入 — 直接将图片粘贴或上传至编辑器；以 Base64 编码存储在数据库中，图片随日记一同保存
 - HTML 导入 — 从其他来源粘贴格式化内容；自动净化，移除脚本与危险属性
@@ -293,7 +293,7 @@ UI 框架：WinUI 3 / Windows App SDK 1.6
 运行时：.NET 8 LTS
 目标系统：Windows 10（Build 19041，2004）及 Windows 11
 部署方式：自包含发布 + Inno Setup 安装向导
-数据存储：单文件 JSON 数据库，可选 AES256-GZip 加密
+数据存储：单文件 JSON 数据库，可选 AES-256 加密（GZip 压缩）
 富文本引擎：WebView2（Edge Chromium）
 
 ## 安装指南
@@ -319,7 +319,7 @@ language.dat — 已保存的 UI 语言偏好
 若要将所有笔记迁移至另一台电脑，只需复制此完整文件夹即可。
 
 ## 安全规格
-全本地 AES256-GCM 加密，PBKDF2 密钥派生（100,000 次迭代）
+全本地 AES-256 加密，PBKDF2 密钥派生（100,000 次迭代）
 密码以加盐 SHA256 哈希存储 — 明文密码永不写入磁盘
 数据库受独占文件锁及 Hidden/Read-Only 文件属性双重保护
 日记 HTML 内容在保存和加载时双重净化 — 剥离 <script> 标签、内联事件属性及 javascript: 等恶意协议
