@@ -4,9 +4,9 @@
 
 ---
 
-Novara is a **local-first, privacy-focused knowledge manager** for Windows, built with C# and WinUI 3. It brings memos, file paths, to-do lists, sticky notes, and a rich-text diary together into a single encrypted database — all stored entirely on your machine with **no cloud uploads, no telemetry, and no account registration**.
+Novara is a **local-first, privacy-focused knowledge manager** for Windows, built with C# and WinUI 3. It brings memos, file paths, to-do lists, sticky notes, and rich-text records together into a single encrypted database — all stored entirely on your machine with **no cloud uploads, no telemetry, and no account registration**.
 
-Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters. Whether you are managing daily notes, tracking project tasks, saving frequently used paths, writing a private diary, or storing API keys with built-in connectivity testing, Novara keeps everything in one fast, native, reliably offline application.
+Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters. Whether you are managing daily notes, tracking project tasks, saving frequently used paths, keeping private records, or storing API keys with built-in connectivity testing, Novara keeps everything in one fast, native, reliably offline application.
 
 With five interface languages, light/dark/system themes, desktop sticky notes, global search, a recycle bin, and deep Windows integration, Novara is designed to be the last note-taking tool you will ever need.
 
@@ -16,9 +16,17 @@ With five interface languages, light/dark/system themes, desktop sticky notes, g
 
 ---
 
+## What's New in 4.0
+
+- **Drag & reorder** cards on all four pages, with the order saved
+- **Desktop to-do sync** — check a to-do on a desktop note and it syncs back to the app
+- **Markdown export** — export records as Markdown, with or without images
+- **Upgraded API connectivity test** — vendor recognition and clearer error details
+- **Data overview panel**, keyboard shortcuts, rolling backups, and a brand-design refresh
+
 ## Security & Privacy Lock
 
-Optional password protection backed by **AES-256-GCM authenticated encryption** (since 3.0). Once enabled, your entire database is encrypted at rest — every memo, path, todo, and diary entry becomes unreadable without the correct password. Passwords may be **6 to 64 characters**, never stored in plaintext (only a salted SHA-256 hash is kept locally). There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
+Optional password protection backed by **AES-256-GCM authenticated encryption** (since 3.0). Once enabled, your entire database is encrypted at rest — every memo, path, todo, and record entry becomes unreadable without the correct password. Passwords may be **6 to 64 characters**, never stored in plaintext (only a salted SHA-256 hash is kept locally). There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
 
 GCM adds **authenticated encryption**: any tampering with the encrypted file is detected by the cryptographic tag, so corrupted or modified data is reported instead of silently misread. Databases created by Novara 2.0 (legacy AES-CBC) are seamlessly migrated to the new format after one confirmation on first unlock — your existing data upgrades in place without loss.
 
@@ -105,22 +113,22 @@ Right-click the empty area of the board and choose **Add Reminder** to create a 
   <img src="images/Plan%20Page.png" alt="Task Dashboard" width="500" />
 </p>
 
-## Rich Text Diary
+## Rich Text Records
 
-A full-featured rich-text diary editor built on WebView2 that turns journaling into a polished writing experience — personal journals, meeting notes, or detailed project documentation.
+A full-featured rich-text records editor built on WebView2 that turns journaling into a polished writing experience — personal journals, meeting notes, or detailed project documentation.
 
 - **Formatting tools** — bold, italic, underline, font color; the floating capsule toolbar stays accessible without scrolling
 - **Image insertion** — paste or upload images directly into the editor; stored base64-encoded inside the database
 - **HTML import** — paste formatted content from other sources; automatically sanitized to remove scripts and dangerous attributes
-- **Auto-save & data safety** — content is preserved when you navigate away or close the app; blank overwrites are blocked; HTML is double-sanitized on save and load with a strict whitelist, keeping your diary safe from XSS
+- **Auto-save & data safety** — content is preserved when you navigate away or close the app; blank overwrites are blocked; HTML is double-sanitized on save and load with a strict whitelist, keeping your records safe from XSS
 
 <p align="center">
-  <img src="images/Diary%20Editor%20Page.png" alt="Rich Text Diary Editor" width="500" />
+  <img src="images/Diary%20Editor%20Page.png" alt="Rich Text Records Editor" width="500" />
 </p>
 
 ## Global Search
 
-Press **Ctrl+K** anywhere to open the global search page and find anything in one keystroke. Results from memos, file paths, todos, notes, and diary entries are aggregated into a single list with source badges, sorted by recency, with matched keywords highlighted.
+Press **Ctrl+K** anywhere to open the global search page and find anything in one keystroke. Results from memos, file paths, todos, notes, and record entries are aggregated into a single list with source badges, sorted by recency, with matched keywords highlighted.
 
 Click a result to jump straight to the item — Novara navigates to the correct page, scrolls the target card into view, and pulses it with a brand-colored flash so you always know where you landed. Cold-start retries guarantee the jump lands even on a freshly launched app.
 
@@ -152,7 +160,7 @@ The recycle bin supports **restore** (back to its original page) and **permanent
 
 Novara ships with **five complete interface languages** — 简体中文, 繁體中文, English, 한국어, and 日本語 — with a **Follow System** option that matches your Windows language automatically.
 
-Switching is seamless: pick a language in Settings, confirm, and the app restarts fully translated — every page, dialog, and menu, with no partial or mixed translations. The UI is powered by static resource dictionaries (no runtime XAML merging), which means zero crash risk and instant lookups. Your data is completely language-independent: only interface text is translated, so your memos, todos, and diary entries stay exactly as you wrote them.
+Switching is seamless: pick a language in Settings, confirm, and the app restarts fully translated — every page, dialog, and menu, with no partial or mixed translations. The UI is powered by static resource dictionaries (no runtime XAML merging), which means zero crash risk and instant lookups. Your data is completely language-independent: only interface text is translated, so your memos, todos, and record entries stay exactly as you wrote them.
 
 <p align="center">
   <img src="images/English%20Welcome%20Page.png" alt="English" width="240" />
@@ -194,6 +202,11 @@ Novara adapts to the way you work:
 - **Portable single file**: `data.novadb` holds all seven partitions; optional password protects the whole database
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone
 - **Open, honest storage**: exports are plaintext with integrity checks — your data is never locked into a format you can't read
+
+## Privacy & Security
+
+- **Privacy Policy** — [English](PRIVACY.md) · [简体中文](PRIVACY.zh-CN.md)
+- **Security Policy** — [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 
 ---
 
