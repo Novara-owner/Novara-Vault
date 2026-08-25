@@ -1,0 +1,40 @@
+# ============ 构建产物 ============
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# ============ Visual Studio / IDE ============
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ============ 发布产物（发布时手动补 Novara.pri） ============
+publish/
+Publish/
+Novara.pri
+*.zip
+
+# ============ DiaryEditorJs 前端 ============
+DiaryEditorJs/node_modules/
+DiaryEditorJs/dist/
+
+# ============ 用户真实数据（绝不能入库） ============
+_data-backup/
+*.novadb
+stickies.json
+*.novabak
+
+# ============ 安装包（走 Releases，不进 git） ============
+Installer/*.exe
+
+# ============ 生成文件 ============
+StickNoteHost/Generated Files/
+
+# ============ 系统 / 其他 ============
+.DS_Store
+Thumbs.db
+desktop.ini

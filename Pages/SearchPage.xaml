@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Novara.Pages.SearchPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource AppSurfaceBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top: back button + search capsule (identical to the memo/path page search box) -->
+        <Grid Grid.Row="0" Margin="24,20,24,12" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="BackButton"
+                    Width="36" Height="36"
+                    Style="{StaticResource NovaraPrimaryButtonStyle}"
+                    CornerRadius="8"
+                    VerticalAlignment="Center">
+                <Path x:Name="BackPathIcon" Width="18" Height="18" Stretch="Uniform"
+                      Fill="#FFFFFFFF" />
+            </Button>
+            <Border x:Name="SearchCapsule"
+                    Grid.Column="1"
+                    Style="{StaticResource NovaraGlassCardStyle}"
+                    Height="60"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Padding="12,0">
+                <Grid x:Name="SearchCapsuleGrid" VerticalAlignment="Center" Margin="4,0">
+                    <Viewbox Width="16" Height="16" Stretch="Uniform"
+                             HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <PathIcon x:Name="SearchGlyphIcon" Foreground="{ThemeResource IconForegroundBrush}" />
+                    </Viewbox>
+                    <TextBox x:Name="SearchBox"
+                             Style="{StaticResource NovaraSearchBoxStyle}"
+                             VerticalAlignment="Center"
+                             MaxLength="200"
+                             Margin="40,0,132,0" />
+                    <!-- cancel (x) button is created in code, exactly like the tab pages -->
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Results -->
+        <ScrollViewer Grid.Row="1" Padding="24,8,24,24">
+            <StackPanel x:Name="ResultPanel" Spacing="10" />
+        </ScrollViewer>
+
+        <!-- Blank hint: single line of text only (no icon). No-result hint: icon + text. Same float-in as tab pages. -->
+        <StackPanel x:Name="EmptyHintPanel"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="10"
+                    Visibility="Collapsed">
+            <Viewbox x:Name="EmptyHintIconBox" Width="56" Height="56" Stretch="Uniform" Opacity="0.5"
+                     Visibility="Collapsed">
+                <PathIcon x:Name="EmptyHintIcon" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+            </Viewbox>
+            <TextBlock x:Name="EmptyHintText"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       FontSize="13" FontWeight="Light"
+                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                       Opacity="0.6" TextWrapping="NoWrap" MaxWidth="600" />
+        </StackPanel>
+
+        <!-- FocusSink: steals focus from the back button (no focus border on an invisible 0x0 button), same fix as LockScreenPage -->
+        <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
+    </Grid>
+</Page>

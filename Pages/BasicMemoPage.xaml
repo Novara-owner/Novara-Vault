@@ -1,0 +1,1403 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Novara.Pages.BasicMemoPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:app="using:Novara"
+    xmlns:local="using:Novara.Pages"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <CubicEase x:Key="FloatUpEase" EasingMode="EaseOut" />
+        <Storyboard x:Name="DialogShowAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DialogScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+        <Storyboard x:Name="DialogHideAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DialogScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewGroupDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="20">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Name="NewEntryDialogShowAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+        <Storyboard x:Name="NewEntryDialogHideAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="NewEntryDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="20">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Name="DeleteConfirmShowAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Name="DeleteConfirmHideAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="20">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Name="EditGroupShowAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <Storyboard x:Name="EditGroupHideAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EditGroupDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="20">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid x:Name="MemoRoot">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="0"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid x:Name="ContentGrid" Grid.Row="2" ContextRequested="ContentGrid_ContextRequested">
+                <ScrollViewer x:Name="MemoScrollViewer" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="GroupsContainer" Spacing="12" Padding="40,20,40,20">
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            
+            <Canvas x:Name="DragLayer" IsHitTestVisible="False" Grid.RowSpan="3" />
+
+                    <TextBlock x:Name="HintText"
+                               Grid.Row="2"
+                               Text="{x:Bind app:App.GetString(\'Memo_Empty_Tip\')}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               TextAlignment="Center"
+                               FontSize="13"
+                               FontWeight="Light"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               Opacity="0.6"
+                               TextWrapping="NoWrap"
+                               MaxWidth="600"
+                               Visibility="Collapsed" />
+
+        <Grid x:Name="NewGroupDialogOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="DialogScrim"
+                  Background="#2E000000"
+                  Tapped="DialogScrim_Tapped" />
+            <Border x:Name="NewGroupDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="480"
+                    MaxHeight="620"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="NewGroupDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Group_NewTitle\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="CloseDialogButton"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="CloseDialogButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="{x:Bind app:App.GetString(\'Common_Label_PickIcon\')}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   Margin="0,0,0,8" />
+                        <ScrollViewer Grid.Row="1"
+                                      x:Name="IconScrollViewer"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      HorizontalScrollMode="Enabled"
+                                      VerticalScrollMode="Disabled"
+                                      ZoomMode="Disabled"
+                                      Background="Transparent"
+                                      Height="56">
+                            <StackPanel x:Name="IconPanel"
+                                        Orientation="Horizontal"
+                                        Spacing="8" />
+                        </ScrollViewer>
+                    </Grid>
+                    <Grid Grid.Row="2" Margin="0,16,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="{x:Bind app:App.GetString(\'Memo_Group_NameLabel\')}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   Margin="0,0,0,8" />
+                        <TextBox x:Name="GroupNameTextBox"
+                                 Grid.Row="1"
+                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                 MaxLength="50"
+                                 PlaceholderText="{x:Bind app:App.GetString(\'Memo_Group_NamePlaceholder\')}"
+                                 TextChanged="GroupNameTextBox_TextChanged"
+                                 VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid x:Name="UngroupedListSection"
+                          Grid.Row="3"
+                          Margin="0,16,0,0"
+                          Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="{x:Bind app:App.GetString(\'Memo_Entry_SelectLabel\')}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   Margin="0,0,0,8" />
+                        <ScrollViewer Grid.Row="1"
+                                      MaxHeight="160"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Hidden">
+                            <StackPanel x:Name="UngroupedEntriesPanel"
+                                        Spacing="4" />
+                        </ScrollViewer>
+                    </Grid>
+                    <Button x:Name="ConfirmButton"
+                            Style="{StaticResource NovaraPrimaryButtonStyle}"
+                            Grid.Row="4"
+                            Margin="0,20,0,0"
+                            Height="44"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="12"
+                            FontSize="14"
+                            FontWeight="Medium"
+                            Click="ConfirmButton_Click">
+                            <Button.RenderTransform>
+                                <CompositeTransform x:Name="ConfirmButtonTransform" />
+                            </Button.RenderTransform>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="NewEntryDialogOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="NewEntryDialogScrim"
+                  Background="#2E000000"
+                  Tapped="NewEntryDialogScrim_Tapped" />
+            <Border x:Name="NewEntryDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="480"
+                    MaxHeight="520"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="NewEntryDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="NewEntryDialogTitle"
+                                   Text="{x:Bind app:App.GetString(\'Memo_Entry_NewTitle\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="CloseNewEntryDialogButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="CloseNewEntryDialogButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                    <Grid x:Name="EntryTypeSection" Grid.Row="1" Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0"
+                                   Text="{x:Bind app:App.GetString(\'Memo_Entry_TypeLabel\')}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   Margin="0,0,0,8" />
+                        <Button x:Name="EntryTypeButton"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                Grid.Row="1"
+                                HorizontalAlignment="Stretch"
+                                Height="40"
+                                CornerRadius="12"
+                                Padding="14,0"
+                                Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
+                                Click="EntryTypeButton_Click">
+                            <Grid>
+                                <TextBlock x:Name="EntryTypeButtonText" Text="{x:Bind app:App.GetString(\'Memo_Entry_TypePlaceholder\')}" VerticalAlignment="Center" Foreground="{ThemeResource AppTextSecondaryBrush}" FontSize="14" />
+                                <FontIcon Glyph="&#xE70D;" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            </Grid>
+                        </Button>
+                    </Grid>
+                    <ScrollViewer Grid.Row="2" Margin="0,16,0,0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <Grid>
+                            <Grid x:Name="EntryTypeFormsContainer" Grid.Row="0" Visibility="Collapsed">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0"
+                                               Text="{x:Bind app:App.GetString(\'Common_Label_Name\')}"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="EntryNameTextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="50"
+                                             PlaceholderText="{x:Bind app:App.GetString(\'Memo_Entry_NamePlaceholder\')}"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="1" Margin="0,12,0,0" x:Name="FormField2Section">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField2Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField2TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="2000"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="2" Margin="0,12,0,0" x:Name="FormField3Section">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField3Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField3TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="2000"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="3" Margin="0,12,0,0" x:Name="FormField4Section">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField4Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField4TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="500"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="4" Margin="0,12,0,0" x:Name="FormField5Section" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField5Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField5TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="500"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="5" Margin="0,12,0,0" x:Name="FormField6Section" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField6Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField6TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="500"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid Grid.Row="6" Margin="0,12,0,0" x:Name="FormField7Section" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="FormField7Label" Grid.Row="0"
+                                               FontSize="12"
+                                               FontWeight="Medium"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               Margin="0,0,0,8" />
+                                    <TextBox x:Name="FormField7TextBox"
+                                             Grid.Row="1"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             MaxLength="500"
+                                             TextChanged="EntryField_TextChanged"
+                                             VerticalAlignment="Center" />
+                                </Grid>
+                            </Grid>
+                            <Grid x:Name="CustomFormContainer"
+                                  Grid.Row="0"
+                                  Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0"
+                                           Text="{x:Bind app:App.GetString(\'Common_Label_PickIcon\')}"
+                                           FontSize="12"
+                                           FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                           Margin="0,0,0,8" />
+                                <ScrollViewer Grid.Row="1"
+                                              x:Name="EntryIconScrollViewer"
+                                              HorizontalScrollBarVisibility="Hidden"
+                                              VerticalScrollBarVisibility="Disabled"
+                                              HorizontalScrollMode="Enabled"
+                                              VerticalScrollMode="Disabled"
+                                              ZoomMode="Disabled"
+                                              Background="Transparent"
+                                              Height="56">
+                                    <StackPanel x:Name="EntryIconPanel"
+                                                Orientation="Horizontal"
+                                                Spacing="8" />
+                                </ScrollViewer>
+                            </Grid>
+                            <Grid Grid.Row="1" Margin="0,16,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0"
+                                           Text="{x:Bind app:App.GetString(\'Common_Label_Name\')}"
+                                           FontSize="12"
+                                           FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                           Margin="0,0,0,8" />
+                                <TextBox x:Name="CustomNameTextBox"
+                                         Grid.Row="1"
+                                         Style="{StaticResource NovaraTextBoxStyle}"
+                                         MaxLength="50"
+                                         PlaceholderText="{x:Bind app:App.GetString(\'Memo_Entry_NamePlaceholder\')}"
+                                         TextChanged="EntryField_TextChanged"
+                                         VerticalAlignment="Center" />
+                            </Grid>
+                            <Grid Grid.Row="2" Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBox x:Name="CustomInfoTextBox_0"
+                                         Grid.Row="0"
+                                         MaxLength="500"
+                                         PlaceholderText="{x:Bind app:App.GetString(\'Memo_Entry_InfoLabel\')}"
+                                         Style="{StaticResource NovaraTextBoxStyle}"
+                                         TextChanged="EntryField_TextChanged"
+                                         VerticalAlignment="Center" />
+                                <StackPanel x:Name="CustomInfoDynamicPanel"
+                                            Grid.Row="1"
+                                            Margin="0,12,0,0"
+                                            Spacing="12" />
+                            </Grid>
+                            <Button x:Name="CustomInfoAddButton"
+                                    Style="{StaticResource NovaraCardActionButtonStyle}"
+                                    Grid.Row="3"
+                                    Margin="0,12,0,0"
+                                    Height="40"
+                                    HorizontalAlignment="Stretch"
+                                    Background="Transparent"
+                                    Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                    BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="20"
+                                    FontSize="13"
+                                    FontWeight="Normal"
+                                    Click="CustomInfoAddButton_Click">
+                                <Button.RenderTransform>
+                                    <CompositeTransform />
+                                </Button.RenderTransform>
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center">
+                                    <Viewbox x:Name="AddInfoIcon" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Opacity="0.6" Margin="0,1,0,0">
+                                        <PathIcon Data="M278.9376 552.5504h192.512v192.512c0 5.597867 4.573867 10.171733 10.171733 10.171733h60.757334a10.171733 10.171733 0 0 0 10.171733-10.171733v-192.512h192.512a10.171733 10.171733 0 0 0 10.171733-10.171733v-60.757334a10.171733 10.171733 0 0 0-10.171733-10.171733h-192.512v-192.512a10.171733 10.171733 0 0 0-10.171733-10.171733h-60.757334a10.171733 10.171733 0 0 0-10.171733 10.171733v192.512h-192.512a10.171733 10.171733 0 0 0-10.171733 10.171733v60.757334c0 5.597867 4.573867 10.171733 10.171733 10.171733z M978.1248 5.3248H45.8752a40.482133 40.482133 0 0 0-40.5504 40.5504v932.2496c0 22.459733 18.090667 40.5504 40.5504 40.5504h932.2496a40.482133 40.482133 0 0 0 40.5504-40.5504V45.8752a40.482133 40.482133 0 0 0-40.5504-40.5504z m-50.653867 922.146133H96.529067V96.529067h830.941866v830.941866z"
+                                                  Foreground="{ThemeResource IconForegroundBrush}" />
+                                    </Viewbox>
+                                    <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Entry_AddInfoButton\')}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            </Grid>
+                        </Grid>
+                    </ScrollViewer>
+                    <Button x:Name="NewEntryConfirmButton"
+                            Style="{StaticResource NovaraPrimaryButtonStyle}"
+                            Grid.Row="3"
+                            Margin="0,20,0,0"
+                            Height="44"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="12"
+                            FontSize="14"
+                            FontWeight="Medium"
+                            Click="NewEntryConfirmButton_Click">
+                            <Button.RenderTransform>
+                                <CompositeTransform x:Name="NewEntryConfirmButtonTransform" />
+                            </Button.RenderTransform>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="DeleteConfirmOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="DeleteConfirmScrim"
+                  Background="#2E000000"
+                  Tapped="DeleteConfirmScrim_Tapped" />
+            <Border x:Name="DeleteConfirmDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="400"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="DeleteConfirmDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="DeleteConfirmTitleText" Text="{x:Bind app:App.GetString(\'Dialog_Delete_Title\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="DeleteConfirmCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Margin="0,20,0,0"><TextBlock x:Name="DeleteConfirmMessageText" Grid.Row="1"
+                               FontSize="14"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0" /></StackPanel>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+
+                        <Button HorizontalAlignment="Left"
+                                Width="160" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="DeleteCancelButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center" />
+                        </Button>
+
+                        <Button x:Name="DeleteConfirmButton" HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><Button.RenderTransform><CompositeTransform x:Name="DeleteConfirmButtonTransform" /></Button.RenderTransform><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button x:Name="DeleteConfirmRedButton" HorizontalAlignment="Right" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" Click="DeleteConfirmButton_Click" Visibility="Collapsed"><Button.RenderTransform><CompositeTransform /></Button.RenderTransform><Button.Template><ControlTemplate TargetType="Button"><Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"><VisualStateManager.VisualStateGroups><VisualStateGroup x:Name="CommonStates"><VisualState x:Name="Normal" /><VisualState x:Name="PointerOver"><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background"><DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" /></ObjectAnimationUsingKeyFrames></Storyboard></VisualState><VisualState x:Name="Pressed"><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background"><DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" /></ObjectAnimationUsingKeyFrames></Storyboard></VisualState><VisualState x:Name="Disabled" /></VisualStateGroup></VisualStateManager.VisualStateGroups><ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" /></Grid></ControlTemplate></Button.Template><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="EditGroupOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="EditGroupScrim"
+                  Background="#2E000000"
+                  Tapped="EditGroupScrim_Tapped" />
+            <Border x:Name="EditGroupDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="400"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="EditGroupDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Group_EditTitle\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="EditGroupCloseButton_Click">
+                            <Path x:Name="EditGroupClosePathIcon"
+                                  Width="16" Height="16"
+                                  Stretch="Uniform"
+                                  Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+                    </Grid>
+
+                    <TextBox x:Name="EditGroupNameTextBox"
+                             Grid.Row="1"
+                             Style="{StaticResource NovaraTextBoxStyle}"
+                             MaxLength="50"
+                             Margin="0,20,0,0"
+                             TextChanged="EditGroupNameTextBox_TextChanged" />
+
+                    <Button x:Name="EditGroupConfirmButton"
+                            Style="{StaticResource NovaraPrimaryButtonStyle}"
+                            Grid.Row="2"
+                            Margin="0,20,0,0"
+                            Height="44"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="12"
+                            FontSize="14"
+                            FontWeight="Medium"
+                            Click="EditGroupConfirmButton_Click">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="ApiCheckOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="ApiCheckScrim"
+                  Background="#2E000000"
+                  Tapped="ApiCheckScrim_Tapped" />
+            <Border x:Name="ApiCheckDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="460"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ApiCheckDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_CheckTitle\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="ApiCheckDialogCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="ApiCheckDialogCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
+                        <TextBlock x:Name="ApiCheckStatusText"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <Border x:Name="ApiCheckReportPanel"
+                                Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                CornerRadius="10"
+                                Padding="12,10"
+                                Visibility="Collapsed">
+                            <StackPanel x:Name="ApiCheckReportRows" Spacing="6" />
+                        </Border>
+                        <TextBlock x:Name="ApiCheckStatusDetail"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   LineHeight="18" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2"
+                               Text="{x:Bind app:App.GetString(\'Memo_Api_CheckDesc\')}"
+                               FontSize="11"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               TextWrapping="Wrap" LineHeight="16"
+                               Margin="0,20,0,0" />
+                    <Grid Grid.Row="3" Margin="0,24,0,0">
+                        <Button x:Name="ApiCheckAdvancedButton"
+                                HorizontalAlignment="Left"
+                                Width="140" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Visibility="Collapsed"
+                                Click="ApiCheckAdvancedButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_AdvancedButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="ApiCheckCloseButton"
+                                HorizontalAlignment="Right"
+                                Width="140" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiCheckCloseButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="ApiProtocolOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="ApiProtocolScrim"
+                  Background="#2E000000"
+                  Tapped="ApiProtocolScrim_Tapped" />
+            <Border x:Name="ApiProtocolDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="360"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ApiProtocolDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="24,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_ProtocolTitle\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="ApiProtocolCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="ApiProtocolCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Grid.Row="1"
+                               Text="{x:Bind app:App.GetString(\'Memo_Api_ProtocolDesc\')}"
+                               FontSize="12"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               LineHeight="18"
+                               Margin="0,16,0,0" />
+                    <Button x:Name="ApiProtocolButton"
+                            Grid.Row="2"
+                            Height="40"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,16,0,0"
+                            Style="{StaticResource NovaraOutlineButtonStyle}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            Click="ApiProtocolButton_Click">
+                        <TextBlock x:Name="ApiProtocolButtonText" Text="{x:Bind app:App.GetString(\'Memo_Api_ProtocolBearer\')}" />
+                    </Button>
+                    <TextBlock x:Name="ApiRawHint"
+                               Grid.Row="3"
+                               Text="{x:Bind app:App.GetString(\'Memo_Api_RawNoCheck\')}"
+                               FontSize="11"
+                               Foreground="#FFB300"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"
+                               Visibility="Collapsed" />
+                    <Grid Grid.Row="4" Margin="0,20,0,0">
+                        <Button x:Name="ApiRetryButton"
+                                HorizontalAlignment="Left"
+                                Width="120" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiRetryButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_RetryButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="ApiCancelButton"
+                                HorizontalAlignment="Right"
+                                Width="120" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiCancelButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="ApiDiagOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="ApiDiagScrim"
+                  Background="#2E000000"
+                  Tapped="ApiDiagScrim_Tapped" />
+            <Border x:Name="ApiDiagDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="460"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ApiDiagDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_ApiDiag_Title\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="ApiDiagDialogCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="ApiDiagDialogCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
+                        <TextBlock x:Name="ApiDiagStatusText"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <Border x:Name="ApiDiagReportPanel"
+                                Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                CornerRadius="10"
+                                Padding="12,10"
+                                Visibility="Collapsed">
+                            <StackPanel x:Name="ApiDiagReportRows" Spacing="10" />
+                        </Border>
+                        <TextBlock x:Name="ApiDiagStatusDetail"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap"
+                                   LineHeight="18" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2"
+                               Text="{x:Bind app:App.GetString(\'Memo_ApiDiag_LatencyNote\')}"
+                               FontSize="11"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               TextWrapping="Wrap" LineHeight="16"
+                               Margin="0,20,0,0" />
+                    <Grid Grid.Row="3" Margin="0,24,0,0">
+                        <Button x:Name="ApiDiagCloseButton"
+                                HorizontalAlignment="Right"
+                                Width="140" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiDiagCloseButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="ApiConfirmOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="ApiConfirmScrim"
+                  Background="#2E000000"
+                  Tapped="ApiConfirmScrim_Tapped" />
+            <Border x:Name="ApiConfirmDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="400"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ApiConfirmDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="24,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_ApiConfirm_Title\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="ApiConfirmCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="ApiConfirmCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="ApiConfirmDescText"
+                               Grid.Row="1"
+                               Text="{x:Bind app:App.GetString(\'Memo_ApiConfirm_Desc\')}"
+                               FontSize="13"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               LineHeight="20"
+                               Margin="0,16,0,0" />
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="ApiConfirmCancelButton"
+                                HorizontalAlignment="Left"
+                                Width="120" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiConfirmCancelButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_ApiConfirm_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="ApiConfirmProceedButton"
+                                HorizontalAlignment="Right"
+                                Width="120" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiConfirmProceedButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_ApiConfirm_Proceed\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="RelayProbeOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="RelayProbeScrim"
+                  Background="#2E000000"
+                  Tapped="RelayProbeScrim_Tapped" />
+            <Border x:Name="RelayProbeDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="540"
+                    MaxHeight="720"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="RelayProbeDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Title\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button x:Name="RelayProbeDialogCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="RelayProbeDialogCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="6">
+                        <TextBlock x:Name="RelayProbeVerdictText"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="RelayProbeStatusText"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="2" Margin="0,16,0,0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="8">
+                            <StackPanel x:Name="RelayProbeReportRows" Spacing="8" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer\')}"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                       TextWrapping="Wrap" LineHeight="16" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer2\')}"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                       TextWrapping="Wrap" LineHeight="16" />
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Grid Grid.Row="3" Margin="0,12,0,0">
+                        <Button x:Name="RelayProbeLoadDatasetButton"
+                                HorizontalAlignment="Left"
+                                Width="220" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                Click="RelayProbeLoadDatasetButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_LoadDataset\')}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="RelayProbeCloseButton"
+                                HorizontalAlignment="Right"
+                                Width="140" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="RelayProbeCloseButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- FocusSink: steals focus (no focus border on an invisible 0x0 button), LockScreenPage/SearchPage fix -->
+        <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
+    </Grid>
+</Page>

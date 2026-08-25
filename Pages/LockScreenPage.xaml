@@ -1,0 +1,364 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Novara.Pages.LockScreenPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:app="using:Novara"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource AppSurfaceBrush}">
+
+    <Page.Resources>
+
+
+        <Storyboard x:Name="LockEntryAnimation">
+            <DoubleAnimation Storyboard.TargetName="LockTitle" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.8" BeginTime="0:0:0.1">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="LockTitleTransform" Storyboard.TargetProperty="Y" From="20" To="0" Duration="0:0:0.8" BeginTime="0:0:0.1">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="PasswordInputPanel" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.6" BeginTime="0:0:0.35">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="WindowsHelloText" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.6" BeginTime="0:0:0.45">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation Storyboard.TargetName="ForgotPasswordText" Storyboard.TargetProperty="Opacity" From="0" To="0.45" Duration="0:0:0.6" BeginTime="0:0:0.55">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Name="ForgotHintBreathing" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="ForgotPasswordText" Storyboard.TargetProperty="Opacity"
+                             From="0.3" To="0.7" Duration="0:0:3.0">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Name="WindowsHelloBreathing" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="WindowsHelloText" Storyboard.TargetProperty="Opacity"
+                             From="0.55" To="1" Duration="0:0:2.0">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Name="CountdownBreathing" RepeatBehavior="Forever" AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="LockCountdownText" Storyboard.TargetProperty="Opacity"
+                             From="0.55" To="1" Duration="0:0:3.0">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <Storyboard x:Name="LockedViewEntry">
+            <DoubleAnimation Storyboard.TargetName="LockedView" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.3">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid>
+
+        <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
+
+        <Grid x:Name="UnlockView">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-10,0,0">
+                <TextBlock x:Name="LockTitle"
+                           Text="{x:Bind app:App.GetString(\'Lock_Title_PrivacyLock\')}"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="44"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}"
+                           CharacterSpacing="300"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,48">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform x:Name="LockTitleTransform" Y="0" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+
+                <Grid x:Name="PasswordInputPanel" Width="398" HorizontalAlignment="Center" Margin="0,0,0,20" Opacity="0">
+                    <Grid.RenderTransform>
+                        <TranslateTransform x:Name="PasswordInputPanelTransform" X="0" Y="0" />
+                    </Grid.RenderTransform>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    
+                    <PasswordBox x:Name="PasswordInput" Grid.Column="0" Width="340" Height="48" MaxLength="64"
+                                 PlaceholderText="{x:Bind app:App.GetString(\'Lock_Password_Placeholder\')}"
+                                 CornerRadius="14"
+                                 Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                 BorderBrush="{ThemeResource AppBorderBrush}"
+                                 BorderThickness="1"
+                                 FontSize="16"
+                                 Padding="16,0,44,0"
+                                 KeyDown="PasswordInput_KeyDown"
+                                 PasswordChanged="PasswordInput_PasswordChanged">
+                        <PasswordBox.Template>
+                            <ControlTemplate TargetType="PasswordBox">
+                                <Grid>
+                                    <Border x:Name="BorderElement"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="{TemplateBinding CornerRadius}">
+                                        <Grid>
+                                            <ScrollViewer x:Name="ContentElement"
+                                                          Margin="{TemplateBinding Padding}"
+                                                          HorizontalAlignment="Stretch"
+                                                          VerticalAlignment="Center"
+                                                          FontSize="{TemplateBinding FontSize}"
+                                                          HorizontalScrollBarVisibility="Hidden"
+                                                          VerticalScrollBarVisibility="Hidden"
+                                                          IsTabStop="False" />
+                                            <TextBlock x:Name="PlaceholderTextBlock"
+                                                       Text="{TemplateBinding PlaceholderText}"
+                                                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                                       FontSize="{TemplateBinding FontSize}"
+                                                       HorizontalAlignment="Stretch"
+                                                       VerticalAlignment="Center"
+                                                       Margin="{TemplateBinding Padding}"
+                                                       IsHitTestVisible="False"
+                                                       Visibility="Collapsed" />
+                                            <Button x:Name="RevealButton"
+                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                    Width="36" Height="36" Margin="0,0,4,0"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    Visibility="Collapsed">
+                                                <FontIcon x:Name="RevealIcon" Glyph="&#xE890;" FontSize="14" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="PointerOver">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextTertiaryBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Focused">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Disabled">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppBorderBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                        <VisualStateGroup x:Name="PasswordStates">
+                                            <VisualState x:Name="RevealingHidden" />
+                                            <VisualState x:Name="Revealing">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RevealButton" Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+                                </Grid>
+                            </ControlTemplate>
+                        </PasswordBox.Template>
+                    </PasswordBox>
+                    <!-- Custom template: keep the blue solid on hover (default button template fades it) -->
+                    <Button x:Name="UnlockButton" Grid.Column="1" Width="48" Height="48" Margin="10,0,0,0"
+                            CornerRadius="24"
+                            Background="{ThemeResource AppPrimaryButtonBrush}"
+                            BorderThickness="0"
+                            Click="UnlockButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="PointerOver">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#FF8C93FF" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Pressed">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#FF5855FF" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Disabled" />
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+                                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                </Grid>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <FontIcon Glyph="&#xE72A;" FontSize="18" Foreground="White" />
+                    </Button>
+                </Grid>
+
+                <TextBlock x:Name="WindowsHelloText"
+                           Text="{x:Bind app:App.GetString(\'Lock_WinHello_Button\')}"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource AppPrimaryButtonBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,0"
+                           Opacity="0"
+                           Tapped="WindowsHelloText_Tapped">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform x:Name="WindowsHelloTextTransform" X="0" Y="0" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+
+            </StackPanel>
+
+            <TextBlock x:Name="ForgotPasswordText"
+                       Text="{x:Bind app:App.GetString(\'Lock_Forgot_Hint\')}"
+                       FontFamily="Segoe UI Variable Text, Segoe UI"
+                       FontSize="14"
+                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,30"
+                       Opacity="0"
+                       Tapped="ForgotPassword_Tapped">
+                <TextBlock.RenderTransform>
+                    <TranslateTransform x:Name="ForgotTransform" X="0" Y="0" />
+                </TextBlock.RenderTransform>
+            </TextBlock>
+
+            <Grid x:Name="ForgotOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="ForgotScrim" Background="#2E000000" Tapped="ForgotScrim_Tapped" />
+                <Border x:Name="ForgotDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24"
+                        Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform>
+                        <CompositeTransform x:Name="ForgotDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                    </Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_Hint\')}"
+                                       HorizontalAlignment="Left" VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="#FFFF4545" />
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Width="28" Height="28"
+                                    Style="{StaticResource NovaraIconButtonStyle}"
+                                    Click="ForgotClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                      Stroke="{ThemeResource IconForegroundBrush}"
+                                      StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <TextBlock Grid.Row="1"
+                                   Text="{x:Bind app:App.GetString(\'Lock_Forgot_Warning\')}"
+                                   FontSize="14"
+                                   Foreground="#FFFF4545"
+                                   TextWrapping="Wrap"
+                                   Margin="0,20,0,0"
+                                   LineHeight="22" />
+                        <Grid Grid.Row="2" Margin="0,20,0,0">
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}"
+                                    CornerRadius="10" FontSize="14"
+                                    Click="ForgotCancel_Click">
+                                <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
+                                    Background="#CCFF4545" Foreground="#FFFFFFFF"
+                                    CornerRadius="10" FontSize="14" FontWeight="SemiBold"
+                                    BorderThickness="0"
+                                    Click="ForgotConfirm_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                                            <VisualStateManager.VisualStateGroups>
+                                                <VisualStateGroup x:Name="CommonStates">
+                                                    <VisualState x:Name="Normal" />
+                                                    <VisualState x:Name="PointerOver">
+                                                        <Storyboard>
+                                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            </ObjectAnimationUsingKeyFrames>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Pressed">
+                                                        <Storyboard>
+                                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            </ObjectAnimationUsingKeyFrames>
+                                                        </Storyboard>
+                                                    </VisualState>
+                                                    <VisualState x:Name="Disabled" />
+                                                </VisualStateGroup>
+                                            </VisualStateManager.VisualStateGroups>
+                                            <ContentPresenter x:Name="ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                        </Grid>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_ConfirmButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="LockedView" Visibility="Collapsed" Background="{ThemeResource AppSurfaceBrush}" Opacity="0">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-51,0,0">
+                <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Locked_Title\')}"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="40"
+                           FontWeight="SemiBold"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,-8,0,0" />
+                <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Locked_Desc\')}"
+                           FontSize="14"
+                           Foreground="{ThemeResource AppTextSecondaryBrush}"
+                           TextWrapping="Wrap" TextAlignment="Center"
+                           MaxWidth="420" LineHeight="22"
+                           HorizontalAlignment="Center"
+                           Margin="0,19,0,0" />
+                <TextBlock x:Name="LockCountdownText"
+                           Text="00:00:15"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="64"
+                           FontWeight="Bold"
+                           Foreground="#FFFF4545"
+                           HorizontalAlignment="Center"
+                           Margin="0,30,0,0" />
+                <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Locked_WaitHint\')}"
+                           FontSize="13"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420" LineHeight="20"
+                           HorizontalAlignment="Center"
+                           Margin="0,28,0,0" />
+            </StackPanel>
+            <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Locked_Footer\')}"
+                       FontSize="12"
+                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="520" LineHeight="18"
+                       HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                       Margin="40,0,40,36" />
+        </Grid>
+    </Grid>
+</Page>
