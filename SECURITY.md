@@ -6,7 +6,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-08-17 · **Applies to:** Novara 4.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-08-25 · **Applies to:** Novara 5.0 (and earlier versions where noted)
 
 ---
 
@@ -16,7 +16,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 4.0 | ✅ Supported | Current release |
+| 5.0 | ✅ Supported | Current release |
+| 4.0 | ✅ Supported | Receives critical fixes where feasible |
 | 3.0 | ✅ Supported | Receives critical fixes where feasible |
 | 2.0 | ⚠️ Legacy | Uses the older AES-CBC encryption; **upgrade recommended** (see Section 7) |
 | < 2.0 | ❌ Unsupported | |
@@ -102,9 +103,9 @@ Novara includes several layers to prevent data loss and corruption:
 
 | Scenario | Behavior |
 |----------|----------|
-| 2.0 data opened in 3.0/4.0 | ✅ Read and migrated from AES-CBC (v1) to AES-GCM (v2) after one confirmation |
-| 3.0/4.0 data opened in 2.0 | ❌ **Not readable** — 2.0 does not understand the GCM format |
-| 3.0 ↔ 4.0 | ✅ Same format (v2 GCM); compatible |
+| 2.0 data opened in 3.0/4.0/5.0 | ✅ Read and migrated from AES-CBC (v1) to AES-GCM (v2) after one confirmation |
+| 3.0/4.0/5.0 data opened in 2.0 | ❌ **Not readable** — 2.0 does not understand the GCM format |
+| 3.0 ↔ 4.0 ↔ 5.0 | ✅ Same format (v2 GCM); compatible |
 
 > ⚠️ **Before downgrading or rolling back to 2.0**, export a plaintext backup. Once a database has been migrated to GCM, older versions cannot open it.
 
@@ -113,7 +114,7 @@ Novara includes several layers to prevent data loss and corruption:
 - **XSS protection in the diary editor** — rich-text HTML is sanitized on load, on save, and after navigation against a strict tag/attribute/URL whitelist, using a real HTML parser (AngleSharp). Script tags, `on*` event attributes (including entity-encoded variants such as `o&#110;load`), and dangerous protocols (`javascript:`, `vbscript:`, non-image `data:`) are stripped. Titles are rendered as plain text.
 - **No code evaluation of untrusted input** — imported HTML and JSON are parsed and normalized, never executed.
 - **Local-only helper process** — the desktop-sticky-note helper communicates with the main app via local files and named events on the same machine; it makes no network requests and opens no listening ports.
-- **Minimal surface** — no listening network ports, no HTTP server, no remote-procedure-call surface exposed to the network. The only outbound network call in the entire app is the user-triggered API-key connectivity test (see the Privacy Policy).
+- **Minimal surface** — no listening network ports, no HTTP server, no remote-procedure-call surface exposed to the network. The only outbound network calls are the user-triggered API-key detection tiers (see the Privacy Policy). The optional MCP server is a local named-pipe endpoint only, reachable from the same machine.
 
 ## 9. Developer commitments
 
@@ -125,11 +126,25 @@ As the project owner, I commit to:
 4. **Never** auto-updating or auto-uploading data without explicit user action.
 5. **Disclosing** security issues transparently: fix first, then publish, with credit to reporters.
 
-## 10. Future changes
+## 10. MCP interface security model
 
-The next major version (5.0) plans a local Agent/MCP interface so that an AI assistant can read and write cards on your behalf. When that feature ships, this policy will be updated with a dedicated section covering its permission model, authentication, and data boundaries. The core principle — Novara itself never transmits your data — will be preserved.
+The optional MCP interface lets an AI agent read and write cards. Its security model is defense-in-depth:
 
-## 11. Contact
+- **Off by default** — the interface is disabled until you enable it in Settings and copy a token.
+- **Token authentication** — a per-user token, compared in fixed time (`CryptographicOperations.FixedTimeEquals`), passed via `NOVARA_MCP_TOKEN` or `--token`.
+- **Database-unlock gate** — a locked or encrypted database refuses every request; an agent can never read encrypted data without unlocking.
+- **Process whitelist** — the first connection from any client process requires explicit approval, persisted in `McpAllowedProcesses`.
+- **Separate delete permission** — deletion is its own opt-in toggle (`McpDeleteEnabled`).
+- **Sensitive-field redaction** — password/key/token fields are returned as `****`, excluded from search, and protected against relabeling-based extraction.
+- **Architecture** — `NovaraMCP.exe` is a zero-logic stdio frontend; all data access happens inside the running Novara process (the single data authority), never by the agent touching files directly.
+
+The core principle — Novara itself never transmits your data — is preserved. See the Privacy Policy for the data boundary when a cloud-hosted AI client is connected.
+
+## 11. Future changes
+
+Security hardening continues across releases. Future updates may add further controls to the MCP interface (e.g. scoped tool permissions) and other protections; each release's changelog will list security-relevant changes.
+
+## 12. Contact
 
 - **Email:** owner@novara.xin
 - **GitHub:** https://github.com/Novara-owner/Novara-Vault

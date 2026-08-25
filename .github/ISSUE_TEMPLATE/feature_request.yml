@@ -1,0 +1,30 @@
+name: Feature Request / 功能建议
+description: Suggest an idea / 提出一个想法
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! / 感谢你的建议！
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 背景
+      description: What problem does this solve? / 这个想法要解决什么问题？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / 建议方案
+      description: Describe what you'd like to see. / 描述你希望看到的实现。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / 考虑过的替代方案（可选）
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context / 补充信息（可选）

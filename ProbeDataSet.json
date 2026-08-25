@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "benchmarkQuestions": [
+    { "key": "strawberry", "prompt": "How many times does the letter 'r' appear in the word 'strawberry'? Answer with just the number.", "expected": "3" },
+    { "key": "compare", "prompt": "Which number is larger: 9.11 or 9.9? Answer with just the number.", "expected": "9.9" },
+    { "key": "math", "prompt": "What is 24 * 7 + 5? Answer with just the number.", "expected": "173" }
+  ],
+  "poisoningStrongPatterns": [
+    "\\b(curl|wget)\\s",
+    "\\b(sh|bash)\\s+-c",
+    "powershell",
+    "cmd\\.exe",
+    "[\\u200B-\\u200D\\uFEFF]",
+    "data:image/[^;]+;base64,[A-Za-z0-9+/=]{100,}"
+  ],
+  "poisoningWeakPatterns": [
+    "!\\[[^\\]]*\\]\\(https?://",
+    "[A-Za-z0-9+/=]{200,}"
+  ]
+}

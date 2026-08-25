@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Novara.Pages.DiaryEditorPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:Novara.Pages"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="PlainTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{ThemeResource AppTextPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Grid Background="{TemplateBinding Background}">
+                            <ContentPresenter x:Name="ContentElement"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarCircleButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="RootGrid"
+                              Background="{TemplateBinding Background}"
+                              CornerRadius="{TemplateBinding CornerRadius}"
+                              Width="{TemplateBinding Width}"
+                              Height="{TemplateBinding Height}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonHoverBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter x:Name="ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarSeparatorStyle" TargetType="Border">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Background" Value="{ThemeResource AppBorderBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="6,0" />
+        </Style>
+
+        <Style x:Key="ColorSwatchButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="RootGrid"
+                              Background="{TemplateBinding Background}"
+                              CornerRadius="{TemplateBinding CornerRadius}"
+                              BorderBrush="{TemplateBinding BorderBrush}"
+                              BorderThickness="{TemplateBinding BorderThickness}"
+                              Width="{TemplateBinding Width}"
+                              Height="{TemplateBinding Height}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <!-- The swatch's own color IS its background - hover must NOT repaint it,
+                                                 only add a border ring to signal clickability. -->
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextSecondaryBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextPrimaryBrush}" />
+                                            </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter x:Name="ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        
+        <Style x:Key="MdViewSwitchButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Page.Resources>
+
+    <Grid x:Name="EditorRoot" Background="{ThemeResource AppSurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="36" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Background="Transparent">
+            <Button x:Name="BackButton"
+                    Style="{StaticResource NovaraPrimaryButtonStyle}"
+                    CornerRadius="8"
+                    Click="BackButton_Click"
+                    Width="36" Height="36"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="28,-10,0,0">
+                <Path x:Name="BackPathIcon"
+                      Width="18" Height="18"
+                      Stretch="Uniform"
+                      Fill="#FFFFFFFF" />
+            </Button>
+
+            
+            <StackPanel x:Name="MdViewSwitch"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center"
+                        Margin="0,-10,28,0"
+                        Visibility="Collapsed">
+                <Button x:Name="MdWriteButton" Style="{StaticResource MdViewSwitchButtonStyle}"
+                        Background="Transparent" Click="MdWriteButton_Click">
+                    <Path x:Name="MdWritePathIcon" Width="20" Height="20"
+                          Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                </Button>
+                <Button x:Name="MdPreviewButton" Style="{StaticResource MdViewSwitchButtonStyle}"
+                        Background="Transparent" Click="MdPreviewButton_Click">
+                    <Path x:Name="MdPreviewPathIcon" Width="20" Height="20"
+                          Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <WebView2 x:Name="ContentWebView"
+                      Margin="48,12,40,8"
+                      DefaultBackgroundColor="Transparent" />
+
+            <Grid x:Name="ToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="ToolbarTranslate" Y="0" />
+                </Grid.RenderTransform>
+                <Border x:Name="ToolbarBorder"
+                    Background="{ThemeResource AppSurfaceElevatedBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="28"
+                    Padding="12,8">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+
+                        <Button x:Name="UndoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="UndoButton_Click">
+                            <Path x:Name="UndoPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
+                        </Button>
+                        <Button x:Name="RedoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="RedoButton_Click">
+                            <Path x:Name="RedoPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
+                        </Button>
+
+                        <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+
+                        <Button x:Name="BoldButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="BoldButton_Click">
+                            <Path x:Name="BoldPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+                        <Button x:Name="ItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="ItalicButton_Click">
+                            <Path x:Name="ItalicPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+                        <Button x:Name="UnderlineButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="UnderlineButton_Click">
+                            <Path x:Name="UnderlinePathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+
+                        <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+
+                        <Button x:Name="ColorButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="ColorButton_Click">
+                            <Path x:Name="TextColorPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+                        <Button x:Name="AlignButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="AlignButton_Click">
+                            <Path x:Name="AlignPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+
+                        <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+
+                        <Button x:Name="CodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="CodeBlockButton_Click">
+                            <Path x:Name="CodeBlockPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
+                        </Button>
+                        <Button x:Name="HorizontalRuleButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="HorizontalRuleButton_Click">
+                            <Path x:Name="HorizontalRulePathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
+                        </Button>
+
+                        <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+
+                        <Button x:Name="InsertButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="InsertButton_Click">
+                            <Path x:Name="InsertImagePathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
+                        </Button>
+
+                        <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+
+                        <Button x:Name="CollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                                Click="CollapseButton_Click">
+                            <Path x:Name="CollapsePathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                        </Button>
+
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            
+            <Grid x:Name="MdToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="MdToolbarTranslate" Y="0" />
+                </Grid.RenderTransform>
+                <Border Background="{ThemeResource AppSurfaceElevatedBrush}"
+                        BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                        BorderThickness="2"
+                        CornerRadius="28"
+                        Padding="12,8">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                                  HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" ZoomMode="Disabled"
+                                  MaxWidth="860">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Button x:Name="MdUndoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdUndoButton_Click"><Path x:Name="MdUndoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button x:Name="MdRedoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdRedoButton_Click"><Path x:Name="MdRedoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdBoldButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBoldButton_Click"><Path x:Name="MdBoldPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button x:Name="MdItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdItalicButton_Click"><Path x:Name="MdItalicPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button x:Name="MdStrikeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdStrikeButton_Click"><Path x:Name="MdStrikePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button x:Name="MdInlineCodeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdInlineCodeButton_Click"><Path x:Name="MdInlineCodePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdHeadingButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingButton_Click"><Path x:Name="MdHeadingPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdBulletButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBulletButton_Click"><Path x:Name="MdBulletPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button x:Name="MdOrderedButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdOrderedButton_Click"><Path x:Name="MdOrderedPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button x:Name="MdQuoteButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdQuoteButton_Click"><Path x:Name="MdQuotePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdLinkButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdLinkButton_Click"><Path x:Name="MdLinkPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button x:Name="MdImageButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdImageButton_Click"><Path x:Name="MdImagePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdCodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCodeBlockButton_Click"><Path x:Name="MdCodeBlockPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button x:Name="MdHrButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHrButton_Click"><Path x:Name="MdHrPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdTableButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdTableButton_Click"><Path x:Name="MdTablePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button x:Name="MdClearFormatButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdClearFormatButton_Click"><Path x:Name="MdClearFormatPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                            <Button x:Name="MdCollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCollapseButton_Click"><Path x:Name="MdCollapsePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            
+            <!-- ND2: wrapped in a per-picker Overlay so DialogDepth pairs each Scrim with its own panel -->
+            <Grid x:Name="MdHeadingPickerOverlay">
+            <Grid x:Name="MdHeadingPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="MdHeadingPickerScrim_Tapped" />
+
+            <Border x:Name="MdHeadingPickerPanel"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,82"
+                    Background="{ThemeResource AppSurfaceElevatedBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="16"
+                    Padding="6">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="MdHeadingPickerTranslate" X="0" />
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="MdHeading1Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="1"><Path x:Name="MdHeading1PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button x:Name="MdHeading2Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="2"><Path x:Name="MdHeading2PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button x:Name="MdHeading3Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="3"><Path x:Name="MdHeading3PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button x:Name="MdHeading4Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="4"><Path x:Name="MdHeading4PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                </StackPanel>
+            </Border>
+
+            <Button x:Name="ExpandButton"
+                    Visibility="Collapsed"
+                    Click="ExpandButton_Click"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,20,20"
+                    Width="44" Height="44"
+                    Background="{ThemeResource AppPrimaryButtonBrush}"
+                    BorderBrush="{ThemeResource AppPrimaryButtonPressedBrush}"
+                    BorderThickness="1"
+                    CornerRadius="22"
+                    Padding="0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="RootGrid"
+                              Background="{TemplateBinding Background}"
+                              BorderBrush="{TemplateBinding BorderBrush}"
+                              BorderThickness="{TemplateBinding BorderThickness}"
+                              CornerRadius="{TemplateBinding CornerRadius}">
+                            <Path x:Name="ToolbarExpandPathIcon" Width="20" Height="20"
+                                  Stretch="Uniform" Fill="#FFFFFFFF"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+            </Grid>
+
+            <Grid x:Name="ColorPickerOverlay">
+            <Grid x:Name="ColorPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="ColorPickerScrim_Tapped" />
+
+            <Border x:Name="ColorPickerPanel"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,82"
+                    Background="{ThemeResource AppSurfaceElevatedBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="16"
+                    Padding="10">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="ColorPickerTranslate" X="0" />
+                </Border.RenderTransform>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="36" />
+                        <RowDefinition Height="36" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="36" />
+                        <ColumnDefinition Width="36" />
+                        <ColumnDefinition Width="36" />
+                        <ColumnDefinition Width="36" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Row="0" Grid.Column="0"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="Transparent" Tag="Clear" Click="ColorItem_Click">
+                        <Path x:Name="RestorePathIcon" Width="18" Height="18"
+                              Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                    </Button>
+                    <Button Grid.Row="0" Grid.Column="1"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#AAAAAA" Click="ColorItem_Click" />
+                    <Button Grid.Row="0" Grid.Column="2"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#FF0000" Click="ColorItem_Click" />
+                    <Button Grid.Row="0" Grid.Column="3"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#FF8C00" Click="ColorItem_Click" />
+
+                    <Button Grid.Row="1" Grid.Column="0"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#4CAF50" Click="ColorItem_Click" />
+                    <Button Grid.Row="1" Grid.Column="1"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#2196F3" Click="ColorItem_Click" />
+                    <Button Grid.Row="1" Grid.Column="2"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#9C27B0" Click="ColorItem_Click" />
+                    <Button Grid.Row="1" Grid.Column="3"
+                            Style="{StaticResource ColorSwatchButtonStyle}"
+                            Background="#795548" Click="ColorItem_Click" />
+                </Grid>
+            </Border>
+            </Grid>
+
+            <Grid x:Name="AlignPickerOverlay">
+            <Grid x:Name="AlignPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="AlignPickerScrim_Tapped" />
+
+            <Border x:Name="AlignPickerPanel"
+                    Visibility="Collapsed"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,82"
+                    Background="{ThemeResource AppSurfaceElevatedBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="16"
+                    Padding="6">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="AlignPickerTranslate" X="0" />
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="AlignLeftButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                            Click="AlignItem_Click" Tag="left">
+                        <Path x:Name="AlignLeftPathIcon" Width="20" Height="20"
+                              Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                    </Button>
+                    <Button x:Name="AlignCenterButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                            Click="AlignItem_Click" Tag="center">
+                        <Path x:Name="AlignCenterPathIcon" Width="20" Height="20"
+                              Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                    </Button>
+                    <Button x:Name="AlignRightButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                            Click="AlignItem_Click" Tag="right">
+                        <Path x:Name="AlignRightPathIcon" Width="20" Height="20"
+                              Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+        </Grid>
+</Page>

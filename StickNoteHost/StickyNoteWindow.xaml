@@ -1,0 +1,39 @@
+<Window
+    x:Class="StickNoteHost.StickyNoteWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Sticky Note">
+    <Border x:Name="RootBorder"
+            Background="#FFF2F2F2"
+            BorderBrush="#40000000"
+            BorderThickness="1"
+            CornerRadius="8" MinWidth="300" MinHeight="450"
+            RightTapped="RootBorder_RightTapped"
+            PointerPressed="RootBorder_PointerPressed"
+            PointerMoved="RootBorder_PointerMoved"
+            PointerReleased="RootBorder_PointerReleased"
+            PointerCaptureLost="RootBorder_PointerCaptureLost">
+        <Grid Padding="14" RowSpacing="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="TitleText" Text="Sticky Note" FontWeight="SemiBold"
+                       Foreground="#FF7276FF" VerticalAlignment="Center" />
+            <TextBlock x:Name="CountdownText" Grid.Row="1" FontSize="32"
+                       FontWeight="Bold"
+                       Foreground="#FFB03030"
+                       HorizontalAlignment="Center"
+                       Visibility="Collapsed"
+                       Margin="0,6,0,0" />
+            <ScrollViewer Grid.Row="2" x:Name="NoteScroll"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          IsTabStop="False">
+                <TextBlock x:Name="NoteBox" Text="Note content" TextWrapping="Wrap"
+                           FontSize="14" VerticalAlignment="Top" />
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</Window>

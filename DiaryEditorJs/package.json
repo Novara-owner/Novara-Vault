@@ -1,0 +1,24 @@
+{
+  "name": "novara-diary-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POC: bundle Tiptap into a single offline JS file for Novara's WebView2 diary editor (no main-app changes yet).",
+  "scripts": {
+    "build": "esbuild src/entry.js --bundle --format=iife --minify --outfile=dist/tiptap.bundle.js && esbuild src/md-entry.js --bundle --format=iife --minify --outfile=dist/md.bundle.js"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.14.0",
+    "@tiptap/extension-color": "^2.27.2",
+    "@tiptap/extension-image": "^2.27.2",
+    "@tiptap/extension-link": "^2.27.2",
+    "@tiptap/extension-text-align": "^2.27.2",
+    "@tiptap/extension-text-style": "^2.27.2",
+    "@tiptap/extension-underline": "^2.27.2",
+    "@tiptap/pm": "^2.14.0",
+    "@tiptap/starter-kit": "^2.14.0",
+    "markdown-it": "^14.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

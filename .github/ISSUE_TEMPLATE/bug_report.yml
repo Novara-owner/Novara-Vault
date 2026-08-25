@@ -1,0 +1,56 @@
+name: Bug Report / 缺陷报告
+description: Report a bug / 报告一个缺陷
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as possible.
+        感谢花时间反馈缺陷，请尽可能填写详细信息。
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      description: Which Novara version are you using? / 你使用的 Novara 版本？
+      placeholder: "e.g. 5.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows version / Windows 版本
+      options:
+        - Windows 11
+        - Windows 10 22H2
+        - Windows 10 (older) / Windows 10（更早）
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened? / 发生了什么？
+      description: A clear and concise description of the bug. / 清晰描述缺陷现象。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: "1. … 2. … 3. …"
+      placeholder: |
+        1. Open the app
+        2. Click …
+        3. See the error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 期望行为
+      description: What you expected to happen instead. / 你期望的正确行为是什么。
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志（可选）
+      description: Paste or attach any relevant logs from `%LocalAppData%\Novara\logs\`. Remove sensitive values first. / 可附上 `%LocalAppData%\Novara\logs\` 下的相关日志，请先移除敏感信息。
