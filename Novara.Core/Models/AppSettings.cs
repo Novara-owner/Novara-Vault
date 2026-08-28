@@ -10,6 +10,9 @@ public class AppSettings
     public string CloseBehavior { get; set; } = "直接退出";
     public List<string> VisibleTabs { get; set; } = new() { "备忘", "文件", "计划", "日记" };
     public bool PrivacyLockEnabled { get; set; }
+    
+    public int AutoLockSeconds { get; set; }
+    public bool AutoLockOnSystemLock { get; set; }
     public bool GcmMigrationRejected { get; set; } 
     public string AppLanguage { get; set; } = ""; // zh-CN / en-US / zh-TW / ko-KR / ja-JP; empty = follow system (contract, see 2.1)
     public bool HasCompletedWelcome { get; set; }

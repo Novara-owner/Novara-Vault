@@ -1,40 +1,32 @@
-# ============ 构建产物 ============
+# ===== Novara 开发工作区 .gitignore（双仓库方案，2026-08-27 定稿）=====
+# 规则：本仓库=开发全量（源码+中文注释+memory 文档），只进本地/主人私有远端。
+# 公开 Novara-Vault 永不经此目录 push，只收 make-vault.ps1 净化产物。
+
+# --- 构建产物 ---
 bin/
 obj/
-[Bb]in/
-[Oo]bj/
+[Bb]uild/
+Generated Files/
 
-# ============ Visual Studio / IDE ============
+# --- IDE / 工具本地产物 ---
 .vs/
+.vscode/
 *.user
 *.suo
-*.userosscache
-*.sln.docstates
-*.userprefs
+*.rsuser
 
-# ============ 发布产物（发布时手动补 Novara.pri） ============
-publish/
-Publish/
-Novara.pri
-*.zip
-
-# ============ DiaryEditorJs 前端 ============
+# --- JS 编辑器依赖（dist bundle 是成品需入库，node_modules 不入）---
 DiaryEditorJs/node_modules/
-DiaryEditorJs/dist/
 
-# ============ 用户真实数据（绝不能入库） ============
-_data-backup/
-*.novadb
-stickies.json
-*.novabak
-
-# ============ 安装包（走 Releases，不进 git） ============
+# --- 打包产物（可由 setup.iss 重新编译生成，不入库）---
 Installer/*.exe
+_publish_tmp/
 
-# ============ 生成文件 ============
-StickNoteHost/Generated Files/
 
-# ============ 系统 / 其他 ============
-.DS_Store
+# --- 操作系统垃圾 ---
 Thumbs.db
 desktop.ini
+
+# --- 日志 ---
+*.log
+logs/

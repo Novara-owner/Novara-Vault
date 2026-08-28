@@ -291,15 +291,11 @@
     </Page.Resources>
 
     <Grid x:Name="MemoRoot">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="0"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <Grid x:Name="ContentGrid" Grid.Row="2" ContextRequested="ContentGrid_ContextRequested">
+        <Grid.RowDefinitions><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid x:Name="ContentGrid" ContextRequested="ContentGrid_ContextRequested">
                 <ScrollViewer x:Name="MemoScrollViewer" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="GroupsContainer" Spacing="12" Padding="40,20,40,20">
+                    <StackPanel x:Name="GroupsContainer" Spacing="12" Padding="40,12,40,20">
 
                     </StackPanel>
                 </ScrollViewer>

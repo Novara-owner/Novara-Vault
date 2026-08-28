@@ -700,11 +700,34 @@ public sealed partial class DiaryPage : Page
             picker.FileTypeFilter.Add(".markdown");
             var file = await picker.PickSingleFileAsync();
             if (file == null) return;
+            await ImportDocumentFromPath(file.Path);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"导入 Markdown 失败: {ex.Message}");
+            App.ShowToast(App.GetString("Diary_Import_Fail")); // NH11: surface the failure to the user
+        }
+    }
 
-            var content = File.ReadAllText(file.Path);
+    /// <summary>Shared import core for both the in-app picker and the system .md right-click menu
+    /// ("Import Novara"): read the raw text, store it untouched, filename (sans extension) as title.
+    /// Empty files are rejected silently, matching NH11.</summary>
+    public async System.Threading.Tasks.Task ImportDocumentFromPath(string filePath)
+    {
+        try
+        {
+            var ext = Path.GetExtension(filePath);
+            if (!string.Equals(ext, ".md", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(ext, ".markdown", StringComparison.OrdinalIgnoreCase)) return; // whitelist
+
+            if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge")); return; } 
+            var content = await File.ReadAllTextAsync(filePath);
+            
+            var bad = 0; foreach (var ch in content) if (ch == '�') bad++;
+            if (bad >= Math.Max(4, content.Length / 100)) { App.ShowToast(App.GetString("Diary_Import_Fail")); return; }
             // NH11: empty file -> nothing to create (matches the editor's empty-doc rule)
             if (string.IsNullOrWhiteSpace(content)) return;
-            var title = Path.GetFileNameWithoutExtension(file.Name);
+            var title = Path.GetFileNameWithoutExtension(filePath);
             if (string.IsNullOrWhiteSpace(title)) title = App.GetString("DiaryEditor_Untitled");
             // NH11+N2H-4: enforce the 120 non-whitespace-char title cap, matching the editor's count
             title = DiaryEditorPage.EnforceTitleLength(title);

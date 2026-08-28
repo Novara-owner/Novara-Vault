@@ -31,7 +31,7 @@
                       HorizontalScrollBarVisibility="Disabled"
                       ContextRequested="RootGrid_ContextRequested">
             <StackPanel x:Name="DiaryList"
-                        Padding="60,24,60,20"
+                        Padding="40,12,40,20"
                         Spacing="12">
 
             </StackPanel>

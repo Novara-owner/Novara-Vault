@@ -11,7 +11,7 @@ import Link from '@tiptap/extension-link';
 import TextAlign from '@tiptap/extension-text-align';
 
 // Custom image node:
-
+// 1. allowBase64=true — the stock extension drops data:image/... on parseHTML (photos vanish on reload).
 // 2. persist width/height so resizing is saved with the document.
 // 3. NodeView enables 8-direction edge dragging (like a window). Not aspect-locked.
 // 4. TextAlign is configured to include 'image', so setTextAlign writes a textAlign attr onto this

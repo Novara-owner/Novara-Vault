@@ -19,6 +19,11 @@ public class NovaraStore
     private const byte FlagPlain = 0x00;
     private const byte FlagEncrypted = 0x01;
     private const int HeaderSize = 4 + 1 + 1 + 16;
+    // 2026-08-28 integrity upgrade (design doc 9.1#3): BACKUP FILES ONLY - version 3 carries a full
+    // SHA-256 digest in a 38B header. data.novadb never writes v3 (2.1 contract: its header matrix
+    // stays v1-plain/v1-CBC/v2-GCM, encrypted integrity via GCM tag).
+    private const byte FileVersionSha256Backup = 3;
+    private const int HeaderSizeSha256 = 4 + 1 + 1 + 32;
 
     
     private const int SaveDebounceMs = 300;
@@ -61,6 +66,16 @@ public class NovaraStore
     public bool IsSaveSuppressed => _suppressSave;
 
     public bool IsEncrypted => _encryptionFlag == FlagEncrypted;
+
+    
+    
+    public void Invalidate()
+    {
+        _suppressSave = true; 
+        _loaded = false;
+        _password = null;
+        Database = null!; 
+    }
 
     /// <summary>Current in-memory password (null when plaintext/not loaded). 5.0 Windows Hello
     /// enable flow reads it to store into PasswordVault.</summary>
@@ -320,13 +335,17 @@ public class NovaraStore
         try
         {
             if (_suppressSave) return false; // N5S-07: memory is stale vs the restored snapshot - exporting it would silently hand the user the wrong data
+            if (!_loaded) return false; 
             // D21: trashed items (IsDeleted) must not leave the machine with a backup - deep-clone the
             // DB, drop them and serialize the clean copy; the live in-memory DB is never mutated.
             // 4.4: includeFilePathEntries=false excludes path backups entirely (device-migration use case).
             NovaraDatabase export;
             try
             {
-                var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database), JsonOptions);
+                
+                
+                
+                var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions), JsonOptions);
                 // E4-20: a clone that fails to deserialize must NOT fall back to the live db (that
                 // would leak trashed items / excluded paths into the backup). Fail the export instead,
                 // consistent with the catch block below.
@@ -346,12 +365,15 @@ public class NovaraStore
                 return false;
             }
             var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
-            var md5 = MD5.HashData(json);
-            var header = new byte[HeaderSize];
+            // 2026-08-28 (design doc 9.1#3): backups leave the machine, so integrity moves MD5 -> SHA-256
+            // as backup format v3 (38B header). SHA-256 detects corruption only - it is NOT tamper
+            // protection on a plaintext file (that lands with the encrypted-backup format, doc 9.2#6).
+            var sha = SHA256.HashData(json);
+            var header = new byte[HeaderSizeSha256];
             BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
-            header[4] = FileVersionLegacy; // backup files are plaintext snapshots - format stays v1 (2.0/3.0 cross-compatible)
+            header[4] = FileVersionSha256Backup; // backup files only - data.novadb never writes v3
             header[5] = FlagPlain;
-            md5.CopyTo(header, 6);
+            sha.CopyTo(header, 6);
             var dir = Path.GetDirectoryName(backupPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             // E2-03: atomic write (tmp + move) - an interrupted export must never leave a half-written backup file
@@ -390,20 +412,32 @@ Logic Range: Below methods in this region
             byte[] body;
             using (var fs = new FileStream(backupPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
+                // 2026-08-28 dual-format import: v3 = SHA-256 over a 38B header (current exports);
+                // v1 = legacy MD5 over the 22B header - 2.0/3.0/4.x/5.0 exports stay importable forever.
                 if (fs.Length < HeaderSize) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
-                var header = new byte[HeaderSize];
-                fs.ReadExactly(header);
-                if (BitConverter.ToUInt32(header, 0) != Magic) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMagic"));
-                if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), header[4]));
-                if (header[5] != FlagPlain) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupNotPlain"));
+                var prefix = new byte[6];
+                fs.ReadExactly(prefix);
+                if (BitConverter.ToUInt32(prefix, 0) != Magic) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMagic"));
+                var ver = prefix[4];
+                if (ver != FileVersionLegacy && ver != FileVersionCurrent && ver != FileVersionSha256Backup) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
+                if (prefix[5] != FlagPlain) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupNotPlain"));
                 // E4-19: a v2 plaintext file does not exist in the format matrix (4.7) - reject it,
                 // symmetric with Load's defensive corruption handling (E1-26).
-                if (header[4] == FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), header[4]));
-                var md5Stored = header.AsSpan(6, 16).ToArray();
-                body = new byte[fs.Length - HeaderSize];
+                if (ver == FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
+
+                var headerSize = ver == FileVersionSha256Backup ? HeaderSizeSha256 : HeaderSize;
+                var digestLen = headerSize - 6;
+                var storedDigest = new byte[digestLen];
+                if (digestLen > 0)
+                {
+                    var rest = new byte[digestLen];
+                    fs.ReadExactly(rest);
+                    rest.CopyTo(storedDigest, 0);
+                }
+                body = new byte[fs.Length - headerSize];
                 fs.ReadExactly(body);
-                var md5Actual = MD5.HashData(body);
-                if (!md5Stored.AsSpan().SequenceEqual(md5Actual))
+                var actual = ver == FileVersionSha256Backup ? SHA256.HashData(body) : MD5.HashData(body);
+                if (!storedDigest.AsSpan().SequenceEqual(actual))
                     return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMd5"));
             }
 
@@ -443,6 +477,10 @@ Logic Range: Below methods in this region
 
             if (File.Exists(_filePath)) File.SetAttributes(_filePath, FileAttributes.Normal);
             Database = db;
+            
+            
+            var oldLoaded = _loaded;
+            var oldSuppress = _suppressSave;
             _loaded = true;
             _suppressSave = false; // N4S-01: the imported db is about to be written to disk - memory and disk become consistent again
             if (_encryptionFlag == FlagEncrypted)
@@ -451,13 +489,15 @@ Logic Range: Below methods in this region
                 if (string.IsNullOrEmpty(_password) || PasswordService.GetDeriveSalt() == null)
                 {
                     Database = oldDb; // E1-05: roll back the in-memory DB before bailing out (L31) - else a later SaveAsync silently overwrites the local db with the imported data
+                    _loaded = oldLoaded;
+                    _suppressSave = oldSuppress;
                     return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_ImportNoKey"));
                 }
-                if (!SaveSync()) { Database = oldDb; return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_ReencryptFail")); }
+                if (!SaveSync()) { Database = oldDb; _loaded = oldLoaded; _suppressSave = oldSuppress; return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_ReencryptFail")); }
             }
             else
             {
-                if (!SaveSync()) { Database = oldDb; return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail")); }
+                if (!SaveSync()) { Database = oldDb; _loaded = oldLoaded; _suppressSave = oldSuppress; return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail")); }
             }
             return new LoadResult(LoadStatus.Ok);
         }
@@ -517,7 +557,19 @@ Logic Range: Below methods in this region
         if (!_loaded) return false;
         if (_suppressSave) return true; // N4S-01: report success so exit paths proceed - but write nothing, the restored file on disk is authoritative
         _saveGate.Wait();
-        try { return WriteSnapshot(); }
+        try
+        {
+            
+            
+            
+            var ok = WriteSnapshot();
+            if (!ok)
+            {
+                Thread.Sleep(60);
+                ok = WriteSnapshot();
+            }
+            return ok;
+        }
         finally { _saveGate.Release(); }
     }
 

@@ -1,0 +1,85 @@
+using System.Collections.Generic;
+using Microsoft.UI.Xaml;
+
+namespace Novara.Services;
+
+/// <summary>
+
+
+/// </summary>
+public static class MeltAnim
+{
+    private sealed class Rec { public System.EventHandler<object>? Handler; public double Val; }
+    private static readonly Dictionary<FrameworkElement, Rec> _active = new();
+
+    
+    public static void Begin(FrameworkElement panel, bool expand, double topMargin = 0)
+    {
+        try
+        {
+            var targetVal = expand ? 1.0 : 0.0;
+            if (_active.TryGetValue(panel, out var hold))
+            {
+                if (hold.Handler != null)
+                {
+                    
+                    try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= hold.Handler; } catch { }
+                    _active.Remove(panel);
+                }
+                else
+                {
+                    
+                    if (hold.Val == targetVal && panel.Visibility == Visibility.Visible) return;
+                    _active.Remove(panel);
+                }
+            }
+
+            if (!expand && panel.Visibility == Visibility.Collapsed) return; 
+
+            panel.Visibility = Visibility.Visible;
+            panel.Height = double.NaN;
+            panel.UpdateLayout();
+            double full = panel.ActualHeight;
+            double start = expand ? 0 : full;
+            double target = expand ? full : 0;
+            if (expand) { panel.Height = 0; panel.Opacity = 0; }
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            System.EventHandler<object> handler = null!;
+            handler = (s, a) =>
+            {
+                try
+                {
+                    if (!_active.TryGetValue(panel, out var rec) || !ReferenceEquals(rec.Handler, handler))
+                    { try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { } return; } 
+
+                    var t = System.Math.Min(1.0, sw.Elapsed.TotalMilliseconds / 220.0);
+                    var eOut = 1 - System.Math.Pow(1 - t, 3);
+                    var eIn = System.Math.Pow(t, 3);
+                    var e = expand ? eOut : eIn;
+                    panel.Height = start + (target - start) * e;
+                    if (topMargin > 0) panel.Margin = new Thickness(0, topMargin * e, 0, 0);
+                    panel.Opacity = expand ? eOut : (1 - eIn);
+                    if (t >= 1)
+                    {
+                        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler;
+                        
+                        _active[panel] = new Rec { Val = targetVal };
+                        if (expand) { panel.Height = double.NaN; panel.Opacity = 1; }
+                        else { panel.Visibility = Visibility.Collapsed; panel.Height = double.NaN; panel.Opacity = 0; }
+                        if (topMargin > 0) panel.Margin = new Thickness(0, topMargin, 0, 0);
+                    }
+                }
+                catch
+                {
+                    
+                    try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { }
+                    _active.Remove(panel);
+                }
+            };
+            _active[panel] = new Rec { Handler = handler, Val = expand ? 1 : 0 };
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += handler;
+        }
+        catch { }
+    }
+}

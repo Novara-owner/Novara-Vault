@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.DiaryEditorPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -197,7 +197,7 @@
 
             <Grid x:Name="ToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom">
                 <Grid.RenderTransform>
-                    <TranslateTransform x:Name="ToolbarTranslate" Y="0" />
+                    <CompositeTransform x:Name="ToolbarTranslate" TranslateX="0" TranslateY="0" ScaleX="1" ScaleY="1" />
                 </Grid.RenderTransform>
                 <Border x:Name="ToolbarBorder"
                     Background="{ThemeResource AppSurfaceElevatedBrush}"
@@ -285,7 +285,7 @@
             
             <Grid x:Name="MdToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed">
                 <Grid.RenderTransform>
-                    <TranslateTransform x:Name="MdToolbarTranslate" Y="0" />
+                    <CompositeTransform x:Name="MdToolbarTranslate" TranslateX="0" TranslateY="0" ScaleX="1" ScaleY="1" />
                 </Grid.RenderTransform>
                 <Border Background="{ThemeResource AppSurfaceElevatedBrush}"
                         BorderBrush="{ThemeResource AppDialogBorderBrush}"
@@ -357,11 +357,11 @@
                     HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
                     Margin="0,0,20,20"
-                    Width="44" Height="44"
-                    Background="{ThemeResource AppPrimaryButtonBrush}"
-                    BorderBrush="{ThemeResource AppPrimaryButtonPressedBrush}"
-                    BorderThickness="1"
-                    CornerRadius="22"
+                    Width="52" Height="52"
+                    Background="{ThemeResource AppSurfaceElevatedBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="2"
+                    CornerRadius="26"
                     Padding="0">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
@@ -371,7 +371,7 @@
                               BorderThickness="{TemplateBinding BorderThickness}"
                               CornerRadius="{TemplateBinding CornerRadius}">
                             <Path x:Name="ToolbarExpandPathIcon" Width="20" Height="20"
-                                  Stretch="Uniform" Fill="#FFFFFFFF"
+                                  Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}"
                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                     </ControlTemplate>

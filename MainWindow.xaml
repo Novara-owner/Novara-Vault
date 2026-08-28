@@ -20,7 +20,7 @@
         <Grid x:Name="CustomTitleBar" Background="Transparent">
             <TextBlock
                 Text="Novara"
-                FontFamily="Century Gothic"
+                FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
                 VerticalAlignment="Center"
                 Margin="16,0,0,0"
                 FontSize="15"
@@ -34,20 +34,26 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" x:Name="NavMemo" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Memo" Margin="0,0,10,0" IsTabStop="False" ToolTipService.ToolTip="Ctrl+1">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Path x:Name="NavMemoPath" Width="20" Height="20" Stretch="Uniform"
-                          Fill="{ThemeResource IconForegroundBrush}" />
-                    <TextBlock x:Name="NavMemoText" Text="备忘" Tag="Nav_Tab_Memo" VerticalAlignment="Center" FontSize="14" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="1" x:Name="NavFile" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="File" Margin="0,0,10,0" IsTabStop="False" ToolTipService.ToolTip="Ctrl+2">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Path x:Name="NavFilePath" Width="20" Height="20" Stretch="Uniform"
-                          Fill="{ThemeResource IconForegroundBrush}" />
-                    <TextBlock x:Name="NavFileText" Text="文件" Tag="Nav_Tab_File" VerticalAlignment="Center" FontSize="14" />
-                </StackPanel>
-            </Button>
+            
+            <Border x:Name="NavShadowReceiver" Grid.ColumnSpan="4" IsHitTestVisible="False" />
+            <Grid x:Name="NavMemoHost" Grid.Column="0" Margin="0,0,10,0">
+                <Button x:Name="NavMemo" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Memo" IsTabStop="False" ToolTipService.ToolTip="Ctrl+1">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Path x:Name="NavMemoPath" Width="20" Height="20" Stretch="Uniform"
+                              Fill="{ThemeResource IconForegroundBrush}" />
+                        <TextBlock x:Name="NavMemoText" Text="备忘" Tag="Nav_Tab_Memo" VerticalAlignment="Center" FontSize="14" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Grid x:Name="NavFileHost" Grid.Column="1" Margin="0,0,10,0">
+                <Button x:Name="NavFile" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="File" IsTabStop="False" ToolTipService.ToolTip="Ctrl+2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Path x:Name="NavFilePath" Width="20" Height="20" Stretch="Uniform"
+                              Fill="{ThemeResource IconForegroundBrush}" />
+                        <TextBlock x:Name="NavFileText" Text="文件" Tag="Nav_Tab_File" VerticalAlignment="Center" FontSize="14" />
+                    </StackPanel>
+                </Button>
+            </Grid>
             <Grid x:Name="NavPlanHost" Grid.Column="2" Margin="0,0,10,0">
                 <Button x:Name="NavPlan" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Plan" IsTabStop="False" ToolTipService.ToolTip="Ctrl+3">
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -77,14 +83,14 @@
                                         <VisualState x:Name="PointerOver">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#33FFFFFF" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppHoverBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#59FFFFFF" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppHoverBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
@@ -128,14 +134,14 @@
                                         <VisualState x:Name="PointerOver">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#33FFFFFF" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppHoverBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
                                         <VisualState x:Name="Pressed">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="#59FFFFFF" />
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppHoverBrush}" />
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
@@ -233,14 +239,14 @@
                     </Grid.RenderTransform>
                     <TextBlock x:Name="WelcomeTitleShadowText"
                                Text="Novara"
-                               FontFamily="Century Gothic"
+                               FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
                                FontSize="80"
                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                Opacity="0.06"
                                Margin="2,2,0,0" />
                     <TextBlock x:Name="WelcomeTitleText"
                                Text="Novara"
-                               FontFamily="Century Gothic"
+                               FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
                                FontSize="80"
                                Foreground="{ThemeResource AppTextPrimaryBrush}" />
                 </Grid>

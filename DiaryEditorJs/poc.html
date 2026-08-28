@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novara Tiptap POC</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #222; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 24px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+    button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+    button.active { background: #0066cc; color: #fff; border-color: #0066cc; }
+    .editor { border: 1px solid #ccc; border-radius: 8px; padding: 12px; min-height: 160px; outline: none; }
+    .editor:focus { border-color: #0066cc; }
+    /* 选中文字时保留文字本身颜色（默认蓝底白字会盖住颜色标记） */
+    ::selection { background: rgba(0,0,0,0.15); color: inherit; }
+    .output { margin-top: 24px; }
+    .output pre { background: #f6f6f6; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .status { margin-top: 8px; font-weight: bold; }
+    .ok { color: #2e7d32; }
+    .fail { color: #c62828; }
+  </style>
+</head>
+<body>
+  <h1>Novara Tiptap POC（增强版）</h1>
+  <p>验证 Tiptap 内核 + text-style/color/image 扩展，并模拟 C# 桥接的 PostMessage 消息格式。</p>
+
+  <div class="toolbar">
+    <button id="btnBold" onclick="bridge('execBold')">加粗</button>
+    <button id="btnItalic" onclick="bridge('execItalic')">斜体</button>
+    <button id="btnUnderline" onclick="bridge('execUnderline')">下划线</button>
+    <button onclick="bridge('execH1')">H1</button>
+    <button onclick="bridge('execH2')">H2</button>
+    <button onclick="bridge('execForeColor', { color: '#FF0000' })">红色字</button>
+    <button onclick="bridge('execForeColor', { color: '#0066CC' })">蓝色字</button>
+    <button onclick="bridge('insertImage', { base64: window.__poc.sampleImage, filename: 'poc.png', mime: 'image/png' })">插图片(模拟)</button>
+    <button onclick="bridge('execClear')">清除格式</button>
+    <button onclick="bridge('setAll', { title: '', body: '<p>通过 setAll 设置的初始内容</p>' })">setAll</button>
+  </div>
+
+  <div id="editor" class="editor"></div>
+
+  <div class="output">
+    <div id="status" class="status">正在初始化…</div>
+    <div>getBody() 导出 HTML：</div>
+    <pre id="html-out"></pre>
+    <div>formatState 回推（模拟 C# 收到）：</div>
+    <pre id="fmt-out"></pre>
+  </div>
+
+  <script src="./dist/tiptap.bundle.js"></script>
+  <script>
+    (function () {
+      var status = document.getElementById('status');
+      var htmlOut = document.getElementById('html-out');
+      var fmtOut = document.getElementById('fmt-out');
+
+      try {
+        var T = window.NovaraTiptap;
+        if (!T || !T.Editor || !T.StarterKit || !T.TextStyle || !T.Color || !T.Image || !T.Underline) {
+          throw new Error('window.NovaraTiptap 缺少导出（bundle 加载失败）');
+        }
+
+        var editor = new T.Editor({
+          element: document.getElementById('editor'),
+          extensions: [T.StarterKit, T.TextStyle, T.Color, T.Image, T.Underline],
+          content: '<p>Hello Novara！这是一段测试文字。</p>',
+          onUpdate: function () { htmlOut.textContent = editor.getHTML(); },
+          onSelectionUpdate: function () { notifyFormatState(); }
+        });
+
+        // 40x30 红色 PNG（可见，用于验证插入图片）；真实 app 里文件选择器是 C# 的 FileOpenPicker，不在 POC 范围
+        window.__poc = {
+          sampleImage: 'iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAYAAABe3VzdAAAAOUlEQVR4nO3OIQEAIAAEse9fGiIgDzExv53t/Gx1QFCwDggK1gFBwTogKFgHBAXrgKBgHRAUrAMvF2vxVygdvPjVAAAAAElFTkSuQmCC'
+        };
+
+        function notifyFormatState() {
+          var state = {
+            action: 'formatState',
+            bold: editor.isActive('bold'),
+            italic: editor.isActive('italic'),
+            underline: editor.isActive('underline')
+          };
+          fmtOut.textContent = JSON.stringify(state, null, 2);
+          // 更新按钮高亮（模拟 C# UpdateFormatButtonStates）
+          document.getElementById('btnBold').className = state.bold ? 'active' : '';
+          document.getElementById('btnItalic').className = state.italic ? 'active' : '';
+          document.getElementById('btnUnderline').className = state.underline ? 'active' : '';
+        }
+
+        // 模拟 C# 的 PostMessageAsync：{ action, ...data }
+        window.bridge = function (action, data) {
+          var m = Object.assign({ action: action }, data || {});
+          switch (m.action) {
+            case 'execBold': editor.chain().focus().toggleBold().run(); break;
+            case 'execItalic': editor.chain().focus().toggleItalic().run(); break;
+            case 'execUnderline': editor.chain().focus().toggleUnderline().run(); break;
+            case 'execH1': editor.chain().focus().toggleHeading({ level: 1 }).run(); break;
+            case 'execH2': editor.chain().focus().toggleHeading({ level: 2 }).run(); break;
+            case 'execForeColor': editor.chain().focus().setColor(m.color || '#000000').run(); break;
+            case 'insertImage': editor.chain().focus().setImage({ src: 'data:' + (m.mime || 'image/png') + ';base64,' + m.base64, alt: m.filename || '' }).run(); break;
+            case 'execClear': editor.chain().focus().unsetAllMarks().clearNodes().run(); break;
+            case 'setAll': editor.commands.setContent(m.body || ''); break;
+          }
+          notifyFormatState();
+        };
+
+        htmlOut.textContent = editor.getHTML();
+        notifyFormatState();
+        status.textContent = '✅ 初始化成功 — 逐项验证：加粗/斜体/下划线/红蓝字/插图片/清除格式/setAll，下方 HTML 应实时变化，按钮高亮反映状态。';
+        status.className = 'status ok';
+      } catch (err) {
+        status.textContent = '❌ 初始化失败：' + err.message;
+        status.className = 'status fail';
+        console.error(err);
+      }
+    })();
+  </script>
+</body>
+</html>

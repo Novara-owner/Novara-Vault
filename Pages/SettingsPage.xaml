@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -128,6 +128,18 @@
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card5" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.32">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="AutoLockCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.36">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="AutoLockCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.36">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -380,6 +392,19 @@
                                 <Viewbox Width="18" Height="18" Stretch="Uniform">
                                     <PathIcon x:Name="McpExpandIcon" Foreground="{ThemeResource IconForegroundBrush}" />
                                 </Viewbox>
+                            </Button>
+                            <Button x:Name="McpAuditButton"
+                                    Width="160" Height="40"
+                                    Style="{StaticResource SettingsDropdownButtonStyle}"
+                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}"
+                                    CornerRadius="10"
+                                    FontSize="14"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed"
+                                    Click="McpAuditButton_Click">
+                                <TextBlock x:Name="McpAuditButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                             <Button x:Name="McpConfigButton"
                                     Width="160" Height="40"
@@ -797,6 +822,38 @@
                         </Button>
                     </StackPanel>
                 </Grid>
+            </Border>
+
+            
+            <Border x:Name="AutoLockCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" x:Name="AutoLockTitleText"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" Margin="4,0,0,0" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="-8,0,0,0">
+                        <Button x:Name="SyncLockButton" Width="160" Height="40"
+                                Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                                VerticalAlignment="Center" Click="SyncLockButton_Click">
+                            <TextBlock x:Name="SyncLockButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="AutoLockButton" Width="160" Height="40"
+                                Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                                VerticalAlignment="Center" Click="AutoLockButton_Click">
+                            <TextBlock x:Name="AutoLockButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
             </Border>
 
             <Border x:Name="Card10" CornerRadius="12" Opacity="0"
@@ -1424,6 +1481,36 @@
         <!-- ================================================================ -->
 
         <!-- ================================================================ -->
+            
+            <Grid x:Name="AutoLockSyncConfirmOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="AutoLockSyncConfirmScrim" Background="#2E000000" Tapped="AutoLockSyncConfirmScrim_Tapped" />
+                <Border x:Name="AutoLockSyncConfirmDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="AutoLockSyncConfirmDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <TextBlock x:Name="AutoLockSyncConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="AutoLockSyncConfirmClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <TextBlock x:Name="AutoLockSyncConfirmMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" Margin="0,20,0,0" />
+                        <Grid Grid.Row="2" Margin="0,24,0,0">
+                            <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="AutoLockSyncConfirmCancel_Click">
+                                <TextBlock x:Name="AutoLockSyncConfirmCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="AutoLockSyncConfirmOk_Click">
+                                <TextBlock x:Name="AutoLockSyncConfirmOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
         <Grid x:Name="PrivacyLockWarningOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="PrivacyLockWarningScrim" Background="#2E000000" Tapped="PrivacyLockWarningScrim_Tapped" />
             <Border x:Name="PrivacyLockWarningDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -2307,6 +2394,71 @@
                         </Button>
                         <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14" Click="McpRevokeConfirmOk_Click">
                             <TextBlock x:Name="McpRevokeConfirmOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="McpAuditOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="McpAuditScrim" Background="#2E000000" Tapped="McpAuditScrim_Tapped" />
+            <Border x:Name="McpAuditDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="640" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="McpAuditDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="McpAuditTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpAuditClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1" Margin="0,16,4,0" MaxHeight="430" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <StackPanel x:Name="McpAuditList" />
+                            <TextBlock x:Name="McpAuditEmptyText" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,48,0,48" />
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14" Click="McpAuditClear_Click">
+                            <TextBlock x:Name="McpAuditClearButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="McpAuditCloseBottom_Click">
+                            <TextBlock x:Name="McpAuditCloseButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="McpAuditClearConfirmOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="McpAuditClearConfirmScrim" Background="#2E000000" Tapped="McpAuditClearConfirmScrim_Tapped" />
+            <Border x:Name="McpAuditClearConfirmDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="McpAuditClearConfirmDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="McpAuditClearConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpAuditClearConfirmClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="McpAuditClearConfirmMessageText" Grid.Row="1" FontSize="14" Foreground="#FFFF4545" TextWrapping="Wrap" LineHeight="22" Margin="0,20,0,0" />
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="McpAuditClearConfirmCancel_Click">
+                            <TextBlock x:Name="McpAuditClearConfirmCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14" Click="McpAuditClearConfirmOk_Click">
+                            <TextBlock x:Name="McpAuditClearConfirmOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
