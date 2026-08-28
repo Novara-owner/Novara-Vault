@@ -23,6 +23,10 @@ public static class ContextMenuService
     private static string DesktopMenuKey => $@"Software\Classes\DesktopBackground\shell\NovaraOpen{MenuKeySuffix}";
     private static string FileMenuKey => $@"Software\Classes\*\shell\NovaraAddPath{MenuKeySuffix}";
     private static string FolderMenuKey => $@"Software\Classes\Directory\shell\NovaraAddPath{MenuKeySuffix}";
+    // SystemFileAssociations binds by extension regardless of which ProgID currently owns .md,
+    // so the entry survives users switching their default Markdown editor (VS Code / Typora / ...).
+    private static string MdMenuKey => $@"Software\Classes\SystemFileAssociations\.md\shell\NovaraImport{MenuKeySuffix}";
+    private static string MarkdownMenuKey => $@"Software\Classes\SystemFileAssociations\.markdown\shell\NovaraImport{MenuKeySuffix}";
 
     public static bool RegisterAll()
     {
@@ -31,11 +35,14 @@ public static class ContextMenuService
             var exe = GetExecutablePath();
             var openCmd = $"\"{exe}\" --open";
             var addPathCmd = $"\"{exe}\" --add-path \"%1\"";
+            var importMdCmd = $"\"{exe}\" --import-md \"%1\"";
 
             // E4-15: shell menu display names are localized (rendered with the current UI language at registration time)
             WriteMenu(DesktopMenuKey, App.GetString("Menu_OpenNovara"), openCmd, exe);
             WriteMenu(FileMenuKey, App.GetString("Menu_AddToNovaraPathBackup"), addPathCmd, exe);
             WriteMenu(FolderMenuKey, App.GetString("Menu_AddToNovaraPathBackup"), addPathCmd, exe);
+            WriteMenu(MdMenuKey, App.GetString("Menu_ImportMdToNovara"), importMdCmd, exe);
+            WriteMenu(MarkdownMenuKey, App.GetString("Menu_ImportMdToNovara"), importMdCmd, exe);
             return true;
         }
         catch
@@ -51,6 +58,8 @@ public static class ContextMenuService
             DeleteTree(DesktopMenuKey);
             DeleteTree(FileMenuKey);
             DeleteTree(FolderMenuKey);
+            DeleteTree(MdMenuKey);
+            DeleteTree(MarkdownMenuKey);
             return true;
         }
         catch
@@ -59,17 +68,20 @@ public static class ContextMenuService
         }
     }
 
-    // Desktop menu key represents the whole group (all three entries are written/removed together).
+    // Desktop menu key represents the whole group (all entries are written/removed together).
     public static bool IsRegistered()
     {
         try
         {
-            // E4-30: all three shell entries must exist - a half-registered state (e.g. file/folder keys
-            // removed manually) must not show the toggle as "on".
+            // E4-30: all shell entries must exist - a half-registered state (e.g. file/folder keys
+            // removed manually) must not show the toggle as "on". This also means installs upgraded
+            // from builds without the .md entry read as "off" until the toggle is re-applied once.
             using var dk = Registry.CurrentUser.OpenSubKey(DesktopMenuKey);
             using var fk = Registry.CurrentUser.OpenSubKey(FileMenuKey);
             using var fok = Registry.CurrentUser.OpenSubKey(FolderMenuKey);
-            return dk != null && fk != null && fok != null;
+            using var mk = Registry.CurrentUser.OpenSubKey(MdMenuKey);
+            using var mmk = Registry.CurrentUser.OpenSubKey(MarkdownMenuKey);
+            return dk != null && fk != null && fok != null && mk != null && mmk != null;
         }
         catch
         {

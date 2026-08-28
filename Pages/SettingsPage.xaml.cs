@@ -37,6 +37,9 @@ public sealed partial class SettingsPage : Page
     
     private bool _statsEnabled;
     private bool _statsExpanded;
+    private bool _animAutoLockSync;
+    private bool _autoLockOnSystemLock; 
+    private int _autoLockSeconds;       
     private bool _welcomeOnLaunch; 
 
     private static readonly string[] TabNames = { "备忘", "文件", "计划", "日记" };
@@ -83,6 +86,9 @@ public sealed partial class SettingsPage : Page
             McpResetConfirmOverlay.Visibility = Visibility.Collapsed;
             McpCopyOverlay.Visibility = Visibility.Collapsed;
             McpDeleteConfirmOverlay.Visibility = Visibility.Collapsed;
+            AutoLockSyncConfirmOverlay.Visibility = Visibility.Collapsed; // N6-11
+            McpAuditOverlay.Visibility = Visibility.Collapsed;
+            McpAuditClearConfirmOverlay.Visibility = Visibility.Collapsed;
             CsvImportPreviewOverlay.Visibility = Visibility.Collapsed;
             CsvExportNoticeOverlay.Visibility = Visibility.Collapsed;
             WindowsHelloOverlay.Visibility = Visibility.Collapsed; // ND8
@@ -93,6 +99,8 @@ public sealed partial class SettingsPage : Page
             _animExportMdNotice = _animExportOptions = _animWarnShow = false; 
             _themeRestartAnimating = _languageRestartAnimating = false; 
             _animMcpConfig = _animMcpResetConfirm = _animMcpCopy = _animMcpDeleteConfirm = _animMcpRevokeConfirm = false;
+            _animMcpAudit = _animMcpAuditClear = false; 
+            _animAutoLockSync = false; 
             _pendingVerifiedAction = null; // N5T1-02: a stale gated flow must not hijack the next password verify
             _pendingExport = false;        // N5T1-02: same for the native export flag
             _pendingReloadAfterImport = false; // N5T1-03: stale flag would fire an unrelated ReloadPages later
@@ -809,6 +817,7 @@ private void ShowPrivacyLockWarningDialog()
     {
         PrivacyLockButton.Visibility = _isPrivacyLockEnabled ? Visibility.Collapsed : Visibility.Visible;
         PrivacyLockEnabledPanel.Visibility = _isPrivacyLockEnabled ? Visibility.Visible : Visibility.Collapsed;
+        UpdateAutoLockCard();
         // 4.7: manual GCM-migration entry - visible only while a v1-CBC database is still un-migrated.
         MigrateFormatEntryButton.Visibility = App.Store is { IsEncrypted: true, NeedsFormatMigration: true }
             ? Visibility.Visible : Visibility.Collapsed;
@@ -1029,6 +1038,97 @@ private void ShowPrivacyLockWarningDialog()
 
     
     
+    
+    private void UpdateAutoLockCard()
+    {
+        var settings = App.Store?.Database.AppSettings;
+        if (settings == null) return;
+        _autoLockOnSystemLock = settings.AutoLockOnSystemLock;
+        _autoLockSeconds = settings.AutoLockSeconds;
+
+        AutoLockCard.Visibility = _isPrivacyLockEnabled ? Visibility.Visible : Visibility.Collapsed;
+        AutoLockTitleText.Text = App.GetString("Setting_AutoLock_Title");
+        AutoLockSyncConfirmTitleText.Text = App.GetString("Setting_AutoLock_SyncConfirm_Title");
+        AutoLockSyncConfirmMessageText.Text = App.GetString("Setting_AutoLock_SyncConfirm_Desc");
+        AutoLockSyncConfirmCancelText.Text = App.GetString("Common_Button_Cancel");
+        AutoLockSyncConfirmOkText.Text = App.GetString("Setting_AutoLock_SyncConfirm_Ok");
+
+        ApplyToggleState(SyncLockButton, _autoLockOnSystemLock);
+        SyncLockButtonText.Text = App.GetString("Setting_AutoLock_Sync");
+
+        ApplyToggleState(AutoLockButton, _autoLockSeconds > 0);
+        AutoLockButtonText.Text = _autoLockSeconds > 0
+            ? ("" + _autoLockSeconds + "s").Replace("60s", "1min").Replace("300s", "5min").Replace("600s", "10min").Replace("1800s", "30min").Replace("3600s", "60min")
+            : App.GetString("Setting_AutoLock_Never");
+    }
+
+    private void SyncLockButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        MenuFlyoutItem MakeItem(string text, bool active)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? accentBrush : normalBrush };
+            if (active) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            return item;
+        }
+        var onItem = MakeItem(App.GetString("Setting_Autostart_On"), _autoLockOnSystemLock);
+        var offItem = MakeItem(App.GetString("Setting_Autostart_Off"), !_autoLockOnSystemLock);
+        onItem.Click += (_, _) => ShowAutoLockSyncConfirmDialog();
+        offItem.Click += (_, _) => { _autoLockOnSystemLock = false; PersistAutoLock(); UpdateAutoLockCard(); App.ShowToast(App.GetString("Common_Toast_Switched")); };
+        menu.Items.Add(onItem); menu.Items.Add(offItem);
+        menu.ShowAt(SyncLockButton, new Windows.Foundation.Point(0, SyncLockButton.ActualHeight + 4));
+    }
+
+    private void AutoLockButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        var options = new (string Label, int Seconds)[] {
+            (App.GetString("Setting_AutoLock_Never"), 0), ("30s", 30), ("1min", 60), ("5min", 300), ("10min", 600), ("30min", 1800), ("60min", 3600)
+        };
+        foreach (var opt in options)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = opt.Label, Foreground = _autoLockSeconds == opt.Seconds ? accentBrush : normalBrush };
+            if (_autoLockSeconds == opt.Seconds) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            var sec = opt.Seconds;
+            item.Click += (_, _) => { _autoLockSeconds = sec; PersistAutoLock(); UpdateAutoLockCard(); App.ShowToast(App.GetString("Common_Toast_Switched")); };
+            menu.Items.Add(item);
+        }
+        menu.ShowAt(AutoLockButton, new Windows.Foundation.Point(0, AutoLockButton.ActualHeight + 4));
+    }
+
+    private void PersistAutoLock()
+    {
+        var settings = App.Store?.Database.AppSettings;
+        if (settings == null) return;
+        settings.AutoLockOnSystemLock = _autoLockOnSystemLock;
+        settings.AutoLockSeconds = _autoLockSeconds;
+        App.Store?.SaveAsync();
+    }
+
+    
+    private void ShowAutoLockSyncConfirmDialog() => ShowOverlay(AutoLockSyncConfirmOverlay, AutoLockSyncConfirmDialog, AutoLockSyncConfirmDialogTransform);
+    private void HideAutoLockSyncConfirmDialog()
+    {
+        if (_animAutoLockSync) return;
+        _animAutoLockSync = true;
+        HideOverlay(AutoLockSyncConfirmOverlay, AutoLockSyncConfirmDialog, AutoLockSyncConfirmDialogTransform, () => _animAutoLockSync = false);
+    }
+    private void AutoLockSyncConfirmClose_Click(object sender, RoutedEventArgs e) => HideAutoLockSyncConfirmDialog();
+    private void AutoLockSyncConfirmCancel_Click(object sender, RoutedEventArgs e) => HideAutoLockSyncConfirmDialog();
+    private void AutoLockSyncConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, AutoLockSyncConfirmScrim)) HideAutoLockSyncConfirmDialog(); }
+    private void AutoLockSyncConfirmOk_Click(object sender, RoutedEventArgs e)
+    {
+        _autoLockOnSystemLock = true;
+        PersistAutoLock(); UpdateAutoLockCard();
+        App.ShowToast(App.GetString("Common_Toast_Switched"));
+        HideAutoLockSyncConfirmDialog();
+    }
+
     private void ApplyToggleState(Button btn, bool on)
     {
         btn.Style = on ? (Style)Application.Current.Resources["NovaraPrimaryButtonStyle"]
@@ -1406,6 +1506,7 @@ private void ShowResetPasswordDialog()
     private bool _animBackupRestoreConfirm, _animBackupDeleteConfirm;
     private bool _animMcpConfig, _animMcpResetConfirm, _animMcpCopy, _animMcpDeleteConfirm;
     private bool _animMcpRevokeConfirm;
+    private bool _animMcpAudit, _animMcpAuditClear;
     private string? _pendingRevokePath;
 
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
@@ -1756,7 +1857,6 @@ Logic Range: Below methods in this region
 
     
 
-
     private void ShowExportMdNoticeDialog() => ShowOverlay(ExportMdNoticeOverlay, ExportMdNoticeDialog, ExportMdNoticeDialogTransform);
     private void HideExportMdNoticeDialog()
     {
@@ -1800,7 +1900,6 @@ Logic Range: Below methods in this region
     }
 
     
-
     private async System.Threading.Tasks.Task ExportHtmlFlowAsync()
     {
         try
@@ -1897,7 +1996,6 @@ Logic Range: Below methods in this region
     }
 
     
-
     private async System.Threading.Tasks.Task ExportPdfFlowAsync()
     {
         try
@@ -2570,7 +2668,6 @@ Logic Range: Below methods in this region
 
     
 
-
     private void InitBackupFreqCombo()
     {
         BackupFreqButtonText.Text = GetBackupFreqLabel(_backupFreqIndex);
@@ -3173,7 +3270,6 @@ Logic Range: Below methods in this region
 
     
 
-
     private void StatsToggleButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
@@ -3267,6 +3363,12 @@ Logic Range: Below methods in this region
         {
             StatsDetailPanel.Visibility = Visibility.Visible;
             BuildStatsPanel();
+            Services.MeltAnim.Begin(StatsDetailPanel, true, 16.0);
+        }
+        else if (_statsEnabled)
+        {
+            Services.MeltAnim.Begin(StatsDetailPanel, false, 16.0); 
+            StatsGrid.Children.Clear();
         }
         else
         {
@@ -3403,6 +3505,7 @@ Logic Range: Below methods in this region
 
         
         McpTitleText.Text = App.GetString("Setting_Mcp_Title");
+        McpAuditButtonText.Text = App.GetString("Setting_Mcp_Audit_Button");
         McpConfigButtonText.Text = App.GetString("Setting_Mcp_Config");
         McpToggleText.Text = App.GetString(enabled ? "Setting_Autostart_On" : "Setting_Autostart_Off");
         McpNoAuthorizedText.Text = App.GetString("Setting_Mcp_NoAuthorized");
@@ -3412,14 +3515,16 @@ Logic Range: Below methods in this region
 
         
         McpConfigButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        McpAuditButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         McpExpandButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         McpExpandIcon.Data = expanded
             ? App.CreateGeometry(IconData.CardCollapse)
             : App.CreateGeometry(IconData.CardExpand);
 
         
-        McpDetailPanel.Visibility = (enabled && expanded) ? Visibility.Visible : Visibility.Collapsed;
-        if (enabled && expanded) BuildMcpAuthorizedList();
+        if (enabled && expanded) { BuildMcpAuthorizedList(); Services.MeltAnim.Begin(McpDetailPanel, true, 16.0); }
+        else if (enabled) { Services.MeltAnim.Begin(McpDetailPanel, false, 16.0); }
+        else { McpDetailPanel.Visibility = Visibility.Collapsed; }
 
         
         McpConfigTitleText.Text = App.GetString("Setting_Mcp_Config_Title");
@@ -3445,6 +3550,16 @@ Logic Range: Below methods in this region
         McpDeleteConfirmMessageText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Message");
         McpDeleteConfirmCancelText.Text = App.GetString("Common_Button_Cancel");
         McpDeleteConfirmOkText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Ok");
+
+        
+        McpAuditTitleText.Text = App.GetString("Setting_Mcp_Audit_Title");
+        McpAuditClearButtonText.Text = App.GetString("Setting_Mcp_Audit_Clear");
+        McpAuditCloseButtonText.Text = App.GetString("Setting_Mcp_Audit_Close");
+        McpAuditEmptyText.Text = App.GetString("Setting_Mcp_Audit_Empty");
+        McpAuditClearConfirmTitleText.Text = App.GetString("Setting_Mcp_Audit_ClearConfirm_Title");
+        McpAuditClearConfirmMessageText.Text = App.GetString("Setting_Mcp_Audit_ClearConfirm_Message");
+        McpAuditClearConfirmCancelText.Text = App.GetString("Common_Button_Cancel");
+        McpAuditClearConfirmOkText.Text = App.GetString("Setting_Mcp_Audit_ClearConfirm_Ok");
 
         UpdateMcpDeletePermissionButton(settings.McpDeleteEnabled);
     }
@@ -3615,6 +3730,134 @@ Logic Range: Below methods in this region
         }
         _pendingRevokePath = null;
         HideMcpRevokeConfirmDialog();
+    }
+
+    
+
+    private void McpAuditButton_Click(object sender, RoutedEventArgs e)
+    {
+        BuildMcpAuditList();
+        ShowMcpAuditDialog();
+    }
+
+    
+    private void BuildMcpAuditList()
+    {
+        McpAuditList.Children.Clear();
+        var events = Novara.Services.McpAuditLog.ReadLatest(200);
+        if (events.Count == 0)
+        {
+            McpAuditEmptyText.Text = App.GetString("Setting_Mcp_Audit_Empty");
+            McpAuditEmptyText.Visibility = Visibility.Visible;
+            return;
+        }
+        McpAuditEmptyText.Visibility = Visibility.Collapsed;
+        foreach (var evt in events)
+            McpAuditList.Children.Add(BuildMcpAuditRow(evt));
+    }
+
+    private static FrameworkElement BuildMcpAuditRow(McpAuditEvent evt)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });   
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                        
+
+        var proc = new TextBlock
+        {
+            Text = Novara.Services.McpAuditLog.ShortName(evt.Path.Length > 0 ? evt.Path : evt.Client),
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = App.GetBrush("AppPrimaryButtonBrush"),
+            VerticalAlignment = VerticalAlignment.Top,
+            MaxWidth = 140,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 12, 0),
+        };
+        ToolTipService.SetToolTip(proc, evt.Path);
+        Grid.SetColumn(proc, 0);
+        row.Children.Add(proc);
+
+        var info = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        var line1 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var evLabel = evt.Ev switch
+        {
+            "auth_ok" => App.GetString("Setting_Mcp_Audit_Ev_Conn"),
+            "auth_new" => App.GetString("Setting_Mcp_Audit_Ev_NewAuth"),
+            "auth_denied" => App.GetString("Setting_Mcp_Audit_Ev_Denied"),
+            "revoke" => App.GetString("Setting_Mcp_Audit_Ev_Revoke"),
+            _ => evt.Tool, 
+        };
+        line1.Children.Add(new TextBlock { Text = evLabel, FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+        line1.Children.Add(new TextBlock { Text = evt.Ts, FontSize = 11, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+        info.Children.Add(line1);
+
+        string desc = evt.Ev == "call"
+            ? (evt.Title.Length > 0 ? $"{evt.Target} · {evt.Title}" : evt.Target)
+            : evt.Reason;
+        if (desc.Length > 0)
+        {
+            var descText = new TextBlock
+            {
+                Text = desc,
+                FontSize = 11,
+                Foreground = App.GetBrush("AppTextSecondaryBrush"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            ToolTipService.SetToolTip(descText, desc);
+            info.Children.Add(descText);
+        }
+        Grid.SetColumn(info, 1);
+        row.Children.Add(info);
+
+        
+        var glyph = new FontIcon
+        {
+            Glyph = evt.Ok ? "\uE73E" : "\uE711",
+            FontSize = 14,
+            Foreground = new SolidColorBrush(evt.Ok
+                ? Color.FromArgb(255, 0x4C, 0xAF, 0x50)
+                : Color.FromArgb(255, 0xFF, 0x45, 0x45)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 2, 0),
+        };
+        Grid.SetColumn(glyph, 2);
+        row.Children.Add(glyph);
+
+        return row;
+    }
+
+    private void ShowMcpAuditDialog() => ShowOverlay(McpAuditOverlay, McpAuditDialog, McpAuditDialogTransform);
+    private void HideMcpAuditDialog()
+    {
+        if (_animMcpAudit) return;
+        _animMcpAudit = true;
+        HideOverlay(McpAuditOverlay, McpAuditDialog, McpAuditDialogTransform, () => _animMcpAudit = false);
+    }
+    private void McpAuditClose_Click(object sender, RoutedEventArgs e) => HideMcpAuditDialog();
+    private void McpAuditCloseBottom_Click(object sender, RoutedEventArgs e) => HideMcpAuditDialog();
+    private void McpAuditScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, McpAuditScrim)) HideMcpAuditDialog(); }
+
+    private void McpAuditClear_Click(object sender, RoutedEventArgs e) => ShowMcpAuditClearConfirmDialog();
+
+    
+    private void ShowMcpAuditClearConfirmDialog() => ShowOverlay(McpAuditClearConfirmOverlay, McpAuditClearConfirmDialog, McpAuditClearConfirmDialogTransform);
+    private void HideMcpAuditClearConfirmDialog()
+    {
+        if (_animMcpAuditClear) return;
+        _animMcpAuditClear = true;
+        HideOverlay(McpAuditClearConfirmOverlay, McpAuditClearConfirmDialog, McpAuditClearConfirmDialogTransform, () => _animMcpAuditClear = false);
+    }
+    private void McpAuditClearConfirmCancel_Click(object sender, RoutedEventArgs e) => HideMcpAuditClearConfirmDialog();
+    private void McpAuditClearConfirmClose_Click(object sender, RoutedEventArgs e) => HideMcpAuditClearConfirmDialog();
+    private void McpAuditClearConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, McpAuditClearConfirmScrim)) HideMcpAuditClearConfirmDialog(); }
+    private void McpAuditClearConfirmOk_Click(object sender, RoutedEventArgs e)
+    {
+        Novara.Services.McpAuditLog.ClearAll();
+        BuildMcpAuditList();
+        HideMcpAuditClearConfirmDialog();
     }
 
     

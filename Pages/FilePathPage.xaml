@@ -22,7 +22,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="PathList"
-                        Padding="40,10,40,20"
+                        Padding="40,12,40,20"
                         Spacing="12" />
         </ScrollViewer>
 

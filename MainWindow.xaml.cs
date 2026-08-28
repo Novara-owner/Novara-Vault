@@ -30,6 +30,12 @@ public sealed partial class MainWindow : Window
     private DiaryEditorPage _diaryEditorPage = null!;
     private SettingsPage _settingsPage = null!;
     private Button? _selectedNavButton;
+    private Microsoft.UI.Xaml.Media.ThemeShadow? _navShadow; 
+
+    
+    
+    private sealed class NavFadeRec { public Microsoft.UI.Xaml.Media.Animation.Storyboard Sb; public double Val; }
+    private static readonly System.Collections.Generic.Dictionary<Microsoft.UI.Xaml.UIElement, NavFadeRec> _navFades = new();
     private object? _previousContent;
     private SearchPage? _searchPage; // global search (3.0-4.5)
     private object? _preSearchContent; // page shown before Ctrl+K opened the search page
@@ -238,7 +244,7 @@ public sealed partial class MainWindow : Window
         }
 
         if (App.Store != null)
-            App.Store.SaveFailed += _ => DispatcherQueue.TryEnqueue(ShowSaveFailedDialog);
+            App.Store.SaveFailed += OnStoreSaveFailed;
 
         ShowWindowCommand = new RelayCommand(ShowMainWindow);
         ExitCommand = new RelayCommand(ExitApp);
@@ -249,6 +255,7 @@ public sealed partial class MainWindow : Window
         if (_windowLoadedHandled) return;
         _windowLoadedHandled = true;
         if (Content is FrameworkElement root) root.Loaded -= OnWindowLoaded;
+        StartAutoLockWatcher(); 
 
         // 1. Store load + stored settings (file IO / MD5 / registry) - CLR fully ready here
         // Language hint applied first so the lock screen (encrypted startup) renders in the last
@@ -303,6 +310,11 @@ public sealed partial class MainWindow : Window
         var pendingPath = App.PendingAddPath ?? Novara.Services.AddPathRequest.ReadPending();
         if (!string.IsNullOrWhiteSpace(pendingPath))
             DispatcherQueue.TryEnqueue(() => HandleAddPathRequest(pendingPath));
+
+        // Stage-3 md-import: consume a pending markdown import (cold start from the .md right-click menu).
+        var pendingMd = App.PendingImportMd ?? Novara.Services.MdImportRequest.ReadPending();
+        if (!string.IsNullOrWhiteSpace(pendingMd))
+            DispatcherQueue.TryEnqueue(() => HandleImportMdRequest(pendingMd));
 
         // Stage-3 reminder edit: consume a pending modify request (cold start from the desktop card).
         var pendingReminder = Novara.Services.ReminderEditRequest.ReadPending();
@@ -430,6 +442,8 @@ private void CreateTrayIcon()
 
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] }; // D5 (Round 5): M6 tray menu follows theme
         menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_ShowWindow"), Command = ShowWindowCommand });
+        menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_LockNow"), Command = new Services.RelayCommand(() => { if (LockScreenFrame.Visibility == Visibility.Visible) return; 
+            if (App.Store is { IsLoaded: true, IsEncrypted: true }) LockNow(); else App.ShowToast(App.GetString("Tray_LockNeedLock")); }) });
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_Exit"), Command = ExitCommand });
 
@@ -578,20 +592,29 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             }
             if (saveFirst)
             {
-                try
+                
+                
+                if (LockScreenFrame.Visibility == Visibility.Visible)
                 {
-                    if (App.Store?.SaveSync() == false)
+                    _isTrayExit = true;
+                }
+                else
+                {
+                    try
                     {
-                        // C6 (Round 5): save failed - SaveFailed dialog already raised; keep session, do not silently lose data
+                        if (App.Store?.SaveSync() == false)
+                        {
+                            // C6 (Round 5): save failed - SaveFailed dialog already raised; keep session, do not silently lose data
+                            _isTrayExit = false;
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        
                         _isTrayExit = false;
                         return;
                     }
-                }
-                catch
-                {
-                    
-                    _isTrayExit = false;
-                    return;
                 }
             }
             try
@@ -622,6 +645,113 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+    
+    
+    
+    [DllImport("user32.dll")]
+    private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+    [DllImport("wtsapi32.dll")]
+    private static extern bool WTSQuerySessionInformation(IntPtr hServer, uint sessionId, int infoClass, out IntPtr ppBuffer, out int pBytes);
+    [DllImport("wtsapi32.dll")]
+    private static extern void WTSFreeMemory(IntPtr pMemory);
+    [DllImport("kernel32.dll")]
+    private static extern bool ProcessIdToSessionId(uint dwProcessId, out uint pSessionId);
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _autoLockTimer;
+
+    private void StartAutoLockWatcher()
+    {
+        if (_autoLockTimer != null) return;
+        _autoLockTimer = DispatcherQueue.CreateTimer();
+        
+        
+        _autoLockTimer.Interval = TimeSpan.FromSeconds(1);
+        _autoLockTimer.Tick += (_, _) => CheckAutoLock();
+        _autoLockTimer.Start();
+    }
+
+    
+    private void CheckAutoLock()
+    {
+        if (LockScreenFrame.Visibility == Visibility.Visible) return; 
+        if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return; 
+        var st = App.Store.Database.AppSettings;
+        if (st.AutoLockOnSystemLock && IsWindowsLocked()) { LockNow(); return; }
+        if (st.AutoLockSeconds > 0 && GetIdleSeconds() >= st.AutoLockSeconds) LockNow();
+    }
+
+    
+    
+    private static bool IsWindowsLocked()
+    {
+        if (!ProcessIdToSessionId((uint)Environment.ProcessId, out var sessionId)) return false;
+        if (!WTSQuerySessionInformation(IntPtr.Zero, sessionId, 25, out var buf, out _)) return false;
+        try
+        {
+            var flags = System.Runtime.InteropServices.Marshal.ReadInt32(buf, 8); // SessionFlags: 1=LOCK 2=UNLOCK
+            return flags == 1;
+        }
+        finally { WTSFreeMemory(buf); }
+    }
+
+    private static int GetIdleSeconds()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<LASTINPUTINFO>() };
+        if (!GetLastInputInfo(ref info)) return 0;
+        
+        
+        var idleMs = unchecked((uint)Environment.TickCount - info.dwTime);
+        return (int)(idleMs / 1000);
+    }
+
+    
+    public void LockNow()
+    {
+        if (LockScreenFrame.Visibility == Visibility.Visible) return; 
+        if (_lockInProgress) return; 
+        if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return; 
+        _lockInProgress = true;
+        _ = LockNowCoreAsync();
+    }
+
+    
+    
+    private void BindStoreSaveFailed()
+    {
+        if (App.Store is { } store)
+        {
+            store.SaveFailed -= OnStoreSaveFailed;
+            store.SaveFailed += OnStoreSaveFailed;
+        }
+    }
+
+    private void OnStoreSaveFailed(string message) => DispatcherQueue.TryEnqueue(ShowSaveFailedDialog);
+
+    private bool _lockInProgress;
+
+    
+    
+    
+    private async Task LockNowCoreAsync()
+    {
+        try
+        {
+            if (RootFrame.Content is DiaryEditorPage ed)
+            {
+                try { await ed.SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+            }
+            try { App.Store!.SaveSync(); } catch { }
+            App.RelockStore(); 
+            BindStoreSaveFailed(); 
+            ShowLockScreen();
+            
+            
+        }
+        finally { _lockInProgress = false; }
+    }
+
     private void ShowLockScreen()
     {
         var page = new LockScreenPage();
@@ -637,6 +767,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         LockScreenFrame.Visibility = Visibility.Collapsed;
         LockScreenFrame.Content = null;
+        ReloadPages(); 
+        
         if (App.Store is { } store)
         {
             store.Database.AppSettings ??= new AppSettings();
@@ -1054,23 +1186,21 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void HookNavHoverEvents()
     {
-        // E1-25: resolve the brushes per event - cached instances went stale when the theme switched
-        // after unlock (lock screen renders in the system theme, then SetTheme swaps the dictionaries).
         
-        // touch the selected button's Foreground, or the white turns black (AppTextPrimaryBrush is
-        // near-black in light theme). Only unselected buttons brighten on hover.
-        foreach (var btn in new[] { NavMemo, NavFile, NavPlan, NavDiary })
+        
+        try
         {
-            btn.PointerEntered += (_, _) =>
+            if (_navShadow == null)
             {
-                if (btn != _selectedNavButton) btn.Foreground = App.GetBrush("AppTextPrimaryBrush");
-            };
-            btn.PointerExited += (_, _) =>
-            {
-                if (btn != _selectedNavButton) btn.Foreground = App.GetBrush("AppTextTertiaryBrush");
-            };
+                _navShadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
+                _navShadow.Receivers.Add(NavShadowReceiver);
+                foreach (var btn in new[] { NavMemo, NavFile, NavPlan, NavDiary })
+                    btn.Shadow = _navShadow;
+            }
         }
-    }
+        catch { }
+        }
+
 
     public void ApplyVisibleTabs(HashSet<string> visibleTabs)
     {
@@ -1260,6 +1390,23 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         UpdateNavSelection(pathNav);
         RestoreChromeFor(RootFrame.Content); // D15: see HandleEditRequest
         _filePathPage?.OpenNewPathDialogWith(path);
+    }
+
+    /// <summary>Import request from the .md file right-click menu: switch to the Records tab and import
+    /// the file through the diary page's shared import core.</summary>
+    public void HandleImportMdRequest(string filePath)
+    {
+        if (App.Store is not { IsLoaded: true }) return; // E1-19: see HandleEditRequest
+        if (WelcomeOverlay.Visibility == Visibility.Visible) return; // E3-11: see HandleEditRequest
+        if (!IsTabVisible("Diary")) { RefuseHiddenTabAction("Diary"); return; } // N4W-03: see HandleEditRequest
+        if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; } // N5S-02
+        FlushEditorDirty(); // N4W-04
+        ShowMainWindow(); // restore from minimized (and raise to foreground) first
+        var (diaryTab, diaryNav) = ResolveNavTarget("Diary"); // E5-05: fall back to first visible when Diary is hidden
+        NavigateToPage(diaryTab);
+        UpdateNavSelection(diaryNav);
+        RestoreChromeFor(RootFrame.Content); // D15: see HandleEditRequest
+        _ = _diaryPage?.ImportDocumentFromPath(filePath);
     }
 
     /// <summary>Reminder edit request from the desktop card: switch to the Plan tab and open the reminder dialog pre-filled.</summary>
@@ -1496,32 +1643,78 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void UpdateNavSelection(Button selected)
     {
+        
+        
+        
+        if (_selectedNavButton == selected) return;
         _selectedNavButton = selected;
         var dimBrush = App.GetBrush("AppTextTertiaryBrush");
-        var whiteBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
-        var selectedBg = App.GetBrush("AppPrimaryButtonBrush"); // brand blue
-        var transparentBg = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        var brandBrush = App.GetBrush("AppPrimaryButtonBrush");
         var iconBrush = App.GetBrush("IconForegroundBrush");
+        var clearBg = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        
+        var raisedBg = App.GetBrush("NavFaceRaisedBrush");
 
-        var navButtons = new[] { (NavMemo, NavMemoPath), (NavFile, NavFilePath), (NavPlan, NavPlanPath), (NavDiary, NavDiaryPath) };
+        var navButtons = new[] { (Btn: NavMemo, Icon: NavMemoPath), (Btn: NavFile, Icon: NavFilePath), (Btn: NavPlan, Icon: NavPlanPath), (Btn: NavDiary, Icon: NavDiaryPath) };
 
-        foreach (var (btn, icon) in navButtons)
+        foreach (var item in navButtons)
         {
-            bool isSelected = btn == selected;
-            btn.Foreground = isSelected ? whiteBrush : dimBrush;
-            btn.Background = isSelected ? selectedBg : transparentBg;
-            btn.BorderBrush = transparentBg; // clean block when idle; template adds border on hover/press
-            icon.Fill = isSelected ? whiteBrush : iconBrush;
+            bool isSelected = item.Btn == selected;
+            
+            item.Btn.Background = isSelected ? raisedBg : clearBg;
+            item.Btn.Translation = isSelected
+                ? new System.Numerics.Vector3(0f, 0f, 20f) 
+                : System.Numerics.Vector3.Zero;
+            
+            SetNavOpacity(item.Btn, isSelected ? 1.0 : 0.6, NavBar.IsLoaded);
+            
+            SetNavOpacity(item.Icon, isSelected ? 1.0 : 0.6, NavBar.IsLoaded);
+            
+            item.Btn.Foreground = isSelected ? brandBrush : dimBrush;
+            item.Icon.Fill = isSelected ? brandBrush : iconBrush;
         }
 
         
         
         bool diarySelected = selected == NavDiary;
         NavDiaryFilterButton.Visibility = diarySelected ? Visibility.Visible : Visibility.Collapsed;
-        NavDiaryFilterIcon.Foreground = diarySelected ? whiteBrush : iconBrush;
+        NavDiaryFilterIcon.Foreground = diarySelected ? brandBrush : iconBrush;
         bool planSelected = selected == NavPlan;
         NavPlanFilterButton.Visibility = planSelected ? Visibility.Visible : Visibility.Collapsed;
-        NavPlanFilterIcon.Foreground = planSelected ? whiteBrush : iconBrush;
+        NavPlanFilterIcon.Foreground = planSelected ? brandBrush : iconBrush;
+    }
+
+    
+    private static void SetNavOpacity(Microsoft.UI.Xaml.FrameworkElement el, double opacity, bool animate)
+    {
+        try
+        {
+            if (!animate || el.ActualWidth <= 0)
+            {
+                el.Opacity = opacity;
+                _navFades.Remove(el);
+                return;
+            }
+            if (_navFades.TryGetValue(el, out var hold) && hold.Val == opacity) return; 
+
+            double from = hold?.Val ?? el.Opacity;
+            if (hold != null) { try { hold.Sb.Stop(); } catch { } _navFades.Remove(el); }
+
+            var anim = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
+            {
+                From = from,
+                To = opacity,
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)),
+                EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut },
+            };
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(anim, el);
+            Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(anim, "Opacity");
+            var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+            sb.Children.Add(anim);
+            _navFades[el] = new NavFadeRec { Sb = sb, Val = opacity };
+            sb.Begin();
+        }
+        catch { el.Opacity = opacity; }
     }
 
     private void NavDiaryFilterButton_Click(object sender, RoutedEventArgs e)
@@ -1538,7 +1731,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? activeBrush : normalBrush };
             item.Icon = active
                 ? new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = activeBrush }
-                : new PathIcon { Data = App.CreateGeometry(iconPath), Foreground = iconBrush };
+                : new PathIcon { Data = App.CreateGeometry(iconPath), Foreground = iconBrush, Opacity = 0.6 };
             item.Click += (_, _) => { _diaryPage?.SetFilter(filter); App.ShowToast(App.GetString("Common_Toast_Switched")); };
             return item;
         }
@@ -1562,7 +1755,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? activeBrush : normalBrush };
             item.Icon = active
                 ? new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = activeBrush }
-                : new PathIcon { Data = App.CreateGeometry(iconPath), Foreground = iconBrush };
+                : new PathIcon { Data = App.CreateGeometry(iconPath), Foreground = iconBrush, Opacity = 0.6 };
             item.Click += (_, _) => { _planPage?.SetFilter(filter); App.ShowToast(App.GetString("Common_Toast_Switched")); };
             return item;
         }

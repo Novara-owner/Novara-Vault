@@ -160,7 +160,6 @@ notifyFormatState();
     }
 
     
-
     private const string MarkdownHtmlTemplate = @"<!DOCTYPE html>
 <html><head><meta charset='utf-8'><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
@@ -741,18 +740,66 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     // ================================================================
 
+        
+        
+        private static (double Dx, double Dy, double Sx, double Sy) MeltMetrics(Grid container)
+        {
+            var parent = container.Parent as FrameworkElement;
+            double pw = parent?.ActualWidth ?? 0, ph = parent?.ActualHeight ?? 0;
+            if (pw <= 0 || ph <= 0) return (0, 0, 1, 1);
+            var tl = container.TransformToVisual(parent).TransformPoint(new Windows.Foundation.Point(0, 0));
+            double cx = tl.X + container.ActualWidth / 2.0, cy = tl.Y + container.ActualHeight / 2.0;
+            double dx = (pw - 46.0) - cx, dy = (ph - 46.0) - cy;
+            double s = System.Math.Max(0.05, System.Math.Min(1.0, 52.0 / System.Math.Max(container.ActualWidth, 1)));
+            return (dx, dy, s, s);
+        }
+
+        private void MeltToolbarAway(Grid container, Microsoft.UI.Xaml.Media.CompositeTransform tr)
+        {
+            if (_isToolbarCollapsed) return;
+            HideAlignPickerPanel();
+            _isToolbarCollapsed = true;
+            ExpandButton.Visibility = Visibility.Collapsed; 
+            var (dx, dy, scx, scy) = MeltMetrics(container);
+            tr.CenterX = container.ActualWidth / 2.0; tr.CenterY = container.ActualHeight / 2.0;
+            var sb = new Storyboard();
+            var tx = new DoubleAnimation { To = dx, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(tx, tr); Storyboard.SetTargetProperty(tx, "TranslateX"); sb.Children.Add(tx);
+            var ty = new DoubleAnimation { To = dy, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(ty, tr); Storyboard.SetTargetProperty(ty, "TranslateY"); sb.Children.Add(ty);
+            var sx = new DoubleAnimation { To = scx, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(sx, tr); Storyboard.SetTargetProperty(sx, "ScaleX"); sb.Children.Add(sx);
+            var sy = new DoubleAnimation { To = scy, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(sy, tr); Storyboard.SetTargetProperty(sy, "ScaleY"); sb.Children.Add(sy);
+            var f = new DoubleAnimation { To = 0, BeginTime = TimeSpan.FromMilliseconds(170), Duration = TimeSpan.FromMilliseconds(170), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(f, container); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
+            sb.Completed += (_, _) => { container.Visibility = Visibility.Collapsed; tr.TranslateX = 0; tr.TranslateY = 0; tr.ScaleX = 1; tr.ScaleY = 1; container.Opacity = 1; ShowExpandButton(); };
+            sb.Begin();
+        }
+
+        private void MeltToolbarBack(Grid container, Microsoft.UI.Xaml.Media.CompositeTransform tr)
+        {
+            ExpandButton.Visibility = Visibility.Collapsed; 
+            var (dx, dy, scx, scy) = MeltMetrics(container);
+            tr.CenterX = container.ActualWidth / 2.0; tr.CenterY = container.ActualHeight / 2.0;
+            tr.TranslateX = dx; tr.TranslateY = dy; tr.ScaleX = scx; tr.ScaleY = scy;
+            container.Opacity = 0; container.Visibility = Visibility.Visible;
+            var sb = new Storyboard();
+            var tx = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(tx, tr); Storyboard.SetTargetProperty(tx, "TranslateX"); sb.Children.Add(tx);
+            var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(ty, tr); Storyboard.SetTargetProperty(ty, "TranslateY"); sb.Children.Add(ty);
+            var sxa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(sxa, tr); Storyboard.SetTargetProperty(sxa, "ScaleX"); sb.Children.Add(sxa);
+            var sya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(sya, tr); Storyboard.SetTargetProperty(sya, "ScaleY"); sb.Children.Add(sya);
+            var f = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(220), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(f, container); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
+            sb.Begin();
+        }
+
     private void CollapseButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_isToolbarCollapsed) return;
-        HideAlignPickerPanel();
-        _isToolbarCollapsed = true;
-        var sb = new Storyboard();
-        var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(280), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(f, ToolbarContainer); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
-        var s = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(s, ToolbarTranslate); Storyboard.SetTargetProperty(s, "Y"); sb.Children.Add(s);
-        sb.Completed += (_, _) => { ToolbarContainer.Visibility = Visibility.Collapsed; ShowExpandButton(); }; sb.Begin();
-    }
+        => MeltToolbarAway(ToolbarContainer, ToolbarTranslate);
 
     private void ShowExpandButton()
     {
@@ -789,39 +836,15 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
     {
         if (!_isToolbarCollapsed) return;
         _isToolbarCollapsed = false;
-        var hs = new Storyboard();
-        var bfo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(150), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(bfo, ExpandButton); Storyboard.SetTargetProperty(bfo, "Opacity"); hs.Children.Add(bfo);
-        hs.Completed += (_, _) => { ExpandButton.Visibility = Visibility.Collapsed; }; hs.Begin();
-        ToolbarContainer.Visibility = Visibility.Visible; ToolbarContainer.Opacity = 0; ToolbarTranslate.Y = 24;
-        var ss = new Storyboard();
-        var fi2 = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(fi2, ToolbarContainer); Storyboard.SetTargetProperty(fi2, "Opacity"); ss.Children.Add(fi2);
-        var su = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(su, ToolbarTranslate); Storyboard.SetTargetProperty(su, "Y"); ss.Children.Add(su);
-        ss.Begin();
+        MeltToolbarBack(ToolbarContainer, ToolbarTranslate);
     }
 
     private void ExpandMdToolbar()
     {
         if (!_isToolbarCollapsed) return;
         _isToolbarCollapsed = false;
-        var hs = new Storyboard();
-        var bfo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(150), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(bfo, ExpandButton); Storyboard.SetTargetProperty(bfo, "Opacity"); hs.Children.Add(bfo);
-        hs.Completed += (_, _) => { ExpandButton.Visibility = Visibility.Collapsed; }; hs.Begin();
-        MdToolbarContainer.Visibility = Visibility.Visible; MdToolbarContainer.Opacity = 0; MdToolbarTranslate.Y = 24;
-        var ss = new Storyboard();
-        var fi2 = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(fi2, MdToolbarContainer); Storyboard.SetTargetProperty(fi2, "Opacity"); ss.Children.Add(fi2);
-        var su = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(su, MdToolbarTranslate); Storyboard.SetTargetProperty(su, "Y"); ss.Children.Add(su);
-        ss.Begin();
+        MeltToolbarBack(MdToolbarContainer, MdToolbarTranslate);
     }
-
-    // ================================================================
-
-    // ================================================================
 
     private void ColorButton_Click(object sender, RoutedEventArgs e)
     {
@@ -990,7 +1013,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
     private void MdTableButton_Click(object sender, RoutedEventArgs e) => PostMessageAsync("mdTable");
     private void MdClearFormatButton_Click(object sender, RoutedEventArgs e) => PostMessageAsync("mdClearFormat");
 
-    private void MdCollapseButton_Click(object sender, RoutedEventArgs e) => CollapseMdToolbar();
+    private void MdCollapseButton_Click(object sender, RoutedEventArgs e) => MeltToolbarAway(MdToolbarContainer, MdToolbarTranslate);
 
     private void CollapseMdToolbar()
     {
@@ -1001,7 +1024,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(280), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(f, MdToolbarContainer); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
         var s = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(s, MdToolbarTranslate); Storyboard.SetTargetProperty(s, "Y"); sb.Children.Add(s);
+        Storyboard.SetTarget(s, MdToolbarTranslate); Storyboard.SetTargetProperty(s, "TranslateY"); sb.Children.Add(s);
         sb.Completed += (_, _) => { MdToolbarContainer.Visibility = Visibility.Collapsed; ShowExpandButton(); }; sb.Begin();
     }
 

@@ -6,7 +6,7 @@
 ; ============================================================
 
 #define MyAppName "Novara"
-#define MyAppVersion "5.0.0"
+#define MyAppVersion "5.1.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 ; E4-39: relative to this script (Installer\..\.. = the Desktop folder where Novara_Publish lives),
@@ -23,7 +23,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
 AllowNoIcons=yes
-OutputDir=.
+OutputDir=....Novara Release
 OutputBaseFilename=Novara_Setup_{#MyAppVersion}
 SetupIconFile=..\Assets\128.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}

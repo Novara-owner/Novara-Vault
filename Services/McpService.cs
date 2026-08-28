@@ -1,5 +1,4 @@
 
-
 using System.IO;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -98,6 +97,9 @@ public static class McpService
             writer.WriteLine(JsonSerializer.Serialize(helloResp, JsonOpts));
             if (!helloResp.Ok) return;
 
+            
+            var clientPath = (hello?.ClientPath ?? "").Trim();
+
             while (!ct.IsCancellationRequested)
             {
                 var line = reader.ReadLine();
@@ -107,7 +109,7 @@ public static class McpService
                 {
                     var req = JsonSerializer.Deserialize<ReqMsg>(line, JsonOpts);
                     if (req == null) continue;
-                    var resp = Execute(req);
+                    var resp = Execute(req, clientPath);
                     writer.WriteLine(JsonSerializer.Serialize(resp, JsonOpts));
                 }
                 catch (System.Text.Json.JsonException) { continue; }
@@ -120,18 +122,31 @@ public static class McpService
 
     private static HelloResp Authorize(HelloMsg? hello)
     {
-        if (hello == null) return new HelloResp { Ok = false, Error = "握手无效" };
+        var clientPath = (hello?.ClientPath ?? "").Trim();
+        if (hello == null)
+        {
+            Audit("auth_denied", clientPath, ok: false, reason: "握手无效");
+            return new HelloResp { Ok = false, Error = "握手无效" };
+        }
         var store = App.Store;
         if (store == null || !store.IsLoaded)
+        {
+            Audit("auth_denied", clientPath, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
             return new HelloResp { Ok = false, Error = "数据库未解锁，请先在 Novara 中解锁" };
+        }
 
         var settings = store.Database.AppSettings;
         if (!settings.McpEnabled)
+        {
+            Audit("auth_denied", clientPath, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
             return new HelloResp { Ok = false, Error = "MCP 接口已关闭，请在 Novara 设置中开启" };
+        }
         if (string.IsNullOrEmpty(settings.McpToken) || !FixedTimeEquals(hello.Token, settings.McpToken))
+        {
+            Audit("auth_denied", clientPath, ok: false, reason: "访问令牌无效，请到 Novara 设置页「MCP 接口」卡片复制最新配置");
             return new HelloResp { Ok = false, Error = "访问令牌无效，请到 Novara 设置页「MCP 接口」卡片复制最新配置" };
+        }
 
-        var clientPath = (hello.ClientPath ?? "").Trim();
         // NM2: concurrent first-authorizations raced on the non-thread-safe List; the gate also
         // serializes popup authorizations server-side (a second client waits its turn).
         
@@ -147,13 +162,25 @@ public static class McpService
         {
             bool allowed = AuthorizeClient?.Invoke(clientPath) ?? false;
             if (!allowed)
+            {
+                Audit("auth_denied", clientPath, ok: false, reason: "该进程尚未授权，请先打开 Novara 完成授权");
                 return new HelloResp { Ok = false, Error = "该进程尚未授权，请先打开 Novara 完成授权" };
+            }
+            bool addedNow = false;
             lock (WhitelistGate)
             {
                 if (clientPath.Length > 0 && !store.Database.AppSettings.McpAllowedProcesses.Contains(clientPath))
+                {
                     store.Database.AppSettings.McpAllowedProcesses.Add(clientPath);
+                    addedNow = true;
+                }
             }
             _ = store.SaveAsync();
+            if (addedNow) Audit("auth_new", clientPath); 
+        }
+        else
+        {
+            Audit("auth_ok", clientPath);
         }
         return new HelloResp { Ok = true };
     }
@@ -168,7 +195,9 @@ public static class McpService
         lock (WhitelistGate)
         {
             var settings = App.Store?.Database.AppSettings;
-            return settings?.McpAllowedProcesses.Remove(path) ?? false;
+            var removed = settings?.McpAllowedProcesses.Remove(path) ?? false;
+            if (removed) Audit("revoke", path); 
+            return removed;
         }
     }
 
@@ -185,27 +214,39 @@ public static class McpService
     
     private static readonly object ExecGate = new();
 
-    private static RespMsg Execute(ReqMsg req)
+    private static RespMsg Execute(ReqMsg req, string clientPath)
     {
         var store = App.Store;
         if (store == null || !store.IsLoaded)
+        {
+            Audit("call", clientPath, req.Method, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "数据库未解锁，请先在 Novara 中解锁" } };
+        }
         // N5C-02: the handshake gate is one-shot - re-check the master switch per call so toggling it
         // off (or revoking access) cuts established sessions immediately, matching delete_item semantics.
         if (!store.Database.AppSettings.McpEnabled)
+        {
+            Audit("call", clientPath, req.Method, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "MCP 接口已关闭，请在 Novara 设置中开启" } };
+        }
         if (store.IsSaveSuppressed)
-            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "已恢复备份数据，请重启 Novara 后再操作" } }; // N5S-08: suppressed writes would evaporate on restart
+        {
+            Audit("call", clientPath, req.Method, ok: false, reason: "已恢复备份数据，请重启 Novara 后再操作"); // N5S-08
+            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "已恢复备份数据，请重启 Novara 后再操作" } };
+        }
 
         bool isWrite = req.Method.StartsWith("create_", StringComparison.Ordinal)
                     || req.Method.StartsWith("update_", StringComparison.Ordinal)
                     || req.Method == "delete_item";
+        var target = "-";
+        var title = "";
         try
         {
             object? result;
             lock (ExecGate)
             {
                 var db = store.Database;
+                (target, title) = CaptureTarget(db, req); 
                 result = req.Method switch
             {
                 "list_items" => McpLogic.ListItems(db, CheckType(GetStr(req.Params, "type"))),
@@ -233,17 +274,93 @@ public static class McpService
                 };
             }
             if (isWrite) _ = store.SaveAsync();
+            Audit("call", clientPath, req.Method, target, title, isWrite, true);
             return new RespMsg { Id = req.Id, Ok = true, Result = result };
         }
         catch (McpError ex)
         {
+            Audit("call", clientPath, req.Method, target, title, isWrite, false, ex.Message);
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = ex.Message } };
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"McpService 执行失败: {ex}");
+            Audit("call", clientPath, req.Method, target, title, isWrite, false, "内部错误");
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "内部错误" } };
         }
+    }
+
+    
+    private static (string Target, string Title) CaptureTarget(NovaraDatabase db, ReqMsg req)
+    {
+        try
+        {
+            var m = req.Method;
+            if (m == "list_items")
+                return ($"list:{GetStr(req.Params, "type") ?? "all"}", "");
+            if (m == "search_items")
+                return ($"search:{GetStr(req.Params, "type") ?? "all"}", McpAuditLog.TruncateTitle(GetStr(req.Params, "query")));
+
+            switch (m)
+            {
+                case "create_memo": return ("memo:new", McpAuditLog.TruncateTitle(GetStr(req.Params, "name")));
+                case "create_todo":
+                case "create_note":
+                case "create_diary": return ($"{InferType(m)}:new", McpAuditLog.TruncateTitle(GetStr(req.Params, "title")));
+                case "create_path": return ("path:new", McpAuditLog.TruncateTitle(GetStr(req.Params, "name")));
+            }
+
+            var type = GetStr(req.Params, "type") ?? InferType(m);
+            var id = GetStr(req.Params, "id") ?? "";
+            if (id.Length > 0 && Guid.TryParse(id, out _))
+                return ($"{type}:{IdShort(id)}", McpAuditLog.TruncateTitle(FindTitle(db, type, id)));
+            return ($"{type}:-", "");
+        }
+        catch { return ("-", ""); }
+    }
+
+    private static string FindTitle(NovaraDatabase db, string type, string id)
+    {
+        return type switch
+        {
+            "memo" => db.MemoEntries.FirstOrDefault(x => x.Id.ToString() == id)?.Name ?? "",
+            "path" => db.PathBackupItems.FirstOrDefault(x => x.Id.ToString() == id)?.Name ?? "",
+            "todo" => db.TodoCards.FirstOrDefault(x => x.Id.ToString() == id)?.Title ?? "",
+            "note" => db.NoteCards.FirstOrDefault(x => x.Id.ToString() == id)?.Title ?? "",
+            "diary" => db.DiaryItems.FirstOrDefault(x => x.Id.ToString() == id)?.Title ?? "",
+            _ => ""
+        };
+    }
+
+    private static string InferType(string method)
+        => method.EndsWith("_memo", StringComparison.Ordinal) ? "memo"
+         : method.EndsWith("_todo", StringComparison.Ordinal) ? "todo"
+         : method.EndsWith("_note", StringComparison.Ordinal) ? "note"
+         : method.Contains("diary", StringComparison.Ordinal) ? "diary"
+         : method.Contains("path", StringComparison.Ordinal) ? "path"
+         : "-";
+
+    private static string IdShort(string id) => id.Length <= 8 ? id : id.Substring(0, 8);
+
+    
+    private static void Audit(string ev, string path, string tool = "", string target = "", string title = "",
+        bool write = false, bool ok = true, string reason = "")
+    {
+        try
+        {
+            McpAuditLog.Write(new McpAuditEvent
+            {
+                Ev = ev,
+                Path = path ?? "",
+                Tool = tool ?? "",
+                Target = target ?? "",
+                Title = title ?? "",
+                Write = write,
+                Ok = ok,
+                Reason = reason ?? ""
+            });
+        }
+        catch { }
     }
 
     

@@ -37,6 +37,9 @@ public partial class App : Application
     /// <summary>Pending file/folder path from right-click menu (--add-path); consumed after UI is ready (stage 3).</summary>
     public static string? PendingAddPath { get; private set; }
 
+    /// <summary>Pending markdown file path from the .md right-click menu (--import-md); consumed after UI is ready (stage 3).</summary>
+    public static string? PendingImportMd { get; private set; }
+
     
     public static Guid? PendingReminderId { get; private set; }
 
@@ -61,6 +64,11 @@ public partial class App : Application
                     PendingAddPath = args[i + 1].Trim();
                     i++;
                     break;
+                case "--import-md" when i + 1 < args.Length:
+                    LaunchedFromContextMenu = true; 
+                    PendingImportMd = args[i + 1].Trim();
+                    i++;
+                    break;
                 case "--mcp-background":
                     McpBackground = true;
                     break;
@@ -74,6 +82,14 @@ public partial class App : Application
     }
 
     public static NovaraStore? Store { get; private set; }
+
+    
+    public static void RelockStore()
+    {
+        var old = Store;
+        old?.Invalidate(); 
+        Store = new NovaraStore(NovaraStore.DefaultFilePath);
+    }
 
     public static string CurrentTheme { get; private set; } = "跟随系统";
 
@@ -506,6 +522,8 @@ public partial class App : Application
             // Pass any pending right-click action to the running instance before exiting.
             if (!string.IsNullOrWhiteSpace(App.PendingAddPath))
                 Services.AddPathRequest.Raise(App.PendingAddPath);
+            if (!string.IsNullOrWhiteSpace(App.PendingImportMd))
+                Services.MdImportRequest.Raise(App.PendingImportMd);
             if (App.PendingReminderId.HasValue)
                 Services.ReminderDueRequest.Raise(App.PendingReminderId.Value);
             Environment.Exit(0);
@@ -562,6 +580,8 @@ public partial class App : Application
             MainWindow?.DispatcherQueue?.TryEnqueue(() => MainWindow.HandleEditRequest(g)));
         Services.AddPathRequest.StartListening(p =>
             MainWindow?.DispatcherQueue?.TryEnqueue(() => MainWindow.HandleAddPathRequest(p)));
+        Services.MdImportRequest.StartListening(p =>
+            MainWindow?.DispatcherQueue?.TryEnqueue(() => MainWindow.HandleImportMdRequest(p)));
         Services.ReminderEditRequest.StartListening(p =>
             MainWindow?.DispatcherQueue?.TryEnqueue(() => MainWindow.HandleReminderEditRequest(p)));
     }

@@ -32,8 +32,8 @@ GCM adds **authenticated encryption**: any tampering with the encrypted file is 
 Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
 
 <p align="center">
-  <img src="images/English-LockPage.png" alt="Privacy lock screen" width="420" />
-  <img src="images/English-UnlockPage.png" alt="30-minute lockout countdown" width="420" />
+  <img src="images/English-UnlockPage.png" alt="Privacy lock screen" width="420" />
+  <img src="images/English-LockPage.png" alt="30-minute lockout countdown" width="420" />
 </p>
 
 ## Memo Manager

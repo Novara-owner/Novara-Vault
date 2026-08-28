@@ -32,8 +32,8 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 安全机制还包括 **连续 5 次输错锁定 30 分钟**——计数与锁定状态跨重启持久化，并用单调时钟抵御系统时间回拨。自 5.0 起，你还可用 **Windows Hello**（生物识别 / PIN）解锁。锁屏跟随系统主题、全屏遮挡应用、窗口失焦自动清空输入框。
 
 <p align="center">
-  <img src="images/Chinese-LockPage.png" alt="隐私锁屏" width="420" />
-  <img src="images/Chinese-UnlockPage.png" alt="30 分钟锁定倒计时" width="420" />
+  <img src="images/Chinese-UnlockPage.png" alt="隐私锁屏" width="420" />
+  <img src="images/Chinese-LockPage.png" alt="30 分钟锁定倒计时" width="420" />
 </p>
 
 ## 备忘管理

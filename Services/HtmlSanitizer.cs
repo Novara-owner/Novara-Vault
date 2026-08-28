@@ -1,5 +1,4 @@
 
-
 using AngleSharp.Html.Parser;
 using DomNode = AngleSharp.Dom.INode;
 using DomElement = AngleSharp.Dom.IElement;

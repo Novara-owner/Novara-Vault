@@ -1,5 +1,4 @@
 
-
 using Novara.Models;
 
 namespace Novara.Services;

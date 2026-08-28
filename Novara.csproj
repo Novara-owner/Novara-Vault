@@ -7,7 +7,7 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.0.0</Version>
+    <Version>5.1.0</Version>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
@@ -21,6 +21,7 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <AppxPackage>false</AppxPackage>
+    <AppxMSBuildToolsPath>D:\VS2026\MSBuild\Microsoft\VisualStudio\v18.0\AppxPackage\</AppxMSBuildToolsPath>
 
     <!-- Self-contained -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
@@ -40,6 +41,8 @@
     <PackageReference Include="AngleSharp" Version="1.1.2" />
     <!-- CS1705 fix: H.NotifyIcon.WinUI 2.3.0 requires WinRT.Runtime 2.2.0.0; explicit CsWinRT reference unifies resolution -->
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
+    <!-- Auto-Lock N6-05: true session-switch events (UAC/screensaver must not false-trigger) -->
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -92,4 +95,8 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Assets\Fonts\Comfortaa.ttf"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Include="Assets\Fonts\OFL.txt"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
 </Project>

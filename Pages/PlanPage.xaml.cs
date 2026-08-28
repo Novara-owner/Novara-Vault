@@ -374,7 +374,6 @@ public sealed partial class PlanPage : Page
     }
 
     private void CloseReminderDialog_Click(object s, RoutedEventArgs e) => HideReminderDialog();
-    private void CancelReminderDialog_Click(object s, RoutedEventArgs e) => HideReminderDialog();
     private void ReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ReminderScrim)) HideReminderDialog(); }
 
     private void ConfirmReminderDialog_Click(object s, RoutedEventArgs e)
@@ -1076,7 +1075,6 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private void HideSetReminderDialog() { DialogDepth.VeilClear(); SetReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
     private void SetReminderClose_Click(object s, RoutedEventArgs e) => HideSetReminderDialog();
-    private void SetReminderCancel_Click(object s, RoutedEventArgs e) => HideSetReminderDialog();
     private void SetReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, SetReminderScrim)) HideSetReminderDialog(); }
 
     private void SetReminderConfirm_Click(object s, RoutedEventArgs e)
@@ -1105,7 +1103,6 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private void HideCancelReminderDialog() { DialogDepth.VeilClear(); CancelReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
     private void CancelReminderClose_Click(object s, RoutedEventArgs e) => HideCancelReminderDialog();
-    private void CancelReminderCancel_Click(object s, RoutedEventArgs e) => HideCancelReminderDialog();
     private void CancelReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, CancelReminderScrim)) HideCancelReminderDialog(); }
 
     private void CancelReminderConfirm_Click(object s, RoutedEventArgs e)
@@ -1402,7 +1399,6 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     private void HideDeleteConfirmDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, DeleteConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, DeleteConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, DeleteConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Completed -= OnDeleteConfirmHideCompleted; sb.Completed += OnDeleteConfirmHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; } // N4P-11: re-arm after the overlay is truly gone
     private void DeleteConfirmClose_Click(object s, RoutedEventArgs e) => HideDeleteConfirmDialog();
-    private void DeleteCancel_Click(object s, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteConfirmScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog(); }
     private void DeleteConfirmButton_Click(object s, RoutedEventArgs e) { if (_pendingDeleteCard == null) { HideDeleteConfirmDialog(); return; } if (_deleteConfirming) return; _deleteConfirming = true; { bool isNote = _pendingDeleteCard.Tag is string tg && tg == "note"; _starredCards.Remove(_pendingDeleteCard); _pinnedCards.Remove(_pendingDeleteCard); _pinIcons.Remove(_pendingDeleteCard); _starIcons.Remove(_pendingDeleteCard); _todoData.Remove(_pendingDeleteCard); _todoCollapsed.Remove(_pendingDeleteCard); _todoCompletedBadges.Remove(_pendingDeleteCard); _noteData.Remove(_pendingDeleteCard); _noteExpanded.Remove(_pendingDeleteCard); _cardExpandBtns.Remove(_pendingDeleteCard); _todoRowPanels.Remove(_pendingDeleteCard); _createdAt.Remove(_pendingDeleteCard); _reminderCards.Remove(_pendingDeleteCard); _dueShown.Remove(_pendingDeleteCard);
 

@@ -65,7 +65,8 @@ public sealed partial class BasicMemoPage : Page
     private Dictionary<Border, FrameworkElement> _entryPinIcons = new();
     private HashSet<Border> _starredEntries = new();
     private Dictionary<Border, FrameworkElement> _entryStarIcons = new();
-    private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
+    private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
+    private readonly Dictionary<Border, (CancellationTokenSource Cts, bool Expanded)> _entryExpand = new();
     private readonly Dictionary<Border, string> _entryIconKeys = new(); // 4.0: entry card -> custom icon key (empty = legacy jigsaw)
 
     private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new(); // N5M-01: per-box CTS (E5-24 pattern)
@@ -1019,10 +1020,14 @@ private MenuFlyout BuildContextMenu()
         var expandBtn = new Button { Width = 32, Height = 32, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = expandViewbox, IsTabStop = false };
         expandBtn.Click += (s, e) =>
         {
-            var wasCollapsed = expandedGrid.Visibility == Visibility.Collapsed;
-            expandedGrid.Visibility = wasCollapsed ? Visibility.Visible : Visibility.Collapsed;
-            expandIcon.Data = wasCollapsed ? collapseIconPath : expandIconPath;
-            expandViewbox.Margin = wasCollapsed ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
+            var st = _entryExpand.TryGetValue(card, out var v) ? v : (null, false);
+            bool targetExpand = !st.Item2;
+            if (st.Cts != null) st.Cts.Cancel();
+            var cts = new CancellationTokenSource();
+            _entryExpand[card] = (cts, targetExpand);
+            expandIcon.Data = targetExpand ? collapseIconPath : expandIconPath;
+            expandViewbox.Margin = targetExpand ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
+            StartEntryMelt(expandedGrid, targetExpand, cts.Token);
         };
         Grid.SetColumn(expandBtn, 4);
         mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); mainRow.Children.Add(expandBtn); Grid.SetRow(mainRow, 0);
@@ -1217,6 +1222,9 @@ private MenuFlyout BuildContextMenu()
         AttachCardDrag(card);
         return card;
     }
+
+        
+        private void StartEntryMelt(Grid panel, bool expand, CancellationToken token) => Services.MeltAnim.Begin(panel, expand, 12.0);
 
     private void CopyToClipboardButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1713,6 +1721,7 @@ private MenuFlyout BuildContextMenu()
             _entryPinIcons.Remove(old);
             _entryStarIcons.Remove(old);
             _entryData.Remove(old);
+            if (_entryExpand.TryGetValue(old, out var eo)) { eo.Cts?.Cancel(); _entryExpand.Remove(old); } // N6-10
             _entryIconKeys.Remove(old);
             _starredEntries.Remove(old);
             _apiProtocols.Remove(old);
@@ -2053,6 +2062,7 @@ private MenuFlyout BuildContextMenu()
                         _standaloneEntries.Remove(delEntryCard);
                         _entriesInGroup.Remove(delEntryCard);
                         _entryData.Remove(delEntryCard);
+                        if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); }
                         _entryIconKeys.Remove(delEntryCard);
                         _entryPinIcons.Remove(delEntryCard);
                         _entryStarIcons.Remove(delEntryCard);

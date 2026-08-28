@@ -15,6 +15,7 @@
                     <SolidColorBrush x:Key="AppSurfaceOverlayBrush" Color="#FF333333" />
                     <SolidColorBrush x:Key="AppHoverBrush" Color="#FF3D3D3D" />
                     <SolidColorBrush x:Key="AppBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="NavFaceRaisedBrush" Color="#FF242424" />
                     <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#DDFFFFFF" />
                     <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#99FFFFFF" />
                     <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#66FFFFFF" />
@@ -37,6 +38,7 @@
                     <SolidColorBrush x:Key="AppSurfaceOverlayBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="AppHoverBrush" Color="#FFE6E6E6" />
                     <SolidColorBrush x:Key="AppBorderBrush" Color="#40000000" />
+                    <SolidColorBrush x:Key="NavFaceRaisedBrush" Color="#FFF7F7F7" />
                     <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#DD000000" />
                     <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#88000000" />
                     <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#66000000" />
@@ -59,6 +61,7 @@
                     <SolidColorBrush x:Key="AppSurfaceOverlayBrush" Color="#FF333333" />
                     <SolidColorBrush x:Key="AppHoverBrush" Color="#FF3D3D3D" />
                     <SolidColorBrush x:Key="AppBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="NavFaceRaisedBrush" Color="#FF242424" />
                     <SolidColorBrush x:Key="AppTextPrimaryBrush" Color="#DDFFFFFF" />
                     <SolidColorBrush x:Key="AppTextSecondaryBrush" Color="#99FFFFFF" />
                     <SolidColorBrush x:Key="AppTextTertiaryBrush" Color="#66FFFFFF" />

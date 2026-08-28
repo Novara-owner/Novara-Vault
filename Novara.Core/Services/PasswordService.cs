@@ -164,12 +164,21 @@ public static class PasswordService
 
     private static SecurityFile? LoadSecurity()
     {
-        try
+        
+        
+        
+        for (var attempt = 0; ; attempt++)
         {
-            if (!File.Exists(SecurityPath)) return null;
-            return JsonSerializer.Deserialize<SecurityFile>(File.ReadAllText(SecurityPath));
+            try
+            {
+                if (!File.Exists(SecurityPath)) return null;
+                return JsonSerializer.Deserialize<SecurityFile>(File.ReadAllText(SecurityPath));
+            }
+            catch (Exception ex) when (attempt < 2 && (ex is IOException || ex is UnauthorizedAccessException))
+            {
+                Thread.Sleep(attempt == 0 ? 25 : 75);
+            }
         }
-        catch { return null; }
     }
 
     private static byte[] HashPassword(string password, byte[] salt)
