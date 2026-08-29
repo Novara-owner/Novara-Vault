@@ -91,6 +91,8 @@ public sealed partial class SettingsPage : Page
             McpAuditClearConfirmOverlay.Visibility = Visibility.Collapsed;
             CsvImportPreviewOverlay.Visibility = Visibility.Collapsed;
             CsvExportNoticeOverlay.Visibility = Visibility.Collapsed;
+            EncExportOverlay.Visibility = Visibility.Collapsed;      // 9.2#6
+            EncImportPwdOverlay.Visibility = Visibility.Collapsed;   // 9.2#6
             WindowsHelloOverlay.Visibility = Visibility.Collapsed; // ND8
             McpRevokeConfirmOverlay.Visibility = Visibility.Collapsed; // ND8
             // R1 (Round 5): reset all hide-animation flags on unload (prevent stuck)
@@ -1494,6 +1496,9 @@ private void ShowResetPasswordDialog()
     private bool _animExportMdNotice;
     private bool _animCsvPreview;
     private bool _animCsvExportNotice;
+    private bool _animEncExport;      
+    private bool _animEncImportPwd;   
+    private string? _pendingEncImportPath; 
 
     
     private bool _backupEnabled;               
@@ -1590,16 +1595,19 @@ private void ShowResetPasswordDialog()
         };
         var mdItem = MakeItem(App.GetString("Setting_Archive_ExportMd"));
         var nativeExportItem = MakeItem(App.GetString("Setting_Archive_ExportNative"));
+        var encExportItem = MakeItem(App.GetString("Setting_Archive_ExportEncrypted")); // 9.2#6: encrypted .novaenc export
         var csvExportItem = MakeItem(App.GetString("Setting_CsvExport"));
         var htmlExportItem = MakeItem(App.GetString("Setting_ExportHtml"));
         var pdfExportItem = MakeItem(App.GetString("Setting_ExportPdf"));
         mdItem.Click += (_, _) => RunPrivacyGated(ShowExportMdNoticeDialog); // N4T-07(A)
         nativeExportItem.Click += (_, _) => ExportNativeFlow();
+        encExportItem.Click += (_, _) => RunPrivacyGated(ShowEncExportDialog); // N4T-07(A): verify the lock password every time (4.6 - no session exemption)
         csvExportItem.Click += (_, _) => RunPrivacyGated(ShowCsvExportNoticeDialog); // N4T-07(A)
         htmlExportItem.Click += (_, _) => RunPrivacyGated(() => _ = ExportHtmlFlowAsync()); // N4T-07(A)
         pdfExportItem.Click += (_, _) => RunPrivacyGated(() => _ = ExportPdfFlowAsync()); // N4T-07(A)
         exportSub.Items.Add(mdItem);
         exportSub.Items.Add(nativeExportItem);
+        exportSub.Items.Add(encExportItem);
         exportSub.Items.Add(csvExportItem);
         exportSub.Items.Add(htmlExportItem);
         exportSub.Items.Add(pdfExportItem);
@@ -1687,6 +1695,19 @@ private void ShowResetPasswordDialog()
     private void ImportBackupFlow(string path)
     {
         var result = App.Store?.ImportBackup(path);
+        if (result != null && result.Status == LoadStatus.NeedPassword)
+        {
+            // 9.2#6: encrypted export backup (v4) - ask for the backup password, then re-enter.
+            // The header-only first pass touched no in-memory state (short-circuit before the swap).
+            _pendingEncImportPath = path;
+            ShowEncImportPwdDialog();
+            return;
+        }
+        HandleImportResult(result);
+    }
+
+    private void HandleImportResult(LoadResult? result)
+    {
         if (result == null || result.Status != LoadStatus.Ok)
         {
             ShowImportResult(App.GetString("Setting_Import_Fail"), result?.Detail ?? App.GetString("Setting_Import_FailDesc"));
@@ -1853,6 +1874,195 @@ Logic Range: Below methods in this region
             await ExportBackupFlowAsync(includePaths);
         }
         finally { _pickerFlowBusy = false; }
+    }
+
+    
+
+    private void ShowEncExportDialog()
+    {
+        // Text via x:Name + code assignment only (MCP UI pit #1: x:Bind text can be Disabled to empty)
+        EncExportTitle.Text = App.GetString("Setting_EncBackup_Title");
+        EncExportDesc.Text = App.GetString("Setting_EncBackup_Desc");
+        EncUseLockCheckBox.Content = App.GetString("Setting_EncBackup_UseLock");
+        EncUseLockWarn.Text = App.GetString("Setting_EncBackup_UseLockWarn");
+        EncPasswordBox.PlaceholderText = App.GetString("Setting_EncBackup_PasswordHint");
+        EncConfirmBox.PlaceholderText = App.GetString("Setting_EncBackup_ConfirmHint");
+        EncStrengthHint.Text = App.GetString("Setting_EncBackup_StrengthHint");
+        EncIncludePathsCheckBox.Content = App.GetString("Setting_ExportOptions_IncludePaths");
+        EncExportCancelText.Text = App.GetString("Common_Button_Cancel");
+        EncExportConfirmText.Text = App.GetString("Setting_EncBackup_ConfirmButton");
+        // The lock-password checkbox only makes sense when a privacy-lock password exists
+        EncUseLockCheckBox.IsChecked = false;
+        EncUseLockCheckBox.Visibility = _isPrivacyLockEnabled ? Visibility.Visible : Visibility.Collapsed;
+        EncUseLockWarn.Visibility = Visibility.Collapsed;
+        EncPasswordBox.Text = "";
+        EncConfirmBox.Text = "";
+        EncStrengthText.Visibility = Visibility.Collapsed;
+        EncIncludePathsCheckBox.IsChecked = false;
+        EncExportConfirmButton.IsEnabled = false; // M5: confirm stays disabled until the form is valid
+        _animEncExport = false; // M2: show entry resets the hide guard
+        ShowOverlay(EncExportOverlay, EncExportDialog, EncExportDialogTransform);
+    }
+
+    private void HideEncExportDialog()
+    {
+        if (_animEncExport) return; // M2 hide re-entry guard
+        _animEncExport = true;
+        HideOverlay(EncExportOverlay, EncExportDialog, EncExportDialogTransform, () => _animEncExport = false);
+    }
+
+    private void EncExportClose_Click(object sender, RoutedEventArgs e) => HideEncExportDialog();
+    private void EncExportCancel_Click(object sender, RoutedEventArgs e) => HideEncExportDialog();
+    private void EncExportScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, EncExportScrim)) HideEncExportDialog(); }
+
+    private void EncUseLockCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        // Reuse the verified session lock password (same read channel the 5.0 Hello enable flow uses);
+        // it never echoes through the password boxes.
+        bool useLock = EncUseLockCheckBox.IsChecked == true;
+        EncUseLockWarn.Visibility = useLock ? Visibility.Visible : Visibility.Collapsed;
+        EncPasswordBox.IsEnabled = !useLock;
+        EncConfirmBox.IsEnabled = !useLock;
+        if (useLock)
+        {
+            EncPasswordBox.Text = "";
+            EncConfirmBox.Text = "";
+            EncStrengthText.Visibility = Visibility.Collapsed;
+        }
+        UpdateEncExportConfirmState();
+    }
+
+    private void EncPasswordBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateEncStrengthAndConfirm();
+    private void EncConfirmBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateEncStrengthAndConfirm();
+
+    private void UpdateEncStrengthAndConfirm()
+    {
+        var pw = EncPasswordBox.Text;
+        if (pw.Length == 0)
+        {
+            EncStrengthText.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            var rating = Novara.Services.PasswordStrength.Rate(pw);
+            EncStrengthText.Visibility = Visibility.Visible;
+            switch (rating)
+            {
+                case Novara.Services.BackupPasswordStrength.Strong:
+                    EncStrengthText.Text = App.GetString("Setting_EncBackup_StrengthStrong");
+                    EncStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)); // green (#4CAF50, path-page green)
+                    break;
+                case Novara.Services.BackupPasswordStrength.Medium:
+                    EncStrengthText.Text = App.GetString("Setting_EncBackup_StrengthMedium");
+                    EncStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00)); // gold (#FFD700, corner-badge gold)
+                    break;
+                default:
+                    EncStrengthText.Text = App.GetString("Setting_EncBackup_StrengthWeak");
+                    EncStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)); // red (#FF4545, danger red)
+                    break;
+            }
+        }
+        UpdateEncExportConfirmState();
+    }
+
+    private void UpdateEncExportConfirmState()
+    {
+        // M5: hard checks stay non-empty + two-box match only (audit: no strength interception);
+        // the lock-password checkbox replaces the two boxes entirely.
+        bool valid = EncUseLockCheckBox.IsChecked == true
+            || (EncPasswordBox.Text.Length > 0 && EncPasswordBox.Text == EncConfirmBox.Text);
+        EncExportConfirmButton.IsEnabled = valid;
+    }
+
+    private async void EncExportConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pickerFlowBusy) return; // N5T1-05
+        _pickerFlowBusy = true;
+        try
+        {
+            bool includePaths = EncIncludePathsCheckBox.IsChecked == true;
+            HideEncExportDialog();
+            await ExportEncBackupFlowAsync(includePaths);
+        }
+        finally { _pickerFlowBusy = false; }
+    }
+
+    private async System.Threading.Tasks.Task ExportEncBackupFlowAsync(bool includePaths)
+    {
+        try // E5-26 pattern: an exception must not escape as an unobserved task fault
+        {
+            var password = EncUseLockCheckBox.IsChecked == true
+                ? App.Store?.Password
+                : EncPasswordBox.Text;
+            if (string.IsNullOrEmpty(password)) return;
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+            picker.FileTypeChoices.Add(App.GetString("Setting_Archive_ExportEncrypted"), new List<string> { ".novaenc" });
+            picker.SuggestedFileName = string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Archive_ExportEncrypted"), DateTime.Now);
+            var file = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            bool ok = App.Store?.ExportBackupEncrypted(file.Path, password, includePaths) ?? false;
+            if (ok)
+            {
+                // Audit 2026-08-29: the no-recovery warning deserves a blocking dialog, not a toast.
+                ShowImportResult(App.GetString("Setting_EncExport_SuccessTitle"), App.GetString("Setting_EncExport_SuccessDesc"));
+            }
+            else
+            {
+                ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+            }
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"加密导出失败: {ex}"); }
+    }
+
+    private void ShowEncImportPwdDialog()
+    {
+        EncImportTitle.Text = App.GetString("Setting_EncBackup_Title");
+        EncImportDesc.Text = App.GetString("Setting_ImportEnc_Desc");
+        EncImportPwdBox.PlaceholderText = App.GetString("Setting_EncBackup_PasswordHint");
+        EncImportCancelText.Text = App.GetString("Common_Button_Cancel");
+        EncImportConfirmText.Text = App.GetString("Common_Button_Confirm");
+        EncImportPwdBox.Text = "";
+        EncImportConfirmButton.IsEnabled = false; // M5
+        _animEncImportPwd = false; // M2: show entry resets the hide guard
+        ShowOverlay(EncImportPwdOverlay, EncImportPwdDialog, EncImportPwdDialogTransform);
+    }
+
+    private void HideEncImportPwdDialog()
+    {
+        if (_animEncImportPwd) return; // M2 hide re-entry guard
+        _animEncImportPwd = true;
+        _pendingEncImportPath = null;
+        HideOverlay(EncImportPwdOverlay, EncImportPwdDialog, EncImportPwdDialogTransform, () => _animEncImportPwd = false);
+    }
+
+    private void EncImportPwdClose_Click(object sender, RoutedEventArgs e) => HideEncImportPwdDialog();
+    private void EncImportPwdCancel_Click(object sender, RoutedEventArgs e) => HideEncImportPwdDialog();
+    private void EncImportPwdScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, EncImportPwdScrim)) HideEncImportPwdDialog(); }
+
+    private void EncImportPwdBox_TextChanged(object sender, TextChangedEventArgs e)
+        => EncImportConfirmButton.IsEnabled = EncImportPwdBox.Text.Length > 0; // M5
+
+    private void EncImportPwdConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        if (_animEncImportPwd) return; // M2: no confirm during the hide animation
+        var pw = EncImportPwdBox.Text;
+        if (pw.Length == 0) { FlashTextBox(EncImportPwdBox); return; }
+        var path = _pendingEncImportPath;
+        if (string.IsNullOrEmpty(path)) { HideEncImportPwdDialog(); return; }
+        var result = App.Store?.ImportBackup(path, pw);
+        // Wrong backup password = stay in the dialog, flash, retry (auth failure is indistinguishable
+        // from corruption by design, but a retry attempt costs nothing and keeps the flow alive).
+        if (result != null && result.Status == LoadStatus.Corrupted && result.Detail == Loc.T("Store_Err_BackupAuthFail"))
+        {
+            FlashTextBox(EncImportPwdBox);
+            return;
+        }
+        HideEncImportPwdDialog();
+        HandleImportResult(result);
     }
 
     
@@ -2204,8 +2414,12 @@ Logic Range: Below methods in this region
     {
         if (!_isPrivacyLockEnabled) { flow(); return; }
         _pendingExport = false; // keep the native flag from hijacking the confirm branch
-        _pendingVerifiedAction = flow;
         ShowImportExportPasswordDialog(App.GetString("Setting_Archive_VerifyTitle"));
+        // MUST run AFTER Show: its entry clears stale gated flows (N5T1-02) - assigning before Show
+        // got the fresh flow wiped too, so every gated convenience channel (MD/CSV/HTML/PDF/encrypted
+        // backup export, CSV import) fell through to the native dispatch after the password check
+        // (2026-08-29: owner-confirmed - the encrypted-backup dialog never appeared with the lock on).
+        _pendingVerifiedAction = flow;
     }
 
     private void ImportExportPasswordConfirm_Click(object sender, RoutedEventArgs e)
