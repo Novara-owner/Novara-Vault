@@ -25,6 +25,24 @@ public class NovaraStore
     private const byte FileVersionSha256Backup = 3;
     private const int HeaderSizeSha256 = 4 + 1 + 1 + 32;
 
+    // 2026-08-29 encrypted export backup (design doc 9.2#6): version 4 - the header carries the
+    // algorithm/KDF ids, the iteration count and a per-backup random salt, so the file is fully
+    // self-contained and decryptable on any machine without security.dat. Layout: 44B header +
+    // CryptoService GCM block (nonce 12 + tag 16 + ciphertext). The 44 header bytes double as the
+    // GCM associated data (the tag itself cannot be part of it; the nonce is authenticated by the
+    // tag). Iterations live in the file so the 9.2#7 KDF upgrade can raise them per-export while
+    // old backups keep importing. data.novadb never writes v4 (2.1 contract untouched).
+    private const byte FileVersionEncryptedBackup = 4;
+    private const int HeaderSizeEncryptedBackup = 4 + 1 + 1 + 1 + 1 + 4 + 32; // 44
+    private const int GcmBlockOverhead = 12 + 16; // nonce + tag prefix of the CryptoService GCM output
+    private const byte AlgoIdAes256Gcm = 0x00;
+    private const byte KdfIdPbkdf2Sha256 = 0x00;
+    private const int BackupKdfIterations = 300000;
+    // Import-side sanity window for the header-declared iteration count: rejects attacker-crafted
+    // headers (DoS via a multi-second derivation on the UI thread) and zero/garbage values.
+    private const int BackupKdfIterationsMin = 1000;
+    private const int BackupKdfIterationsMax = 2000000;
+
     
     private const int SaveDebounceMs = 300;
 
@@ -336,34 +354,8 @@ public class NovaraStore
         {
             if (_suppressSave) return false; // N5S-07: memory is stale vs the restored snapshot - exporting it would silently hand the user the wrong data
             if (!_loaded) return false; 
-            // D21: trashed items (IsDeleted) must not leave the machine with a backup - deep-clone the
-            // DB, drop them and serialize the clean copy; the live in-memory DB is never mutated.
-            // 4.4: includeFilePathEntries=false excludes path backups entirely (device-migration use case).
-            NovaraDatabase export;
-            try
-            {
-                
-                
-                
-                var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions), JsonOptions);
-                // E4-20: a clone that fails to deserialize must NOT fall back to the live db (that
-                // would leak trashed items / excluded paths into the backup). Fail the export instead,
-                // consistent with the catch block below.
-                if (copy == null) return false;
-                copy.MemoEntries?.RemoveAll(x => x.IsDeleted);
-                copy.PathBackupItems?.RemoveAll(x => x.IsDeleted);
-                copy.TodoCards?.RemoveAll(x => x.IsDeleted);
-                copy.NoteCards?.RemoveAll(x => x.IsDeleted);
-                copy.DiaryItems?.RemoveAll(x => x.IsDeleted);
-                if (!includeFilePathEntries) copy.PathBackupItems?.Clear();
-                export = copy;
-            }
-            catch
-            {
-                // E1-26: clone failure (concurrent UI mutation) must NOT leak trashed items / excluded
-                // paths, and must NOT mutate the live db - fail the export instead; the user retries.
-                return false;
-            }
+            var export = CloneForExport(includeFilePathEntries);
+            if (export == null) return false;
             var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
             // 2026-08-28 (design doc 9.1#3): backups leave the machine, so integrity moves MD5 -> SHA-256
             // as backup format v3 (38B header). SHA-256 detects corruption only - it is NOT tamper
@@ -394,12 +386,99 @@ public class NovaraStore
         }
     }
 
+    /// <summary>
+    /// D21: trashed items (IsDeleted) must not leave the machine with a backup - deep-clone the
+    /// DB, drop them and return the clean copy; the live in-memory DB is never mutated.
+    /// 4.4: includeFilePathEntries=false excludes path backups entirely (device-migration use case).
+    /// Shared by ExportBackup (plaintext v3) and ExportBackupEncrypted (v4).
+    /// </summary>
+    private NovaraDatabase? CloneForExport(bool includeFilePathEntries)
+    {
+        try
+        {
+            
+            
+            
+            var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions), JsonOptions);
+            // E4-20: a clone that fails to deserialize must NOT fall back to the live db (that
+            // would leak trashed items / excluded paths into the backup). Fail the export instead,
+            // consistent with the catch block below.
+            if (copy == null) return null;
+            copy.MemoEntries?.RemoveAll(x => x.IsDeleted);
+            copy.PathBackupItems?.RemoveAll(x => x.IsDeleted);
+            copy.TodoCards?.RemoveAll(x => x.IsDeleted);
+            copy.NoteCards?.RemoveAll(x => x.IsDeleted);
+            copy.DiaryItems?.RemoveAll(x => x.IsDeleted);
+            if (!includeFilePathEntries) copy.PathBackupItems?.Clear();
+            return copy;
+        }
+        catch
+        {
+            // E1-26: clone failure (concurrent UI mutation) must NOT leak trashed items / excluded
+            // paths, and must NOT mutate the live db - fail the export instead; the user retries.
+            return null;
+        }
+    }
+
+    /* ========== NovaraStore Encrypted Export Backup ==========
+Function: Encrypted export backup (format v4, design doc 9.2#6, 2026-08-29): 44B self-contained
+    header (magic/version=4/flag=encrypted/algoId/kdfId/iterations/random per-backup salt) +
+    GCM block (nonce+tag+cipher of GZip'd JSON). Header bytes double as the GCM AAD.
+Corresponding UI: SettingsPage encrypted-backup dialogs
+Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
+*/
+    public bool ExportBackupEncrypted(string backupPath, string password, bool includeFilePathEntries)
+    {
+        try
+        {
+            if (_suppressSave) return false; // N5S-07: same stale-memory guard as the plaintext export
+            if (!_loaded) return false; // N6-16: never export a "valid header + empty db" clone
+            if (string.IsNullOrEmpty(password)) return false;
+            var export = CloneForExport(includeFilePathEntries);
+            if (export == null) return false;
+            var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
+
+            // Per-backup random salt: independent from security.dat on purpose - the backup
+            // password is a separate secret and must stay decryptable without this machine.
+            var salt = RandomNumberGenerator.GetBytes(32);
+            var header = new byte[HeaderSizeEncryptedBackup];
+            BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
+            header[4] = FileVersionEncryptedBackup;
+            header[5] = FlagEncrypted;
+            header[6] = AlgoIdAes256Gcm;
+            header[7] = KdfIdPbkdf2Sha256;
+            BitConverter.TryWriteBytes(header.AsSpan(8, 4), BackupKdfIterations);
+            salt.CopyTo(header, 12);
+            // The raw header bytes are the AAD - parsed and passed as-is, never reassembled
+            // field by field (a byte-order/padding mismatch would break every decryption).
+            var cipher = CryptoService.EncryptGcm(json, password, salt, BackupKdfIterations, header);
+
+            var dir = Path.GetDirectoryName(backupPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // E2-03: atomic write (tmp + move) - same guarantee as the plaintext export
+            var tmpPath = backupPath + ".tmp";
+            using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                fs.Write(header);
+                fs.Write(cipher); // CryptoService layout: nonce(12) + tag(16) + ciphertext
+                fs.Flush(true);
+            }
+            File.Move(tmpPath, backupPath, true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"NovaraStore 加密导出失败: {ex}");
+            return false;
+        }
+    }
+
     /* ========== NovaraStore Import Backup ==========
 Function: Backup import: header/version/MD5 validation, plaintext only, in-memory rollback on failure (#1/#22), null-normalize & dedupe (#23/#24)
 Corresponding UI: NovaraStore.cs
 Logic Range: Below methods in this region
 */
-    public LoadResult ImportBackup(string backupPath)
+    public LoadResult ImportBackup(string backupPath, string? backupPassword = null)
     {
         // N5S-06: refuse while suppressed - the old code cleared suppression before validation, so a
         // failed import silently un-protected the restored snapshot, and an "encrypted" success path
@@ -414,31 +493,72 @@ Logic Range: Below methods in this region
             {
                 // 2026-08-28 dual-format import: v3 = SHA-256 over a 38B header (current exports);
                 // v1 = legacy MD5 over the 22B header - 2.0/3.0/4.x/5.0 exports stay importable forever.
+                // 2026-08-29: v4 = encrypted export backup (9.2#6). Format detection is header-only -
+                // the file extension is never consulted (audit 2026-08-29: renamed/stripped suffixes
+                // must still import).
                 if (fs.Length < HeaderSize) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
                 var prefix = new byte[6];
                 fs.ReadExactly(prefix);
                 if (BitConverter.ToUInt32(prefix, 0) != Magic) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMagic"));
                 var ver = prefix[4];
-                if (ver != FileVersionLegacy && ver != FileVersionCurrent && ver != FileVersionSha256Backup) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
-                if (prefix[5] != FlagPlain) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupNotPlain"));
-                // E4-19: a v2 plaintext file does not exist in the format matrix (4.7) - reject it,
-                // symmetric with Load's defensive corruption handling (E1-26).
-                if (ver == FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
+                if (ver != FileVersionLegacy && ver != FileVersionCurrent && ver != FileVersionSha256Backup && ver != FileVersionEncryptedBackup)
+                    return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
 
-                var headerSize = ver == FileVersionSha256Backup ? HeaderSizeSha256 : HeaderSize;
-                var digestLen = headerSize - 6;
-                var storedDigest = new byte[digestLen];
-                if (digestLen > 0)
+                if (ver == FileVersionEncryptedBackup)
                 {
-                    var rest = new byte[digestLen];
-                    fs.ReadExactly(rest);
-                    rest.CopyTo(storedDigest, 0);
+                    // v4 layout: 44B header (magic/ver/flag/algoId/kdfId/iterations/salt) + GCM block
+                    // (nonce 12 + tag 16 + cipher). The raw 44 header bytes are the AAD exactly as
+                    // they were written - parsed here and passed as-is, never reassembled field by
+                    // field (a byte-order mismatch would break every decryption).
+                    if (prefix[5] != FlagEncrypted) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver)); // not in the format matrix (E4-19 symmetry)
+                    if (fs.Length < HeaderSizeEncryptedBackup + GcmBlockOverhead)
+                        return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
+                    if (string.IsNullOrEmpty(backupPassword))
+                        return new LoadResult(LoadStatus.NeedPassword); // UI re-enters with the backup password
+                    var header44 = new byte[HeaderSizeEncryptedBackup];
+                    fs.Position = 0;
+                    fs.ReadExactly(header44);
+                    var algoId = header44[6];
+                    var kdfId = header44[7];
+                    var iter32 = BitConverter.ToUInt32(header44, 8);
+                    if (algoId != AlgoIdAes256Gcm || kdfId != KdfIdPbkdf2Sha256 || iter32 < BackupKdfIterationsMin || iter32 > BackupKdfIterationsMax)
+                        return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver)); // unknown algo/kdf or DoS-grade iteration count
+                    var salt = header44[12..44];
+                    var encBody = new byte[fs.Length - HeaderSizeEncryptedBackup];
+                    fs.ReadExactly(encBody);
+                    try
+                    {
+                        // Auth failure (wrong password OR tampering) is deliberately one
+                        // indistinguishable outcome - never split the two error messages.
+                        body = CryptoService.DecryptGcm(encBody, backupPassword, salt, (int)iter32, header44);
+                    }
+                    catch
+                    {
+                        return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupAuthFail"));
+                    }
                 }
-                body = new byte[fs.Length - headerSize];
-                fs.ReadExactly(body);
-                var actual = ver == FileVersionSha256Backup ? SHA256.HashData(body) : MD5.HashData(body);
-                if (!storedDigest.AsSpan().SequenceEqual(actual))
-                    return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMd5"));
+                else
+                {
+                    if (prefix[5] != FlagPlain) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupNotPlain"));
+                    // E4-19: a v2 plaintext file does not exist in the format matrix (4.7) - reject it,
+                    // symmetric with Load's defensive corruption handling (E1-26).
+                    if (ver == FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
+
+                    var headerSize = ver == FileVersionSha256Backup ? HeaderSizeSha256 : HeaderSize;
+                    var digestLen = headerSize - 6;
+                    var storedDigest = new byte[digestLen];
+                    if (digestLen > 0)
+                    {
+                        var rest = new byte[digestLen];
+                        fs.ReadExactly(rest);
+                        rest.CopyTo(storedDigest, 0);
+                    }
+                    body = new byte[fs.Length - headerSize];
+                    fs.ReadExactly(body);
+                    var actual = ver == FileVersionSha256Backup ? SHA256.HashData(body) : MD5.HashData(body);
+                    if (!storedDigest.AsSpan().SequenceEqual(actual))
+                        return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMd5"));
+                }
             }
 
             var db = JsonSerializer.Deserialize<NovaraDatabase>(body, JsonOptions);
@@ -683,6 +803,6 @@ private bool WriteSnapshot()
     }
 }
 
-public enum LoadStatus { Ok, EmptyCreated, Encrypted, WrongPassword, Corrupted, IoError }
+public enum LoadStatus { Ok, EmptyCreated, Encrypted, WrongPassword, Corrupted, IoError, NeedPassword }
 
 public record LoadResult(LoadStatus Status, string? Detail = null);

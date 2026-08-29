@@ -1709,6 +1709,126 @@
         </Grid>
 
         
+        <Grid x:Name="EncExportOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="EncExportScrim" Background="#2E000000" Tapped="EncExportScrim_Tapped" />
+            <Border x:Name="EncExportDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="EncExportDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="EncExportTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="EncExportClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}"
+                                  StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="EncExportDesc" Grid.Row="1"
+                               FontSize="13" LineHeight="20" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               Margin="0,14,0,0" />
+                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                        <CheckBox x:Name="EncUseLockCheckBox" FontSize="13"
+                                  Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                  Checked="EncUseLockCheckBox_Changed" Unchecked="EncUseLockCheckBox_Changed" />
+                        <TextBlock x:Name="EncUseLockWarn" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="#FF4545" Margin="0,6,0,0" Visibility="Collapsed" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="3" Margin="0,12,0,0" Spacing="8">
+                        <TextBox x:Name="EncPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
+                                 TextChanged="EncPasswordBox_TextChanged" />
+                        <TextBox x:Name="EncConfirmBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
+                                 TextChanged="EncConfirmBox_TextChanged" />
+                        <TextBlock x:Name="EncStrengthText" FontSize="12" FontWeight="SemiBold" Visibility="Collapsed" />
+                        <TextBlock x:Name="EncStrengthHint" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                    <CheckBox x:Name="EncIncludePathsCheckBox" Grid.Row="4" Margin="0,12,0,0" FontSize="13"
+                              Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                    <Grid Grid.Row="5" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="EncExportCancel_Click">
+                            <TextBlock x:Name="EncExportCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="EncExportConfirmButton" HorizontalAlignment="Right" Width="190" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="EncExportConfirm_Click" IsEnabled="False">
+                            <TextBlock x:Name="EncExportConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="EncImportPwdOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="EncImportPwdScrim" Background="#2E000000" Tapped="EncImportPwdScrim_Tapped" />
+            <Border x:Name="EncImportPwdDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="EncImportPwdDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="EncImportTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="EncImportPwdClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}"
+                                  StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="EncImportDesc" Grid.Row="1"
+                               FontSize="13" LineHeight="20" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               Margin="0,14,0,0" />
+                    <TextBox x:Name="EncImportPwdBox" Grid.Row="2" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
+                             Margin="0,14,0,0" TextChanged="EncImportPwdBox_TextChanged" />
+                    <Grid Grid.Row="3" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="EncImportPwdCancel_Click">
+                            <TextBlock x:Name="EncImportCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="EncImportConfirmButton" HorizontalAlignment="Right" Width="190" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="EncImportPwdConfirm_Click" IsEnabled="False">
+                            <TextBlock x:Name="EncImportConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
         <Grid x:Name="ExportMdNoticeOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ExportMdNoticeScrim" Background="#2E000000" Tapped="ExportMdNoticeScrim_Tapped" />
             <Border x:Name="ExportMdNoticeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">

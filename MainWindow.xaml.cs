@@ -34,7 +34,7 @@ public sealed partial class MainWindow : Window
 
     
     
-    private sealed class NavFadeRec { public Microsoft.UI.Xaml.Media.Animation.Storyboard Sb; public double Val; }
+    private sealed class NavFadeRec { public Microsoft.UI.Xaml.Media.Animation.Storyboard Sb = null!; public double Val; }
     private static readonly System.Collections.Generic.Dictionary<Microsoft.UI.Xaml.UIElement, NavFadeRec> _navFades = new();
     private object? _previousContent;
     private SearchPage? _searchPage; // global search (3.0-4.5)
@@ -648,18 +648,18 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     
     
     
+    
     [DllImport("user32.dll")]
     private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
     [StructLayout(LayoutKind.Sequential)]
     private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
-    [DllImport("wtsapi32.dll")]
-    private static extern bool WTSQuerySessionInformation(IntPtr hServer, uint sessionId, int infoClass, out IntPtr ppBuffer, out int pBytes);
-    [DllImport("wtsapi32.dll")]
-    private static extern void WTSFreeMemory(IntPtr pMemory);
-    [DllImport("kernel32.dll")]
-    private static extern bool ProcessIdToSessionId(uint dwProcessId, out uint pSessionId);
+    [DllImport("user32.dll")]
+    private static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+    [DllImport("user32.dll")]
+    private static extern bool CloseDesktop(IntPtr hDesktop);
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _autoLockTimer;
+    private int _lockStrikes; 
 
     private void StartAutoLockWatcher()
     {
@@ -678,22 +678,27 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (LockScreenFrame.Visibility == Visibility.Visible) return; 
         if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return; 
         var st = App.Store.Database.AppSettings;
-        if (st.AutoLockOnSystemLock && IsWindowsLocked()) { LockNow(); return; }
+        
+        
+        
+        if (st.AutoLockOnSystemLock)
+        {
+            _lockStrikes = IsInputDesktopUnavailable() ? _lockStrikes + 1 : 0;
+            if (_lockStrikes >= 2) { _lockStrikes = 0; LockNow(); return; }
+        }
+        else if (_lockStrikes != 0) _lockStrikes = 0; 
         if (st.AutoLockSeconds > 0 && GetIdleSeconds() >= st.AutoLockSeconds) LockNow();
     }
 
     
     
-    private static bool IsWindowsLocked()
+    
+    private static bool IsInputDesktopUnavailable()
     {
-        if (!ProcessIdToSessionId((uint)Environment.ProcessId, out var sessionId)) return false;
-        if (!WTSQuerySessionInformation(IntPtr.Zero, sessionId, 25, out var buf, out _)) return false;
-        try
-        {
-            var flags = System.Runtime.InteropServices.Marshal.ReadInt32(buf, 8); // SessionFlags: 1=LOCK 2=UNLOCK
-            return flags == 1;
-        }
-        finally { WTSFreeMemory(buf); }
+        var h = OpenInputDesktop(0, false, 0x0100); // DESKTOP_SWITCHDESKTOP
+        if (h == IntPtr.Zero) return true;
+        CloseDesktop(h);
+        return false;
     }
 
     private static int GetIdleSeconds()

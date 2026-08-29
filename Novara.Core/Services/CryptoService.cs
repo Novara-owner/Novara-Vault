@@ -51,25 +51,27 @@ public static class CryptoService
         return Decompress(compressed);
     }
 
-    private static byte[] DeriveKey(string password, byte[] salt)
-        => Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, KeySize);
+    private static byte[] DeriveKey(string password, byte[] salt, int iterations = Iterations)
+        => Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
 
     /// <summary>
     /// AES-256-GCM (authenticated encryption, format v2, 2026-08-10, see 4.7):
     /// PBKDF2 key + 12-byte nonce + 16-byte tag. Wrong password / tampered data throw
     /// AuthenticationTagMismatchException (explicit corruption detection - replaces the CBC+MD5 combo).
     /// Layout: nonce(12) + tag(16) + ciphertext.
+    /// Optional overrides (2026-08-29, encrypted export backup 9.2#6): a custom iteration count and
+    /// associated data. The main-database paths keep the defaults (const Iterations, no AAD).
     /// </summary>
-    public static byte[] EncryptGcm(byte[] plainData, string password, byte[] deriveSalt)
+    public static byte[] EncryptGcm(byte[] plainData, string password, byte[] deriveSalt, int iterations = Iterations, byte[]? associatedData = null)
     {
-        var key = DeriveKey(password, deriveSalt);
+        var key = DeriveKey(password, deriveSalt, iterations);
         var nonce = RandomNumberGenerator.GetBytes(GcmNonceSize);
         var compressed = Compress(plainData);
 
         var cipher = new byte[compressed.Length];
         var tag = new byte[GcmTagSize];
         using var gcm = new AesGcm(key, GcmTagSize);
-        gcm.Encrypt(nonce, compressed, cipher, tag);
+        gcm.Encrypt(nonce, compressed, cipher, tag, associatedData);
 
         var result = new byte[GcmNonceSize + GcmTagSize + cipher.Length];
         nonce.CopyTo(result, 0);
@@ -78,17 +80,17 @@ public static class CryptoService
         return result;
     }
 
-    public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt)
+    public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt, int iterations = Iterations, byte[]? associatedData = null)
     {
         if (data.Length < GcmNonceSize + GcmTagSize) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
-        var key = DeriveKey(password, deriveSalt);
+        var key = DeriveKey(password, deriveSalt, iterations);
         var nonce = data.AsSpan(0, GcmNonceSize);
         var tag = data.AsSpan(GcmNonceSize, GcmTagSize);
         var cipher = data.AsSpan(GcmNonceSize + GcmTagSize);
 
         var compressed = new byte[cipher.Length];
         using var gcm = new AesGcm(key, GcmTagSize);
-        gcm.Decrypt(nonce, cipher, tag, compressed); // wrong password / tamper -> AuthenticationTagMismatchException
+        gcm.Decrypt(nonce, cipher, tag, compressed, associatedData); // wrong password / tamper -> AuthenticationTagMismatchException
         return Decompress(compressed);
     }
 
