@@ -14,6 +14,7 @@ public class AppSettings
     public int AutoLockSeconds { get; set; }
     public bool AutoLockOnSystemLock { get; set; }
     public bool GcmMigrationRejected { get; set; } 
+    public bool KdfMigrationRejected { get; set; } // 9.2#7: user declined the one-time v2->v3 KDF-hardening migration; symmetric with GcmMigrationRejected
     public string AppLanguage { get; set; } = ""; // zh-CN / en-US / zh-TW / ko-KR / ja-JP; empty = follow system (contract, see 2.1)
     public bool HasCompletedWelcome { get; set; }
     public bool WelcomeOnLaunch { get; set; } = true; 
@@ -30,4 +31,15 @@ public class AppSettings
     public List<string> McpAllowedProcesses { get; set; } = new();
     public bool McpDeleteEnabled { get; set; }
     public bool McpDetailExpanded { get; set; } = true;
+    
+    
+    public List<McpClientPermRecord> McpClientPermissions { get; set; } = new();
+    public bool McpPermMigrated { get; set; } 
+}
+
+/// <summary>9.2#5: one authorized client's fine-grained permission set (McpPermissions flag bits).</summary>
+public sealed class McpClientPermRecord
+{
+    public string Path { get; set; } = "";
+    public long Permissions { get; set; } // McpPerm flags as long (JSON-friendly)
 }

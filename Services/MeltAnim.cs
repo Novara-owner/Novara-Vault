@@ -42,6 +42,17 @@ public static class MeltAnim
             double full = panel.ActualHeight;
             double start = expand ? 0 : full;
             double target = expand ? full : 0;
+            if (expand && full <= 0)
+            {
+                // Panel not laid out yet (e.g. opened before the page entered the tree - D4 authorize
+                // jump). Animating to 0 would pin Height dead AND the terminal record below would then
+                // swallow every later expand via the N6-08 same-value short-circuit ("click does
+                // nothing"). Snap to the final state WITHOUT recording: the next Begin runs a real
+                // animation once the panel has content and a real height.
+                panel.Opacity = 1;
+                panel.Height = double.NaN;
+                return;
+            }
             if (expand) { panel.Height = 0; panel.Opacity = 0; }
             var sw = System.Diagnostics.Stopwatch.StartNew();
 

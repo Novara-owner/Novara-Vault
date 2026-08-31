@@ -35,7 +35,7 @@ public sealed partial class TrashPage : Page
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
         BackPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.Back);
-        ClearAllPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.Delete[0]);
+        ClearAllPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.Delete);
         RestoreAllPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.RestoreTrash);
     }
 
@@ -192,7 +192,7 @@ public sealed partial class TrashPage : Page
         var brandBlue = App.GetBrush("AppPrimaryButtonBrush");
         var dangerRed = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
         var restoreBtn = MakeIconButton(IconData.RestoreTrash, (_, _) => Restore(row.Entity), brandBlue, brandBlue, bold: true);
-        var delBtn = MakeIconButton(IconData.Delete[0], (_, _) =>
+        var delBtn = MakeIconButton(IconData.Delete, (_, _) =>
         {
             _pendingDeleteForever = row.Entity;
             ShowDeleteForeverDialog();

@@ -28,6 +28,10 @@ public static class PasswordService
         public string HashSalt { get; set; } = "";
         public string DeriveSalt { get; set; } = "";
         public string Hash { get; set; } = "";
+        /// <summary>9.2#7 (2026-08-29): 1 = legacy salted-SHA256 (pre-KDF-hardening, field missing on
+        /// old files), 2 = PBKDF2-SHA256 with CryptoService.CurrentIterations. Old files verify via
+        /// the legacy algorithm and are rewritten to v2 transparently on the first successful verify.</summary>
+        public int Version { get; set; } = 1;
     }
 
     private sealed class LockoutFile
@@ -54,13 +58,14 @@ public static class PasswordService
         {
             var hashSalt = RandomNumberGenerator.GetBytes(SaltSize);
             var deriveSalt = RandomNumberGenerator.GetBytes(SaltSize);
-            var hash = HashPassword(password, hashSalt);
+            var hash = HashPasswordV2(password, hashSalt); // 9.2#7: hardened hash from day one
             Directory.CreateDirectory(BaseDir);
             AtomicWrite(SecurityPath, JsonSerializer.Serialize(new SecurityFile
             {
                 HashSalt = Convert.ToBase64String(hashSalt),
                 DeriveSalt = Convert.ToBase64String(deriveSalt),
-                Hash = Convert.ToBase64String(hash)
+                Hash = Convert.ToBase64String(hash),
+                Version = 2
             }));
             return true;
         }
@@ -78,13 +83,36 @@ public static class PasswordService
             if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.Hash)) return false;
             var hashSalt = Convert.FromBase64String(sf.HashSalt);
             var expected = Convert.FromBase64String(sf.Hash);
-            var actual = HashPassword(password, hashSalt);
-            return CryptographicOperations.FixedTimeEquals(expected, actual);
+            // 9.2#7: verify by the file's own version. Legacy files verify via salted SHA-256 and are
+            // transparently rewritten to the hardened PBKDF2 format on their first successful verify.
+            var actual = sf.Version >= 2 ? HashPasswordV2(password, hashSalt) : HashPassword(password, hashSalt);
+            var ok = CryptographicOperations.FixedTimeEquals(expected, actual);
+            if (ok && sf.Version < 2) UpgradeSecurityFile(sf, password, hashSalt);
+            return ok;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>9.2#7: silent in-place hardening - keep hashSalt + deriveSalt, rewrite only the
+    /// password hash in the V2 format. Failure is swallowed on purpose: the verify result stands and
+    /// the next successful verify retries the upgrade.</summary>
+    private static void UpgradeSecurityFile(SecurityFile sf, string password, byte[] hashSalt)
+    {
+        try
+        {
+            Directory.CreateDirectory(BaseDir);
+            AtomicWrite(SecurityPath, JsonSerializer.Serialize(new SecurityFile
+            {
+                HashSalt = sf.HashSalt,
+                DeriveSalt = sf.DeriveSalt,
+                Hash = Convert.ToBase64String(HashPasswordV2(password, hashSalt)),
+                Version = 2
+            }));
+        }
+        catch { }
     }
 
     /// <summary>Health of security.dat, independent of any password (N4S-04).</summary>
@@ -134,13 +162,14 @@ public static class PasswordService
             if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.DeriveSalt)) return false;
             var hashSalt = Convert.FromBase64String(sf.HashSalt);
             var deriveSalt = Convert.FromBase64String(sf.DeriveSalt);
-            var hash = HashPassword(newPassword, hashSalt);
+            var hash = HashPasswordV2(newPassword, hashSalt); // 9.2#7: hardened hash from day one
             Directory.CreateDirectory(BaseDir);
             AtomicWrite(SecurityPath, JsonSerializer.Serialize(new SecurityFile
             {
                 HashSalt = Convert.ToBase64String(hashSalt),
                 DeriveSalt = Convert.ToBase64String(deriveSalt),
-                Hash = Convert.ToBase64String(hash)
+                Hash = Convert.ToBase64String(hash),
+                Version = 2
             }));
             return true;
         }
@@ -189,6 +218,12 @@ public static class PasswordService
         System.Text.Encoding.UTF8.GetBytes(password, input.AsSpan(salt.Length));
         return sha.ComputeHash(input);
     }
+
+    /// <summary>9.2#7: PBKDF2-SHA256 verification hash (3M iterations, CryptoService.CurrentIterations)
+    /// - a fast salted SHA-256 lets a GPU-holder brute-force the password file itself; the hardened
+    /// hash makes security.dat as expensive to attack as the database it unlocks.</summary>
+    private static byte[] HashPasswordV2(string password, byte[] salt)
+        => Rfc2898DeriveBytes.Pbkdf2(password, salt, CryptoService.CurrentIterations, HashAlgorithmName.SHA256, 32);
 
     private static LockoutFile? LoadLockout()
     {

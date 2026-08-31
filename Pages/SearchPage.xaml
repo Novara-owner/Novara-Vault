@@ -72,6 +72,12 @@
                        FontSize="13" FontWeight="Light"
                        Foreground="{ThemeResource AppTextTertiaryBrush}"
                        Opacity="0.6" TextWrapping="NoWrap" MaxWidth="600" />
+            <TextBlock x:Name="CmdHintText"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       FontSize="12" FontWeight="Light"
+                       Foreground="{ThemeResource AppTextTertiaryBrush}"
+                       Opacity="0.5" Visibility="Collapsed" />
         </StackPanel>
 
         <!-- FocusSink: steals focus from the back button (no focus border on an invisible 0x0 button), same fix as LockScreenPage -->

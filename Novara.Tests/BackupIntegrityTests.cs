@@ -195,7 +195,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.Equal(1, header[5]);                                       // FlagEncrypted
         Assert.Equal(0, header[6]);                                       // AlgoId = AES-256-GCM
         Assert.Equal(0, header[7]);                                       // KdfId = PBKDF2-SHA256
-        Assert.Equal((uint)300000, BitConverter.ToUInt32(header, 8));     // iterations in-file
+        Assert.Equal((uint)3000000, BitConverter.ToUInt32(header, 8));    // iterations in-file (9.2#7 calibration)
         Assert.True(header[12..44].Any(b => b != 0), "per-backup salt must be random, not zero");
         Assert.True(body.Length > 28);                                    // nonce(12)+tag(16)+cipher
         Assert.NotEqual(0x1f, body[0]);                                   // no plaintext GZip magic

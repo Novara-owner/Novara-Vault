@@ -219,7 +219,7 @@ public sealed partial class MainWindow : Window
 
             // Global search hotkey: Ctrl+K from anywhere in the app (3.0-4.5)
             var ctrlK = new KeyboardAccelerator { Key = Windows.System.VirtualKey.K, Modifiers = Windows.System.VirtualKeyModifiers.Control };
-            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus()) OpenSearchPage(); }; 
+            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus() && LockScreenFrame.Visibility != Visibility.Visible) OpenSearchPage(); }; 
             root.KeyboardAccelerators.Add(ctrlK);
             root.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden; // no ctrl+k tooltip on empty areas
 
@@ -289,6 +289,10 @@ public sealed partial class MainWindow : Window
             finally { gate.Dispose(); }
             return answered ? allowed : false;
         };
+        // 9.2#5: one-shot legacy migration (pre-permission-center authorized paths -> full set, D2).
+        // Must run before the server accepts any connection; persisted only when something moved.
+        if (App.Store != null && McpPermissions.EnsureMigrated(App.Store.Database.AppSettings))
+            _ = App.Store.SaveAsync();
         McpService.Start(); 
 
         // Sticky-note theme sync: when the app theme is "follow system", push the current
@@ -805,7 +809,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
         // 4.7: a v1-CBC encrypted database unlocks fine - offer the one-time GCM migration now
         
+        // 9.2#7: v2 databases on legacy 100k iterations get the symmetric KDF-hardening offer.
         if (App.Store is { NeedsFormatMigration: true } && !App.Store.Database.AppSettings.GcmMigrationRejected)
+            ShowMigrateFormatDialog();
+        else if (App.Store is { NeedsKdfMigration: true } && !App.Store.Database.AppSettings.KdfMigrationRejected)
             ShowMigrateFormatDialog();
 
         // E3-08b: the system theme may have changed while the lock screen covered the window (the
@@ -866,12 +873,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     // ---- 4.7: one-time v1-CBC -> v2-GCM migration confirmation (after unlock) ----
     private bool _migrateFailed; // failure state: dialog switches to "retry on next launch"
+    private bool _migrateIsKdf; // 9.2#7: the dialog currently shows the KDF-hardening (v2->v3) flavor
 
     public void ShowMigrateFormatDialog()
     {
         _migrateFailed = false;
-        MigrateFormatMessage.Text = App.GetString("Security_Migrate_Body");
-        MigrateFormatTitle.Text = App.GetString("Security_Migrate_Title");
+        // 9.2#7: one dialog, two flavors - GCM (v1->v2) and KDF hardening (v2->v3), dispatched by
+        // which migration is actually pending (settings entry re-opens it for the pending kind).
+        _migrateIsKdf = App.Store is { NeedsKdfMigration: true };
+        MigrateFormatMessage.Text = App.GetString(_migrateIsKdf ? "Security_Migrate_Kdf_Body" : "Security_Migrate_Body");
+        MigrateFormatMessage.Foreground = App.GetBrush("AppTextSecondaryBrush"); // reset the red failure tint (KDF pipeline may re-open after a GCM failure tint)
+        MigrateFormatTitle.Text = App.GetString(_migrateIsKdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
         MigrateLaterButton.Visibility = Visibility.Visible;
         MigrateConfirmText.Text = App.GetString("Security_Migrate_Confirm");
         MigrateFormatDialogTransform.ScaleX = 0.92;
@@ -914,7 +926,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         
         if (App.Store?.Database.AppSettings is { } s)
         {
-            s.GcmMigrationRejected = true;
+            if (_migrateIsKdf) s.KdfMigrationRejected = true; else s.GcmMigrationRejected = true;
             App.Store.SaveAsync();
         }
         HideMigrateFormatDialog();
@@ -923,15 +935,24 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void MigrateConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_migrateFailed) { HideMigrateFormatDialog(); return; }
-        if (App.Store?.MigrateFormat() == true)
+        var ok = _migrateIsKdf ? App.Store?.MigrateKdf() == true : App.Store?.MigrateFormat() == true;
+        if (ok)
         {
+            _settingsPage?.UpdatePrivacyLockUI();
+            // 9.2#7 pipeline: a v1 library just became v2 - if the KDF offer is still pending it is
+            // shown right away (the user has just expressed the upgrade intent, not a double nag).
+            if (!_migrateIsKdf && App.Store is { NeedsKdfMigration: true } && !App.Store.Database.AppSettings.KdfMigrationRejected)
+            {
+                ShowMigrateFormatDialog();
+                return;
+            }
             HideMigrateFormatDialog();
-            _settingsPage?.UpdatePrivacyLockUI(); // 4.7: the manual entry disappears immediately after the upgrade
             return;
         }
         // Migration failed: keep the dialog open in a failure state - data untouched, retried next launch.
         _migrateFailed = true;
-        MigrateFormatTitle.Text = App.GetString("Security_Migrate_Title");
+        var kdf = _migrateIsKdf;
+        MigrateFormatTitle.Text = App.GetString(kdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
         MigrateFormatMessage.Text = App.GetString("Security_Migrate_Failed");
         MigrateFormatMessage.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
         MigrateLaterButton.Visibility = Visibility.Collapsed;
@@ -1108,7 +1129,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         {
             Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
             Text = App.GetString("Trash_Title"),
-            Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), IconData.Delete[0]), Foreground = App.GetBrush("IconForegroundBrush") },
+            Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), IconData.Delete), Foreground = App.GetBrush("IconForegroundBrush") },
             KeyboardAcceleratorTextOverride = "Ctrl+Shift+Backspace"
         };
         trashItem.Click += (_, _) => OpenTrashPage();
@@ -1566,6 +1587,45 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         BottomToolbarPanel.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         CustomTitleBar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         UpdateNavBarVisibility();
+    }
+
+    /// <summary>9.3 Command Palette: execute a command picked from the search page's "&gt;" mode.</summary>
+    public void RunPaletteCommand(string cmd)
+    {
+        // N5S-02 parity with SearchJump: commands navigate and open dialogs - never tear the restore barrier down.
+        if (RestorePendingBlocksNavigation()) { App.ShowToast(App.GetString("Common_Toast_RestorePending")); return; }
+        CloseSearchPage();
+        switch (cmd)
+        {
+            case "new_memo":
+                { var (t, n) = ResolveNavTarget("Memo"); NavigateToPage(t); UpdateNavSelection(n); } // E5-05: never land on a VisibleTabs-hidden page
+                _memoPage?.OpenNewEntryDialog();
+                break;
+            case "new_todo":
+                { var (t, n) = ResolveNavTarget("Plan"); NavigateToPage(t); UpdateNavSelection(n); }
+                _planPage?.ShowNewItemDialog(App.GetString("Plan_Todo_NewTitle"));
+                break;
+            case "new_note":
+                { var (t, n) = ResolveNavTarget("Plan"); NavigateToPage(t); UpdateNavSelection(n); }
+                _planPage?.ShowNewNoteDialog();
+                break;
+            case "new_diary":
+                NavigateToEditor(); // switches to the diary tab and opens the editor (5.0 flow)
+                break;
+            case "new_document":
+                NavigateToEditor(null, "markdown");
+                break;
+            case "open_settings":
+                NavigateToSettings();
+                break;
+            case "open_trash":
+                OpenTrashPage();
+                break;
+            case "lock_now":
+                if (App.Store is { IsEncrypted: true }) LockNow();
+                else App.ShowToast(App.GetString("Tray_LockNeedLock")); // same as the tray command
+                break;
+        }
     }
 
     /// <summary>Jump from a search result to its page and open the edit dialog (3.0-4.5).</summary>
@@ -2316,6 +2376,18 @@ private void ShowThemeRestartOverlay()
         if (invokeResult) { try { result?.Invoke(allowed); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"MCP authorize callback late invoke dropped: {ex.Message}"); } }
     }
 
-    private void McpAuthorizeAllow_Click(object sender, RoutedEventArgs e) => HideMcpAuthorizeDialog(true);
+    private void McpAuthorizeAllow_Click(object sender, RoutedEventArgs e)
+    {
+        // 9.2#5 (D4): land the fresh client on its permission editor immediately - the default set
+        // only reads non-sensitive zones, so the user should see and adjust the matrix right away.
+        var path = McpAuthorizePath.Text;
+        if (!string.IsNullOrEmpty(path) && App.Store != null)
+        {
+            McpPermissions.EnsureDefaultRecord(App.Store.Database.AppSettings, path); // idempotent, pre-seeds before the pipe-thread write
+            NavigateToSettings();
+            DispatcherQueue.TryEnqueue(() => _settingsPage?.OpenMcpPermEditor(path)); // next frame - page may have just been created
+        }
+        HideMcpAuthorizeDialog(true);
+    }
     private void McpAuthorizeDeny_Click(object sender, RoutedEventArgs e) => HideMcpAuthorizeDialog(false);
 }

@@ -2401,6 +2401,187 @@
         </Grid>
 
         
+        
+        <Grid x:Name="McpPermOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="McpPermScrim" Background="#2E000000" Tapped="McpPermScrim_Tapped" />
+            <Border x:Name="McpPermDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="McpPermDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="McpPermTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" TextTrimming="CharacterEllipsis" MaxWidth="420" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="McpPermClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}"
+                                  StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="76" />
+                            <ColumnDefinition Width="76" />
+                            <ColumnDefinition Width="76" />
+                            <ColumnDefinition Width="76" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="McpPermColRead" Grid.Column="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                        <TextBlock x:Name="McpPermColCreate" Grid.Column="2" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                        <TextBlock x:Name="McpPermColUpdate" Grid.Column="3" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                        <TextBlock x:Name="McpPermColDelete" Grid.Column="4" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                        
+                        <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">
+                            <Run x:Name="McpPermZoneMemo" FontSize="15" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <Run x:Name="McpPermMemoWarn" FontSize="14" Foreground="#FF4545" />
+                        </TextBlock>
+                        <CheckBox x:Name="McpPermChkMemoRead" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkMemoCreate" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkMemoUpdate" Grid.Row="1" Grid.Column="3" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkMemoDelete" Grid.Row="1" Grid.Column="4" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        
+                        <TextBlock x:Name="McpPermZonePath" Grid.Row="2" Grid.Column="0" FontSize="15" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                        <CheckBox x:Name="McpPermChkPathRead" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkPathCreate" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkPathUpdate" Grid.Row="2" Grid.Column="3" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkPathDelete" Grid.Row="2" Grid.Column="4" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        
+                        <TextBlock x:Name="McpPermZoneTodo" Grid.Row="3" Grid.Column="0" FontSize="15" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                        <CheckBox x:Name="McpPermChkTodoRead" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkTodoCreate" Grid.Row="3" Grid.Column="2" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkTodoUpdate" Grid.Row="3" Grid.Column="3" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkTodoDelete" Grid.Row="3" Grid.Column="4" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        
+                        <TextBlock x:Name="McpPermZoneNote" Grid.Row="4" Grid.Column="0" FontSize="15" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                        <CheckBox x:Name="McpPermChkNoteRead" Grid.Row="4" Grid.Column="1" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkNoteCreate" Grid.Row="4" Grid.Column="2" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkNoteUpdate" Grid.Row="4" Grid.Column="3" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkNoteDelete" Grid.Row="4" Grid.Column="4" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        
+                        <TextBlock x:Name="McpPermZoneDiary" Grid.Row="5" Grid.Column="0" FontSize="15" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                        <CheckBox x:Name="McpPermChkDiaryRead" Grid.Row="5" Grid.Column="1" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkDiaryCreate" Grid.Row="5" Grid.Column="2" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkDiaryUpdate" Grid.Row="5" Grid.Column="3" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                        <CheckBox x:Name="McpPermChkDiaryDelete" Grid.Row="5" Grid.Column="4" HorizontalAlignment="Center" MinWidth="0" Margin="0,4" Checked="McpPermChk_Changed" Unchecked="McpPermChk_Changed">
+                            <CheckBox.RenderTransform>
+                                <ScaleTransform ScaleX="1.25" ScaleY="1.25" />
+                            </CheckBox.RenderTransform>
+                        </CheckBox>
+                    </Grid>
+                    <TextBlock x:Name="McpPermDeleteHint" Grid.Row="2" FontSize="12" Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
+                    <Grid Grid.Row="3" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="McpPermToggleAll_Click">
+                            <TextBlock x:Name="McpPermToggleAllText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="190" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="McpPermSave_Click">
+                            <TextBlock x:Name="McpPermSaveText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
         <Grid x:Name="McpConfigOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="McpConfigScrim" Background="#2E000000" Tapped="McpConfigScrim_Tapped" />
             <Border x:Name="McpConfigDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">

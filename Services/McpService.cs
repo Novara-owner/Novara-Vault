@@ -174,6 +174,10 @@ public static class McpService
                     store.Database.AppSettings.McpAllowedProcesses.Add(clientPath);
                     addedNow = true;
                 }
+                // 9.2#5: fine-grained record with the D1 default set - idempotent (the authorize
+                // dialog may have pre-created it before the server-side write lands).
+                if (clientPath.Length > 0)
+                    McpPermissions.EnsureDefaultRecord(store.Database.AppSettings, clientPath);
             }
             _ = store.SaveAsync();
             if (addedNow) Audit("auth_new", clientPath); 
@@ -196,6 +200,7 @@ public static class McpService
         {
             var settings = App.Store?.Database.AppSettings;
             var removed = settings?.McpAllowedProcesses.Remove(path) ?? false;
+            settings?.McpClientPermissions.RemoveAll(r => r.Path == path); // 9.2#5: fine-grained record dies with the grant (downgrade-compat list above stays in sync)
             if (removed) Audit("revoke", path); 
             return removed;
         }
@@ -238,6 +243,19 @@ public static class McpService
         bool isWrite = req.Method.StartsWith("create_", StringComparison.Ordinal)
                     || req.Method.StartsWith("update_", StringComparison.Ordinal)
                     || req.Method == "delete_item";
+
+        // 9.2#5: per-client fine-grained permission gate. Unknown methods map to None (no
+        // requirement) and fall through to the "unknown tool" error below. delete_item additionally
+        // needs the global McpDeleteEnabled master switch (checked inside Delete) - client bit AND switch.
+        var required = McpPermissions.RequiredFor(req.Method, GetStr(req.Params, "type"));
+        var granted = McpPermissions.GetFor(store.Database.AppSettings, clientPath);
+        if ((granted & required) != required)
+        {
+            var denyReason = $"权限不足：需要 {McpPermissions.Describe(required)}";
+            Audit("call", clientPath, req.Method, ok: false, reason: denyReason);
+            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "权限不足，请在 Novara 设置的 MCP 授权面板中调整该客户端的权限" } };
+        }
+
         var target = "-";
         var title = "";
         try

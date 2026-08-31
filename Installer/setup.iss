@@ -6,7 +6,7 @@
 ; ============================================================
 
 #define MyAppName "Novara"
-#define MyAppVersion "5.2.0"
+#define MyAppVersion "5.3.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 ; E4-39: relative to this script (Installer\..\.. = the Desktop folder where Novara_Publish lives),
@@ -54,9 +54,12 @@ Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescripti
 [Files]
 ; 发布产物全部文件（含 Novara.pri，缺它启动闪退——见开发规范 5.1）
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; E5-11: desktop sticky-note host - deployed next to Novara.exe (FindHostExe release layout #1);
-; Assets\128.ico is already pulled in by the recursesubdirs copy above.
-Source: "{#PublishDir}\StickNoteHost.exe"; DestDir: "{app}"; Flags: ignoreversion
+; E5-11: desktop sticky-note host - full bundle in a {app}\Host\ subfolder (FindHostExe layout #1).
+; 2026-08-31 test report: the old "bare exe only" entry shipped a .NET apphost without its
+; StickNoteHost.dll bundle - the host died instantly on clean machines (Event 1023, "The
+; application to execute does not exist"). The whole publish output must ship; its resources.pri
+; is inert inside the Host\ subfolder (the XAML MRM red line only covers the {app} root).
+Source: "{#PublishDir}\Host\*"; DestDir: "{app}\Host"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 5.0 MCP: stdio MCP server 前端 - 与 Novara.exe 同目录（FindNovaraMcpExe release layout #1）
 Source: "{#PublishDir}\NovaraMCP.exe"; DestDir: "{app}"; Flags: ignoreversion
 

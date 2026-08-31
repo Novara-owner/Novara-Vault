@@ -34,6 +34,23 @@ public sealed partial class SearchPage : Page
     private string _currentFilter = "all"; 
     private string _currentKey = "";
 
+    
+    private sealed record PaletteCmd(string Action, string LabelKey, string IconPath);
+    private static readonly PaletteCmd[] PaletteCommands =
+    {
+        new("new_memo", "Memo_Entry_NewTitle", IconData.NewEntry[0] + " " + IconData.NewEntry[1]),
+        new("new_todo", "Menu_New_Todo", IconData.Todo[0] + " " + IconData.Todo[1]),
+        new("new_note", "Menu_New_Note", IconData.Note[0] + " " + IconData.Note[1]),
+        new("new_diary", "Menu_New_Diary", IconData.NewDiary),
+        new("new_document", "Diary_New_Document", IconData.Document),
+        new("open_settings", "Setting_Title_Page", IconData.Settings[0] + " " + IconData.Settings[1]),
+        new("open_trash", "Trash_Title", IconData.Delete),
+        new("lock_now", "Tray_LockNow", IconData.Lock), // 9.3: owner-provided padlock glyph (icon-bbox-check passed)
+    };
+    private readonly List<PaletteCmd> _cmdMatched = new(); // currently filtered command rows (keyboard navigation source)
+    private int _cmdIndex; // highlighted row index within _cmdMatched
+    private bool PaletteMode => SearchBox.Text?.StartsWith(">") == true;
+
     private static readonly string SearchGlyphPath = IconData.Search[0] + " " + IconData.Search[1]; // full magnifier = circle + handle
 
     public SearchPage()
@@ -46,16 +63,39 @@ public sealed partial class SearchPage : Page
 
         // Same search-box behavior as the tab pages: TextChanged only toggles the x button and
         // restores the blank hint when empty; Enter actually runs the search.
+        // 9.3: a leading ">" switches the box into command-palette mode (live filtered command list).
         SearchBox.TextChanged += (_, _) =>
         {
             UpdateCancelButtonVisibility();
+            UpdateModeIcon();
+            if (PaletteMode) { RenderCommands(); return; }
             if (string.IsNullOrWhiteSpace(SearchBox.Text))
                 ShowBlankHint();
         };
+        // 9.3: Up/Down move the palette highlight; intercepted so the caret never wanders.
+        SearchBox.KeyDown += (_, e) =>
+        {
+            if (!PaletteMode) return;
+            int count = _cmdMatched.Count;
+            if (count == 0) return;
+            if (e.Key == Windows.System.VirtualKey.Down)
+            {
+                e.Handled = true;
+                _cmdIndex = (_cmdIndex + 1) % count;
+                RefreshCmdHighlights();
+            }
+            else if (e.Key == Windows.System.VirtualKey.Up)
+            {
+                e.Handled = true;
+                _cmdIndex = (_cmdIndex - 1 + count) % count;
+                RefreshCmdHighlights();
+            }
+        };
         SearchBox.KeyUp += (_, e) =>
         {
-            if (e.Key == Windows.System.VirtualKey.Enter)
-                RunSearch(SearchBox.Text?.Trim() ?? "");
+            if (e.Key != Windows.System.VirtualKey.Enter) return;
+            if (PaletteMode) { ExecuteHighlightedCommand(); return; } // 9.3: run the highlighted command
+            RunSearch(SearchBox.Text?.Trim() ?? "");
         };
 
         CreateCancelButton();
@@ -161,6 +201,96 @@ public sealed partial class SearchPage : Page
         _ => App.GetString("Diary_Filter_All")
     };
 
+    
+
+    private void UpdateModeIcon()
+    {
+        // magnifier in search mode, "</>" prompt mark in palette mode
+        SearchGlyphIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry),
+            PaletteMode ? IconData.CmdPrompt : SearchGlyphPath);
+    }
+
+    private void RenderCommands()
+    {
+        _renderCts?.Cancel(); _renderCts = null; // palette rows render synchronously - kill any in-flight search render
+        _cmdMatched.Clear();
+        var filter = SearchBox.Text.Length > 1 ? SearchBox.Text.Substring(1).Trim() : "";
+        foreach (var c in PaletteCommands)
+        {
+            if (filter.Length == 0) { _cmdMatched.Add(c); continue; }
+            var label = App.GetString(c.LabelKey);
+            if (label.StartsWith(filter, StringComparison.OrdinalIgnoreCase) || label.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                _cmdMatched.Add(c);
+        }
+        ResultPanel.Children.Clear();
+        if (_cmdMatched.Count == 0)
+        {
+            _cmdIndex = 0;
+            ShowNoResultHint();
+            EmptyHintText.Text = App.GetString("Cmd_NoMatch");
+            return;
+        }
+        if (_cmdIndex >= _cmdMatched.Count) _cmdIndex = _cmdMatched.Count - 1; // keep the highlight in range while filtering
+        if (_cmdIndex < 0) _cmdIndex = 0;
+        EmptyHintPanel.Visibility = Visibility.Collapsed;
+        for (int i = 0; i < _cmdMatched.Count; i++)
+            ResultPanel.Children.Add(BuildCommandCard(_cmdMatched[i], i));
+        RefreshCmdHighlights();
+    }
+
+    private Border BuildCommandCard(PaletteCmd cmd, int index)
+    {
+        var card = new Border
+        {
+            Background = App.GetBrush("AppSurfaceOverlayBrush"),
+            BorderBrush = App.GetBrush("AppBorderBrush"), // same card border as the result cards
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(20, 14, 20, 14),
+            Tag = index, // row index for hover-synced highlight
+        };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+        panel.Children.Add(new Viewbox
+        {
+            Width = 20, Height = 20, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center,
+            Child = new PathIcon { Data = App.CreateGeometry(cmd.IconPath), Foreground = App.GetBrush("IconForegroundBrush") },
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = App.GetString(cmd.LabelKey), FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center,
+        });
+        card.Child = panel;
+        card.Tapped += (_, _) => ExecuteCommandAt(index);
+        card.PointerEntered += (_, _) => { _cmdIndex = index; RefreshCmdHighlights(); }; // mouse hover drives the same highlight
+        return card;
+    }
+
+    private void RefreshCmdHighlights()
+    {
+        for (int i = 0; i < ResultPanel.Children.Count; i++)
+        {
+            if (ResultPanel.Children[i] is Border b && b.Tag is int idx)
+            {
+                bool hot = idx == _cmdIndex;
+                // assign fresh brush references, never mutate shared instances (E1-09)
+                b.BorderBrush = hot ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush");
+            }
+        }
+    }
+
+    private void ExecuteHighlightedCommand()
+    {
+        if (_cmdMatched.Count == 0) return;
+        ExecuteCommandAt(Math.Clamp(_cmdIndex, 0, _cmdMatched.Count - 1));
+    }
+
+    private void ExecuteCommandAt(int index)
+    {
+        if (index < 0 || index >= _cmdMatched.Count) return;
+        App.MainWindow?.RunPaletteCommand(_cmdMatched[index].Action); // RunPaletteCommand closes this page itself
+    }
+
     private bool MatchesFilter(SearchItem it) => _currentFilter switch
     {
         "memo" => it.Kind == "memo",
@@ -231,6 +361,9 @@ public sealed partial class SearchPage : Page
         ResultPanel.Children.Clear();
         _currentFilter = "all";
         _currentKey = "";
+        _cmdIndex = 0;
+        _cmdMatched.Clear();
+        UpdateModeIcon(); // TextChanged may not fire while detached - restore the magnifier explicitly
         UpdateFilterButton();
         ShowBlankHint();
         RebuildIndex(); 
@@ -240,6 +373,7 @@ public sealed partial class SearchPage : Page
     {
         SearchBox.PlaceholderText = App.GetString("Search_Placeholder");
         EmptyHintText.Text = App.GetString("Search_Empty");
+        CmdHintText.Text = App.GetString("Cmd_Mode_Hint");
     }
 
     public void FocusSearch()
@@ -341,6 +475,7 @@ public sealed partial class SearchPage : Page
         ResultPanel.Children.Clear();
         EmptyHintText.Text = App.GetString("Search_Empty");
         EmptyHintIconBox.Visibility = Visibility.Collapsed;
+        CmdHintText.Visibility = Visibility.Visible; // 9.3: palette entry hint under the blank text
         EmptyHintPanel.Visibility = Visibility.Visible;
         FloatInHint();
     }
@@ -350,6 +485,7 @@ public sealed partial class SearchPage : Page
     {
         ResultPanel.Children.Clear();
         EmptyHintText.Text = _currentFilter != "all" ? App.GetString("Search_Filter_NoResult") : App.GetString("Search_NoResult");
+        CmdHintText.Visibility = Visibility.Collapsed;
         EmptyHintIconBox.Visibility = Visibility.Visible;
         EmptyHintIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.SearchNoResult);
         EmptyHintPanel.Visibility = Visibility.Visible;

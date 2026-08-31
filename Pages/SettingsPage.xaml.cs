@@ -102,6 +102,8 @@ public sealed partial class SettingsPage : Page
             _themeRestartAnimating = _languageRestartAnimating = false; 
             _animMcpConfig = _animMcpResetConfirm = _animMcpCopy = _animMcpDeleteConfirm = _animMcpRevokeConfirm = false;
             _animMcpAudit = _animMcpAuditClear = false; 
+            McpPermOverlay.Visibility = Visibility.Collapsed; 
+            _animMcpPerm = false;
             _animAutoLockSync = false; 
             _pendingVerifiedAction = null; // N5T1-02: a stale gated flow must not hijack the next password verify
             _pendingExport = false;        // N5T1-02: same for the native export flag
@@ -112,6 +114,16 @@ _animCsvPreview = false;
         Loaded += (_, _) =>
         {
             CardsFloatIn.Begin();
+
+            // 9.2#5 (D4): the authorize dialog may land here before the page is loaded (fresh
+            // navigation) - OpenMcpPermEditor defers into this hook so the permission matrix and the
+            // melt animations below never run against an unmeasured tree.
+            if (_pendingMcpPermPath != null)
+            {
+                var pending = _pendingMcpPermPath;
+                _pendingMcpPermPath = null;
+                OpenMcpPermEditor(pending);
+            }
 
             // N5S-02: barrier self-heal - if the restore-restart overlay was torn down by a navigation
             // (IPC / Ctrl+K) and the user came back, put it straight back up; suppression is still on.
@@ -821,7 +833,8 @@ private void ShowPrivacyLockWarningDialog()
         PrivacyLockEnabledPanel.Visibility = _isPrivacyLockEnabled ? Visibility.Visible : Visibility.Collapsed;
         UpdateAutoLockCard();
         // 4.7: manual GCM-migration entry - visible only while a v1-CBC database is still un-migrated.
-        MigrateFormatEntryButton.Visibility = App.Store is { IsEncrypted: true, NeedsFormatMigration: true }
+        // 9.2#7: same entry now also covers the v2->v3 KDF-hardening offer (same dialog, new flavor).
+        MigrateFormatEntryButton.Visibility = App.Store is { IsEncrypted: true } && (App.Store.NeedsFormatMigration || App.Store.NeedsKdfMigration)
             ? Visibility.Visible : Visibility.Collapsed;
         // 5.0: reflect the real PasswordVault state (it survives restart; _winHelloEnabled is only in-memory)
         _winHelloEnabled = WindowsHelloService.IsEnabled();
@@ -1512,6 +1525,7 @@ private void ShowResetPasswordDialog()
     private bool _animMcpConfig, _animMcpResetConfirm, _animMcpCopy, _animMcpDeleteConfirm;
     private bool _animMcpRevokeConfirm;
     private bool _animMcpAudit, _animMcpAuditClear;
+    private bool _animMcpPerm; 
     private string? _pendingRevokePath;
 
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
@@ -3635,6 +3649,26 @@ Logic Range: Below methods in this region
         times.AddRange(todos.Select(t => t.CreatedAt));
         times.AddRange(notes.Select(n => n.CreatedAt));
         string lastActive = times.Count > 0 ? times.Max().ToString("yyyy-MM-dd HH:mm") : App.GetString("Setting_Stats_Never");
+        string firstUse = times.Count > 0 ? times.Min().ToString("yyyy-MM-dd HH:mm") : App.GetString("Setting_Stats_Never"); 
+
+        
+        var snapshots = Services.AutoBackupService.ListSnapshots();
+        var lastBackup = snapshots.Count > 0
+            ? snapshots.Max(s => s.Timestamp).ToString("yyyy-MM-dd HH:mm")
+            : App.GetString("Setting_Stats_None");
+        string integrityValue;
+        bool integrityWarn;
+        switch (Services.DatabaseHealth.VerifyDataFile(Services.NovaraStore.DefaultFilePath))
+        {
+            case Novara.Services.DataFileIntegrity.DigestVerified:
+                integrityValue = "✓"; integrityWarn = false; break;
+            case Novara.Services.DataFileIntegrity.EncryptedStructured:
+                integrityValue = App.GetString("Setting_Stats_IntegrityEnc"); integrityWarn = false; break;
+            default:
+                integrityValue = "✗"; integrityWarn = true; break;
+        }
+        var orphans = Novara.Services.DatabaseHealth.CountOrphanMemoEntries(db);
+        bool orphanWarn = orphans > 0;
 
         
         bool showMemo = _visibleTabs.Contains("备忘");
@@ -3642,22 +3676,29 @@ Logic Range: Below methods in this region
         bool showPlan = _visibleTabs.Contains("计划");
         bool showDiary = _visibleTabs.Contains("日记");
 
-        var blocks = new List<(string label, string value, bool show)>
+        var blocks = new List<(string label, string value, bool show, bool warn)>
         {
-            (App.GetString("Setting_Stats_MemoEntries"), entries.Count.ToString(), showMemo),
-            (App.GetString("Setting_Stats_Groups"), db.MemoGroups.Count.ToString(), showMemo),
-            (App.GetString("Setting_Stats_Paths"), paths.Count.ToString(), showFile),
-            (App.GetString("Setting_Stats_Todos"), todos.Count.ToString(), showPlan),
-            (App.GetString("Setting_Stats_Notes"), notes.Count.ToString(), showPlan),
-            (App.GetString("Setting_Stats_Diaries"), diaries.Count.ToString(), showDiary),
-            (App.GetString("Setting_Stats_Documents"), documents.Count.ToString(), showDiary),
-            (App.GetString("Setting_Stats_Completion"), $"{completion:F0}%", showPlan),
-            (App.GetString("Setting_Stats_Storage"), storage, true),
+            (App.GetString("Setting_Stats_MemoEntries"), entries.Count.ToString(), showMemo, false),
+            (App.GetString("Setting_Stats_Groups"), db.MemoGroups.Count.ToString(), showMemo, false),
+            (App.GetString("Setting_Stats_Paths"), paths.Count.ToString(), showFile, false),
+            (App.GetString("Setting_Stats_Todos"), todos.Count.ToString(), showPlan, false),
+            (App.GetString("Setting_Stats_Notes"), notes.Count.ToString(), showPlan, false),
+            (App.GetString("Setting_Stats_Diaries"), diaries.Count.ToString(), showDiary, false),
+            (App.GetString("Setting_Stats_Documents"), documents.Count.ToString(), showDiary, false),
+            (App.GetString("Setting_Stats_Completion"), $"{completion:F0}%", showPlan, false),
+            (App.GetString("Setting_Stats_Storage"), storage, true, false),
             (App.GetString("Setting_Stats_Starred"),
-                (entries.Count(e => e.IsStarred) + paths.Count(p => p.IsStarred) + todos.Count(t => t.IsStarred) + notes.Count(n => n.IsStarred) + diaries.Count(d => d.IsStarred) + documents.Count(d => d.IsStarred)).ToString(), true),
+                (entries.Count(e => e.IsStarred) + paths.Count(p => p.IsStarred) + todos.Count(t => t.IsStarred) + notes.Count(n => n.IsStarred) + diaries.Count(d => d.IsStarred) + documents.Count(d => d.IsStarred)).ToString(), true, false),
             (App.GetString("Setting_Stats_Trash"),
-                (db.MemoEntries.Count(x => x.IsDeleted) + db.PathBackupItems.Count(x => x.IsDeleted) + db.TodoCards.Count(x => x.IsDeleted) + db.NoteCards.Count(x => x.IsDeleted) + db.DiaryItems.Count(x => x.IsDeleted)).ToString(), true),
-            (App.GetString("Setting_Stats_LastActive"), lastActive, true),
+                (db.MemoEntries.Count(x => x.IsDeleted) + db.PathBackupItems.Count(x => x.IsDeleted) + db.TodoCards.Count(x => x.IsDeleted) + db.NoteCards.Count(x => x.IsDeleted) + db.DiaryItems.Count(x => x.IsDeleted)).ToString(), true, false),
+            (App.GetString("Setting_Stats_LastActive"), lastActive, true, false),
+            (App.GetString("Setting_Stats_FirstUse"), firstUse, true, false),
+            (App.GetString("Setting_Stats_Encryption"),
+                (App.Store is { IsEncrypted: true } ? App.GetString("Setting_Stats_EncOn") : App.GetString("Setting_Stats_EncOff")), true, false),
+            (App.GetString("Setting_Stats_LastBackup"), lastBackup, true, false),
+            (App.GetString("Setting_Stats_SnapshotCount"), $"{snapshots.Count}/{Services.AutoBackupService.MaxSnapshots}", true, false),
+            (App.GetString("Setting_Stats_Integrity"), integrityValue, true, integrityWarn),
+            (App.GetString("Setting_Stats_Orphans"), orphanWarn ? orphans.ToString() : "✓", true, orphanWarn),
         };
 
         var visible = blocks.Where(b => b.show).ToList();
@@ -3675,7 +3716,7 @@ Logic Range: Below methods in this region
 
         for (int i = 0; i < visible.Count; i++)
         {
-            var (label, value, _) = visible[i];
+            var (label, value, _, warn) = visible[i];
             var block = new Border
             {
                 Padding = new Thickness(16, 14, 16, 14),
@@ -3689,7 +3730,9 @@ Logic Range: Below methods in this region
                 Text = value,
                 FontSize = 22,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = App.GetBrush("AppPrimaryButtonBrush"),
+                Foreground = warn
+                    ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)) // danger red (#FF4545) for failed integrity / orphan references
+                    : App.GetBrush("AppPrimaryButtonBrush"),
             };
             var labelText = new TextBlock
             {
@@ -3882,6 +3925,7 @@ Logic Range: Below methods in this region
             var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var pathText = new TextBlock
             {
@@ -3893,6 +3937,28 @@ Logic Range: Below methods in this region
             };
             Grid.SetColumn(pathText, 0);
             row.Children.Add(pathText);
+
+            // 9.2#5: per-client permission editor entry (D4 - the editor is also auto-opened right
+            // after a fresh authorization; this button is the permanent access path).
+            var perm = new Button
+            {
+                Content = new TextBlock { Text = App.GetString("Setting_Mcp_Perm_Title"), FontSize = 12 },
+                Height = 28,
+                MinWidth = 72,
+                Padding = new Thickness(10, 0, 10, 0),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(0, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = path,
+            };
+            // Page-level Resources[...] throws COMException for keys living in the app dictionary
+            // (Controls.xaml) - crash log 2026-08-29 20:54 proved it ("Cannot find a resource with
+            // the given key"), and the exception killed the expand flow right before the melt anim.
+            var permStyle = FindAppStyle("NovaraOutlineButtonStyle");
+            if (permStyle != null) perm.Style = permStyle;
+            perm.Click += McpPermRowButton_Click;
+            Grid.SetColumn(perm, 1);
+            row.Children.Add(perm);
 
             var revoke = new Button
             {
@@ -3906,7 +3972,7 @@ Logic Range: Below methods in this region
                 Tag = path,
             };
             revoke.Click += McpRevokeButton_Click;
-            Grid.SetColumn(revoke, 1);
+            Grid.SetColumn(revoke, 2); // col 1 = permission editor button (9.2#5)
             row.Children.Add(revoke);
 
             McpAuthorizedList.Children.Add(row);
@@ -3944,6 +4010,172 @@ Logic Range: Below methods in this region
         }
         _pendingRevokePath = null;
         HideMcpRevokeConfirmDialog();
+    }
+
+    
+    
+
+    private string? _mcpPermPath;
+    private string? _pendingMcpPermPath; // D4: authorize dialog landed before Loaded - replay on load
+    private bool _mcpPermDeleteGateOff; // delete master switch off -> matrix must never carry delete bits
+
+    private const McpPerm AllDeleteBits =
+        McpPerm.MemoDelete | McpPerm.PathDelete | McpPerm.TodoDelete | McpPerm.NoteDelete | McpPerm.DiaryDelete;
+
+    /// <summary>Public entry - MainWindow opens this right after a fresh authorization (D4).
+    /// If the page is not loaded yet (fresh navigation), the request is deferred to Loaded.</summary>
+    public void OpenMcpPermEditor(string clientPath)
+    {
+        if (!IsLoaded) { _pendingMcpPermPath = clientPath; return; }
+        _mcpPermPath = clientPath;
+        // Text via x:Name + code assignment only (MCP UI pit #1)
+        McpPermTitle.Text = App.GetString("Setting_Mcp_Perm_Title") + " — " + System.IO.Path.GetFileName(clientPath);
+        McpPermZoneMemo.Text = App.GetString("Nav_Tab_Memo");
+        McpPermMemoWarn.Text = App.GetString("Setting_Mcp_Perm_MemoWarn");
+        McpPermZonePath.Text = App.GetString("Nav_Tab_File");
+        McpPermZoneTodo.Text = App.GetString("Setting_Stats_Todos");
+        McpPermZoneNote.Text = App.GetString("Setting_Stats_Notes");
+        McpPermZoneDiary.Text = App.GetString("Nav_Tab_Diary");
+        McpPermColRead.Text = App.GetString("Setting_Mcp_Perm_ColRead");
+        McpPermColCreate.Text = App.GetString("Setting_Mcp_Perm_ColCreate");
+        McpPermColUpdate.Text = App.GetString("Setting_Mcp_Perm_ColUpdate");
+        McpPermColDelete.Text = App.GetString("Setting_Mcp_Perm_ColDelete");
+        McpPermSaveText.Text = App.GetString("Common_Button_Confirm");
+        McpPermDeleteHint.Text = App.GetString("Setting_Mcp_Perm_DeleteLocked");
+        _mcpPermDeleteGateOff = !(App.Store?.Database.AppSettings.McpDeleteEnabled ?? false); // gate state must precede SetMatrix (filter) and ApplyDeleteGate (UI)
+        var bits = (McpPerm)Convert.ToInt64(App.Store?.Database.AppSettings.McpClientPermissions
+            .FirstOrDefault(r => r.Path == clientPath)?.Permissions ?? 0L);
+        SetMatrix(bits);
+        ApplyDeleteGate(!_mcpPermDeleteGateOff);
+        UpdateMcpPermToggleAll(); // left button label tracks the loaded state
+        _animMcpPerm = false; // M2: show entry resets the hide guard
+        ShowOverlay(McpPermOverlay, McpPermDialog, McpPermDialogTransform);
+    }
+
+    private void ApplyDeleteGate(bool masterOn)
+    {
+        McpPermChkMemoDelete.IsEnabled = masterOn;
+        McpPermChkPathDelete.IsEnabled = masterOn;
+        McpPermChkTodoDelete.IsEnabled = masterOn;
+        McpPermChkNoteDelete.IsEnabled = masterOn;
+        McpPermChkDiaryDelete.IsEnabled = masterOn;
+        McpPermDeleteHint.Visibility = masterOn ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void SetMatrix(McpPerm bits)
+    {
+        // 9.2#5 gate: with the delete master switch off, delete bits must never land in the matrix -
+        // through ANY path. The owner caught it: IsEnabled=false only blocks clicks, but the
+        // toggle-all button assigns IsChecked in code and would still flip the five disabled boxes,
+        // letting delete grants be saved past the gate. Filter at the single write choke point.
+        if (_mcpPermDeleteGateOff) bits &= ~AllDeleteBits;
+        McpPermChkMemoRead.IsChecked = bits.HasFlag(McpPerm.MemoRead);
+        McpPermChkMemoCreate.IsChecked = bits.HasFlag(McpPerm.MemoCreate);
+        McpPermChkMemoUpdate.IsChecked = bits.HasFlag(McpPerm.MemoUpdate);
+        McpPermChkMemoDelete.IsChecked = bits.HasFlag(McpPerm.MemoDelete);
+        McpPermChkPathRead.IsChecked = bits.HasFlag(McpPerm.PathRead);
+        McpPermChkPathCreate.IsChecked = bits.HasFlag(McpPerm.PathCreate);
+        McpPermChkPathUpdate.IsChecked = bits.HasFlag(McpPerm.PathUpdate);
+        McpPermChkPathDelete.IsChecked = bits.HasFlag(McpPerm.PathDelete);
+        McpPermChkTodoRead.IsChecked = bits.HasFlag(McpPerm.TodoRead);
+        McpPermChkTodoCreate.IsChecked = bits.HasFlag(McpPerm.TodoCreate);
+        McpPermChkTodoUpdate.IsChecked = bits.HasFlag(McpPerm.TodoUpdate);
+        McpPermChkTodoDelete.IsChecked = bits.HasFlag(McpPerm.TodoDelete);
+        McpPermChkNoteRead.IsChecked = bits.HasFlag(McpPerm.NoteRead);
+        McpPermChkNoteCreate.IsChecked = bits.HasFlag(McpPerm.NoteCreate);
+        McpPermChkNoteUpdate.IsChecked = bits.HasFlag(McpPerm.NoteUpdate);
+        McpPermChkNoteDelete.IsChecked = bits.HasFlag(McpPerm.NoteDelete);
+        McpPermChkDiaryRead.IsChecked = bits.HasFlag(McpPerm.DiaryRead);
+        McpPermChkDiaryCreate.IsChecked = bits.HasFlag(McpPerm.DiaryCreate);
+        McpPermChkDiaryUpdate.IsChecked = bits.HasFlag(McpPerm.DiaryUpdate);
+        McpPermChkDiaryDelete.IsChecked = bits.HasFlag(McpPerm.DiaryDelete);
+    }
+
+    private McpPerm ReadMatrix()
+    {
+        McpPerm bits = McpPerm.None;
+        if (McpPermChkMemoRead.IsChecked == true) bits |= McpPerm.MemoRead;
+        if (McpPermChkMemoCreate.IsChecked == true) bits |= McpPerm.MemoCreate;
+        if (McpPermChkMemoUpdate.IsChecked == true) bits |= McpPerm.MemoUpdate;
+        if (McpPermChkMemoDelete.IsChecked == true) bits |= McpPerm.MemoDelete;
+        if (McpPermChkPathRead.IsChecked == true) bits |= McpPerm.PathRead;
+        if (McpPermChkPathCreate.IsChecked == true) bits |= McpPerm.PathCreate;
+        if (McpPermChkPathUpdate.IsChecked == true) bits |= McpPerm.PathUpdate;
+        if (McpPermChkPathDelete.IsChecked == true) bits |= McpPerm.PathDelete;
+        if (McpPermChkTodoRead.IsChecked == true) bits |= McpPerm.TodoRead;
+        if (McpPermChkTodoCreate.IsChecked == true) bits |= McpPerm.TodoCreate;
+        if (McpPermChkTodoUpdate.IsChecked == true) bits |= McpPerm.TodoUpdate;
+        if (McpPermChkTodoDelete.IsChecked == true) bits |= McpPerm.TodoDelete;
+        if (McpPermChkNoteRead.IsChecked == true) bits |= McpPerm.NoteRead;
+        if (McpPermChkNoteCreate.IsChecked == true) bits |= McpPerm.NoteCreate;
+        if (McpPermChkNoteUpdate.IsChecked == true) bits |= McpPerm.NoteUpdate;
+        if (McpPermChkNoteDelete.IsChecked == true) bits |= McpPerm.NoteDelete;
+        if (McpPermChkDiaryRead.IsChecked == true) bits |= McpPerm.DiaryRead;
+        if (McpPermChkDiaryCreate.IsChecked == true) bits |= McpPerm.DiaryCreate;
+        if (McpPermChkDiaryUpdate.IsChecked == true) bits |= McpPerm.DiaryUpdate;
+        if (McpPermChkDiaryDelete.IsChecked == true) bits |= McpPerm.DiaryDelete;
+        return bits;
+    }
+
+    /// <summary>Left button under the matrix: its label always describes what clicking it does -
+    
+    private void UpdateMcpPermToggleAll()
+        => McpPermToggleAllText.Text = App.GetString(
+            ReadMatrix() == McpPerm.None ? "Setting_Mcp_PresetAll" : "Setting_Mcp_PresetNone");
+
+    private void McpPermChk_Changed(object sender, RoutedEventArgs e) => UpdateMcpPermToggleAll();
+
+    private void McpPermToggleAll_Click(object sender, RoutedEventArgs e)
+    {
+        SetMatrix(ReadMatrix() == McpPerm.None ? McpPermissions.LegacyFull : McpPerm.None);
+        UpdateMcpPermToggleAll();
+    }
+
+    private void McpPermSave_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _mcpPermPath;
+        if (string.IsNullOrEmpty(path)) { HideMcpPermDialog(); return; }
+        var settings = App.Store?.Database.AppSettings;
+        if (settings == null) { HideMcpPermDialog(); return; }
+        var bits = ReadMatrix();
+        var rec = settings.McpClientPermissions.FirstOrDefault(r => r.Path == path);
+        if (rec != null) rec.Permissions = (long)bits;
+        else settings.McpClientPermissions.Add(new Novara.Models.McpClientPermRecord { Path = path, Permissions = (long)bits });
+        PersistSetting(_ => { }); // empty mutate - the record above is already in place, this just persists
+        BuildMcpAuthorizedList();
+        HideMcpPermDialog();
+    }
+
+    private void McpPermCancel_Click(object sender, RoutedEventArgs e) => HideMcpPermDialog();
+    private void McpPermClose_Click(object sender, RoutedEventArgs e) => HideMcpPermDialog();
+    private void McpPermScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, McpPermScrim)) HideMcpPermDialog(); }
+
+    private void HideMcpPermDialog()
+    {
+        if (_animMcpPerm) return; // M2 hide re-entry guard
+        _animMcpPerm = true;
+        HideOverlay(McpPermOverlay, McpPermDialog, McpPermDialogTransform, () => _animMcpPerm = false);
+    }
+
+    private void McpPermRowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string path) OpenMcpPermEditor(path);
+    }
+
+    /// <summary>App-level style lookup: TryGetValue does not descend into MergedDictionaries in all
+    /// WinUI builds, so the merges are walked explicitly. Never throws (returns null on a miss) -
+    /// a page-level Resources[key] index did exactly that (crash log 2026-08-29 20:54).</summary>
+    private static Style? FindAppStyle(string key)
+    {
+        try
+        {
+            if (Application.Current.Resources.TryGetValue(key, out var v) && v is Style s) return s;
+            foreach (var d in Application.Current.Resources.MergedDictionaries)
+                if (d.TryGetValue(key, out v) && v is Style s2) return s2;
+        }
+        catch { }
+        return null;
     }
 
     
