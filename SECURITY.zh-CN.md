@@ -2,6 +2,8 @@
 
 <p align="center"><a href="SECURITY.md">English</a> · <strong>简体中文</strong></p>
 
+> 另见：[安全架构](docs/security-architecture.zh-CN.md)——两条信任链（静态数据 / Agent 访问）一图速览，以及如何校验你的下载。 · [Security Architecture (English)](docs/security-architecture.md)
+
 ---
 
 > 本文档有两个用途：(1) 告诉安全研究人员**如何私下报告漏洞**；(2) 向用户说明 **Novara 如何保护你的数据、以及不保护什么**。

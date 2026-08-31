@@ -2,6 +2,8 @@
 
 <p align="center"><strong>English</strong> · <a href="SECURITY.zh-CN.md">简体中文</a></p>
 
+> See also: [Security Architecture](docs/security-architecture.md) — the two trust chains (data at rest / agent access) at a glance, and how to verify your download. · [安全架构（中文）](docs/security-architecture.zh-CN.md)
+
 ---
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
