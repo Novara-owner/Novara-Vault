@@ -65,7 +65,7 @@ public sealed partial class BasicMemoPage : Page
     private Dictionary<Border, FrameworkElement> _entryPinIcons = new();
     private HashSet<Border> _starredEntries = new();
     private Dictionary<Border, FrameworkElement> _entryStarIcons = new();
-    private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
+    private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
     private readonly Dictionary<Border, (CancellationTokenSource Cts, bool Expanded)> _entryExpand = new();
     private readonly Dictionary<Border, string> _entryIconKeys = new(); // 4.0: entry card -> custom icon key (empty = legacy jigsaw)
 
@@ -105,6 +105,12 @@ public sealed partial class BasicMemoPage : Page
         this.Loaded += Page_Loaded;
         this.Unloaded += OnPageUnloaded; // 3.0.5
         this.KeyDown += Page_KeyDown;
+        GenerateIcon2.Data = App.CreateGeometry(IconData.Dice); // 9.3 dice icon on the six password-slot generate buttons
+        GenerateIcon3.Data = App.CreateGeometry(IconData.Dice);
+        GenerateIcon4.Data = App.CreateGeometry(IconData.Dice);
+        GenerateIcon5.Data = App.CreateGeometry(IconData.Dice);
+        GenerateIcon6.Data = App.CreateGeometry(IconData.Dice);
+        GenerateIcon7.Data = App.CreateGeometry(IconData.Dice);
         _contextMenu = BuildContextMenu();
         AddInfoIcon.PointerEntered += (_, _) => AddInfoIcon.Opacity = 1.0;
         AddInfoIcon.PointerExited += (_, _) => AddInfoIcon.Opacity = 0.6;
@@ -312,6 +318,8 @@ private MenuFlyout BuildContextMenu()
         FormField5TextBox.Text = "";
         FormField6TextBox.Text = "";
         FormField7TextBox.Text = "";
+        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed; // 9.3: TOTP box reset with the rest of the form
+        TotpSection.Visibility = Visibility.Collapsed; // 9.3: hidden until a type is selected (initial dialog state shows type picker only)
         CustomFormContainer.Visibility = Visibility.Collapsed;
         CustomNameTextBox.Text = "";
         CustomInfoTextBox_0.Text = "";
@@ -383,6 +391,7 @@ private MenuFlyout BuildContextMenu()
 
         var groups = db.MemoGroups.ToList();
         var entries = db.MemoEntries.Where(x => !x.IsDeleted).ToList();
+        _totpRows.Clear(); // 9.3: rebuild the live TOTP row registry with the fresh card tree
 
         bool playEntrance = !_entrancePlayed; // P0-1: only the first load plays the cascade
         int entIdx = 0;
@@ -409,7 +418,7 @@ private MenuFlyout BuildContextMenu()
             for (int i = s; i < e; i++)
             {
                 var en = entries[i];
-                var fields = en.Fields.Select(f => (f.Label, f.Value, f.CanCopy)).ToList();
+                var fields = en.Fields.Select(f => (f.Label, f.Value, f.CanCopy || f.Label == "备注")).ToList(); // 2026-08-29: note is copyable too - display-side flag covers legacy entries saved with CanCopy=false
                 var card = CreateEntryCard(en.Type, en.Name, en.KeyInfo, fields, en.IconKey);
                 _entryIds[card] = en.Id;
                 _entryIconKeys[card] = en.IconKey;
@@ -943,6 +952,10 @@ private MenuFlyout BuildContextMenu()
         {
             if (CustomNameTextBox.Text.Trim() != _editOrigName) return true;
             if (_entrySelectedIcon != _editOrigIcon) return true;
+            // 9.3: TOTP rides in Fields but lives in its own box - compare it separately (custom entries support TOTP too).
+            string curTotp = TotpTextBox.Text.Trim();
+            string origTotp = _editOrigFields.FirstOrDefault(f => f.label == "TOTP").value ?? "";
+            if (curTotp != origTotp) return true;
             var cur = new List<string>();
             if (!string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text)) cur.Add(CustomInfoTextBox_0.Text.Trim());
             foreach (var child in CustomInfoDynamicPanel.Children)
@@ -962,6 +975,10 @@ private MenuFlyout BuildContextMenu()
                 string orig = _editOrigFields.FirstOrDefault(f => f.label == label).value ?? "";
                 if (cur != orig) return true;
             }
+            // 9.3: TOTP rides in Fields but lives in its own box - compare it separately.
+            string curTotp = TotpTextBox.Text.Trim();
+            string origTotp = _editOrigFields.FirstOrDefault(f => f.label == "TOTP").value ?? "";
+            if (curTotp != origTotp) return true;
             return false;
         }
 
@@ -1038,6 +1055,7 @@ private MenuFlyout BuildContextMenu()
         var fieldsPanel = new StackPanel { Spacing = 14 };
         foreach (var (label, value, canCopy) in fields)
         {
+            if (label == "TOTP") { fieldsPanel.Children.Add(BuildTotpRow(value)); continue; } // 9.3: live code row instead of a static text line
             var row = new Grid { ColumnSpacing = 8 }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.Children.Add(new TextBlock { Text = FieldLabelText(label), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
             var recess = new Border { Background = App.GetBrush("AppSurfaceBrush"), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) }; Grid.SetColumn(recess, 1);
@@ -1105,6 +1123,7 @@ private MenuFlyout BuildContextMenu()
                     _customInfoCount = 1;
                     for (int i = 1; i < d.fields.Count; i++)
                     {
+                        if (d.fields[i].Item1 == "TOTP") { TotpTextBox.Text = d.fields[i].Item2; continue; } // 9.3: TOTP restored to its own box, never into a custom info slot
                         var dtb = CreateCustomInfoTextBox(_customInfoCount);
                         dtb.Text = d.fields[i].Item2;
                         CustomInfoDynamicPanel.Children.Add(dtb);
@@ -1117,6 +1136,7 @@ private MenuFlyout BuildContextMenu()
                     EntryNameTextBox.Text = d.name;
                     foreach (var f in d.fields)
                     {
+                        if (f.Item1 == "TOTP") { TotpTextBox.Text = f.Item2; continue; } // 9.3: TOTP key lives in Fields, restored to its own box
                         var slot = FieldSlotFor(d.type, f.Item1);
                         if (slot != null) slot.Text = f.Item2;
                     }
@@ -1502,12 +1522,16 @@ private MenuFlyout BuildContextMenu()
     private void ApplyEntryFormLayout(string type)
     {
         FormField2Label.Text = ""; FormField3Label.Text = ""; FormField4Label.Text = ""; FormField5Label.Text = ""; FormField6Label.Text = ""; FormField7Label.Text = "";
+        TotpLabel.Text = App.GetString("Totp_Label"); // 9.3: static label assigned once per layout pass
+        TotpTextBox.PlaceholderText = App.GetString("Totp_Placeholder"); // 9.3: i18n entry existed since 2a3c12d but was never wired
         FormField2TextBox.PlaceholderText = ""; FormField3TextBox.PlaceholderText = ""; FormField4TextBox.PlaceholderText = ""; FormField5TextBox.PlaceholderText = ""; FormField6TextBox.PlaceholderText = ""; FormField7TextBox.PlaceholderText = "";
         FormField2TextBox.Text = ""; FormField3TextBox.Text = ""; FormField4TextBox.Text = ""; FormField5TextBox.Text = ""; FormField6TextBox.Text = ""; FormField7TextBox.Text = "";
         FormField2Section.Visibility = Visibility.Collapsed; FormField3Section.Visibility = Visibility.Collapsed;
         FormField4Section.Visibility = Visibility.Collapsed; FormField5Section.Visibility = Visibility.Collapsed;
         FormField6Section.Visibility = Visibility.Collapsed; FormField7Section.Visibility = Visibility.Collapsed;
         EntryNameTextBox.Text = "";
+        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed; // 9.3: clear on type switch within the same dialog (ResetEntryTypeForms only runs on dialog open)
+        UpdateGenerateButtons(type); // 9.3: dice button follows password slots per type
         switch (type)
         {
             case "邮箱":
@@ -1556,7 +1580,282 @@ private MenuFlyout BuildContextMenu()
         }
         if (type == "自定义") { EntryTypeFormsContainer.Visibility = Visibility.Collapsed; CustomFormContainer.Visibility = Visibility.Visible; LoadEntryIconSelector(); }
         else { EntryTypeFormsContainer.Visibility = Visibility.Visible; CustomFormContainer.Visibility = Visibility.Collapsed; }
+        // 9.3: TOTP block only in password-capable types, parked right after the password slot.
+        
+        Panel? totpHost = null;
+        if (type == "邮箱" || type == "账户" || type == "WiFi") totpHost = FormField3Section; // password slot = F3
+        else if (type == "网站") totpHost = FormField4Section; // password slot = F4
+        if (totpHost != null)
+        {
+            if (TotpSection.Parent is Panel prev && !ReferenceEquals(prev, totpHost)) prev.Children.Remove(TotpSection);
+            Grid.SetRow(TotpSection, 2); // section-internal row 3 = right below the password input
+            if (!ReferenceEquals(TotpSection.Parent, totpHost)) totpHost.Children.Add(TotpSection);
+            TotpSection.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            TotpSection.Visibility = Visibility.Collapsed; // stays parked in its previous host, just hidden
+        }
         UpdateNewEntryConfirmState(); // UI-2: fields were just cleared (or re-filled) - recompute the confirm state
+    }
+
+    
+    
+    
+
+    private TextBox? _genTargetSlot;
+    private string _genMode = "password";
+    private int _genTokenBytes = 32;
+    private string _genPreview = "";
+
+    private void UpdateGenerateButtons(string type)
+    {
+        if (!EntryTypeFieldLabels.TryGetValue(type, out var labels)) return;
+        foreach (var label in labels)
+        {
+            var slot = FieldSlotFor(type, label);
+            if (slot == null) continue;
+            var btn = slot.Name switch
+            {
+                "FormField2TextBox" => GenerateBtn2,
+                "FormField3TextBox" => GenerateBtn3,
+                "FormField4TextBox" => GenerateBtn4,
+                "FormField5TextBox" => GenerateBtn5,
+                "FormField6TextBox" => GenerateBtn6,
+                _ => GenerateBtn7
+            };
+            btn.Visibility = label.Contains("密码") ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    private void GenerateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string n }) return;
+        var slot = n switch
+        {
+            "2" => FormField2TextBox, "3" => FormField3TextBox, "4" => FormField4TextBox,
+            "5" => FormField5TextBox, "6" => FormField6TextBox, _ => FormField7TextBox
+        };
+        OpenGenerateDialog(slot);
+    }
+
+    /// <summary>Public-shape entry: D4-style callers could open it for a specific slot directly.</summary>
+    private void OpenGenerateDialog(TextBox slot)
+    {
+        _genTargetSlot = slot;
+        _genTokenBytes = 32;
+        GenTitle.Text = App.GetString("Gen_Title");
+        GenModePassword.Content = App.GetString("Gen_Mode_Password");
+        GenModeUuid.Content = App.GetString("Gen_Mode_Uuid");
+        GenModeToken.Content = App.GetString("Gen_Mode_Token");
+        GenLengthLabel.Text = App.GetString("Gen_Length");
+        GenChkUpper.Content = App.GetString("Gen_CharUpper");
+        GenChkLower.Content = App.GetString("Gen_CharLower");
+        GenChkDigits.Content = App.GetString("Gen_CharDigits");
+        GenChkSymbols.Content = App.GetString("Gen_CharSymbols");
+        GenChkExcludeAmb.Content = App.GetString("Gen_ExcludeAmbiguous");
+        GenRegenerate.Content = App.GetString("Gen_Regenerate");
+        GenTokenHint.Text = App.GetString("Gen_TokenHint");
+        GenToken16.Content = "16 B"; GenToken32.Content = "32 B"; GenToken48.Content = "48 B";
+        GenCancelText.Text = App.GetString("Common_Button_Cancel");
+        GenFillText.Text = App.GetString("Gen_Fill");
+        GenChkUpper.IsChecked = true; GenChkLower.IsChecked = true; GenChkDigits.IsChecked = true;
+        GenChkSymbols.IsChecked = true; GenChkExcludeAmb.IsChecked = true;
+        GenLengthSlider.Value = 16;
+        GenerateHideAnimation.Completed -= OnGenerateHideCompleted;
+        GenerateHideAnimation.Completed += OnGenerateHideCompleted;
+        SetGenMode("password");
+        GenerateHideAnimation.Stop();
+        GenerateShowAnimation.Stop();
+        GenerateDialogTransform.ScaleX = 0.92; GenerateDialogTransform.ScaleY = 0.92; GenerateDialogTransform.TranslateY = 20;
+        GenerateDialog.Opacity = 0; GenerateScrim.Opacity = 0;
+        GenerateOverlay.Visibility = Visibility.Visible;
+        DialogDepth.VeilShow();
+        GenerateShowAnimation.Begin();
+    }
+
+    private void SetGenMode(string mode)
+    {
+        _genMode = mode;
+        Style On(string key) => (Style)Application.Current.Resources[key];
+        GenModePassword.Style = On(mode == "password" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
+        GenModeUuid.Style = On(mode == "uuid" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
+        GenModeToken.Style = On(mode == "token" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
+        GenPasswordParams.Visibility = mode == "password" ? Visibility.Visible : Visibility.Collapsed;
+        GenTokenParams.Visibility = mode == "token" ? Visibility.Visible : Visibility.Collapsed;
+        Regenerate();
+    }
+
+    private void Regenerate()
+    {
+        try
+        {
+            _genPreview = _genMode switch
+            {
+                "uuid" => SecretGenerator.GenerateUuid(),
+                "token" => SecretGenerator.GenerateToken(_genTokenBytes),
+                _ => SecretGenerator.GeneratePassword(new Novara.Services.PasswordOptions(
+                    (int)GenLengthSlider.Value,
+                    GenChkUpper.IsChecked == true, GenChkLower.IsChecked == true,
+                    GenChkDigits.IsChecked == true, GenChkSymbols.IsChecked == true,
+                    GenChkExcludeAmb.IsChecked == true))
+            };
+        }
+        catch (ArgumentException) { _genPreview = ""; } // no class selected - preview empties, fill stays disabled
+        GenPreviewText.Text = _genPreview;
+        GenFillText.Opacity = _genPreview.Length > 0 ? 1.0 : 0.4;
+        if (_genMode == "password")
+        {
+            GenLengthValue.Text = ((int)GenLengthSlider.Value).ToString();
+            var bits = (int)Math.Round(Novara.Services.SecretGenerator.EntropyBits(new Novara.Services.PasswordOptions(
+                (int)GenLengthSlider.Value,
+                GenChkUpper.IsChecked == true, GenChkLower.IsChecked == true,
+                GenChkDigits.IsChecked == true, GenChkSymbols.IsChecked == true,
+                GenChkExcludeAmb.IsChecked == true)));
+            GenEntropyText.Text = string.Format(App.GetString("Gen_Entropy"), bits);
+        }
+    }
+
+    private void GenModePassword_Click(object sender, RoutedEventArgs e) => SetGenMode("password");
+    private void GenModeUuid_Click(object sender, RoutedEventArgs e) => SetGenMode("uuid");
+    private void GenModeToken_Click(object sender, RoutedEventArgs e) => SetGenMode("token");
+    private void GenChk_Changed(object sender, RoutedEventArgs e) { if (GenerateOverlay.Visibility == Visibility.Visible) Regenerate(); }
+    private void GenLengthSlider_ValueChanged(object sender, RoutedEventArgs e) { if (GenerateOverlay.Visibility == Visibility.Visible) Regenerate(); }
+    private void GenTokenBytes_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string t } && int.TryParse(t, out var n)) { _genTokenBytes = n; Regenerate(); }
+    }
+    private void GenRegenerate_Click(object sender, RoutedEventArgs e) => Regenerate();
+
+    private void GenFill_Click(object sender, RoutedEventArgs e)
+    {
+        if (_genTargetSlot != null && _genPreview.Length > 0)
+            _genTargetSlot.Text = _genPreview; // rides the existing TextChanged -> confirm-state chain
+        CloseGenerateDialog();
+    }
+
+    private void GenCancel_Click(object sender, RoutedEventArgs e) => CloseGenerateDialog();
+    private void GenClose_Click(object sender, RoutedEventArgs e) => CloseGenerateDialog();
+    private void GenerateScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, GenerateScrim)) CloseGenerateDialog(); }
+
+    private void CloseGenerateDialog()
+    {
+        GenerateHideAnimation.Completed -= OnGenerateHideCompleted;
+        GenerateHideAnimation.Completed += OnGenerateHideCompleted;
+        DialogDepth.VeilHide();
+        GenerateHideAnimation.Begin();
+    }
+
+    private void OnGenerateHideCompleted(object? sender, object e)
+    {
+        GenerateOverlay.Visibility = Visibility.Collapsed;
+        _genTargetSlot = null;
+    }
+
+    
+    
+    
+
+    private sealed record TotpRowRef(WeakReference<FrameworkElement> Root, TextBlock Code, TextBlock Seconds,
+        ColumnDefinition FillCol, ColumnDefinition RestCol, byte[] Key, string Algorithm, int Digits, int Period);
+    private readonly List<TotpRowRef> _totpRows = new();
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _totpTimer;
+
+    private void TotpTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateNewEntryConfirmState(); // 9.3: TOTP edits must re-arm the confirm button (empty branch below returns early)
+        var v = TotpTextBox.Text.Trim();
+        if (string.IsNullOrEmpty(v)) { TotpStatus.Visibility = Visibility.Collapsed; return; }
+        if (TotpService.TryParse(v, out var cfg))
+        {
+            var summary = string.IsNullOrEmpty(cfg.Issuer)
+                ? $"{cfg.Algorithm} · {cfg.Digits}d/{cfg.Period}s"
+                : $"{cfg.Issuer} · {cfg.Algorithm} · {cfg.Digits}d/{cfg.Period}s";
+            TotpStatus.Text = string.Format(App.GetString("Totp_Ok"), summary);
+            TotpStatus.Foreground = App.GetBrush("AppPrimaryButtonBrush");
+        }
+        else
+        {
+            TotpStatus.Text = App.GetString("Totp_Bad");
+            TotpStatus.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        }
+        TotpStatus.Visibility = Visibility.Visible;
+    }
+
+    private FrameworkElement BuildTotpRow(string storedValue)
+    {
+        var row = new Grid { ColumnSpacing = 8 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(new TextBlock { Text = App.GetString("Totp_Label"), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+
+        var recess = new Border { Background = App.GetBrush("AppSurfaceBrush"), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) };
+        Grid.SetColumn(recess, 1);
+
+        var inner = new Grid { MinHeight = 26 };
+        inner.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        inner.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (int i = 0; i < 3; i++) inner.ColumnDefinitions.Add(new ColumnDefinition { Width = i == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+
+        if (TotpService.TryParse(storedValue, out var cfg))
+        {
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var code = new TextBlock { Text = TotpService.ComputeCode(cfg, nowUnix), FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, CharacterSpacing = 200 };
+            var seconds = new TextBlock { Text = TotpService.RemainingSeconds(cfg.Period, nowUnix) + "s", FontSize = 11, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+            var cb = new Button { Width = 24, Height = 24, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), BorderThickness = new Thickness(0), Padding = new Thickness(4), VerticalAlignment = VerticalAlignment.Center, IsTabStop = false, Content = new Viewbox { Width = 12, Height = 12, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.Copy), Foreground = App.GetBrush("IconForegroundBrush") } } };
+            cb.Click += (_, _) => { var dp = new DataPackage(); dp.SetText(TotpService.ComputeCode(cfg)); try { Clipboard.SetContent(dp); } catch { } App.ShowToast(App.GetString("Common_Toast_Copied")); }; // copies the CURRENT code, recomputed live
+            Grid.SetColumn(code, 0); Grid.SetColumn(seconds, 1); Grid.SetColumn(cb, 2);
+            inner.Children.Add(code); inner.Children.Add(seconds); inner.Children.Add(cb);
+            // 9.3 fix: hand-drawn 3px track. WinUI ProgressBar plays a RepositionThemeAnimation
+            // (IndicatorLengthDelta) on every Value change, jolting the left edge; Star-column
+            // widths update discretely in layout - right edge moves, left edge stays pinned.
+            int remain0 = TotpService.RemainingSeconds(cfg.Period, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            var fillCol = new ColumnDefinition { Width = new GridLength(remain0, GridUnitType.Star) };
+            var restCol = new ColumnDefinition { Width = new GridLength(cfg.Period - remain0, GridUnitType.Star) };
+            var fillBorder = new Border { Background = App.GetBrush("AppPrimaryButtonBrush"), CornerRadius = new CornerRadius(1.5) };
+            Grid.SetColumn(fillBorder, 0);
+            var fillGrid = new Grid();
+            fillGrid.ColumnDefinitions.Add(fillCol);
+            fillGrid.ColumnDefinitions.Add(restCol);
+            fillGrid.Children.Add(fillBorder);
+            var barTrack = new Border { Height = 3, CornerRadius = new CornerRadius(1.5), Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 4, 0, 0), Child = fillGrid };
+            Grid.SetRow(barTrack, 1); Grid.SetColumn(barTrack, 0); Grid.SetColumnSpan(barTrack, 3);
+            inner.Children.Add(barTrack);
+            EnsureTotpTimer();
+            _totpRows.Add(new TotpRowRef(new WeakReference<FrameworkElement>(row), code, seconds, fillCol, restCol, cfg.Key, cfg.Algorithm, cfg.Digits, cfg.Period));
+        }
+        else
+        {
+            inner.Children.Add(new TextBlock { Text = storedValue + " · " + App.GetString("Totp_InvalidRender"), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+        }
+        recess.Child = inner;
+        row.Children.Add(recess); // 9.3 fix: recess was built but never attached - code/copy/progress never rendered
+        return row;
+    }
+
+    private void EnsureTotpTimer()
+    {
+        _totpTimer ??= DispatcherQueue.CreateTimer();
+        if (_totpTimer.IsRunning) return;
+        _totpTimer.Interval = TimeSpan.FromSeconds(1);
+        _totpTimer.Tick += (_, _) => UpdateTotpRows();
+        _totpTimer.Start();
+    }
+
+    private void UpdateTotpRows()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        for (int i = _totpRows.Count - 1; i >= 0; i--)
+        {
+            var r = _totpRows[i];
+            if (!r.Root.TryGetTarget(out _)) { _totpRows.RemoveAt(i); continue; } // card tree gone - drop the registration
+            var remain = TotpService.RemainingSeconds(r.Period, now);
+            r.Code.Text = TotpService.ComputeCode(r.Key, r.Algorithm, now / r.Period, r.Digits);
+            r.Seconds.Text = remain + "s";
+            r.FillCol.Width = new GridLength(remain, GridUnitType.Star); // 9.3: discrete layout update, no template animation
+            r.RestCol.Width = new GridLength(Math.Max(0, r.Period - remain), GridUnitType.Star);
+        }
     }
 
     private TextBox CreateCustomInfoTextBox(int index)
@@ -1611,7 +1910,7 @@ private MenuFlyout BuildContextMenu()
                     if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } // UI-3
                     fields.Add(("邮箱地址", keyInfo, true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("邮箱密码", FormField3TextBox.Text.Trim(), true)); 
-                    if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), true));
                     break;
                 case "账户":
                     keyInfo = FormField2TextBox.Text.Trim();
@@ -1619,7 +1918,7 @@ private MenuFlyout BuildContextMenu()
                     fields.Add(("账号", keyInfo, true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("密码", FormField3TextBox.Text.Trim(), true)); 
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("网址", FormField4TextBox.Text.Trim(), false));
-                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), true));
                     break;
                 case "网站":
                     keyInfo = FormField2TextBox.Text.Trim();
@@ -1627,7 +1926,7 @@ private MenuFlyout BuildContextMenu()
                     fields.Add(("网址", keyInfo, true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("账号", FormField3TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("密码", FormField4TextBox.Text.Trim(), true));
-                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), true));
                     break;
                 case "银行卡":
                     keyInfo = FormField2TextBox.Text.Trim();
@@ -1637,14 +1936,14 @@ private MenuFlyout BuildContextMenu()
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("有效期", FormField4TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("CVV", FormField5TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField6TextBox.Text)) fields.Add(("密码", FormField6TextBox.Text.Trim(), true));
-                    if (!string.IsNullOrWhiteSpace(FormField7TextBox.Text)) fields.Add(("备注", FormField7TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField7TextBox.Text)) fields.Add(("备注", FormField7TextBox.Text.Trim(), true));
                     break;
                 case "WiFi":
                     keyInfo = FormField2TextBox.Text.Trim();
                     if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } 
                     fields.Add(("网络名", keyInfo, true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("密码", FormField3TextBox.Text.Trim(), true));
-                    if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), true));
                     break;
                 case "证件":
                     keyInfo = FormField2TextBox.Text.Trim();
@@ -1653,7 +1952,7 @@ private MenuFlyout BuildContextMenu()
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("姓名", FormField3TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("签发机构", FormField4TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("有效期", FormField5TextBox.Text.Trim(), false));
-                    if (!string.IsNullOrWhiteSpace(FormField6TextBox.Text)) fields.Add(("备注", FormField6TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField6TextBox.Text)) fields.Add(("备注", FormField6TextBox.Text.Trim(), true));
                     break;
                 case "API Key":
                     var apiKeyVal = FormField2TextBox.Text.Trim();
@@ -1664,10 +1963,14 @@ private MenuFlyout BuildContextMenu()
                     fields.Add(("API Key", apiKeyVal, true));
                     fields.Add(("URL", apiUrlVal, true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("模型 ID", FormField4TextBox.Text.Trim(), true));
-                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), false));
+                    if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), true));
                     break;
             }
         }
+
+        // 9.3: TOTP key rides in Fields (label "TOTP") - encrypted/backup/search/trash all inherit it.
+        var totpVal = TotpTextBox.Text.Trim();
+        if (!string.IsNullOrEmpty(totpVal)) fields.Add(("TOTP", totpVal, true));
 
         
         var entryIconKey = type == "自定义" && !string.IsNullOrEmpty(_entrySelectedIcon) ? _entrySelectedIcon
@@ -1823,7 +2126,7 @@ private MenuFlyout BuildContextMenu()
     }
 
 
-    private void OpenNewEntryDialog()
+    public void OpenNewEntryDialog()
     {
         _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
         NewEntryDialogHideAnimation.Stop();
@@ -2167,6 +2470,7 @@ private MenuFlyout BuildContextMenu()
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
+        _totpTimer?.Stop(); // 9.3: no live TOTP rows off-page
         _apiCheckCts?.Cancel();
         _apiCheckCts?.Dispose();
         _apiCheckCts = null;

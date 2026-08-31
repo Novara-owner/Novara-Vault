@@ -31,7 +31,14 @@ public static class StickySync
 
     private static string? FindHostExe()
     {
-        // 1) Release layout: host sits next to the main exe.
+        // 1) Release layout (2026-08-31 test-report fix): full host bundle in a Host\ subfolder
+        //    next to the main exe (setup.iss installs {app}\Host\*). Probed FIRST - a bare
+        //    side-by-side exe from older installs is a .NET apphost without its dll bundle and
+        //    dies instantly (Event 1023), so the complete subfolder must win over it.
+        var subFolder = Path.Combine(AppContext.BaseDirectory, "Host", "StickNoteHost.exe");
+        if (File.Exists(subFolder)) return subFolder;
+
+        // 2) Legacy release layout: host sits next to the main exe (kept for manual deployments).
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "StickNoteHost.exe");
         if (File.Exists(sideBySide)) return sideBySide;
 

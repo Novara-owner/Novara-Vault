@@ -149,6 +149,75 @@
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
 
+        <Storyboard x:Name="GenerateShowAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.25" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.3" Value="1" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0.92" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <QuadraticEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseOut" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+        <Storyboard x:Name="GenerateHideAnimation">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateScrim" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialog" Storyboard.TargetProperty="Opacity">
+                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <LinearDoubleKeyFrame KeyTime="0:0:0.2" Value="0" />
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="ScaleX">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="ScaleY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="0.92">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="GenerateDialogTransform" Storyboard.TargetProperty="TranslateY">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.25" Value="20">
+                    <EasingDoubleKeyFrame.EasingFunction>
+                        <CubicEase EasingMode="EaseIn" />
+                    </EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
         <Storyboard x:Name="DeleteConfirmShowAnimation">
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="DeleteConfirmScrim" Storyboard.TargetProperty="Opacity">
                 <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0" />
@@ -481,6 +550,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <TextBlock x:Name="NewEntryDialogTitle"
@@ -536,6 +606,10 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <Grid x:Name="EntryTypeFormsContainer" Grid.Row="0" Visibility="Collapsed">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
@@ -575,15 +649,28 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField2TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="2000"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField2TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="2000"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn2" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="2" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon2" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                                 <Grid Grid.Row="2" Margin="0,12,0,0" x:Name="FormField3Section">
                                     <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
@@ -592,15 +679,28 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField3TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="2000"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField3TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="2000"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn3" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="3" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon3" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                                 <Grid Grid.Row="3" Margin="0,12,0,0" x:Name="FormField4Section">
                                     <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
@@ -609,12 +709,24 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField4TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="500"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField4TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="500"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn4" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="4" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon4" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                                 <Grid Grid.Row="4" Margin="0,12,0,0" x:Name="FormField5Section" Visibility="Collapsed">
                                     <Grid.RowDefinitions>
@@ -626,12 +738,24 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField5TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="500"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField5TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="500"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn5" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="5" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon5" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                                 <Grid Grid.Row="5" Margin="0,12,0,0" x:Name="FormField6Section" Visibility="Collapsed">
                                     <Grid.RowDefinitions>
@@ -643,12 +767,24 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField6TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="500"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField6TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="500"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn6" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="6" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon6" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                                 <Grid Grid.Row="6" Margin="0,12,0,0" x:Name="FormField7Section" Visibility="Collapsed">
                                     <Grid.RowDefinitions>
@@ -660,12 +796,24 @@
                                                FontWeight="Medium"
                                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                                Margin="0,0,0,8" />
-                                    <TextBox x:Name="FormField7TextBox"
-                                             Grid.Row="1"
-                                             Style="{StaticResource NovaraTextBoxStyle}"
-                                             MaxLength="500"
-                                             TextChanged="EntryField_TextChanged"
-                                             VerticalAlignment="Center" />
+                                    <Grid Grid.Row="1" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="FormField7TextBox"
+                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 MaxLength="500"
+                                                 TextChanged="EntryField_TextChanged"
+                                                 VerticalAlignment="Center" />
+                                        <Button x:Name="GenerateBtn7" Grid.Column="1" Width="36" Height="36"
+                                                Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
+                                                Click="GenerateBtn_Click" Tag="7" Visibility="Collapsed" IsTabStop="False">
+                                            <Viewbox Width="16" Height="16" Stretch="Uniform">
+                                                <PathIcon x:Name="GenerateIcon7" Foreground="{ThemeResource IconForegroundBrush}" />
+                                            </Viewbox>
+                                        </Button>
+                                    </Grid>
                                 </Grid>
                             </Grid>
                             <Grid x:Name="CustomFormContainer"
@@ -768,11 +916,22 @@
                                 </StackPanel>
                             </Button>
                             </Grid>
+                            
+                            <StackPanel x:Name="TotpSection" Grid.Row="1" Margin="0,12,0,0" Spacing="6">
+                                <TextBlock x:Name="TotpLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox x:Name="TotpTextBox"
+                                         Style="{StaticResource NovaraTextBoxStyle}"
+                                         MaxLength="500"
+                                         TextChanged="TotpTextBox_TextChanged"
+                                         VerticalAlignment="Center" />
+                                <TextBlock x:Name="TotpStatus" FontSize="11" Visibility="Collapsed" TextWrapping="Wrap" />
+                            </StackPanel>
                         </Grid>
                     </ScrollViewer>
                     <Button x:Name="NewEntryConfirmButton"
                             Style="{StaticResource NovaraPrimaryButtonStyle}"
-                            Grid.Row="3"
+                            Grid.Row="4"
                             Margin="0,20,0,0"
                             Height="44"
                             HorizontalAlignment="Stretch"
@@ -1387,6 +1546,108 @@
                                 FontSize="14"
                                 Click="RelayProbeCloseButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="GenerateOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="GenerateScrim" Background="#2E000000" Tapped="GenerateScrim_Tapped" />
+            <Border x:Name="GenerateDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="GenerateDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24" RowSpacing="14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="GenTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="GenClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}"
+                                  StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="GenModePassword" Height="32" MinWidth="80" Padding="12,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModePassword_Click" />
+                        <Button x:Name="GenModeUuid" Height="32" MinWidth="80" Padding="12,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModeUuid_Click" />
+                        <Button x:Name="GenModeToken" Height="32" MinWidth="80" Padding="12,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModeToken_Click" />
+                    </StackPanel>
+                    <Border Grid.Row="2" Background="{ThemeResource AppSurfaceBrush}" CornerRadius="10" Padding="16,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="GenPreviewText" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" MaxHeight="72" />
+                            <Button x:Name="GenRegenerate" Grid.Column="1" Height="32" MinWidth="88" Padding="12,0"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12"
+                                    VerticalAlignment="Center" Margin="12,0,0,0" Click="GenRegenerate_Click" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Grid.Row="3" x:Name="GenPasswordParams" Spacing="10" Margin="0,4,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="GenLengthLabel" Grid.Column="0" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" VerticalAlignment="Center" />
+                            <Slider x:Name="GenLengthSlider" Grid.Column="1" Minimum="8" Maximum="64" StepFrequency="1"
+                                    Value="16" ValueChanged="GenLengthSlider_ValueChanged" VerticalAlignment="Center" Margin="12,0" />
+                            <TextBlock x:Name="GenLengthValue" Grid.Column="2" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" MinWidth="28" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="18">
+                            <CheckBox x:Name="GenChkUpper" Content=" " Checked="GenChk_Changed" Unchecked="GenChk_Changed" MinWidth="0" />
+                            <CheckBox x:Name="GenChkLower" Content=" " Checked="GenChk_Changed" Unchecked="GenChk_Changed" MinWidth="0" />
+                            <CheckBox x:Name="GenChkDigits" Content=" " Checked="GenChk_Changed" Unchecked="GenChk_Changed" MinWidth="0" />
+                            <CheckBox x:Name="GenChkSymbols" Content=" " Checked="GenChk_Changed" Unchecked="GenChk_Changed" MinWidth="0" />
+                            <CheckBox x:Name="GenChkExcludeAmb" Content=" " Checked="GenChk_Changed" Unchecked="GenChk_Changed" MinWidth="0" />
+                        </StackPanel>
+                        <TextBlock x:Name="GenEntropyText" FontSize="12" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="4" x:Name="GenTokenParams" Spacing="10" Margin="0,4,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="GenTokenHint" FontSize="12" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="GenToken16" Height="30" MinWidth="72" Padding="10,0"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="16" />
+                            <Button x:Name="GenToken32" Height="30" MinWidth="72" Padding="10,0"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="32" />
+                            <Button x:Name="GenToken48" Height="30" MinWidth="72" Padding="10,0"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="48" />
+                        </StackPanel>
+                    </StackPanel>
+                    <Grid Grid.Row="5" Margin="0,8,0,0">
+                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="GenCancel_Click">
+                            <TextBlock x:Name="GenCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="190" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="GenFill_Click">
+                            <TextBlock x:Name="GenFillText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>

@@ -80,15 +80,30 @@ public partial class App : Application
         // Tray icon: show notes / exit. Menu text + tooltip are localized and rebuilt when the
         // stickies.json language changes (D25); D26: DoubleClickCommand can never fire while
         // NoLeftClickDelay=true, so it is removed (left-click ShowNote covers the interaction).
-        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "128.ico");
+        // 2026-08-31: the publish bundle does not carry Assets\ - a failed icon load here used to
+        // kill the whole process right after the windows were created (Event-log crash, sticky
+        // windows vanished ~5s). Probe exe dir first, then the parent (Host\ subfolder layout),
+        // and degrade to an iconless tray instead of dying.
+        System.Drawing.Icon? trayIcon = null;
+        var parentDir = System.IO.Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+        foreach (var dir in new[] { AppContext.BaseDirectory, parentDir })
+        {
+            if (string.IsNullOrEmpty(dir)) continue;
+            try
+            {
+                var probe = System.IO.Path.Combine(dir, "Assets", "128.ico");
+                if (System.IO.File.Exists(probe)) { trayIcon = new System.Drawing.Icon(probe); break; }
+            }
+            catch { }
+        }
         TrayIcon = new TaskbarIcon
         {
-            Icon = new System.Drawing.Icon(iconPath),
             ToolTipText = TrayTooltip(),
             ContextMenuMode = ContextMenuMode.PopupMenu,
             MenuActivation = PopupActivationMode.RightClick,
             NoLeftClickDelay = true,
         };
+        if (trayIcon != null) TrayIcon.Icon = trayIcon; // iconless tray beats a dead host
         RebuildTrayMenu(); // assigns ContextFlyout + localized tooltip
         TrayIcon.LeftClickCommand = new RelayCommand(ShowNote);
         try { TrayIcon.ForceCreate(); } catch { TrayIcon = null; }

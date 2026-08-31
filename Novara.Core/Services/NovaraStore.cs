@@ -13,17 +13,23 @@ namespace Novara.Services;
 public class NovaraStore
 {
 
-    private const uint Magic = 0x41564F4E; // "NOVA"
-    private const byte FileVersionLegacy = 1;   // 2.0: plaintext or CBC-encrypted (see 4.7)
-    private const byte FileVersionCurrent = 2;  // 3.0: AES-256-GCM encrypted
-    private const byte FlagPlain = 0x00;
-    private const byte FlagEncrypted = 0x01;
-    private const int HeaderSize = 4 + 1 + 1 + 16;
+    internal const uint Magic = 0x41564F4E; // "NOVA"
+    internal const byte FileVersionLegacy = 1;   // 2.0: plaintext or CBC-encrypted (see 4.7)
+    internal const byte FileVersionCurrent = 2;  // 3.0: AES-256-GCM encrypted
+    internal const byte FlagPlain = 0x00;
+    internal const byte FlagEncrypted = 0x01;
+    internal const int HeaderSize = 4 + 1 + 1 + 16;
     // 2026-08-28 integrity upgrade (design doc 9.1#3): BACKUP FILES ONLY - version 3 carries a full
     // SHA-256 digest in a 38B header. data.novadb never writes v3 (2.1 contract: its header matrix
     // stays v1-plain/v1-CBC/v2-GCM, encrypted integrity via GCM tag).
     private const byte FileVersionSha256Backup = 3;
     private const int HeaderSizeSha256 = 4 + 1 + 1 + 32;
+
+    // 9.2#7 KDF calibration (2026-08-29): ver3 = GCM with PBKDF2 3,000,000 iterations (CryptoService
+    // CurrentIterations). Same 22B header (2.1 contract intact), parameters implied by the version
+    // byte; the value range is shared with backup files but the file types are disjoint (Load accepts
+    // library 1/2/3 only, ImportBackup accepts backup 1/3/4 only).
+    internal const byte FileVersionKdfHardened = 3;
 
     // 2026-08-29 encrypted export backup (design doc 9.2#6): version 4 - the header carries the
     // algorithm/KDF ids, the iteration count and a per-backup random salt, so the file is fully
@@ -37,11 +43,11 @@ public class NovaraStore
     private const int GcmBlockOverhead = 12 + 16; // nonce + tag prefix of the CryptoService GCM output
     private const byte AlgoIdAes256Gcm = 0x00;
     private const byte KdfIdPbkdf2Sha256 = 0x00;
-    private const int BackupKdfIterations = 300000;
+    private const int BackupKdfIterations = 3_000_000; // synced with the main-database KDF calibration (9.2#7) - v4 headers carry the count, old backups parse by header
     // Import-side sanity window for the header-declared iteration count: rejects attacker-crafted
     // headers (DoS via a multi-second derivation on the UI thread) and zero/garbage values.
     private const int BackupKdfIterationsMin = 1000;
-    private const int BackupKdfIterationsMax = 2000000;
+    private const int BackupKdfIterationsMax = 5_000_000; // covers the 3M export default with headroom for the 9.2#7 stage-two parameters
 
     
     private const int SaveDebounceMs = 300;
@@ -102,6 +108,27 @@ public class NovaraStore
     /// <summary>True when the loaded database is v1 CBC-encrypted and can be migrated to GCM (4.7).</summary>
     public bool NeedsFormatMigration => _needsFormatMigration;
 
+    /// <summary>9.2#7: a v2-GCM database still on the legacy 100k iterations - offered the one-time
+    /// KDF-hardening migration (v3). Computed live from the version byte, immune to stale flags.</summary>
+    public bool NeedsKdfMigration
+        => _loaded && _fileVersion == FileVersionCurrent && _encryptionFlag == FlagEncrypted;
+
+    /// <summary>9.2#7: same-password re-encryption to ver3 (PBKDF2 3M). The version byte flips BEFORE
+    /// SaveSync so WriteSnapshot picks the new parameters; any write failure rolls the byte back and
+    /// the legacy file stays untouched (symmetric with MigrateFormat).</summary>
+    public bool MigrateKdf()
+    {
+        if (!NeedsKdfMigration || string.IsNullOrEmpty(_password)) return false;
+        var oldVersion = _fileVersion;
+        _fileVersion = FileVersionKdfHardened;
+        if (!SaveSync())
+        {
+            _fileVersion = oldVersion; // roll back - keep the legacy file untouched
+            return false;
+        }
+        return true;
+    }
+
     public event Action<string>? SaveFailed;
 
     public NovaraStore(string filePath)
@@ -132,7 +159,7 @@ public class NovaraStore
             var header = new byte[HeaderSize];
             fs.ReadExactly(header);
             if (BitConverter.ToUInt32(header, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
-            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
+            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent && header[4] != FileVersionKdfHardened) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
             _fileVersion = header[4]; // v1 (legacy CBC / plaintext) or v2 (GCM); see 4.7
             byte flag = header[5];
             var md5Stored = header.AsSpan(6, 16).ToArray();
@@ -206,11 +233,11 @@ public class NovaraStore
             var header = new byte[HeaderSize];
             fs.ReadExactly(header);
             if (BitConverter.ToUInt32(header, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
-            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
+            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent && header[4] != FileVersionKdfHardened) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
             _fileVersion = header[4];
             if (header[5] == FlagPlain)
-                return header[4] == FileVersionCurrent
-                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4])) // E5-16: a v2 plaintext file does not exist (4.7 matrix) - defensive corruption, symmetric with Load() E1-26
+                return header[4] != FileVersionLegacy
+                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4])) // E5-16 + 9.2#7: v2/v3 plaintext files do not exist (format matrix) - defensive corruption, symmetric with Load() E1-26
                     : new LoadResult(LoadStatus.WrongPassword, Loc.T("Store_Err_NotEncrypted"));
             if (header[5] != FlagEncrypted) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), header[5])); // D8-2 (Round 5): unknown encryption flag -> corrupted (aligned with Load())
             var md5Stored = header.AsSpan(6, 16).ToArray();
@@ -232,13 +259,19 @@ public class NovaraStore
             if (salt == null) return Corrupted(Loc.T("Store_Err_SecurityMissing"));
 
             byte[] plain;
-            if (_fileVersion == FileVersionCurrent)
+            if (_fileVersion == FileVersionCurrent || _fileVersion == FileVersionKdfHardened)
             {
-                // v2 GCM: authenticated by the 16-byte tag - no MD5; wrong password / tamper throw.
+                // v2/v3 GCM: authenticated by the 16-byte tag - no MD5; wrong password / tamper throw.
                 // E1-02: Verify() already passed above, so a decrypt failure is corruption/tampering,
                 // NOT a wrong password - report it as Corrupted (the lock screen shows the corrupt dialog
                 // instead of counting strikes and locking the user out of a damaged database).
-                try { plain = CryptoService.DecryptGcm(body, password, salt); }
+                // 9.2#7: iteration count is implied by the version byte (v2=100k legacy, v3=3M hardened).
+                try
+                {
+                    plain = _fileVersion == FileVersionKdfHardened
+                        ? CryptoService.DecryptGcm(body, password, salt, CryptoService.CurrentIterations)
+                        : CryptoService.DecryptGcm(body, password, salt);
+                }
                 catch { return Corrupted(Loc.T("Store_Err_DecryptFail")); } 
                 _needsFormatMigration = false;
             }
@@ -289,7 +322,7 @@ public class NovaraStore
         if (_suppressSave) return false; // N5S-05: a suppressed session must not mint a security.dat the restored db can never pair with
         _password = password;
         _encryptionFlag = FlagEncrypted;
-        _fileVersion = FileVersionCurrent; // 3.0 new encryption is GCM (v2) from day one (4.7)
+        _fileVersion = FileVersionKdfHardened; // 9.2#7: new encryption starts at the latest format from day one
         _loaded = true;
         if (!SaveSync())
         {
@@ -753,8 +786,11 @@ private bool WriteSnapshot()
                 header[5] = _encryptionFlag;
                 if (_encryptionFlag == FlagEncrypted)
                 {
-                    // v2 GCM: the 16-byte tag authenticates the data, MD5 field stays zero (4.7)
-                    header[4] = _fileVersion == FileVersionCurrent ? FileVersionCurrent : FileVersionLegacy;
+                    // GCM (v2/v3): the 16-byte tag authenticates the data, MD5 field stays zero (4.7).
+                    // 9.2#7: ver byte drives the iteration count - v2=100k legacy, v3=3M hardened.
+                    header[4] = _fileVersion == FileVersionKdfHardened ? FileVersionKdfHardened
+                              : _fileVersion == FileVersionCurrent ? FileVersionCurrent
+                              : FileVersionLegacy;
                     if (header[4] == FileVersionLegacy) md5.CopyTo(header, 6);
                 }
                 else
@@ -769,9 +805,10 @@ private bool WriteSnapshot()
 
                     var salt = PasswordService.GetDeriveSalt();
                     if (salt == null || string.IsNullOrEmpty(_password)) throw new InvalidOperationException(Loc.T("Store_Err_EncNoKey"));
-                    var cipher = _fileVersion == FileVersionCurrent
-                        ? CryptoService.EncryptGcm(json, _password, salt)
-                        : CryptoService.Encrypt(json, _password, salt);
+                    // 9.2#7: parameters implied by the version byte - v3 writes 3M, v1/v2 keep legacy 100k
+                    var cipher = _fileVersion == FileVersionLegacy
+                        ? CryptoService.Encrypt(json, _password, salt)
+                        : CryptoService.EncryptGcm(json, _password, salt, _fileVersion == FileVersionKdfHardened ? CryptoService.CurrentIterations : CryptoService.LegacyIterations);
                     fs.Write(cipher);
                 }
                 else

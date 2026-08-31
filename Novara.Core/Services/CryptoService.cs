@@ -14,7 +14,10 @@ public static class CryptoService
     private const int IvSize = 16;
     private const int GcmNonceSize = 12;
     private const int GcmTagSize = 16;
-    private const int Iterations = 100000;
+    internal const int LegacyIterations = 100_000; // legacy: ver1/ver2 databases (pre-KDF-hardening, design 9.2#7)
+    /// <summary>Current PBKDF2 iteration count for ver3 databases and new security.dat files
+    /// (KDF calibration 2026-08-29: ~340ms on the dev machine, mid of the 250-500ms target band).</summary>
+    public const int CurrentIterations = 3_000_000;
 
     public static byte[] Encrypt(byte[] plainData, string password, byte[] deriveSalt)
     {
@@ -51,7 +54,7 @@ public static class CryptoService
         return Decompress(compressed);
     }
 
-    private static byte[] DeriveKey(string password, byte[] salt, int iterations = Iterations)
+    private static byte[] DeriveKey(string password, byte[] salt, int iterations = LegacyIterations)
         => Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
 
     /// <summary>
@@ -62,7 +65,7 @@ public static class CryptoService
     /// Optional overrides (2026-08-29, encrypted export backup 9.2#6): a custom iteration count and
     /// associated data. The main-database paths keep the defaults (const Iterations, no AAD).
     /// </summary>
-    public static byte[] EncryptGcm(byte[] plainData, string password, byte[] deriveSalt, int iterations = Iterations, byte[]? associatedData = null)
+    public static byte[] EncryptGcm(byte[] plainData, string password, byte[] deriveSalt, int iterations = LegacyIterations, byte[]? associatedData = null)
     {
         var key = DeriveKey(password, deriveSalt, iterations);
         var nonce = RandomNumberGenerator.GetBytes(GcmNonceSize);
@@ -80,7 +83,7 @@ public static class CryptoService
         return result;
     }
 
-    public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt, int iterations = Iterations, byte[]? associatedData = null)
+    public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt, int iterations = LegacyIterations, byte[]? associatedData = null)
     {
         if (data.Length < GcmNonceSize + GcmTagSize) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
         var key = DeriveKey(password, deriveSalt, iterations);
