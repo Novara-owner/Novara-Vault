@@ -7,7 +7,7 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>6.0.0</Version>
+    <Version>6.1.0</Version>
     <Platforms>x64</Platforms>
     
 

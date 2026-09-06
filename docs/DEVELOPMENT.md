@@ -806,6 +806,7 @@ Novara/
 | 5.2 | 2026-08-29 | Encrypted backup export/import (`.novaenc`), sync-lock livelock fix |
 | 5.3 | 2026-08-31 | KDF hardening (format v3, 3,000,000 iterations), Agent Permission Center, TOTP, secret generator, command palette, database health check, Host full-bundle deployment |
 | 6.0 | 2026-09-06 | Motion design system, Workspaces, Quick Capture, network activity indicator, welcome tour; five full verification rounds (~250 fixes) and MCP security hardening |
+| 6.1 | 2026-09-06 | Fix: new empty memo groups no longer disappear under the no-filter view; explicit toast while a workspace is active |
 
 ---
 

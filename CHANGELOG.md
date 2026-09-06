@@ -6,6 +6,13 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-09-06
+
+### Fixed
+
+- **Memo page: creating a group after wiping memo data appeared to fail.** The group was actually created and persisted, but the workspace-era "hide empty groups" filter applied unconditionally and collapsed the new empty card immediately (and again on every reload), so it looked like nothing happened. Empty groups are now always visible when no workspace filter is active — the hiding rule applies only while a workspace is selected, which was its original intent.
+- While a workspace is active, creating an empty group still keeps it hidden by design (group visibility follows its entries); the toast now says so explicitly instead of a generic "created".
+
 ## [6.0.0] - 2026-09-06
 
 ### Added
