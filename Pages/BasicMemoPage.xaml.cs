@@ -986,7 +986,9 @@ private MenuFlyout BuildContextMenu()
                             if (vis) visibleCount++;
                         }
                 }
-                gb.Visibility = visibleCount > 0 ? Visibility.Visible : Visibility.Collapsed; 
+                
+                
+                gb.Visibility = visibleCount > 0 || !wsActive ? Visibility.Visible : Visibility.Collapsed;
                 if (gb.Child is Grid gg2 && gg2.Children.Count > 3 && gg2.Children[3] is Grid eh)
                     eh.Visibility = visibleCount > 0 ? Visibility.Collapsed : Visibility.Visible;
                 UpdateGroupCount(gb);
@@ -1645,7 +1647,11 @@ private MenuFlyout BuildContextMenu()
         SyncUncategorizedCard();
         PersistAll();
         ApplyCardFilters(); 
-        App.ShowToast(App.GetString("Common_Toast_Created"));
+        
+        
+        bool groupHiddenByWorkspace = !string.IsNullOrEmpty(App.CurrentWorkspaceId)
+            && toMove.Count == 0 && _pendingMoveEntry == null;
+        App.ShowToast(App.GetString(groupHiddenByWorkspace ? "Memo_Toast_Group_Hidden" : "Common_Toast_Created"));
         var sb = new Storyboard(); var sx = new DoubleAnimation { To = 0.95, Duration = TimeSpan.FromMilliseconds(100) }; Storyboard.SetTarget(sx, ConfirmButtonTransform); Storyboard.SetTargetProperty(sx, "ScaleX"); sb.Children.Add(sx);
         var sy = new DoubleAnimation { To = 0.95, Duration = TimeSpan.FromMilliseconds(100) }; Storyboard.SetTarget(sy, ConfirmButtonTransform); Storyboard.SetTargetProperty(sy, "ScaleY"); sb.Children.Add(sy);
         sb.Completed += (s, ev) => { var sb2 = new Storyboard(); var sx2 = new DoubleAnimation { To = 1.0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(sx2, ConfirmButtonTransform); Storyboard.SetTargetProperty(sx2, "ScaleX"); sb2.Children.Add(sx2); var sy2 = new DoubleAnimation { To = 1.0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(sy2, ConfirmButtonTransform); Storyboard.SetTargetProperty(sy2, "ScaleY"); sb2.Children.Add(sy2); sb2.Completed += (s2, e2) => CloseNewGroupDialog(); sb2.Begin(); };
