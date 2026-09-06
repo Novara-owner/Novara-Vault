@@ -46,7 +46,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 
 | 标签页 | 功能 |
 |--------|------|
-| **备忘** | 分组管理账号 / 密码 / API Key / 邮箱 / 网站 / 银行卡 / WiFi / 证件 / 自定义等条目；双击复制、星标置顶、API 连通检测 |
+| **备忘** | 分组管理账号 / 密码 / API Key / 邮箱 / 网站 / 银行卡 / WiFi / 证件 / 自定义等条目；字段行一键复制、TOTP 两步验证、星标置顶、API 连通检测 |
 | **路径备份** | 登记本地文件 / 文件夹路径，一键检测存在性 / 有效性（绿 / 红状态）、复制 / 打开 |
 | **计划** | 待办 + 便签卡片（星标 / 置顶 / 排序 / 展开）；「发送到桌面」独立便签；时间提醒 |
 | **记录** | 富文本日记（HTML）+ Markdown 文档双格式编辑器、时间线回顾、筛选 |
@@ -98,7 +98,7 @@ Novara/
 **分层原则**：
 
 - `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
-- 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / RelayCommand 等。
+- 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
 - `Pages/` 是九大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage。
 
 **核心解耦方式**：
@@ -147,21 +147,21 @@ Novara/
 
 ### 4.4 数据模型详解
 
-**MemoGroup（备忘分组）**：`Id` / `Name` / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `PinnedAt` / `IsDeleted` / `DeletedAt` / `Order`。
+**MemoGroup（备忘分组）**：`Id` / `Name` / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned`。分组物理删除（不进回收站），删除前组内条目先救援为独立条目。
 
-**MemoEntry（备忘条目）**：`Id` / `GroupId`（外键，null=未分组）/ `Name` / `Type` / `KeyInfo` / `Fields`（`EntryField` 列表）/ `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Protocol`（API 检测成功状态）。
+**MemoEntry（备忘条目）**：`Id` / `GroupId`（外键，null=未分组）/ `Name` / `Type` / `KeyInfo` / `Fields`（`EntryField` 列表）/ `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `WorkspaceId` / `Protocol`（API 检测成功状态）。
 
 **EntryField（条目字段）**：`Label` / `Value` / `CanCopy`（是否可一键复制，敏感字段为 true）。
 
-**FilePathEntry（路径条目）**：`Id` / `Name` / `Path` / `Note` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order`。
+**FilePathEntry（路径条目）**：`Id` / `Name` / `Path` / `Note` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `WorkspaceId`。（路径页顺序 = UI 列表顺序，无独立 `Order` 字段。）
 
-**TodoCard（待办）**：`Id` / `Title` / `IconKey` / `MainText` / `SubTexts` / `CheckedStates` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order` / `ReminderAt` / `ReminderSetAt`。
+**TodoCard（待办）**：`Id` / `Title` / `IconKey` / `MainText` / `SubTexts` / `CheckedStates` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `Order` / `ReminderAt` / `ReminderSetAt` / `WorkspaceId`。
 
-**NoteCard（便签）**：`Id` / `Title` / `IconKey` / `Content` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order` / `ReminderAt` / `ReminderSetAt`。
+**NoteCard（便签）**：`Id` / `Title` / `IconKey` / `Content` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `Order` / `ReminderAt` / `ReminderSetAt` / `WorkspaceId`。
 
-**DiaryEntry（日记/文档）**：`Id` / `Title` / `Content` / `CreatedAt` / `ModifiedAt` / `IsPinned` / `PinnedAt` / `IsStarred` / `IsDeleted` / `DeletedAt` / `Order` / `Format`（"html"=富文本日记默认 / "markdown"=MD 文档，零迁移）。
+**DiaryEntry（日记/文档）**：`Id` / `Title` / `Content` / `CreatedAt` / `ModifiedAt` / `IsPinned` / `PinnedAt` / `IsStarred` / `IsDeleted` / `DeletedAt` / `Order` / `Format`（"html"=富文本日记默认 / "markdown"=MD 文档，零迁移）/ `WorkspaceId`。
 
-**AppSettings（设置）**：主题 / 语言 / 自启 / 右键菜单 / 关闭行为 / 可见标签页 / 隐私锁 / 欢迎页 / 备份 / MCP 等（详见 4.6）。
+**AppSettings（设置）**：主题 / 语言 / 自启 / 右键菜单 / 关闭行为 / 可见标签页 / 隐私锁 / 自动锁定 / 欢迎页与首启导览 / 备份 / MCP（总开关、逐客户端权限矩阵、审计设置）/ 工作区 等。
 
 ### 4.5 数据约定
 
@@ -169,6 +169,7 @@ Novara/
 - **存储值语言无关**：内部枚举 / 状态值（Type、Theme、CloseBehavior、VisibleTabs）**维持中文字面量落盘**，显示文案由 UI 层翻译。未来版本禁止向存储写入语言相关字面量。
 - **软删除**：五类实体（备忘条目 / 路径 / 待办 / 便签 / 日记）均加 `IsDeleted / DeletedAt` 软删，进回收站。
 - **排序**：待办 / 便签 / 日记用 `Order` 字段（0 = 未手动排序走时间倒序；>0 = 用户拖拽排定顺序）。
+- **工作区**：五类实体均携带 `WorkspaceId`（空 = 未分配）。工作区本身存于 `AppSettings` 的扁平列表——是虚拟筛选层，不是存储层级。
 - **新卡片落位**：新建卡片一律插「非置顶区最前」（置顶卡之后、普通卡之前）。
 
 ---
@@ -177,8 +178,8 @@ Novara/
 
 ### 5.1 加密算法
 
-- **加密**：AES-256-GCM（v2）。nonce 12 字节 + tag 16 字节，认证靠 GCM tag，MD5 字段置零不校验。
-- **密钥派生**：PBKDF2-SHA256，100000 次迭代。
+- **加密**：AES-256-GCM（v2 头结构；加密参数由版本字节隐含）。nonce 12 字节 + tag 16 字节，认证靠 GCM tag，MD5 字段置零不校验。
+- **密钥派生**：PBKDF2-SHA256，格式 v3（5.3+）起为 **3,000,000 次迭代**（参考机解锁约 340 ms）。v2 库经一次性选择权弹窗迁移；拒绝后不再弹，设置页保留手动入口。
 - **旧版兼容**：2.0 旧数据为 AES-CBC（v1），解锁后自动迁移到 v2 GCM。
 
 ### 5.2 版本矩阵
@@ -187,11 +188,12 @@ Novara/
 |------|------|
 | v1 明文 | 恒为 v1（2.0 兼容），无加密 |
 | v1 CBC | 2.0 旧加密，解锁后弹一次迁移确认 → 升级 v2 |
-| v2 GCM | 当前加密方案 |
+| v2 GCM | GCM + 100,000 次 PBKDF2（3.0–5.2 格式） |
+| v3 GCM | GCM + 3,000,000 次 PBKDF2——现行方案；**≤ 5.2.0 无法读取** |
 
 ### 5.3 密码哈希独立存储
 
-密码哈希存独立明文小文件 `security.dat`（双盐：哈希盐 + 派生盐，加盐 SHA256），**不随库加密**——因为锁屏阶段无密钥可读。库加密时，密码哈希必须能独立读取以验证解锁。
+密码哈希存独立明文小文件 `security.dat`（双盐：哈希盐 + 派生盐），**不随库加密**——因为锁屏阶段无密钥可读。哈希格式版本化：V1 = 加盐 SHA-256（旧文件兼容），V2 = PBKDF2-SHA256 3,000,000 次迭代（新文件；旧文件首次验证成功后静默自动升级）。
 
 ### 5.4 改密事务
 
@@ -424,8 +426,8 @@ Novara/
 
 | 卡片 | 功能 |
 |------|------|
-| 数据概览 | 条目 / 分组 / 待办完成率 / 存储占用（默认关，开启后默认展开） |
-| MCP 接口 | 总开关 + 授权列表 + 配置（详见 16） |
+| 数据概览 | 条目 / 分组 / 待办完成率 / 存储占用 + 数据库健康指标（加密状态 / 最近备份 / 快照份数 / 完整性 / 孤儿引用）（默认关，开启后默认展开） |
+| MCP 接口 | 总开关 + 逐客户端权限矩阵 + 审计日志查看 + 配置（详见 16） |
 | 显示模式（主题） | 浅色 / 深色 / 跟随系统（存储 + 重启闭环） |
 | 语言 | 五语言切换（存储 + 重启闭环） |
 | 自定义选项卡 | 勾选 / 取消四标签页显示（至少保留 1 个） |
@@ -433,7 +435,9 @@ Novara/
 | 全局右键菜单 | 桌面 / 文件右键菜单开关 |
 | 窗口退出行为 | 直接退出 / 托盘驻留 |
 | 隐私访问锁 | 设密 / 改密 / 关锁 / 警告四弹窗 |
-| 数据备份 | 快照 / 恢复 / 自动备份 |
+| 自动锁定 | 空闲计时（5 / 10 / 30 / 60 分钟 / 从不）+ Windows 锁屏联动 + 立即锁定热键 |
+| 网络活动 | 本地活动流水；发起 API 检测调用时显示目标端点 |
+| 数据备份 | 快照 / 恢复 / 自动备份 / 加密 `.novaenc` 导出与导入 |
 | 数据归档与还原 | 导入 / 导出（原生 / CSV / MD / HTML / PDF） |
 | 资料库重置 | 高危确认 → 删三文件重建 |
 | 官网 | 打开 novara.xin |
@@ -445,7 +449,7 @@ Novara/
 - C 关锁：解密为明文写盘 → 删 security.dat。
 - D 警告：红色文案 + 红色三态确认键。
 
-**导入导出**：导出恒明文（含 MD5 头）；有锁时均需密码验证；导入不覆盖 security.dat / lockout.dat；导入后 ReloadPages + 语言/主题变化提示重启生效。
+**导入导出**：明文导出带 SHA-256 完整性头（双头探测兼容旧 MD5 头文件）；加密 `.novaenc` 导出使用独立备份密码。有锁时均需密码验证；导入不覆盖 security.dat / lockout.dat；导入后 ReloadPages + 语言/主题变化提示重启生效。
 
 ---
 
@@ -469,6 +473,10 @@ Novara/
 - 来源标签：卡片右上角品牌色小标签（备忘 / 路径 / 计划 / 日记 / 文档）。
 - 来源筛选：混合 / 备忘 / 文件 / 计划 / 日记 / 文档。
 - 点击结果跳转 + 目标卡闪烁（缩放脉动 + 边框品牌色闪 + 恢复原色）。
+
+### 13.4 命令面板
+
+输入 `>` 作为首字符后，同一输入框切换为命令模式：新建备忘 / 待办 / 便签 / 日记 / 文档、打开回收站或设置、立即锁定。命令复用结果卡渲染（图标 + 文案），支持键盘导航，无匹配时回落到搜索空态。
 
 ---
 
@@ -539,7 +547,7 @@ MCP 客户端 (stdio)
     ↓ JSON-RPC
 NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/list / tools/call / ping）
     ↓ 命名管道 Novara.Mcp
-主进程 McpService（未解锁门控 → token 鉴权 → 进程白名单 → 脱敏 → CRUD）
+主进程 McpService（未解锁门控 → token 鉴权 → 进程授权 → 权限矩阵 → 脱敏 → CRUD）
 ```
 
 ### 16.2 工具清单（14 个）
@@ -549,19 +557,21 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 | 创建 | create_memo / create_todo / create_note / create_diary / create_path |
 | 更新 | update_memo / update_todo / update_note / update_diary / update_path |
 | 查询 | list_items / read_item / search_items |
-| 删除 | delete_item（软删，默认关闭，需设置页开启） |
+| 删除 | delete_item（软删；需客户端删除位 **且** 全局总闸） |
 
 ### 16.3 安全模型
 
 - **隐私锁门控**：库未解锁时一律拒绝。
 - **token 鉴权**：总开关默认关，开启自动生成 token（Base64Url 32B）。
-- **进程白名单**：首次连接弹窗确认，路径记入白名单。
+- **逐客户端授权 + 权限矩阵**：首次连接弹窗确认；批准后每个客户端持有独立的 20 位权限矩阵（读 / 建 / 改 / 删 × 五类数据）。新客户端除备忘外默认只读；混合列举绝不泄露无权分区。
+- **删除总闸**：全局总闸与客户端自身删除位取与。
+- **审计日志**：每次调用（含被拒绝的尝试）落本地日志（进程 / 时间 / 工具 / 对象 / 结果），字段限长、凭据掩码；可在 MCP 卡片查看。
 - **脱敏**：敏感字段（密码 / API Key）脱敏输出；`update` 不可篡改已有敏感字段、可新增敏感字段。
 - **写边界**：`create` / `update` / `delete`（软删）；回收站不暴露；`format` 不可改。
 
 ### 16.4 设置页 MCP 卡片
 
-标题 + 折叠 / 配置 / 总开关三按钮 + 授权列表面板（空态居中提示、非空随内容，每行 = 路径 + 红色撤销）。四个弹窗：配置（Key 重置 / JSON 复制 / 删除权限下拉）/ 重置确认 / JSON 选择（JSON / 提示词）/ 删除权限确认。
+标题 + 折叠 / 审计记录 / 配置 / 总开关按钮 + 授权列表面板（空态居中提示、非空随内容，每行 = 进程 + 权限按钮 + 红色撤销）。批准客户端后自动进入其权限矩阵弹窗；另有四弹窗：配置（Key 重置 / JSON 复制）/ 重置确认 / JSON 选择（JSON / 提示词）/ 删除权限确认。
 
 ---
 
@@ -612,7 +622,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 | 格式 | 用途 | 说明 |
 |------|------|------|
-| 原生备份（.novabak） | 完整备份 / 恢复 | 恒明文（含 MD5 头）；有锁需密码验证；导入校验 + 回滚 + Id 去重 |
+| 原生备份（.novabak） | 完整备份 / 恢复 | 明文，带 SHA-256 完整性头（兼容旧 MD5 头文件）；有锁需密码验证；导入校验 + 回滚 + Id 去重 |
 | CSV | 备忘导入 / 导出 | 兼容 KeePass / Bitwarden 三种方言，自动识别 |
 | Markdown | 汇总 / 单篇 / 文档原文 | 只读不可导入 |
 | HTML 合集 | 记录页合集 | 品牌 logo + 官网 + 宣传语 + 打印友好 CSS |
@@ -672,8 +682,8 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 ### Novara.Core（纯逻辑）
 
 - **NovaraStore**：`Load` / `LoadWithPassword` / `SaveAsync`（SemaphoreSlim 串行 + 快照合并 + 300ms 去抖）/ `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt`（失败回滚）/ `ExportBackup`（恒明文 + 软删过滤）/ `ImportBackup`（校验 + 回滚 + 归一化 + Id 去重）/ `ResetDatabase`；写盘 tmp+Move 原子替换 + Flush(true)。
-- **CryptoService**：`Encrypt`（v1 CBC）/ `Decrypt` + `EncryptGcm` / `DecryptGcm`（v2）；PBKDF2-SHA256 100000 迭代。
-- **PasswordService**：`security.dat` 双盐 + 加盐 SHA256 固定时间比较；`lockout.dat`（FailCount/Until/Enabled）；`SetBaseDir` 路径注入。
+- **CryptoService**：`Encrypt`（v1 CBC）/ `Decrypt` + `EncryptGcm` / `DecryptGcm`（v2/v3 GCM）；格式 v3 起为 PBKDF2-SHA256 3,000,000 次迭代。另有 `ExportBackup`（明文）、`ExportBackupEncrypted`（`.novaenc` v4 容器）与 GZip 解压炸弹防护。
+- **PasswordService**：`security.dat` 双盐 + 版本化密码哈希（V1 加盐 SHA256 → V2 PBKDF2-SHA256 3M）固定时间比较；`lockout.dat`（FailCount/Until/Enabled）；`SetBaseDir` 路径注入。
 - **ApiProbeService**：入口一，厂商识别 + 协议矩阵 + 错误分类 + 脱敏（见 20）。
 - **ApiChatClient**：共享聊天客户端（OpenAI/Anthropic/Gemini 三协议 + 流式 + usage/TTFT + chat 端点推导）。
 - **ApiDiagnoseService**：入口二，可达性 + 余额推断 + 元数据 + 延迟（见 20）。
@@ -697,6 +707,11 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 - **ReminderScheduler**：schtasks 注册一次性任务。
 - **ChunkedRender**：分批渲染辅助（DispatcherQueue 低优先级分帧）。
 - **HtmlSanitizer**：XSS 白名单净化（从 DiaryEditorPage 提取，供 HTML 导出 / MCP format=html 复用）。
+- **Motion**：令牌化动效层（6.0）——时长 / 缓动工厂 / 弹窗 Show-Hide Transform 通道 / stagger 接线，全程序动画唯一参数来源。
+- **DialogDepth**：弹窗基础设施——ThemeShadow 挂接、压暗层（Veil）显隐、可选的模糊 / tint 景深处理。
+- **GlobalHotkeyService**：全局热键——快速捕获（Ctrl+Shift+N）与立即锁定（Ctrl+Shift+L）。
+- **NetworkActivityService**：本地网络流水——API 检测等用户主动调用前后 Begin/End，驱动标题栏指示器。
+- **CountdownBorder**：30 秒冷静期控件（硬删 / 清空 / 重置等危险确认）。
 - **RelayCommand**：ICommand 最小实现（托盘命令绑定）。
 - **EditRequest / AddPathRequest / ReminderEditRequest / ReminderDueRequest / ShowWindowRequest**：IPC 请求（pending json + 命名事件）。
 
@@ -714,9 +729,11 @@ dotnet publish -r win-x64 --self-contained
 
 关键坑（务必遵守）：
 
-- **Novara.pri**：发布必须手动补，缺它启动即 `0xc000027b`。
-- **StickNoteHost 独立发布**：Host 是 `EnableMsixTooling=true`，其 publish 会产出 `resources.pri`（MSIX 资源）。若把 Host 直接 publish 到主程序发布目录，`resources.pri` 会干扰 XAML 加载 → 启动 `0xc000027b`。正确做法：Host publish 到独立临时目录，只复制 `StickNoteHost.exe`。发布目录内绝不能出现 `resources.pri`。
+- **发布目录必须先清空**：`dotnet publish -o` 只覆盖同名文件、从不删除残留。旧版本残留的 `Novara.pri` + 新 DLL 会造成编译期 XBF 资源错位，所有改过 XAML 的页面启动即崩（生成代码中 `InvalidCastException`）。
+- **Novara.pri**：publish 产物不含 pri，必须从构建输出手动补齐并核验其与 DLL 同批次 mtime；缺它启动即 `0xc000027b`。平台强制 x64 后文件位于 `bin\x64\Release\...`。
+- **StickNoteHost 以完整自包含包随发**：Host publish 到独立临时目录，然后把全部产物（exe + dll + deps.json + runtimeconfig + 原生库）复制进发布目录的 `Host\` 子目录。只带裸 `StickNoteHost.exe`（apphost）在全新机器上即死（事件 1023）。`resources.pri` 在 `Host\` 内无害，但发布目录根绝不能出现。
 - **NovaraMCP 独立发布**：纯 net8.0 控制台，`PublishSingleFile=true` + `SelfContained=true`，publish 产单个自包含 exe（无 `resources.pri`）。只复制 `NovaraMCP.exe` 到主程序发布目录。
+- **Win2D 核验**：确认发布目录含 `Microsoft.Graphics.Canvas.dll` 与 `Microsoft.Graphics.Canvas.Interop.dll`（模糊特效依赖）；缺失时静默降级不崩溃，但观感受损。
 - 卸载器：删除自启注册表项 + 删 `data.novadb` 前先去 Hidden|ReadOnly 属性。
 - 数据保留语义：卸载选「保留数据」则 `%LocalAppData%\Novara` 原样保留，重装自动恢复。
 - 清 bin/obj 后首次编译先 `dotnet restore`（否则 NETSDK1004）。
@@ -784,7 +801,11 @@ Novara/
 | 2.0 | 2026-08-07 | 四大标签页 + 设置页 + 隐私锁；加密存储 / 托盘 / 主题 / 双语 |
 | 3.0 | 2026-08-12 | 桌面便签、全局搜索（Ctrl+K）、AES-256-GCM 升级 + 长密码、五语言、卡片回收站、系统级提醒、全局右键菜单 |
 | 4.0 | 2026-08-18 | 卡片拖拽排序、待办桌面双向同步、日记 MD 导出、API 检测升级、分批渲染 / 崩溃日志 / 数据备份 / 写盘去抖、单元测试工程化 |
-| 5.0 | 2026-08-19 | 记录页重定位（Format 字段 + MD 编辑器）、MCP Agent 接口（14 工具）、Windows Hello 解锁（项目收官） |
+| 5.0 | 2026-08-19 | 记录页重定位（Format 字段 + MD 编辑器）、MCP Agent 接口（14 工具）、Windows Hello 解锁 |
+| 5.1 | 2026-08-29 | MCP 审计日志、自动锁定与立即锁定、SHA-256 导出完整性头 |
+| 5.2 | 2026-08-29 | 加密备份导出/导入（`.novaenc`）、同步锁定死循环根治 |
+| 5.3 | 2026-08-31 | KDF 强化（格式 v3、3,000,000 次迭代）、Agent 权限中心、TOTP、随机生成器、命令面板、数据库健康检查、Host 整包部署 |
+| 6.0 | 2026-09-06 | 动效设计系统、工作区、快速捕获、网络活动指示器、首启导览；五轮全域核验（约 250 项修复）与 MCP 安全加固 |
 
 ---
 

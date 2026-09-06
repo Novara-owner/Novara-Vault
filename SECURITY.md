@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-08-25 · **Applies to:** Novara 5.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-06 · **Applies to:** Novara 6.0 (and earlier versions where noted)
 
 ---
 
@@ -18,9 +18,10 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 5.0 | ✅ Supported | Current release |
+| 6.0 | ✅ Supported | Current release |
+| 5.x | ✅ Supported | Receives critical fixes where feasible |
 | 4.0 | ✅ Supported | Receives critical fixes where feasible |
-| 3.0 | ✅ Supported | Receives critical fixes where feasible |
+| 3.0 | ⚠️ Legacy | Receives critical fixes where feasible |
 | 2.0 | ⚠️ Legacy | Uses the older AES-CBC encryption; **upgrade recommended** (see Section 7) |
 | < 2.0 | ❌ Unsupported | |
 
@@ -73,12 +74,12 @@ When the privacy lock is enabled, Novara encrypts the entire database:
 | Aspect | Detail |
 |--------|--------|
 | Cipher | AES-256-GCM (authenticated encryption), 256-bit key |
-| Key derivation | PBKDF2-SHA256, 100,000 iterations, per-user random 32-byte salt |
-| Password | 6–64 characters; only salted SHA-256 hashes are stored locally (never the plaintext) |
+| Key derivation | PBKDF2-SHA256, **3,000,000 iterations** since format v3 (5.3+; ≈340 ms unlock on the reference machine); per-user random 32-byte salt. v2 databases (100,000 iterations) migrate via a one-time opt-in prompt |
+| Password | 6–64 characters; only a versioned, salted password hash is stored locally — PBKDF2-SHA256 (3,000,000 iterations) since the hash format's second revision, never the plaintext |
 | Authentication | 12-byte random nonce + 16-byte GCM tag — any tampering is detected |
 | Data flow | JSON → GZip compression → AES encryption → on-disk file |
 | File format | Versioned header (`NOVA` magic + version + encryption flag + 16-byte integrity field) + encrypted body |
-| Migration | Legacy v1 (AES-CBC, Novara 2.0) is read-only and auto-migrates to v2 (GCM) after one user confirmation |
+| Migration | Legacy v1 (AES-CBC, Novara 2.0) auto-migrates to v2 (GCM) after one user confirmation; v2 migrates to v3 (hardened KDF) via a one-time opt-in prompt |
 
 **Important:** encryption is **off by default**. Without the privacy lock, the database is a plaintext JSON file (protected only by your Windows account permissions). This is a deliberate design choice so that casual users are never locked out of their own data.
 
@@ -92,7 +93,7 @@ Novara includes several layers to prevent data loss and corruption:
 - **Recycle bin (soft delete)** — deleted cards are recoverable for 7 days, then permanently purged on the next startup.
 - **Rolling local backups** — the built-in backup keeps up to 10 local snapshots you can restore from (4.0+).
 - **Crash logs (local, redacted)** — crash details are written locally (4.0+) for later diagnosis; sensitive values (e.g. API keys) are redacted and they are never auto-uploaded.
-- **Integrity checks** — the export format carries a 16-byte MD5 header; imports are validated, normalized, and rolled back on failure.
+- **Integrity checks** — plaintext exports carry a SHA-256 header (dual-header detection keeps older MD5-headered files importable); encrypted backups are authenticated by GCM; imports are validated, normalized, and rolled back on failure.
 
 ## 6. Anti-brute-force & lockout
 
@@ -105,11 +106,12 @@ Novara includes several layers to prevent data loss and corruption:
 
 | Scenario | Behavior |
 |----------|----------|
-| 2.0 data opened in 3.0/4.0/5.0 | ✅ Read and migrated from AES-CBC (v1) to AES-GCM (v2) after one confirmation |
-| 3.0/4.0/5.0 data opened in 2.0 | ❌ **Not readable** — 2.0 does not understand the GCM format |
-| 3.0 ↔ 4.0 ↔ 5.0 | ✅ Same format (v2 GCM); compatible |
+| 2.0 data opened in 3.0+ | ✅ Read and migrated from AES-CBC (v1) to AES-GCM (v2) after one confirmation |
+| v2 data opened in 5.3+ | ✅ Readable as-is; migrates to v3 (3,000,000-iteration KDF) via a one-time opt-in prompt |
+| v3 data opened in 5.2.0 or earlier | ❌ **Not readable** — older versions do not understand the v3 KDF parameters |
+| v2/v3 data opened in 2.0 | ❌ **Not readable** — 2.0 does not understand the GCM format |
 
-> ⚠️ **Before downgrading or rolling back to 2.0**, export a plaintext backup. Once a database has been migrated to GCM, older versions cannot open it.
+> ⚠️ **Before downgrading or rolling back to 2.0**, export a plaintext backup. Once a database has been migrated to GCM (v2) or v3, older versions cannot open it. The v3 migration dialog states this downgrade limit before you opt in.
 
 ## 8. Application hardening
 
@@ -135,16 +137,18 @@ The optional MCP interface lets an AI agent read and write cards. Its security m
 - **Off by default** — the interface is disabled until you enable it in Settings and copy a token.
 - **Token authentication** — a per-user token, compared in fixed time (`CryptographicOperations.FixedTimeEquals`), passed via `NOVARA_MCP_TOKEN` or `--token`.
 - **Database-unlock gate** — a locked or encrypted database refuses every request; an agent can never read encrypted data without unlocking.
-- **Process whitelist** — the first connection from any client process requires explicit approval, persisted in `McpAllowedProcesses`.
-- **Separate delete permission** — deletion is its own opt-in toggle (`McpDeleteEnabled`).
+- **Per-client approval** — the first connection from any client process requires explicit approval, persisted locally.
+- **Per-client permission matrix** — each approved client holds its own 20-bit matrix (read / create / update / delete across the five data types). New clients start **read-only everywhere except memos**; a mixed (all-types) listing never leaks data from partitions the client cannot read.
+- **Deletion master switch** — deleting requires both the client's own delete bit and a global toggle; the two are AND-ed so flipping one alone cannot enable deletion.
+- **Audit log** — every call, including denied attempts, is recorded locally with process, time, tool, target, and result; fields are length-capped and credential-shaped values are masked.
 - **Sensitive-field redaction** — password/key/token fields are returned as `****`, excluded from search, and protected against relabeling-based extraction.
-- **Architecture** — `NovaraMCP.exe` is a zero-logic stdio frontend; all data access happens inside the running Novara process (the single data authority), never by the agent touching files directly.
+- **Architecture** — `NovaraMCP.exe` is a zero-logic stdio frontend; all data access happens inside the running Novara process (the single data authority), never by the agent touching files directly. Malformed client input answers a spec-compliant error instead of hanging the connection.
 
 The core principle — Novara itself never transmits your data — is preserved. See the Privacy Policy for the data boundary when a cloud-hosted AI client is connected.
 
 ## 11. Future changes
 
-Security hardening continues across releases. Future updates may add further controls to the MCP interface (e.g. scoped tool permissions) and other protections; each release's changelog will list security-relevant changes.
+Security hardening continues across releases. The 6.0 round alone tightened MCP input handling, export/import round-trips, and backup-path validation; future updates will keep narrowing the attack surface. Each release's changelog lists security-relevant changes.
 
 ## 12. Contact
 

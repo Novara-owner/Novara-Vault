@@ -54,7 +54,7 @@ Files in that directory include:
 | File | Purpose |
 |------|---------|
 | `data.novadb` | Your entire database (memos, paths, to-dos, notes, records, settings) as a single file |
-| `security.dat` | Only salted hashes of your lock password (never the password itself); see Section 4 |
+| `security.dat` | A versioned, salted hash of your lock password (PBKDF2-SHA256) — never the password itself; see Section 4 |
 | `lockout.dat` | Lockout state after repeated wrong passwords (failure count and lock expiry) |
 | `language.dat` | A plain-text hint of your selected interface language (needed to show the lock screen in the right language before the database is unlocked) |
 | `stickies.json` | Data used to synchronize desktop sticky notes with the helper process |
@@ -68,12 +68,12 @@ Nothing in this directory is uploaded anywhere. Deleting this directory (or usin
 Encryption in Novara is **optional and turned OFF by default**.
 
 - **Default state:** your database is stored as a plaintext JSON file on your local disk. It is protected by the Windows user account's file permissions, but it is **not encrypted** unless you enable the privacy lock.
-- **When you enable the privacy lock:** the entire database is encrypted with **AES-256-GCM** (authenticated encryption). The encryption key is derived from your password using **PBKDF2-SHA256 with 100,000 iterations** and a per-user random salt. GCM also detects tampering: if the encrypted file is modified, Novara reports it as corrupted instead of silently misreading it.
-- **Password:** the lock password is **6 to 64 characters**. Only salted **SHA-256 hashes** of the password are stored locally — the plaintext password is never written to disk.
+- **When you enable the privacy lock:** the entire database is encrypted with **AES-256-GCM** (authenticated encryption). The encryption key is derived from your password using **PBKDF2-SHA256** with a per-user random salt — **3,000,000 iterations since format v3 (5.3+)**, calibrated so that unlocking takes a noticeable but tolerable fraction of a second. GCM also detects tampering: if the encrypted file is modified, Novara reports it as corrupted instead of silently misreading it.
+- **Password:** the lock password is **6 to 64 characters**. Only a salted, versioned **password hash** (PBKDF2-SHA256 since the hash format's second revision) is stored locally — the plaintext password is never written to disk.
 - **Windows Hello (since 5.0):** you can optionally unlock with Windows Hello biometrics or PIN. This never stores or transmits your biometric data; it delegates the check to the Windows Hello subsystem.
 - **No backdoor, no recovery:** there is deliberately no way to recover a forgotten password. If you forget it, the only option is to erase the database and start over.
 - **Brute-force protection:** after 5 consecutive wrong passwords, unlocking is blocked for 30 minutes. The failure count and lock deadline persist across restarts and use a monotonic clock to resist system-time rollback.
-- **Upgrade path:** databases created by Novara 2.0 used an older AES-CBC format. Novara 3.0 and later can read them and migrate them to the newer GCM format after one confirmation.
+- **Upgrade path:** databases created by Novara 2.0 used an older AES-CBC format. Novara 3.0 and later can read them and migrate them to the newer GCM format after one confirmation. Databases on the pre-5.3 GCM format (100,000-iteration KDF) upgrade to the hardened v3 parameters through a one-time opt-in prompt.
 
 **What encryption does and does not protect:** see the Security Policy (SECURITY.md) for the full threat model. In short, encryption protects your data **at rest** (the file on disk when the app is locked or closed). It does not protect data that is already unlocked in memory, nor does it protect against malware, keyloggers, screen capture, or physical access to your unlocked machine.
 
@@ -104,7 +104,7 @@ This is the **only** way any of your data is sent over the network. If you do no
 Since 5.0, Novara can expose a **local MCP server** so that an AI agent can read and write your cards on your behalf. This is an **opt-in** feature, disabled by default.
 
 - **Novara itself stays offline.** The MCP server is a local process that talks to the running Novara app over a local named pipe. It makes no network requests and sends nothing anywhere by itself.
-- **Access control.** The interface is gated by a token you set, a per-process authorization whitelist (a first connection from any process requires your approval), and the database-unlock state — a locked or encrypted database refuses every request. Deletion has its own separate permission.
+- **Access control.** The interface is gated by a token you set, per-client approval (a first connection from any process requires your approval, and each approved client holds its own read / create / update / delete permission matrix), and the database-unlock state — a locked or encrypted database refuses every request. Deletion requires both the client's own permission bit and a global master switch.
 - **Sensitive-field redaction.** Password, key, and token fields are read back as `****` and are excluded from search results, so an agent cannot casually extract your secrets.
 
 **The one thing to understand about cloud AI.** The MCP server never transmits your data. However, if you connect a **cloud-hosted** AI assistant (for example, an AI app that calls a remote model), then whatever that assistant reads from Novara may be sent by *that AI client* to the AI provider you chose — this is controlled by the AI app and its provider, not by Novara. If you use a **local** model, nothing leaves your machine. Please check the privacy policy of any AI client you connect before granting it access.
@@ -170,7 +170,7 @@ You are in full control at all times:
 - **Recycle bin** — deleted cards go to a recycle bin and are recoverable for 7 days, after which they are permanently removed on the next startup.
 - **Reset / delete** — the in-app "Reset" wipes the database and starts fresh.
 - **Privacy lock** — you can enable, change, or disable encryption at any time from Settings. Disabling it re-saves the database as plaintext.
-- **MCP interface** — you can enable or disable the agent interface, rotate its token, and manage its process whitelist from Settings at any time.
+- **MCP interface** — you can enable or disable the agent interface, rotate its token, and manage per-client approvals and permissions from Settings at any time.
 
 ## 12. What we will never do
 
