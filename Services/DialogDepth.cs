@@ -38,6 +38,8 @@ public static class DialogDepth
             }
             if (scrim == null || dialog == null || !processed.Add(scrim)) continue;
 
+            ApplyBlurScrim(scrim); 
+
             if (dialog.Shadow == null)
             {
                 var shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
@@ -52,6 +54,53 @@ public static class DialogDepth
         }
     }
 
+    
+    
+    
+    private static void ApplyBlurScrim(Grid scrim)
+    {
+        try
+        {
+            
+            
+            if (scrim.Background is Microsoft.UI.Xaml.Media.SolidColorBrush sb && sb.Color.A == 0) return;
+            scrim.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(scrim).Compositor;
+            var blur = new Microsoft.Graphics.Canvas.Effects.GaussianBlurEffect
+            {
+                Name = "Blur",
+                BlurAmount = 6f,
+                BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Soft, 
+                Optimization = Microsoft.Graphics.Canvas.Effects.EffectOptimization.Balanced,
+                Source = new Microsoft.UI.Composition.CompositionEffectSourceParameter("Backdrop"),
+            };
+            var brush = compositor.CreateEffectFactory(blur).CreateBrush();
+            brush.SetSourceParameter("Backdrop", compositor.CreateBackdropBrush());
+            var visual = compositor.CreateSpriteVisual();
+            visual.Brush = brush;
+            visual.Size = new System.Numerics.Vector2((float)scrim.ActualWidth, (float)scrim.ActualHeight);
+            scrim.SizeChanged += (_, e) => visual.Size = new System.Numerics.Vector2((float)e.NewSize.Width, (float)e.NewSize.Height);
+            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(scrim, visual);
+
+            
+            if (scrim.Parent is Grid overlay)
+            {
+                int idx = overlay.Children.IndexOf(scrim);
+                overlay.Children.Insert(idx + 1, new Border
+                {
+                    Background = App.GetBrush("AppSurfaceBrush"),
+                    Opacity = 0.3,
+                    IsHitTestVisible = false,
+                });
+            }
+        }
+        catch
+        {
+            // blur is decorative - fall back to a transparent scrim so the dialog still works
+            scrim.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        }
+    }
+
     private static void OnOverlayVisibilityChanged(DependencyObject d, DependencyProperty p)
     {
         if (((UIElement)d).Visibility == Visibility.Visible) VeilShow();
@@ -62,6 +111,7 @@ public static class DialogDepth
     /// one level, e.g. LockScreen's ForgotOverlay). Shadow only.</summary>
     public static void AttachPair(Grid scrim, Border dialog, bool driveChrome = true)
     {
+        ApplyBlurScrim(scrim); // 9.3#5
         if (dialog.Shadow == null)
         {
             var shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
@@ -76,6 +126,9 @@ public static class DialogDepth
 
     
     public static void VeilHide() => App.MainWindow?.VeilHide();
+
+    
+    public static void VeilHideImmediate() => App.MainWindow?.VeilHideImmediate();
 
     
     public static void VeilClear() => App.MainWindow?.VeilClear();

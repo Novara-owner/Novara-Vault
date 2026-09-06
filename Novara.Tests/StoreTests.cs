@@ -146,6 +146,39 @@ public class NovaraStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_NullElementsInsideLists_NormalizedNotCorrupted()
+    {
+        // N3-18: a hand-crafted/external file with null elements inside lists ("todoCards":[null],
+        // "fields":[null], "subTexts":[null]) used to NRE the per-item normalization and mislabel a
+        // healthy file as Corrupted. Null elements must be dropped and null field props become "".
+        var path = DbPath;
+        var db = new NovaraDatabase();
+        db.MemoEntries.Add(null!);
+        db.MemoEntries.Add(new MemoEntry { Name = "正常", Type = "账户", Fields = new List<EntryField> { null!, new() { Label = null!, Value = null! } } });
+        db.TodoCards.Add(null!);
+        db.TodoCards.Add(new TodoCard { Title = "待办", SubTexts = new List<string> { null!, "子项" } });
+        var json = JsonSerializer.SerializeToUtf8Bytes(db, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        using (var fs = File.Create(path))
+        {
+            var header = new byte[22];
+            BitConverter.TryWriteBytes(header.AsSpan(0, 4), 0x41564F4E);
+            header[4] = 1; header[5] = 0; // v1 + plaintext
+            System.Security.Cryptography.MD5.HashData(json).CopyTo(header, 6);
+            fs.Write(header); fs.Write(json);
+        }
+
+        var store = new NovaraStore(path);
+        Assert.Equal(LoadStatus.Ok, store.Load().Status);
+        var loaded = store.Database;
+        Assert.Single(loaded.MemoEntries);
+        Assert.Single(loaded.MemoEntries[0].Fields);
+        Assert.Equal("", loaded.MemoEntries[0].Fields[0].Label);
+        Assert.Single(loaded.TodoCards);
+        Assert.Equal(new List<string> { "子项" }, loaded.TodoCards[0].SubTexts);
+    }
+
+    [Fact]
     public void Encrypted_RoundTrip_ReturnsData()
     {
         var path = DbPath;

@@ -119,6 +119,41 @@ public class KdfHardeningTests : IDisposable
     
 
     [Fact]
+    public void SecurityHealth_WrongLengthDeriveSalt_Damaged()
+    {
+        
+        
+        PasswordService.SetBaseDir(_dir);
+        try
+        {
+            var json = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["HashSalt"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                ["DeriveSalt"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)), 
+                ["Hash"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+                ["Version"] = 2,
+            });
+            File.WriteAllText(Path.Combine(_dir, "security.dat"), json);
+            Assert.Equal(PasswordService.SecurityHealth.Damaged, PasswordService.CheckSecurityHealth());
+        }
+        finally { PasswordService.SetBaseDir(null); }
+    }
+
+    [Fact]
+    public void SecurityHealth_IntactFile_Ok()
+    {
+        PasswordService.SetBaseDir(_dir);
+        try
+        {
+            Assert.True(PasswordService.Create("pw-123"));
+            Assert.Equal(PasswordService.SecurityHealth.Ok, PasswordService.CheckSecurityHealth());
+        }
+        finally { PasswordService.SetBaseDir(null); }
+    }
+
+    
+
+    [Fact]
     public void SecurityFile_VerifyLegacyFormat_Then_AutoUpgrade()
     {
         

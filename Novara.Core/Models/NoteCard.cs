@@ -15,4 +15,5 @@ public class NoteCard
     public int Order { get; set; } 
     public DateTime? ReminderAt { get; set; }   
     public DateTime? ReminderSetAt { get; set; } 
+    public string WorkspaceId { get; set; } = ""; // 9.3 Workspace: owning workspace id (empty = unassigned)
 }

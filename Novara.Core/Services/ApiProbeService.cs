@@ -1,4 +1,10 @@
 
+
+
+
+
+
+
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -107,13 +113,25 @@ public static class ApiProbeService
     {
         if (string.IsNullOrWhiteSpace(baseUrl)) return ("generic", "bearer", "/v1/models", "data");
         var u = baseUrl.Trim().TrimEnd('/');
-        foreach (var (hostKeys, tpl) in VendorMatrix)
-            foreach (var hk in hostKeys)
-                if (u.Contains(hk, StringComparison.OrdinalIgnoreCase))
-                    return (tpl.Name, tpl.AuthKind, NormalizeEndpoint(u, tpl.Endpoint), tpl.SuccessField);
+        // N4-46: match the HOST with domain-suffix semantics instead of substring-matching the whole
+        // URL - a path like /localhost-proxy used to be misread as Ollama and a query value like
+        // ?x=api.openai.com as OpenAI. Subdomain forms (open.bigmodel.cn) still match bigmodel.cn.
+        var host = ExtractHost(u);
+        if (host != null)
+            foreach (var (hostKeys, tpl) in VendorMatrix)
+                foreach (var hk in hostKeys)
+                    if (host.Equals(hk, StringComparison.OrdinalIgnoreCase)
+                        || host.EndsWith("." + hk, StringComparison.OrdinalIgnoreCase))
+                        return (tpl.Name, tpl.AuthKind, NormalizeEndpoint(u, tpl.Endpoint), tpl.SuccessField);
         
         
         return ("generic", "bearer", NormalizeEndpoint(u, "/v1/models"), "data");
+    }
+
+    private static string? ExtractHost(string url)
+    {
+        var candidate = url.Contains("://", StringComparison.Ordinal) ? url : "https://" + url;
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ? uri.Host : null;
     }
 
     private static string NormalizeEndpoint(string baseUrl, string path)
@@ -256,9 +274,16 @@ public static class ApiProbeService
     }
 
     /// <summary>Probe a base URL + key, returning a structured report. Pure of UI; no key leakage.
-    /// An optional handler injects a mock transport for offline testing.</summary>
-    public static async System.Threading.Tasks.Task<ApiProbeReport> ProbeAsync(string? url, string? key, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
+    /// An optional handler injects a mock transport for offline testing. N4-47: callers that already
+    /// report their own network-activity session (the diagnose pipeline) pass recordActivity:false -
+    /// the nested Begin/End made ONE user action show two trail entries.</summary>
+    public static async System.Threading.Tasks.Task<ApiProbeReport> ProbeAsync(string? url, string? key, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null, bool recordActivity = true)
     {
+        // 9.3: network activity transparency - report to the title-bar badge / trail.
+        if (recordActivity) NetworkActivityService.Begin("NetActivity_Kind_Probe", url ?? "");
+        bool activityOk = false; // N3-06: the trail panel renders Success as a green check - feed it the real outcome, not a hardcoded true
+        try
+        {
         var sw = Stopwatch.StartNew();
         var report = new ApiProbeReport();
 
@@ -279,6 +304,10 @@ public static class ApiProbeService
 
         using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(15) } : null;
         var client = ownedClient ?? Http;
+        // N2-34: N1-51 parity for the injected-handler path - the default injected handler forwards
+        // the key across hosts on redirects; the shared production Http already disables them.
+        if (handler is System.Net.Http.SocketsHttpHandler ssh) ssh.AllowAutoRedirect = false;
+        else if (handler is System.Net.Http.HttpClientHandler hch) hch.AllowAutoRedirect = false;
         url = NormalizeBaseUrl(url);
         var (vendor, authKind, endpoint, field) = RecognizeVendor(url);
         report.Vendor = vendor;
@@ -289,22 +318,25 @@ public static class ApiProbeService
         
         
         var baseUrl = url.Trim().TrimEnd('/');
-        var attempts = new List<(string Ep, string Mode)>();
-        if (vendor != "generic") attempts.Add((endpoint, authKind));
+        
+        
+        
+        var attempts = new List<(string Ep, string Mode, string Field)>();
+        if (vendor != "generic") attempts.Add((endpoint, authKind, field));
         foreach (var ep in GenericEndpoints)
         {
             
             var full = NormalizeEndpoint(baseUrl, ep);
             foreach (var mode in new[] { "bearer", "raw" })
                 if (!attempts.Any(a => a.Ep.Equals(full, StringComparison.OrdinalIgnoreCase) && a.Mode == mode))
-                    attempts.Add((full, mode));
+                    attempts.Add((full, mode, "data"));
         }
 
         const int TotalBudgetMs = 16000; 
         const int PerAttemptMs = 15000;  
 
         ApiProbeReport? last = null;
-        foreach (var (epUrl, mode) in attempts)
+        foreach (var (epUrl, mode, attemptField) in attempts)
         {
             var remaining = TotalBudgetMs - sw.ElapsedMilliseconds;
             
@@ -319,8 +351,8 @@ public static class ApiProbeService
             int attemptBudgetMs = (int)Math.Min(remaining, PerAttemptMs);
             attemptCts.CancelAfter(TimeSpan.FromMilliseconds(attemptBudgetMs));
 
-            var r = await ProbeEndpointAsync(client, epUrl, key, mode, field, attemptCts.Token);
-            if (r.Status == ApiProbeStatus.Success) return Finalize(r, vendor, mode, epUrl, sw, key);
+            var r = await ProbeEndpointAsync(client, epUrl, key, mode, attemptField, attemptCts.Token);
+            if (r.Status == ApiProbeStatus.Success) { activityOk = true; return Finalize(r, vendor, mode, epUrl, sw, key); }
             if (ct.IsCancellationRequested) return Cancelled(sw);
 
             
@@ -343,6 +375,11 @@ public static class ApiProbeService
         
         if (last != null) return Finalize(last, vendor, last.Protocol, last.Endpoint, sw, key);
         return Finalize(new ApiProbeReport { Status = ApiProbeStatus.Unknown, Detail = "endpoint" }, vendor, "bearer", baseUrl + GenericEndpoints[0], sw, key);
+        }
+        finally
+        {
+            if (recordActivity) NetworkActivityService.End(activityOk); // N3-06 / N4-47
+        }
     }
 
     
@@ -363,7 +400,17 @@ public static class ApiProbeService
 
     /// <summary>Manual retry: probe with the user-chosen protocol against /v1/models (no vendor auto-detection
     /// or fallback chain - the user explicitly picked the scheme).</summary>
+    // 9.3: wrapper reports the activity; core body untouched.
     public static async System.Threading.Tasks.Task<ApiProbeReport> ProbeWithProtocolAsync(
+        string? url, string? key, string protocol, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
+    {
+        NetworkActivityService.Begin("NetActivity_Kind_Protocol", url ?? "");
+        bool activityOk = false; // N3-06
+        try { var r = await ProbeWithProtocolAsyncCore(url, key, protocol, ct, handler); activityOk = r.Status == ApiProbeStatus.Success; return r; }
+        finally { NetworkActivityService.End(activityOk); }
+    }
+
+    private static async System.Threading.Tasks.Task<ApiProbeReport> ProbeWithProtocolAsyncCore(
         string? url, string? key, string protocol, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
     {
         var sw = Stopwatch.StartNew();
@@ -380,6 +427,9 @@ public static class ApiProbeService
         };
         using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(15) } : null;
         var client = ownedClient ?? Http;
+        // N2-34: N1-51 parity for the injected-handler path (same as ProbeAsync above).
+        if (handler is System.Net.Http.SocketsHttpHandler ssh2) ssh2.AllowAutoRedirect = false;
+        else if (handler is System.Net.Http.HttpClientHandler hch2) hch2.AllowAutoRedirect = false;
         // N4A-04: this manual-retry path bypassed ProbeAsync's per-attempt budget - with
         // ResponseHeadersRead the body read ignores HttpClient.Timeout, so a server that stalls after
         // the response header hung the dialog forever. Give it the same single-attempt cap.

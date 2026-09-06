@@ -6,5 +6,26 @@
   <Project Path="Novara.csproj">
     <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="Debug|Any CPU" Project="x64" />
+    <Platform Solution="Release|Any CPU" Project="x64" />
+  </Project>
+  <Project Path="Novara.Core\Novara.Core.csproj">
+    <Platform Solution="*|x64" Project="Any CPU" />
+    <Platform Solution="Debug|Any CPU" Project="Any CPU" />
+    <Platform Solution="Release|Any CPU" Project="Any CPU" />
+  </Project>
+  <Project Path="Novara.Tests\Novara.Tests.csproj">
+    <Platform Solution="*|x64" Project="Any CPU" />
+    <Platform Solution="Debug|Any CPU" Project="Any CPU" />
+    <Platform Solution="Release|Any CPU" Project="Any CPU" />
+  </Project>
+  <Project Path="StickNoteHost\StickNoteHost.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug|Any CPU" Project="x64" />
+    <Platform Solution="Release|Any CPU" Project="x64" />
+  </Project>
+  <Project Path="NovaraMCP\NovaraMCP.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug|Any CPU" Project="x64" />
+    <Platform Solution="Release|Any CPU" Project="x64" />
   </Project>
 </Solution>

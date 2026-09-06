@@ -13,10 +13,14 @@ public class AppSettings
     
     public int AutoLockSeconds { get; set; }
     public bool AutoLockOnSystemLock { get; set; }
+    
+    public bool QuickCaptureEnabled { get; set; } = false;
+    public string QuickCaptureHotkey { get; set; } = "CtrlShiftN";
     public bool GcmMigrationRejected { get; set; } 
     public bool KdfMigrationRejected { get; set; } // 9.2#7: user declined the one-time v2->v3 KDF-hardening migration; symmetric with GcmMigrationRejected
     public string AppLanguage { get; set; } = ""; // zh-CN / en-US / zh-TW / ko-KR / ja-JP; empty = follow system (contract, see 2.1)
     public bool HasCompletedWelcome { get; set; }
+    public bool HasCompletedCarousel { get; set; } // N4-01: 9.3 promo carousel "played once" flag - independent from HasCompletedWelcome (whose write happens before MaybeShowWelcomeCarousel and made the old gate unreachable in Release)
     public bool WelcomeOnLaunch { get; set; } = true; 
     
     public bool BackupEnabled { get; set; }
@@ -35,6 +39,8 @@ public class AppSettings
     
     public List<McpClientPermRecord> McpClientPermissions { get; set; } = new();
     public bool McpPermMigrated { get; set; } 
+    
+    public List<WorkspaceItem> Workspaces { get; set; } = new();
 }
 
 /// <summary>9.2#5: one authorized client's fine-grained permission set (McpPermissions flag bits).</summary>

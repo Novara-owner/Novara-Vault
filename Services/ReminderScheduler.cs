@@ -1,6 +1,11 @@
 
+
+
+
+
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 
 namespace Novara.Services;
@@ -24,8 +29,11 @@ public static class ReminderScheduler
     public static void Schedule(Guid id, DateTime due)
     {
         var taskName = TaskPrefix + id;
-        var st = due.ToString("HH:mm");
-        var sd = due.ToString("yyyy/MM/dd"); 
+        
+        
+        
+        var st = due.ToString("t", CultureInfo.CurrentCulture);
+        var sd = due.ToString("d", CultureInfo.CurrentCulture);
         var tr = "\\\"" + GetExecutablePath() + "\\\" --reminder " + id;
         var args = "/create /tn \"" + taskName + "\" /tr \"" + tr + "\" /sc once /st " + st + " /sd " + sd + " /f";
         Run(args);
@@ -47,6 +55,10 @@ public static class ReminderScheduler
                 UseShellExecute = false,
             });
             p?.WaitForExit(5000);
+            // N4P-08: surface failures (locked task folder, ACL) instead of swallowing the exit
+            // code silently - scheduling stays best-effort, but the reason is now diagnosable.
+            if (p is { HasExited: true } && p.ExitCode != 0)
+                Debug.WriteLine($"ReminderScheduler 失败(exit {p.ExitCode}): schtasks {args}");
         }
         catch (Exception ex)
         {

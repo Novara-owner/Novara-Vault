@@ -43,6 +43,16 @@ public class CryptoServiceTests
         Assert.Throws<System.IO.InvalidDataException>(() =>
             CryptoService.Decrypt(new byte[] { 1, 2, 3 }, "password", Salt));
     }
+
+    [Fact]
+    public void Gcm_ExactlyFramingOnly_NoCipherByte_ThrowsInvalidData()
+    {
+        
+        
+        var framingOnly = new byte[12 + 16]; // 28B, zero ciphertext
+        Assert.Throws<System.IO.InvalidDataException>(() =>
+            CryptoService.DecryptGcm(framingOnly, "password", Salt));
+    }
 }
 
 public class ApiProbeServiceTests
@@ -189,5 +199,32 @@ public class SearchFuzzyTests
     {
         Assert.True(SearchFuzzy.MatchesQuery("api glm models", "glm api"));
         Assert.False(SearchFuzzy.MatchesQuery("api glm models", "glm novara"));
+    }
+
+    [Fact]
+    public void UltraLongQueryWord_DoesNotOverflowStack()
+    {
+        
+        
+        var text = new string('a', 1000) + "novara " + new string('b', 1000);
+        var ultraLong = new string('a', 3000) + new string('c', 3000); // 6000 chars > 512 & > text
+        Assert.False(SearchFuzzy.ContainsFuzzy(text, ultraLong));
+
+        var wordLongerThanText = new string('x', 200);
+        Assert.False(SearchFuzzy.ContainsFuzzy("short-text-here", wordLongerThanText)); 
+
+        
+        Assert.True(SearchFuzzy.ContainsFuzzy("the quick brown fox", "brown fox"));
+    }
+
+    [Fact]
+    public void SameCharRun_DoesNotExplodeBacktracking()
+    {
+        
+        
+        
+        var word = new string('a', 30);
+        Assert.False(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "b", word)); 
+        Assert.True(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "ca", word)); 
     }
 }

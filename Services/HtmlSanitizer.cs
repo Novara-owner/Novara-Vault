@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using AngleSharp.Html.Parser;
 using DomNode = AngleSharp.Dom.INode;
 using DomElement = AngleSharp.Dom.IElement;
@@ -85,7 +90,7 @@ public static class HtmlSanitizer
                     var nodes = el.ChildNodes.ToList();
                     foreach (var n in nodes) parent?.InsertBefore(n, el);
                     el.Remove();
-                    foreach (var n in nodes) SanitizeNode(n, depth + 1);
+                    foreach (var n in nodes) SanitizePromoted(n, depth + 1);
                     continue;
                 }
                 SanitizeAttrs(el);
@@ -96,6 +101,32 @@ public static class HtmlSanitizer
                 node.RemoveChild(child);
             }
         }
+    }
+
+    /// <summary>
+    /// N3-02: a node promoted by the unwrap branch must go through the exact same element checks
+    /// (tag whitelist + attribute sanitization) as any other element. Passing it straight to
+    /// SanitizeNode only processed its CHILDREN, leaving on*/javascript: attributes on the promoted
+    /// element itself (e.g. &lt;x&gt;&lt;a href="javascript:..."&gt; survived a single pass).
+    /// Disallowed promoted tags are unwrapped recursively, mirroring the main loop.
+    /// </summary>
+    private static void SanitizePromoted(DomNode node, int depth)
+    {
+        if (node is not DomElement el) return; // text nodes need nothing
+        if (depth >= MaxDepth) { el.Remove(); return; }
+        var tag = el.LocalName;
+        if (DropTags.Contains(tag)) { el.Remove(); return; }
+        if (!AllowedTags.Contains(tag))
+        {
+            var parent = el.ParentElement;
+            var nodes = el.ChildNodes.ToList();
+            foreach (var n in nodes) parent?.InsertBefore(n, el);
+            el.Remove();
+            foreach (var n in nodes) SanitizePromoted(n, depth + 1);
+            return;
+        }
+        SanitizeAttrs(el);
+        SanitizeNode(el, depth + 1);
     }
 
     private static void SanitizeAttrs(DomElement el)
@@ -112,20 +143,68 @@ public static class HtmlSanitizer
                 var v = attr.Value?.Trim() ?? "";
                 if (!IsSafeUrl(v)) el.RemoveAttribute(attr.Name);
             }
+            else if (name == "style")
+            {
+                
+                var v = SanitizeStyle(attr.Value ?? "");
+                if (string.IsNullOrEmpty(v)) el.RemoveAttribute(attr.Name);
+                else el.SetAttribute("style", v);
+            }
         }
+    }
+
+    /// <summary>
+    
+    
+    /// </summary>
+    private static string SanitizeStyle(string style)
+    {
+        if (string.IsNullOrWhiteSpace(style)) return "";
+        var kept = new System.Collections.Generic.List<string>();
+        foreach (var raw in style.Split(';'))
+        {
+            var idx = raw.IndexOf(':');
+            if (idx <= 0) continue;
+            var prop = raw[..idx].Trim().ToLowerInvariant();
+            var val = raw[(idx + 1)..].Trim();
+            if (val.Contains("url(", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("expression", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("@import", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (prop is "color" or "background-color")
+            {
+                var safe = System.Text.RegularExpressions.Regex.Replace(val, "[^A-Za-z0-9#(),.%\\s-]", "");
+                if (safe.Trim().Length > 0) kept.Add(prop + ":" + safe.Trim());
+            }
+            else if (prop == "text-align")
+            {
+                if (val is "left" or "right" or "center" or "justify") kept.Add(prop + ":" + val);
+            }
+            
+        }
+        return string.Join(";", kept);
     }
 
     private static bool IsSafeUrl(string url)
     {
         if (string.IsNullOrEmpty(url)) return false;
+        if (url.StartsWith("//")) return false; 
         if (url.StartsWith('/') || url.StartsWith('#') || url.StartsWith("./") || url.StartsWith("../")) return true;
         if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-            return url.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)
-                && (url.Contains("png", StringComparison.OrdinalIgnoreCase)
-                    || url.Contains("jpeg", StringComparison.OrdinalIgnoreCase)
-                    || url.Contains("jpg", StringComparison.OrdinalIgnoreCase)
-                    || url.Contains("gif", StringComparison.OrdinalIgnoreCase)
-                    || url.Contains("webp", StringComparison.OrdinalIgnoreCase));
+        {
+            
+            
+            const string prefix = "data:image/";
+            if (!url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            var rest = url.Substring(prefix.Length);
+            var end = rest.IndexOfAny(new[] { ';', ',' });
+            var mime = end < 0 ? rest : rest.Substring(0, end);
+            return mime.Equals("png", StringComparison.OrdinalIgnoreCase)
+                || mime.Equals("jpeg", StringComparison.OrdinalIgnoreCase)
+                || mime.Equals("jpg", StringComparison.OrdinalIgnoreCase)
+                || mime.Equals("gif", StringComparison.OrdinalIgnoreCase)
+                || mime.Equals("webp", StringComparison.OrdinalIgnoreCase);
+        }
         var idx = url.IndexOf(':');
         if (idx < 0) return true;
         return AllowedSchemes.Contains(url[..idx]);

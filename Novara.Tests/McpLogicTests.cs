@@ -35,6 +35,22 @@ public class McpLogicTests
     }
 
     [Fact]
+    public void ReadMemo_RedactsEmailPassword_Cvv_AndTotp() // N3-01: the three UI labels that were missing from SensitiveLabels
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateMemo(db, "钱包", "银行卡", "4111", new List<McpFieldInput>
+        {
+            new() { Label = "邮箱密码", Value = "mail-secret", CanCopy = true },
+            new() { Label = "CVV", Value = "123", CanCopy = true },
+            new() { Label = "TOTP", Value = "JBSWY3DPEHPK3PXP", CanCopy = false }
+        }, null, null);
+
+        var view = McpLogic.ReadItem(db, "memo", id);
+
+        Assert.All(view.Fields!, f => { Assert.Equal("****", f.Value); Assert.True(f.Redacted); });
+    }
+
+    [Fact]
     public void UpdateMemo_CanAddSensitiveField_ButCannotModifyExisting()
     {
         var db = NewDb();
@@ -104,6 +120,22 @@ public class McpLogicTests
         var db = NewDb();
         var id = McpLogic.CreateDiary(db, "文档", "内容", null);
         Assert.Equal("markdown", McpLogic.ReadItem(db, "diary", id).Format);
+    }
+
+    [Fact]
+    public void UpdateDiary_NoopDoesNotBumpModifiedAt_AndRejectsEmptyContent()
+    {
+        // N3-26: a no-op update (id only / identical values) must not push the entry to the top of
+        // "recently modified"; empty content is rejected like UpdateTodo/UpdateNote.
+        var db = NewDb();
+        var id = McpLogic.CreateDiary(db, "文档", "内容", "markdown");
+        var before = DateTime.Now.AddHours(-1);
+        db.DiaryItems.First(d => d.Id == id).ModifiedAt = before;
+
+        McpLogic.UpdateDiary(db, id, "文档", "内容"); // identical values -> no change
+        Assert.Equal(before, db.DiaryItems.First(d => d.Id == id).ModifiedAt);
+
+        Assert.Throws<McpError>(() => McpLogic.UpdateDiary(db, id, "文档", ""));
     }
 
     [Fact]

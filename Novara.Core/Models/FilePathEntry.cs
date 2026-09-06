@@ -11,4 +11,5 @@ public class FilePathEntry
     public DateTime CreatedAt { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime DeletedAt { get; set; }
+    public string WorkspaceId { get; set; } = ""; // 9.3 Workspace: owning workspace id (empty = unassigned)
 }

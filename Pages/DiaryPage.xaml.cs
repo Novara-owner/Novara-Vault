@@ -408,7 +408,7 @@ public sealed partial class DiaryPage : Page
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = DiaryList.Children.IndexOf(card);
+        _dropIndex = _dragOriginIndex = CountVisibleBefore(card); // N2-06: origin in VISIBLE-slot space (same space as ComputeDropIndex)
 
         App.StopCardEntrance(card); 
         card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
@@ -455,7 +455,9 @@ public sealed partial class DiaryPage : Page
         foreach (var child in DiaryList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            if (child is FrameworkElement fe)
+            
+            
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(DiaryList).TransformPoint(new Point(0, 0)).Y;
                 if (ptInList.Y < top + fe.ActualHeight / 2) break;
@@ -468,7 +470,12 @@ public sealed partial class DiaryPage : Page
     private void UpdateDropIndicator(int index)
     {
         
-        index = Math.Max(index, _diaries.Count(d => d.IsPinned));
+        
+        int pinnedVisible = 0;
+        foreach (var child in DiaryList.Children)
+            if (child is Border b && b.Visibility == Visibility.Visible && b.Tag is DiaryEntry d && d.IsPinned)
+                pinnedVisible++;
+        index = Math.Max(index, pinnedVisible);
         
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
@@ -555,26 +562,59 @@ public sealed partial class DiaryPage : Page
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
 
-        int curIdx = DiaryList.Children.IndexOf(card);
-        if (curIdx != dropIndex)
+        // N2-06: dropIndex is in "slot space including the dragged card" (ComputeDropIndex counts it);
+        // convert to the without-self space, then translate back to a physical Children index.
+        int curVisible = CountVisibleBefore(card); // current visible slot, excluding the card itself
+        int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
+        if (dst != curVisible)
         {
             DiaryList.Children.Remove(card);
-            if (curIdx < dropIndex) dropIndex--;
-            DiaryList.Children.Insert(dropIndex, card);
+            DiaryList.Children.Insert(PhysicalIndexForVisibleSlot(dst), card);
         }
 
         PersistDiaryOrder();
     }
 
+    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> (its visible slot).</summary>
+    private int CountVisibleBefore(Border card)
+    {
+        int n = 0;
+        foreach (var child in DiaryList.Children)
+        {
+            if (ReferenceEquals(child, card)) break;
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible) n++;
+        }
+        return n;
+    }
+
+    /// <summary>N2-06: physical Children index where a card must land to become the
+    /// <paramref name="visibleSlot"/>-th visible card (past the end when the slot exceeds them).</summary>
+    private int PhysicalIndexForVisibleSlot(int visibleSlot)
+    {
+        int seen = 0;
+        for (int i = 0; i < DiaryList.Children.Count; i++)
+        {
+            if (DiaryList.Children[i] is FrameworkElement fe && fe.Visibility == Visibility.Visible)
+            {
+                if (seen == visibleSlot) return i;
+                seen++;
+            }
+        }
+        return DiaryList.Children.Count;
+    }
+
+    
+    
     
     private void PersistDiaryOrder()
     {
         int order = 0;
         foreach (var child in DiaryList.Children)
-        {
-            if (child is Border b && b.Tag is DiaryEntry d && !d.IsPinned)
+            if (child is Border b && b.Visibility == Visibility.Visible && b.Tag is DiaryEntry d && !d.IsPinned)
                 d.Order = ++order;
-        }
+        foreach (var child in DiaryList.Children)
+            if (child is Border b2 && b2.Visibility != Visibility.Visible && b2.Tag is DiaryEntry h && !h.IsPinned)
+                h.Order = ++order;
         App.Store?.SaveAsync();
     }
 
@@ -605,7 +645,7 @@ public sealed partial class DiaryPage : Page
         foreach (var c in DiaryList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
         if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; }
         EmptyHint.Visibility = Visibility.Visible;
-        EmptyHint.Text = _currentFilter switch
+        EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch
         {
             "diary" => App.GetString("Diary_Filter_Diary_Empty"),
             "document" => App.GetString("Diary_Filter_Document_Empty"),
@@ -619,12 +659,21 @@ public sealed partial class DiaryPage : Page
     public void SetFilter(string filter)
     {
         _currentFilter = filter;
+        ApplyCardFilters();
+    }
+
+    
+    public void ApplyCardFilters()
+    {
+        string wsId = App.CurrentWorkspaceId;
+        bool wsActive = !string.IsNullOrEmpty(wsId);
         foreach (var child in DiaryList.Children)
         {
             if (child is not Border b || b.Tag is not DiaryEntry d) continue;
             bool isDoc = d.Format == "markdown";
-            bool show = filter == "all" || (filter == "document" && isDoc) || (filter == "diary" && !isDoc);
-            b.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            bool typeMatch = _currentFilter == "all" || (_currentFilter == "document" && isDoc) || (_currentFilter == "diary" && !isDoc);
+            bool wsMatch = !wsActive || d.WorkspaceId == wsId;
+            b.Visibility = (typeMatch && wsMatch) ? Visibility.Visible : Visibility.Collapsed;
         }
         UpdateEmptyHint();
     }
@@ -721,10 +770,20 @@ public sealed partial class DiaryPage : Page
                 !string.Equals(ext, ".markdown", StringComparison.OrdinalIgnoreCase)) return; // whitelist
 
             if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge")); return; } 
-            var content = await File.ReadAllTextAsync(filePath);
             
-            var bad = 0; foreach (var ch in content) if (ch == '�') bad++;
-            if (bad >= Math.Max(4, content.Length / 100)) { App.ShowToast(App.GetString("Diary_Import_Fail")); return; }
+            
+            string content;
+            try
+            {
+                var bytes = await File.ReadAllBytesAsync(filePath);
+                content = new System.Text.UTF8Encoding(false, true).GetString(bytes);
+                if (content.Length > 0 && content[0] == '\uFEFF') content = content.Substring(1); 
+            }
+            catch (System.Text.DecoderFallbackException)
+            {
+                App.ShowToast(App.GetString("Diary_Import_Fail"));
+                return;
+            }
             // NH11: empty file -> nothing to create (matches the editor's empty-doc rule)
             if (string.IsNullOrWhiteSpace(content)) return;
             var title = Path.GetFileNameWithoutExtension(filePath);
@@ -732,7 +791,7 @@ public sealed partial class DiaryPage : Page
             // NH11+N2H-4: enforce the 120 non-whitespace-char title cap, matching the editor's count
             title = DiaryEditorPage.EnforceTitleLength(title);
 
-            UpsertDiary(new DiaryEntry { Title = title, Content = content, Format = "markdown" });
+            UpsertDiary(new DiaryEntry { Title = title, Content = content, Format = "markdown", WorkspaceId = App.CurrentWorkspaceId });
         }
         catch (Exception ex)
         {
@@ -871,9 +930,15 @@ public sealed partial class DiaryPage : Page
         {
             entry.Id = Guid.NewGuid().ToString(); entry.CreatedAt = DateTime.Now; entry.ModifiedAt = DateTime.Now;
             
-            if (all != null && all.Any(d => !d.IsDeleted && d.Order > 0))
+            
+            
+            var wsId = App.CurrentWorkspaceId;
+            bool inView(DiaryEntry d) => string.IsNullOrEmpty(wsId) || d.WorkspaceId == wsId;
+            if (all != null && all.Any(d => !d.IsDeleted && inView(d) && d.Order > 0))
             {
-                foreach (var d in all) if (!d.IsPinned && d.Order > 0) d.Order++;
+                
+                
+                foreach (var d in all) if (!d.IsDeleted && !d.IsPinned && inView(d) && d.Order > 0) d.Order++;
                 entry.Order = 1;
             }
             App.Store?.Database.DiaryItems.Add(entry); _diaries.Add(entry); // E1-01: new diary MUST land in the db (else it vanishes on restart)
@@ -889,7 +954,8 @@ public sealed partial class DiaryPage : Page
             
             foreach (var d in _diaries)
             {
-                if (d != entry && d.IsPinned && d.Format == entry.Format)
+                
+                if (d != entry && d.IsPinned && d.Format == entry.Format && d.WorkspaceId == entry.WorkspaceId)
                 {
                     d.IsPinned = false;
                     d.PinnedAt = null;
@@ -909,9 +975,13 @@ public sealed partial class DiaryPage : Page
         if (_diaryPinIcons.TryGetValue(entry, out var pv))
             pv.Visibility = entry.IsPinned ? Visibility.Visible : Visibility.Collapsed;
         
-        
-        if (_loadCts != null) RefreshDiaryList();
-        else ReorderDiaryCards();
+        if (entry.IsPinned)
+        {
+            
+            
+            if (_loadCts != null) RefreshDiaryList();
+            else ReorderDiaryCards();
+        }
     }
 
     private void ToggleStar(DiaryEntry entry)
@@ -1128,9 +1198,7 @@ public sealed partial class DiaryPage : Page
 
     private void OpenDeleteConfirmDialog()
     {
-        DeleteConfirmDialogTransform.ScaleX = 0.92;
-        DeleteConfirmDialogTransform.ScaleY = 0.92;
-        DeleteConfirmDialogTransform.TranslateY = 20;
+        DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
         DeleteConfirmDialog.Opacity = 0;
         DeleteConfirmScrim.Opacity = 0;
         DeleteConfirmOverlay.Visibility = Visibility.Visible;

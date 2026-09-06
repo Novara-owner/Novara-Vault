@@ -6,6 +6,7 @@
     <RootNamespace>Novara.Core</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>6.0.0</Version> <!-- N4-53: keep the solution-wide version aligned (main/Host/MCP are 6.0.0) -->
   </PropertyGroup>
 
   <ItemGroup>

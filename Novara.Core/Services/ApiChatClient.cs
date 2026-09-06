@@ -74,7 +74,15 @@ public static class ApiChatClient
         if (string.Equals(vendor, "Google Gemini", StringComparison.OrdinalIgnoreCase)) return ApiChatProtocol.Gemini;
         // Xiaomi MiMo exposes an Anthropic-compatible base (https://api.xiaomimimo.com/anthropic);
         // detect it by path so the vendor-matrix host match doesn't force OpenAI onto it.
-        if (baseUrl?.Contains("/anthropic", StringComparison.OrdinalIgnoreCase) == true) return ApiChatProtocol.Anthropic;
+        // N3-31: the path heuristic must NOT override a vendor already recognized by the matrix -
+        // a user reverse-proxy URL that merely CONTAINS "/anthropic" (e.g. /anthropic-relay) would
+        // otherwise misclassify an OpenAI-compatible endpoint as Anthropic. Gate it to vendors that
+        // legitimately rely on the path signal: Xiaomi MiMo, unknown/generic relays and null vendor.
+        if (string.Equals(vendor, "Xiaomi MiMo", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrEmpty(vendor) || string.Equals(vendor, "generic", StringComparison.OrdinalIgnoreCase))
+        {
+            if (baseUrl?.Contains("/anthropic", StringComparison.OrdinalIgnoreCase) == true) return ApiChatProtocol.Anthropic;
+        }
         return ApiChatProtocol.OpenAI;
     }
 
@@ -133,7 +141,12 @@ public static class ApiChatClient
             var amp = rest.IndexOf('&');
             apiVersion = amp >= 0 ? rest.Substring(0, amp) : rest;
         }
-        return baseUrl + "/openai/deployments/" + Uri.EscapeDataString(model) + "/chat/completions?api-version=" + apiVersion;
+        // N2-36: a base already ending in /openai (e.g. https://xx.openai.azure.com/openai) would
+        // double up to /openai/openai/deployments/... and 404 - strip it before re-appending.
+        var root = baseUrl.EndsWith("/openai", StringComparison.OrdinalIgnoreCase)
+            ? baseUrl.Substring(0, baseUrl.Length - "/openai".Length)
+            : baseUrl;
+        return root + "/openai/deployments/" + Uri.EscapeDataString(model) + "/chat/completions?api-version=" + apiVersion;
     }
 
     /// <summary>Append a path, avoiding a duplicated prefix when the base URL already ends with it
@@ -222,7 +235,10 @@ public static class ApiChatClient
             {
                 usage.PromptTokens = GetInt(gu, "promptTokenCount");
                 usage.CompletionTokens = GetInt(gu, "candidatesTokenCount");
+                // N3-29: Gemini sometimes omits totalTokenCount - fall back to prompt+completion instead
+                // of reporting a misleading 0 (display only; the completion-token budget is unaffected).
                 usage.TotalTokens = GetInt(gu, "totalTokenCount");
+                if (usage.TotalTokens == 0) usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens;
                 usage.HasUsage = true;
             }
         }
@@ -323,17 +339,28 @@ public static class ApiChatClient
 
     // ---- Network pipeline ----
 
-    // ---- Diagnostic logging: every chat request is appended to %LOCALAPPDATA%\Novara\relay-probe.log ----
+    // ---- Diagnostic logging: every chat request is appended to %LOCALAPPDATA%\{DataDirName}\relay-probe.log ----
     private static readonly object LogLock = new();
+    // N3-34: honor CoreEnv.DataDirName (Novara vs Novara-Dev) - the hardcoded "Novara" path made
+    // Debug builds write into the Release data directory, polluting it with probe logs.
     private static readonly string LogPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Novara", "relay-probe.log");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), CoreEnv.DataDirName, "relay-probe.log");
 
     private static void DebugLog(string line)
     {
         try
         {
             lock (LogLock)
+            {
+                
+                try
+                {
+                    var fi = new System.IO.FileInfo(LogPath);
+                    if (fi.Exists && fi.Length > 1_000_000) System.IO.File.Delete(LogPath);
+                }
+                catch { }
                 System.IO.File.AppendAllText(LogPath, DateTime.Now.ToString("HH:mm:ss.fff") + " " + line + Environment.NewLine);
+            }
         }
         catch { }
     }
@@ -355,7 +382,7 @@ public static class ApiChatClient
             AllowAutoRedirect = false, // security: never forward the key across hosts
             ConnectTimeout = TimeSpan.FromSeconds(5),
         };
-        return new HttpClient(h) { Timeout = TimeSpan.FromSeconds(30) };
+        return new HttpClient(h) { Timeout = TimeSpan.FromSeconds(120) }; // N2-33: 30s capped the WHOLE chat (think chains alone exceed it) - 120s covers reasoning models + slow relays; the probe's own 600s budget still governs totals
     }
 
     /// <summary>Send one minimal chat request and collect content + usage + latency (optionally streamed for OpenAI).</summary>
@@ -375,28 +402,45 @@ public static class ApiChatClient
             result.Status = ApiProbeStatus.Unknown; result.Detail = "missing-key"; result.LatencyMs = sw.ElapsedMilliseconds; return result;
         }
 
-        using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(30) } : null;
+        
+        if (handler is SocketsHttpHandler ssh) ssh.AllowAutoRedirect = false;
+        else if (handler is HttpClientHandler hch) hch.AllowAutoRedirect = false;
+        using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(120) } : null; // N2-33: 120s (see CreateHttpClient)
         var client = ownedClient ?? Http;
         baseUrl = ApiProbeService.NormalizeBaseUrl(baseUrl!);
         var (vendor, authKind, modelsEndpoint, _) = ApiProbeService.RecognizeVendor(baseUrl);
         var protocol = DetectProtocol(vendor, baseUrl);
         var endpoint = ResolveChatEndpoint(baseUrl, vendor, modelsEndpoint, protocol, request.Model);
 
+        
+        
+        
+        System.Threading.CancellationTokenSource? chatCts = null;
         try
         {
+            chatCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
+            chatCts.CancelAfter(TimeSpan.FromSeconds(120)); // N2-33: 30s killed legit think-heavy chats mid-stream; 120s covers reasoning models, the probe's 600s budget still bounds totals
             using var req = BuildChatHttpRequest(endpoint, key, authKind, protocol, request);
             if (request.Stream && protocol == ApiChatProtocol.OpenAI)
-                await RunOpenAiStreamAsync(client, req, ct, sw, result, key);
+                await RunOpenAiStreamAsync(client, req, chatCts.Token, sw, result, key);
             else
-                await RunNonStreamAsync(client, req, protocol, ct, sw, result, key);
+                await RunNonStreamAsync(client, req, protocol, chatCts.Token, sw, result, key);
         }
         catch (System.OperationCanceledException) when (ct.IsCancellationRequested)
         {
             result.Status = ApiProbeStatus.Unknown; result.Detail = "cancelled";
         }
+        catch (System.OperationCanceledException) when (chatCts != null && chatCts.IsCancellationRequested)
+        {
+            result.Status = ApiProbeStatus.Unknown; result.Detail = "timeout";
+        }
         catch (System.Exception ex)
         {
             result.Status = ApiProbeStatus.NetworkError; result.Detail = ApiProbeService.ClassifyNetworkError(ex);
+        }
+        finally
+        {
+            chatCts?.Dispose();
         }
         result.LatencyMs = sw.ElapsedMilliseconds;
         DebugLog($"CHAT {endpoint} | model={request.Model} | prompt={Truncate(request.Prompt, 60)} | ok={result.Ok} | status={result.Status} | detail={result.Detail} | usage(p={result.Usage.PromptTokens},c={result.Usage.CompletionTokens},t={result.Usage.TotalTokens},cache={result.Usage.CacheReadInputTokens?.ToString() ?? "-"}) | raw={Truncate(result.RawBody, 300)}");
@@ -443,7 +487,7 @@ public static class ApiChatClient
     {
         using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         CollectHeaders(resp, result);
-        var body = await resp.Content.ReadAsStringAsync(ct);
+        var body = await ReadBodyCapped(resp, ct);
         result.RawBody = MaskKeyInText(body, key); // N5A-03: the raw channel must honor the same masking as Detail
 
         if (resp.StatusCode == HttpStatusCode.OK)
@@ -469,7 +513,7 @@ public static class ApiChatClient
         CollectHeaders(resp, result);
         if (resp.StatusCode != HttpStatusCode.OK)
         {
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            var body = await ReadBodyCapped(resp, ct);
             result.RawBody = MaskKeyInText(body, key); // N5A-03: the raw channel must honor the same masking as Detail
             result.Status = ApiProbeService.MapStatus(resp.StatusCode);
             var (parsedStatus, parsedDetail) = ApiProbeService.ParseErrorBody(body);
@@ -489,6 +533,7 @@ public static class ApiChatClient
         {
             var line = await reader.ReadLineAsync(ct);
             if (line == null) break;
+            if (raw.Length > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit"); // N5-S14-04
             raw.AppendLine(line);
             if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
             var payload = line.Substring(5).Trim();
@@ -512,6 +557,26 @@ public static class ApiChatClient
                 result.TokensPerSecond = usage.CompletionTokens * 1000.0 / (total - result.TtftMs.Value);
         }
         result.Ok = true; result.Status = ApiProbeStatus.Success;
+    }
+
+    
+    
+    private const int MaxResponseBodyBytes = 32 * 1024 * 1024;
+
+    private static async System.Threading.Tasks.Task<string> ReadBodyCapped(System.Net.Http.HttpResponseMessage resp, System.Threading.CancellationToken ct)
+    {
+        var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var ms = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        long total = 0;
+        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+        {
+            total += read;
+            if (total > MaxResponseBodyBytes) throw new InvalidOperationException("response body exceeds the 32MB safety limit");
+            ms.Write(buffer, 0, read);
+        }
+        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
     }
 
     private static void CollectHeaders(HttpResponseMessage resp, ApiChatResult result)

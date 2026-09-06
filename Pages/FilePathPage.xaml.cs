@@ -40,6 +40,7 @@ public sealed partial class FilePathPage : Page
     private bool _confirming; // E3-10: one-shot guard for the create confirm button - double-click during the hide animation created duplicate paths
     private bool _entrancePlayed; // E4-16: play the entrance animation only once (page instances are cached by MainWindow)
     private bool _renderInProgress; // N4F-01: true while the chunked fill is still adding cards to the UI
+    private System.Threading.CancellationTokenSource? _renderCts; // N4-32: chunked-render cancel token (SearchPage parity)
     private bool _persistAfterRender; // N4F-01: a persistence request arrived during the fill window - rerun it after the fill
     private DispatcherTimer? _autoCheckTimer;
     private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new(); // N4F-05: per-box CTS (E5-24 pattern) - a single shared CTS truncated the first flash when a second box flashed
@@ -73,7 +74,11 @@ public sealed partial class FilePathPage : Page
         KeyDown += Page_KeyDown;
         Loaded += (_, _) => { LoadFromStore(); // E4-16: entrance animation now fires inside LoadFromStore after chunked render completes
         CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => CheckAllPaths(); _autoCheckTimer.Start(); } };
-        Unloaded += (_, _) => { _autoCheckTimer?.Stop(); _autoCheckTimer = null; NewPathOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _editingPathCard = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); // N4F-05: per-box map cleanup (was single _flashCts)
+        Unloaded += (_, _) => { _pathCheckCts?.Cancel(); 
+            
+            
+            _autoCheckTimer?.Stop(); _autoCheckTimer = null; NewPathOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _editingPathCard = null; _deleteConfirming = false; 
+         foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); // N4F-05: per-box map cleanup (was single _flashCts)
             
             if (_dragCard != null && _cardBaseBorderColor.TryGetValue(_dragCard, out var baseColor)) { _dragCard.BorderBrush = new SolidColorBrush(baseColor); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; _dragCard.RenderTransform = new TranslateTransform(); }
             _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll(); DialogDepth.VeilClear(); };
@@ -98,6 +103,10 @@ public sealed partial class FilePathPage : Page
 
         
         _renderInProgress = true; // N4F-01: PersistOrderAndSave during the fill window would rebuild db from the partial UI
+        // N4-32: SearchPage-parity cancellation - a page switch mid-render must stop the remaining
+        // low-priority batches from building cards into a detached PathList.
+        _renderCts?.Cancel();
+        var renderCts = _renderCts = new System.Threading.CancellationTokenSource();
         try
         {
             await ChunkedRender.RunAsync(entries.Count, 8, DispatcherQueue, (s, e) =>
@@ -113,12 +122,14 @@ public sealed partial class FilePathPage : Page
                     PathList.Children.Add(card);
                     if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
                 }
-            });
+            }, renderCts.Token);
         }
+        catch (OperationCanceledException) { return; } // N4-32: page switched mid-render - stop quietly (SearchPage parity)
         finally { _renderInProgress = false; }
+        _renderCts?.Dispose(); _renderCts = null; // N5-S8-08
 
         _entrancePlayed = true; // P0-1: cascade already played per-card above
-        UpdateEmptyHint();
+        ApplyCardFilters();
         CheckAllPaths(); 
         if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); } // N4F-01: run the deferred rebuild now that every entry has a card
     }
@@ -135,9 +146,17 @@ public sealed partial class FilePathPage : Page
         foreach (var child in PathList.Children)
             if (child is Border b && _cardIds.TryGetValue(b, out var id) && byId.TryGetValue(id, out var e))
                 ordered.Add(e);
+        // N2-01: MCP writes land directly in the db without UI cards - keep db entries that are
+        // neither on a card nor soft-deleted across the rebuild (P0, same as the memo page).
+        var pathKnownIds = ordered.Select(x => x.Id).Concat(softDeleted.Select(x => x.Id)).ToHashSet();
+        var pathOrphans = byId.Values.Where(x => !x.IsDeleted && !pathKnownIds.Contains(x.Id)).ToList();
+        // N2-16: an entry can be both on a card AND soft-deleted (MCP deleted it without a UI
+        // refresh) - it must land in the db exactly once.
+        var pathSeen = ordered.Select(x => x.Id).ToHashSet();
         db.PathBackupItems.Clear();
         db.PathBackupItems.AddRange(ordered);
-        db.PathBackupItems.AddRange(softDeleted); // keep soft-deleted items (trash)
+        db.PathBackupItems.AddRange(softDeleted.Where(x => !pathSeen.Contains(x.Id))); // keep soft-deleted items (trash)
+        db.PathBackupItems.AddRange(pathOrphans);
         App.Store?.SaveAsync();
     }
 
@@ -158,9 +177,38 @@ public sealed partial class FilePathPage : Page
 
     private void UpdateEmptyHint()
     {
-        bool empty = PathList.Children.Count == 0;
-        EmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        if (empty) FloatInHint();
+        bool anyVisible = false;
+        foreach (var c in PathList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
+        if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; }
+        EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : App.GetString("Path_Empty_Tip");
+        EmptyHint.Visibility = Visibility.Visible;
+        FloatInHint();
+    }
+
+    
+    public void ApplyCardFilters()
+    {
+        string wsId = App.CurrentWorkspaceId;
+        bool wsActive = !string.IsNullOrEmpty(wsId);
+        var db = App.Store?.Database;
+        // N3-38: pre-index WorkspaceId per card id once - the per-card FirstOrDefault over the whole
+        
+        Dictionary<Guid, string>? wsById = null;
+        if (wsActive && db != null)
+        {
+            wsById = new Dictionary<Guid, string>();
+            foreach (var p in db.PathBackupItems) wsById[p.Id] = p.WorkspaceId ?? "";
+        }
+        foreach (var child in PathList.Children)
+        {
+            if (child is not Border b) continue;
+            bool wsMatch = true;
+            // Missing id => hidden under a workspace filter (mirrors the original e != null check).
+            if (wsById != null && _cardIds.TryGetValue(b, out var id))
+                wsMatch = wsById.TryGetValue(id, out var cw) && cw == wsId;
+            b.Visibility = wsMatch ? Visibility.Visible : Visibility.Collapsed;
+        }
+        UpdateEmptyHint();
     }
 
     private void FloatInHint()
@@ -222,9 +270,7 @@ public sealed partial class FilePathPage : Page
             NewPathNoteBox.Text = "";
             NewPathDialogTitle.Text = App.GetString("Path_New_Title");
         }
-        NewPathDialogTransform.ScaleX = 0.92;
-        NewPathDialogTransform.ScaleY = 0.92;
-        NewPathDialogTransform.TranslateY = 20;
+        NewPathDialogTransform.ScaleX = 0.94; NewPathDialogTransform.ScaleY = 0.94; NewPathDialogTransform.TranslateY = 24;
         NewPathDialog.Opacity = 0;
         NewPathScrim.Opacity = 0;
         NewPathOverlay.Visibility = Visibility.Visible;
@@ -315,14 +361,33 @@ public sealed partial class FilePathPage : Page
 
     // UI-2 (2026-08-11): live validation for the new-path dialog - confirm stays disabled until
     // name is non-blank AND the path is non-blank and actually exists.
-    private void UpdateNewPathConfirmState()
+    private System.Threading.CancellationTokenSource? _npCheckCts;
+
+    private async void UpdateNewPathConfirmState()
     {
         string name = NewPathNameBox.Text.Trim();
         string path = NewPathInputBox.Text.Trim().Trim('"');
         bool valid = !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(path);
         
-        if (_editingPathCard == null)
-            valid = valid && (Directory.Exists(path) || File.Exists(path));
+        
+        
+        if (_editingPathCard == null && valid)
+        {
+            _npCheckCts?.Cancel();
+            var cts = _npCheckCts = new System.Threading.CancellationTokenSource();
+            var exists = false;
+            try
+            {
+                exists = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    try { return Directory.Exists(path) || File.Exists(path); }
+                    catch { return false; }
+                });
+            }
+            catch (System.OperationCanceledException) { return; }
+            if (cts.IsCancellationRequested) return;
+            valid = exists;
+        }
         
         if (valid && _editingPathCard != null && !PathContentChanged())
             valid = false;
@@ -408,14 +473,14 @@ public sealed partial class FilePathPage : Page
         {
             card = BuildPathCard(name, path, note, PathList.Children.Count);
 
-            var entry = new FilePathEntry { Name = name, Path = path, Note = note, CreatedAt = DateTime.Now };
+            var entry = new FilePathEntry { Name = name, Path = path, Note = note, CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
             App.Store?.Database.PathBackupItems.Add(entry);
             _cardIds[card] = entry.Id;
             PathList.Children.Insert(0, card);
             App.PlayCardEntrance(card);
             ReorderCards();
         }
-        UpdateEmptyHint();
+        ApplyCardFilters();
         
         if (!string.IsNullOrWhiteSpace(path)) SetPathStatus(card, Directory.Exists(path) || File.Exists(path));
         PersistOrderAndSave();
@@ -582,11 +647,28 @@ public sealed partial class FilePathPage : Page
         {
             if (Directory.Exists(path))
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // N2-42: no associated program (ERROR_NO_ASSOCIATION) - CrashLogger swallowed the
+                    // exception and the click did nothing at all; surface a toast instead.
+                    App.ShowToast(App.GetString("OpenFile_Fail"));
+                }
             }
             else
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{path}\"", UseShellExecute = true });
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{path}\"", UseShellExecute = true });
+                }
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    App.ShowToast(App.GetString("OpenFile_Fail"));
+                    System.Diagnostics.Debug.WriteLine($"explorer /select failed: {ex.Message}");
+                }
             }
         };
         rightPanel.Children.Add(openBtn);
@@ -612,8 +694,10 @@ public sealed partial class FilePathPage : Page
         {
             var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
             pkg.SetText(path);
-            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg);
-            App.ShowToast(App.GetString("Common_Toast_Copied"));
+            
+            // a locked clipboard used to bubble into CrashLogger with zero user feedback
+            try { Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg); App.ShowToast(App.GetString("Common_Toast_Copied")); }
+            catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); }
         };
         rightPanel.Children.Add(copyBtn);
 
@@ -667,9 +751,7 @@ public sealed partial class FilePathPage : Page
 
     private void ShowDeleteConfirmDialog()
     {
-        DeleteConfirmDialogTransform.ScaleX = 0.92;
-        DeleteConfirmDialogTransform.ScaleY = 0.92;
-        DeleteConfirmDialogTransform.TranslateY = 20;
+        DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
         DeleteConfirmDialog.Opacity = 0;
         DeleteConfirmScrim.Opacity = 0;
         DeleteConfirmOverlay.Visibility = Visibility.Visible;
@@ -747,7 +829,7 @@ public sealed partial class FilePathPage : Page
         _deleteConfirming = true;
         {
             _starredCards.Remove(_pendingDeleteCard);
-            if (_pinnedCard == _pendingDeleteCard) _pinnedCard = null;
+            if (_pinnedCard == _pendingDeleteCard) { _pinnedCard = null; SyncPinEntity(); } 
             _pinIcons.Remove(_pendingDeleteCard);
             _starIcons.Remove(_pendingDeleteCard);
             _pathCardData.Remove(_pendingDeleteCard);
@@ -766,7 +848,7 @@ public sealed partial class FilePathPage : Page
             App.PlayCardRemoval(PathList, delCard, _dragging, () =>
             {
                 PersistOrderAndSave();
-                UpdateEmptyHint();
+                ApplyCardFilters();
                 App.ShowToast(App.GetString("Common_Toast_Deleted"));
             });
         }
@@ -890,7 +972,7 @@ public sealed partial class FilePathPage : Page
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = PathList.Children.IndexOf(card);
+        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, PathList); // N2-06: origin in visible-slot space
 
         App.StopCardEntrance(card); 
         card.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
@@ -937,7 +1019,8 @@ public sealed partial class FilePathPage : Page
         foreach (var child in PathList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            if (child is FrameworkElement fe)
+            
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(PathList).TransformPoint(new Point(0, 0)).Y;
                 if (ptInList.Y < top + fe.ActualHeight / 2) break;
@@ -950,7 +1033,8 @@ public sealed partial class FilePathPage : Page
     private void UpdateDropIndicator(int index)
     {
         
-        index = Math.Max(index, _pinnedCard != null ? 1 : 0);
+        
+        index = Math.Max(index, _pinnedCard != null && _pinnedCard.Visibility == Visibility.Visible ? 1 : 0);
         
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
@@ -1039,15 +1123,49 @@ public sealed partial class FilePathPage : Page
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
 
-        int curIdx = PathList.Children.IndexOf(card);
-        if (curIdx != dropIndex)
+        // N2-06: dropIndex is in "slot space including the dragged card" - convert to the
+        // without-self space, then translate back to a physical Children index (hidden cards stay put).
+        int curVisible = CountVisibleBeforeIn(card, PathList);
+        int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
+        if (dst != curVisible)
         {
             PathList.Children.Remove(card);
-            if (curIdx < dropIndex) dropIndex--;
-            PathList.Children.Insert(dropIndex, card);
+            PathList.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, PathList), card);
         }
 
         PersistOrderAndSave(); 
+    }
+
+    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> in
+    /// <paramref name="container"/> (visible-slot space matching ComputeDropIndex; the drop
+    /// indicator itself is excluded).</summary>
+    private int CountVisibleBeforeIn(FrameworkElement card, Panel container)
+    {
+        int n = 0;
+        foreach (var child in container.Children)
+        {
+            if (ReferenceEquals(child, card)) break;
+            if (ReferenceEquals(child, _dropIndicator)) continue;
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible) n++;
+        }
+        return n;
+    }
+
+    /// <summary>N2-06: physical Children index where a card must land to become the
+    /// <paramref name="visibleSlot"/>-th visible card (call AFTER removing the dragged card).</summary>
+    private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
+    {
+        int seen = 0;
+        var children = container.Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is FrameworkElement fe && fe.Visibility == Visibility.Visible)
+            {
+                if (seen == visibleSlot) return i;
+                seen++;
+            }
+        }
+        return children.Count;
     }
 
     private void SetPathStatus(Border card, bool isValid)
@@ -1203,8 +1321,8 @@ public sealed partial class FilePathPage : Page
             ShowDeleteConfirmDialog();
         };
 
-        menu.Items.Add(starItem);
         menu.Items.Add(pinItem);
+        menu.Items.Add(starItem); 
         menu.Items.Add(checkItem);
         menu.Items.Add(editItem);
         menu.Items.Add(sep);
@@ -1252,16 +1370,43 @@ public sealed partial class FilePathPage : Page
         return menu;
     }
 
-    private void CheckAllPaths()
+    private System.Threading.CancellationTokenSource? _pathCheckCts;
+
+    private async void CheckAllPaths()
     {
+        
+        
+        _pathCheckCts?.Cancel();
+        _pathCheckCts?.Dispose();
+        var cts = _pathCheckCts = new System.Threading.CancellationTokenSource();
+        var ct = cts.Token;
+
+        var targets = new List<(Border Card, string Path)>();
         foreach (var child in PathList.Children)
+            if (child is Border card && card.Visibility == Visibility.Visible
+                && _pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
+                targets.Add((card, data.path));
+        if (targets.Count == 0) return;
+
+        var results = new List<(Border Card, bool IsValid)>();
+        try
         {
-            if (child is Border card && _pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
+            await System.Threading.Tasks.Task.Run(() =>
             {
-                var isValid = Directory.Exists(data.path) || File.Exists(data.path);
-                SetPathStatus(card, isValid);
-            }
+                foreach (var (card, path) in targets)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    bool isValid;
+                    try { isValid = Directory.Exists(path) || File.Exists(path); }
+                    catch { isValid = false; } 
+                    results.Add((card, isValid));
+                }
+            });
         }
+        catch (System.OperationCanceledException) { return; }
+        if (ct.IsCancellationRequested) return;
+        foreach (var (card, isValid) in results)
+            if (PathList.Children.Contains(card)) SetPathStatus(card, isValid); 
     }
 
     private GeometryGroup MakeGroup(string[] paths)

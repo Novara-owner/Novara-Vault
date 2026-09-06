@@ -1,4 +1,7 @@
 
+
+
+
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -35,17 +38,20 @@ public sealed class McpPipeClient
     /// broken-pipe retry-once logic keeps working.</summary>
     private static string? ReadLineWithTimeout(System.IO.StreamReader reader, int seconds)
     {
-        var task = reader.ReadLineAsync();
+        
+        
+        
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         try
         {
-            if (!task.Wait(TimeSpan.FromSeconds(seconds)))
-                throw new TimeoutException($"主进程响应超时（{seconds} 秒无应答）"); 
-            return task.Result;
+            return reader.ReadLineAsync(cts.Token).GetAwaiter().GetResult();
         }
-        catch (AggregateException ae) when (ae.GetBaseException() is IOException io)
+        catch (OperationCanceledException)
         {
-            throw io; // let Call()'s retry-once handle broken pipes
+            
+            throw new TimeoutException($"主进程响应超时（{seconds} 秒无应答）");
         }
+        
     }
 
     public string Call(string method, JsonObject? args)
@@ -65,7 +71,16 @@ public sealed class McpPipeClient
                     ["params"] = (args ?? new JsonObject()).DeepClone()
                 };
                 _writer!.WriteLine(req.ToJsonString());
-                var line = ReadLineWithTimeout(_reader!, 60) ?? throw new McpForwardError("主进程无响应");
+                // N2-32: an EOF right after a successful write sits in the same race window as a
+                // broken pipe (server closed between our write and its reply) - reset and retry
+                
+                var line = ReadLineWithTimeout(_reader!, 60);
+                if (line == null)
+                {
+                    if (attempt >= 1) throw new McpForwardError("主进程无响应");
+                    ResetConnection();
+                    continue;
+                }
                 var resp = JsonNode.Parse(line) as JsonObject ?? throw new McpForwardError("响应无效");
                 if (resp["ok"]?.GetValue<bool>() == true)
                     return resp["result"]?.ToJsonString() ?? "null";

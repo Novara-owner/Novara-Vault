@@ -17,7 +17,7 @@ namespace Novara.Pages;
 /// <summary>
 /// Global search page (3.0-4.5): Ctrl+K opens this page. The search box is an exact copy of
 /// the memo/path page one (capsule + magnifier + cancel-x + Enter-to-search). Results are
-/// matched entries from all four tabs rendered as uniform cards (no icon, no source tag):
+/// matched entries from all four tabs rendered as uniform cards (kind icon on the right):
 /// memo shows name + first info (+ group name on the right), path shows name + path,
 /// todo shows name + main todo, note shows name + single-line content, diary shows
 /// name + created/modified times. Clicking a card jumps to its page and flashes the target card.
@@ -43,12 +43,13 @@ public sealed partial class SearchPage : Page
         new("new_note", "Menu_New_Note", IconData.Note[0] + " " + IconData.Note[1]),
         new("new_diary", "Menu_New_Diary", IconData.NewDiary),
         new("new_document", "Diary_New_Document", IconData.Document),
-        new("open_settings", "Setting_Title_Page", IconData.Settings[0] + " " + IconData.Settings[1]),
+        new("open_settings", "Setting_Title_Page", string.Join(" ", IconData.Settings)), // N5-S15-02: full 4-path glyph, same as MainWindow (2 paths left the center hollow)
         new("open_trash", "Trash_Title", IconData.Delete),
         new("lock_now", "Tray_LockNow", IconData.Lock), // 9.3: owner-provided padlock glyph (icon-bbox-check passed)
     };
     private readonly List<PaletteCmd> _cmdMatched = new(); // currently filtered command rows (keyboard navigation source)
     private int _cmdIndex; // highlighted row index within _cmdMatched
+    private bool _wasPaletteMode; // N2-48: last TextChanged pass rendered palette rows (stale-card cleanup on leave)
     private bool PaletteMode => SearchBox.Text?.StartsWith(">") == true;
 
     private static readonly string SearchGlyphPath = IconData.Search[0] + " " + IconData.Search[1]; // full magnifier = circle + handle
@@ -68,7 +69,15 @@ public sealed partial class SearchPage : Page
         {
             UpdateCancelButtonVisibility();
             UpdateModeIcon();
-            if (PaletteMode) { RenderCommands(); return; }
+            if (PaletteMode) { _wasPaletteMode = true; RenderCommands(); return; }
+            // N2-48: leaving palette mode (backspacing past ">") must clear the stale command cards -
+            // they lingered until the next Enter-run search otherwise.
+            if (_wasPaletteMode)
+            {
+                _wasPaletteMode = false;
+                ResultPanel.Children.Clear();
+                ShowBlankHint();
+            }
             if (string.IsNullOrWhiteSpace(SearchBox.Text))
                 ShowBlankHint();
         };
@@ -228,6 +237,7 @@ public sealed partial class SearchPage : Page
             _cmdIndex = 0;
             ShowNoResultHint();
             EmptyHintText.Text = App.GetString("Cmd_NoMatch");
+            EmptyHintIconBox.Visibility = Visibility.Collapsed; 
             return;
         }
         if (_cmdIndex >= _cmdMatched.Count) _cmdIndex = _cmdMatched.Count - 1; // keep the highlight in range while filtering
@@ -303,6 +313,7 @@ public sealed partial class SearchPage : Page
 
     private void FilterButton_Click(object sender, RoutedEventArgs e)
     {
+        if (PaletteMode) return; 
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var activeBrush = App.GetBrush("AppTextPrimaryBrush");
         var normalBrush = App.GetBrush("AppTextSecondaryBrush");
@@ -359,10 +370,14 @@ public sealed partial class SearchPage : Page
         // before RootFrame.Content switches) - so hide the x / show the blank hint explicitly instead.
         UpdateCancelButtonVisibility();
         ResultPanel.Children.Clear();
+        _items.Clear(); // N4-10: RefreshResults treats a non-empty _items as "already searched" - stale cards
+        // from the previous session would render under a changed filter on the next visit (page instance is cached)
         _currentFilter = "all";
         _currentKey = "";
         _cmdIndex = 0;
         _cmdMatched.Clear();
+        _wasPaletteMode = false; // N3-55: leave palette mode on reset - otherwise the next TextChanged pass
+        // with a non-">" first char redundantly re-clears an already-empty panel (harmless, but stale state)
         UpdateModeIcon(); // TextChanged may not fire while detached - restore the magnifier explicitly
         UpdateFilterButton();
         ShowBlankHint();
@@ -394,7 +409,7 @@ public sealed partial class SearchPage : Page
 
         foreach (var e in db.MemoEntries.Where(x => !x.IsDeleted))
         {
-            var sub = !string.IsNullOrWhiteSpace(e.KeyInfo) ? e.KeyInfo : (e.Fields.Count > 0 ? e.Fields[0].Value : "");
+            var sub = !string.IsNullOrWhiteSpace(e.KeyInfo) ? e.KeyInfo : (e.Fields.Count > 0 ? (e.Fields[0]?.Value ?? "") : ""); 
             var text = (e.Name + " " + e.KeyInfo + " " + string.Join(" ", e.Fields.Where(f => f != null).Select(f => f.Label + " " + f.Value))).ToLowerInvariant();
             _index.Add(new SearchItem("memo", e.Id.ToString(), e.Name, sub, e.CreatedAt, "", text));
         }
@@ -428,10 +443,14 @@ public sealed partial class SearchPage : Page
                 _items.Add(it);
 
         
+        var sortWords = key.Split(' ', StringSplitOptions.RemoveEmptyEntries); 
         _items.Sort((a, b) =>
         {
-            bool ta = a.Title.IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
-            bool tb = b.Title.IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+            
+            var titleA = a.Title ?? "";
+            var titleB = b.Title ?? "";
+            bool ta = sortWords.Any(w => titleA.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
+            bool tb = sortWords.Any(w => titleB.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
             if (ta != tb) return ta ? -1 : 1;
             return b.Time.CompareTo(a.Time);
         });
@@ -512,8 +531,8 @@ public sealed partial class SearchPage : Page
     }
 
     /// <summary>
-    /// Uniform result card, no icon / no source tag:
-    /// row1 = name (highlighted), row2 = kind-specific info (memo first info, path, main todo,
+    /// Uniform result card: row1 = kind icon (right, AppPrimaryButtonBrush) + name (highlighted),
+    /// row2 = kind-specific info (memo first info, path, main todo,
     /// single-line note content, diary created+modified times); right side = memo group name + star/pin badges.
     /// </summary>
     private Border BuildResultCard(SearchItem it, string key)
@@ -561,23 +580,44 @@ public sealed partial class SearchPage : Page
     private static TextBlock BuildHighlightText(string text, string key, double size, Windows.UI.Text.FontWeight weight, Brush baseBrush)
     {
         var tb = new TextBlock { FontSize = size, TextWrapping = TextWrapping.Wrap };
+        text ??= ""; // N4-11: explicit "Name":null in a hand-edited/import file deserializes to null (store normalization does not cover Name/Title) - IndexOf would NRE mid-render
         if (string.IsNullOrEmpty(key))
         {
             tb.Text = text;
             tb.Foreground = baseBrush;
             return tb;
         }
-        int idx = text.IndexOf(key, StringComparison.OrdinalIgnoreCase);
-        if (idx < 0)
+        
+        var words = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var hits = new List<(int Start, int Len)>();
+        foreach (var w in words)
+        {
+            int pos = 0;
+            while ((pos = text.IndexOf(w, pos, StringComparison.OrdinalIgnoreCase)) >= 0)
+            {
+                hits.Add((pos, w.Length));
+                pos += w.Length;
+            }
+        }
+        if (hits.Count == 0)
         {
             tb.Text = text;
             tb.Foreground = baseBrush;
             return tb;
         }
-        tb.Inlines.Add(new Run { Text = text.Substring(0, idx), Foreground = baseBrush });
-        tb.Inlines.Add(new Run { Text = text.Substring(idx, Math.Min(key.Length, text.Length - idx)), Foreground = App.GetBrush("AppTextPrimaryBrush"), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        if (idx + key.Length < text.Length)
-            tb.Inlines.Add(new Run { Text = text.Substring(idx + key.Length), Foreground = baseBrush });
+        hits.Sort((x, y) => x.Start != y.Start ? x.Start.CompareTo(y.Start) : y.Len.CompareTo(x.Len)); 
+        var brand = App.GetBrush("AppTextPrimaryBrush");
+        int cur = 0;
+        foreach (var h in hits)
+        {
+            if (h.Start < cur) continue; 
+            if (h.Start > cur)
+                tb.Inlines.Add(new Run { Text = text.Substring(cur, h.Start - cur), Foreground = baseBrush });
+            tb.Inlines.Add(new Run { Text = text.Substring(h.Start, Math.Min(h.Len, text.Length - h.Start)), Foreground = brand, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            cur = h.Start + h.Len;
+        }
+        if (cur < text.Length)
+            tb.Inlines.Add(new Run { Text = text.Substring(cur), Foreground = baseBrush });
         return tb;
     }
 

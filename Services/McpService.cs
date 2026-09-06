@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using System.IO;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -77,7 +82,7 @@ public static class McpService
                 }, CancellationToken.None);
             }
             catch (OperationCanceledException) { break; }
-            catch { }
+            catch { Thread.Sleep(500); } // N4-41: pipe CONSTRUCTION failure (name held/ACL) - same NM5 backoff as the wait, no full-speed spin
             finally { pipe?.Dispose(); }
         }
     }
@@ -90,8 +95,8 @@ public static class McpService
             using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 4096, leaveOpen: true)
             { AutoFlush = true, NewLine = "\n" };
 
-            var helloLine = reader.ReadLine();
-            if (helloLine == null) return;
+            var helloLine = ReadLineWithTimeout(reader, TimeSpan.FromSeconds(10));
+            if (helloLine == null) return; 
             var hello = JsonSerializer.Deserialize<HelloMsg>(helloLine, JsonOpts);
             var helloResp = Authorize(hello);
             writer.WriteLine(JsonSerializer.Serialize(helloResp, JsonOpts));
@@ -102,8 +107,8 @@ public static class McpService
 
             while (!ct.IsCancellationRequested)
             {
-                var line = reader.ReadLine();
-                if (line == null) break;
+                var line = ReadLineWithTimeout(reader, TimeSpan.FromSeconds(60));
+                if (line == null) break; 
                 // NM14: one malformed line must not kill the whole session - skip and keep serving.
                 try
                 {
@@ -112,12 +117,33 @@ public static class McpService
                     var resp = Execute(req, clientPath);
                     writer.WriteLine(JsonSerializer.Serialize(resp, JsonOpts));
                 }
-                catch (System.Text.Json.JsonException) { continue; }
+                catch (System.Text.Json.JsonException)
+                {
+                    // N3-25: an unparseable line previously got NO response - the agent sat through
+                    // the full 60s read timeout before erroring. Fail fast with an explicit error.
+                    try
+                    {
+                        writer.WriteLine(JsonSerializer.Serialize(new RespMsg
+                        {
+                            Id = 0, Ok = false, // id unknowable on a parse failure (JSON-RPC convention)
+                            Error = new RespError { Message = "请求不是合法 JSON" }
+                        }, JsonOpts));
+                    }
+                    catch { }
+                }
                 catch (IOException) { throw; }
                 catch { continue; }
             }
         }
         catch { }
+    }
+
+    
+    private static string? ReadLineWithTimeout(StreamReader reader, TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout);
+        try { return reader.ReadLineAsync(cts.Token).GetAwaiter().GetResult(); }
+        catch (OperationCanceledException) { return null; }
     }
 
     private static HelloResp Authorize(HelloMsg? hello)
@@ -192,6 +218,41 @@ public static class McpService
     /// <summary>Guards McpAllowedProcesses check+add across concurrent HandleConnection threads.</summary>
     private static readonly object WhitelistGate = new();
 
+    /// <summary>N2-21: UI-side first-grant pre-seed must share WhitelistGate with the pipe threads'
+    /// check+add (N4C-02 pattern) - an unlocked EnsureDefaultRecord raced a concurrent first-auth.</summary>
+    public static void SeedDefaultPermission(string path)
+    {
+        lock (WhitelistGate)
+        {
+            var settings = App.Store?.Database.AppSettings;
+            if (settings != null) McpPermissions.EnsureDefaultRecord(settings, path);
+        }
+    }
+
+    /// <summary>N2-21: UI-side matrix save must share WhitelistGate - FirstOrDefault enumeration and
+    /// Add on the live List raced the pipe threads' writes (List is not thread-safe).</summary>
+    public static void SaveClientPermissions(string path, McpPerm bits)
+    {
+        lock (WhitelistGate)
+        {
+            var settings = App.Store?.Database.AppSettings;
+            if (settings == null) return;
+            var rec = settings.McpClientPermissions.FirstOrDefault(r => r.Path == path);
+            if (rec != null) rec.Permissions = (long)bits;
+            else settings.McpClientPermissions.Add(new Novara.Models.McpClientPermRecord { Path = path, Permissions = (long)bits });
+        }
+    }
+
+    /// <summary>N2-21: UI-side matrix load shares WhitelistGate for the same reason (read-side gap).</summary>
+    public static McpPerm ReadClientPermissions(string path)
+    {
+        lock (WhitelistGate)
+        {
+            var settings = App.Store?.Database.AppSettings;
+            return (McpPerm)(settings?.McpClientPermissions.FirstOrDefault(r => r.Path == path)?.Permissions ?? 0L);
+        }
+    }
+
     /// <summary>N4C-02: UI-side revoke must share WhitelistGate with the pipe threads' check+add -
     /// an unlocked Remove racing a concurrent first-auth corrupted the List.</summary>
     public static bool RevokeAuthorizedProcess(string path)
@@ -244,10 +305,22 @@ public static class McpService
                     || req.Method.StartsWith("update_", StringComparison.Ordinal)
                     || req.Method == "delete_item";
 
+        
+        
+        string? readType = null;
+        if (req.Method == "read_item")
+        {
+            try { readType = CheckType(GetStrStrict(req.Params, "type") ?? throw new McpError("缺少参数 type")); }
+            catch (McpError ex)
+            {
+                Audit("call", clientPath, req.Method, ok: false, reason: ex.Message);
+                return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = ex.Message } };
+            }
+        }
         // 9.2#5: per-client fine-grained permission gate. Unknown methods map to None (no
         // requirement) and fall through to the "unknown tool" error below. delete_item additionally
         // needs the global McpDeleteEnabled master switch (checked inside Delete) - client bit AND switch.
-        var required = McpPermissions.RequiredFor(req.Method, GetStr(req.Params, "type"));
+        var required = McpPermissions.RequiredFor(req.Method, req.Method == "read_item" ? readType : GetStr(req.Params, "type"));
         var granted = McpPermissions.GetFor(store.Database.AppSettings, clientPath);
         if ((granted & required) != required)
         {
@@ -258,30 +331,51 @@ public static class McpService
 
         var target = "-";
         var title = "";
+        Action? postGate = null; // N4-43: slow side-effect IO staged by delete_item, run after the gate
+        // N2-68: groupId presence must be known BEFORE the dispatch - an explicitly EMPTY value means
+        // "move to uncategorized" while absence means "leave the group untouched".
+        var grpRaw = GetStr(req.Params, "groupId");
+        var clearGroup = grpRaw != null && grpRaw.Trim().Length == 0;
+        // N2-69: MCP-created entries land in the ACTIVE workspace (parity with UI creation).
+        var currentWs = App.CurrentWorkspaceId;
         try
         {
             object? result;
             lock (ExecGate)
             {
+                // N3-05: re-validate inside the gate. RelockStore / backup-restore may invalidate or
+                // swap this store between the entry checks above and this lock - without the re-check
+                // a) store.Database is null and the NRE (thrown outside any catch) leaves the request
+                // unanswered, b) a stale decrypted db captured before the invalidation could serve
+                // data after the lock. ReferenceEquals catches the swapped-fresh-instance case;
+                // IsLoaded covers in-place invalidation. (Fully closing the residual two-statement
+                
+                if (!ReferenceEquals(App.Store, store) || !store.IsLoaded || store.Database == null)
+                    throw new McpError("数据库已锁定，请先在 Novara 中解锁");
+                // N4-42: the McpEnabled re-check at method entry sat outside this gate - a toggle-off
+                // racing an in-flight call could pass the entry check and serve from a just-disabled
+                // session. Same re-validation parity as the N3-05 store check above.
+                if (!store.Database.AppSettings.McpEnabled)
+                    throw new McpError("MCP 接口已关闭，请在 Novara 设置中开启");
                 var db = store.Database;
                 (target, title) = CaptureTarget(db, req); 
                 result = req.Method switch
             {
-                "list_items" => McpLogic.ListItems(db, CheckType(GetStr(req.Params, "type"))),
-                "read_item" => McpLogic.ReadItem(db, ReqStr(req.Params, "type"), ReqStr(req.Params, "id")),
-                "search_items" => McpLogic.SearchItems(db, ReqStr(req.Params, "query"), CheckType(GetStr(req.Params, "type"))),
-                "delete_item" => Delete(store, ReqStr(req.Params, "type"), ReqStr(req.Params, "id")),
+                "list_items" => McpLogic.ListItems(db, CheckType(GetStrStrict(req.Params, "type"))),
+                "read_item" => McpLogic.ReadItem(db, readType!, ReqStr(req.Params, "id")), // N4-44: type validated strictly before the gate
+                "search_items" => McpLogic.SearchItems(db, ReqStr(req.Params, "query"), CheckType(GetStrStrict(req.Params, "type"))),
+                "delete_item" => Delete(store, ReqStr(req.Params, "type"), ReqStr(req.Params, "id"), ref postGate),
 
                 "create_memo" => McpLogic.CreateMemo(db, ReqStr(req.Params, "name"), ReqStr(req.Params, "type"),
-                    GetStr(req.Params, "keyInfo"), GetFields(req.Params), GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey")),
+                    GetStr(req.Params, "keyInfo"), GetFields(req.Params), GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey"), currentWs),
                 "create_todo" => McpLogic.CreateTodo(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "mainText"),
-                    GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey")),
-                "create_note" => McpLogic.CreateNote(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "iconKey")),
-                "create_diary" => CreateDiary(store, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "format")),
-                "create_path" => McpLogic.CreatePath(db, ReqStr(req.Params, "name"), ReqStr(req.Params, "path"), GetStr(req.Params, "note")),
+                    GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey"), currentWs),
+                "create_note" => McpLogic.CreateNote(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "iconKey"), currentWs),
+                "create_diary" => CreateDiary(store, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "format"), currentWs),
+                "create_path" => McpLogic.CreatePath(db, ReqStr(req.Params, "name"), ReqStr(req.Params, "path"), GetStr(req.Params, "note"), currentWs),
 
                 "update_memo" => UpdateMemo(db, ReqStr(req.Params, "id"), GetStr(req.Params, "name"), GetStr(req.Params, "type"),
-                    GetStr(req.Params, "keyInfo"), GetFields(req.Params), GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey")),
+                    GetStr(req.Params, "keyInfo"), GetFields(req.Params), clearGroup ? (Guid?)null : GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey"), clearGroup),
                 "update_todo" => UpdateTodo(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "mainText"),
                     GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey")),
                 "update_note" => UpdateNote(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "content"), GetStr(req.Params, "iconKey")),
@@ -291,7 +385,12 @@ public static class McpService
                 _ => throw new McpError($"未知工具: {req.Method}")
                 };
             }
-            if (isWrite) _ = store.SaveAsync();
+            postGate?.Invoke(); // N4-43: slow IO (schtasks/file) runs outside the ExecGate critical section
+            if (isWrite)
+            {
+                _ = store.SaveAsync();
+                App.MainWindow?.NotifyExternalDbMutation(); // N2-01: cached tab pages must learn about direct db writes (marshals to UI thread internally)
+            }
             Audit("call", clientPath, req.Method, target, title, isWrite, true);
             return new RespMsg { Id = req.Id, Ok = true, Result = result };
         }
@@ -366,7 +465,7 @@ public static class McpService
     {
         try
         {
-            McpAuditLog.Write(new McpAuditEvent
+            var evt = new McpAuditEvent
             {
                 Ev = ev,
                 Path = path ?? "",
@@ -376,18 +475,20 @@ public static class McpService
                 Write = write,
                 Ok = ok,
                 Reason = reason ?? ""
-            });
+            };
+            
+            System.Threading.Tasks.Task.Run(() => McpAuditLog.Write(evt));
         }
         catch { }
     }
 
     
 
-    private static string CreateDiary(NovaraStore store, string title, string content, string? format)
+    private static string CreateDiary(NovaraStore store, string title, string content, string? format, string? workspaceId)
     {
         var fmt = string.IsNullOrWhiteSpace(format) ? "markdown" : format.Trim().ToLowerInvariant();
         if (fmt == "html") content = HtmlSanitizer.Sanitize(content);
-        return McpLogic.CreateDiary(store.Database, title, content, fmt);
+        return McpLogic.CreateDiary(store.Database, title, content, fmt, workspaceId);
     }
 
     private static object UpdateDiary(NovaraDatabase db, string id, string? title, string? content)
@@ -402,9 +503,9 @@ public static class McpService
     }
 
     private static object UpdateMemo(NovaraDatabase db, string id, string? name, string? type, string? keyInfo,
-        List<McpFieldInput>? fields, Guid? groupId, string? iconKey)
+        List<McpFieldInput>? fields, Guid? groupId, string? iconKey, bool clearGroupId)
     {
-        McpLogic.UpdateMemo(db, id, name, type, keyInfo, fields, groupId, iconKey);
+        McpLogic.UpdateMemo(db, id, name, type, keyInfo, fields, groupId, iconKey, clearGroupId);
         return true;
     }
 
@@ -426,11 +527,35 @@ public static class McpService
         return true;
     }
 
-    private static object Delete(NovaraStore store, string type, string id)
+    // N4-43: slow side-effect IO (schtasks cancel, stickies.json write) must not run inside the
+    // ExecGate critical section - it blocked every concurrent MCP session. Delete now stages the
+    // post-gate work in `postGate`; Execute invokes it right after the lock releases.
+    private static object Delete(NovaraStore store, string type, string id, ref Action? postGate)
     {
         if (!store.Database.AppSettings.McpDeleteEnabled)
             throw new McpError("MCP 删除操作未开启，请在 Novara 设置中打开权限");
         McpLogic.DeleteItem(store.Database, type, id);
+        // N2-08: a UI soft-delete carries side effects a bare IsDeleted flip misses (N4P-04 trio) -
+        // the schtasks one-shot reminder would still fire with no card to show, and a desktop sticky
+        // would keep displaying the deleted entry for up to 7 days. Mirror the PlanPage teardown.
+        if ((type == "todo" || type == "note") && Guid.TryParse(id, out var delId))
+        {
+            var card = type == "todo"
+                ? store.Database.TodoCards.FirstOrDefault(x => x.Id == delId) as object
+                : store.Database.NoteCards.FirstOrDefault(x => x.Id == delId);
+            switch (card)
+            {
+                case Models.TodoCard t when t.ReminderAt != null:
+                    t.ReminderAt = null; t.ReminderSetAt = null;
+                    postGate += () => Services.ReminderScheduler.Cancel(delId);
+                    break;
+                case Models.NoteCard n when n.ReminderAt != null:
+                    n.ReminderAt = null; n.ReminderSetAt = null;
+                    postGate += () => Services.ReminderScheduler.Cancel(delId);
+                    break;
+            }
+            postGate += () => Services.StickySync.RemoveNote(id);
+        }
         return true;
     }
 
@@ -439,6 +564,16 @@ public static class McpService
     private static string? GetStr(JsonElement? p, string key)
         => p is { } e && e.ValueKind == JsonValueKind.Object && e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() : null;
+
+    // N3-24: for keys where null means "default" (e.g. list/search type = all) a PRESENT-but-non-string
+    // value must not silently degrade to null -> all (an agent passing type: 123 would get every
+    // partition back instead of an error). Strict variant: absent -> null, string -> value, else error.
+    private static string? GetStrStrict(JsonElement? p, string key)
+    {
+        if (p is not { } e || e.ValueKind != JsonValueKind.Object || !e.TryGetProperty(key, out var v)) return null;
+        if (v.ValueKind != JsonValueKind.String) throw new McpError($"{key} 必须是字符串");
+        return v.GetString();
+    }
 
     private static string ReqStr(JsonElement? p, string key)
         => GetStr(p, key) ?? throw new McpError($"缺少参数 {key}");
@@ -477,7 +612,11 @@ public static class McpService
     private static List<string>? GetStrings(JsonElement? p, string key)
     {
         if (p is not { } e || !e.TryGetProperty(key, out var v) || v.ValueKind != JsonValueKind.Array) return null;
-        return v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList();
+        // N4-45: strict element check (N3-24 philosophy) - a non-string element used to be silently
+        // dropped ("a",123,"b" -> "a","b"), leaving the agent unaware its payload got mangled.
+        foreach (var x in v.EnumerateArray())
+            if (x.ValueKind != JsonValueKind.String) throw new McpError($"{key} 必须是字符串数组");
+        return v.EnumerateArray().Select(x => x.GetString()!).ToList();
     }
 
     private static bool FixedTimeEquals(string? a, string b)

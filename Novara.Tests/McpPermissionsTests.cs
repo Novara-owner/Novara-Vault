@@ -36,9 +36,11 @@ public class McpPermissionsTests
     [Fact]
     public void RequiredFor_AllType_RequiresEveryRead()
     {
-        Assert.Equal(McpPermissions.AllRead, McpPermissions.RequiredFor("list_items", "all"));
+        // N2-67: an explicit "all" is NOT a valid type (execution layer rejects it) - the permission
+        
+        Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("list_items", "all"));
         Assert.Equal(McpPermissions.AllRead, McpPermissions.RequiredFor("list_items", null)); 
-        Assert.Equal(McpPermissions.AllRead, McpPermissions.RequiredFor("search_items", "all"));
+        Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("search_items", "all"));
     }
 
     [Fact]

@@ -7,8 +7,11 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>5.3.0</Version>
+    <Version>6.0.0</Version>
     <Platforms>x64</Platforms>
+    
+
+    <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -21,6 +24,10 @@
     <EnableMsixTooling>false</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <AppxPackage>false</AppxPackage>
+    <!-- N4-16 verified NOT dead config (2026-09-03): deleting it breaks CLI builds - WinAppSDK's
+         MrtCore.PriGen.targets then resolves ExpandPriContent from the dotnet SDK dir (absent) and
+         fails with MSB4062. This points PriGen at the VS install. Machine-specific by necessity;
+         Vault sanitization handles the absolute-path concern. Do not remove without a build test. -->
 
     <!-- Self-contained -->
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
@@ -34,6 +41,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.2.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250108002" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
     <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.0" />

@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using System.Text.Json;
 
 namespace Novara.Services;
@@ -61,9 +66,13 @@ public static class ReminderDueRequest
             if (File.Exists(PendingPath))
             {
                 var json = File.ReadAllText(PendingPath);
-                File.Delete(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingReminderDueFile>(json);
-                if (j != null && Guid.TryParse(j.Id, out var id)) return id;
+                // N2-07 (N1-60 parity): delete only after a successful deserialize
+                if (j != null && Guid.TryParse(j.Id, out var id))
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return id;
+                }
             }
         }
         catch { }

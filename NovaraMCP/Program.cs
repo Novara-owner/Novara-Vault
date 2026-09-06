@@ -1,4 +1,8 @@
 
+
+
+
+
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -48,7 +52,15 @@ public static class Program
         catch
         {
             // N5C-03: malformed JSON gets a spec -32700 parse-error response (id=null) instead of silence.
-            Respond(null, null, new JsonObject { ["code"] = -32700, ["message"] = "Parse error" });
+            // N5-C-01: Respond() early-returns on a null id (notification guard), so the frame must be
+            // written directly here - routed through Respond it was silently swallowed and the client
+            // hung until timeout.
+            WriteFrame(new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = null,
+                ["error"] = new JsonObject { ["code"] = -32700, ["message"] = "Parse error" }
+            });
             return;
         }
         if (obj == null)
@@ -96,6 +108,11 @@ public static class Program
         var resp = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id.DeepClone() };
         if (error != null) resp["error"] = error;
         else resp["result"] = result ?? new JsonObject();
+        WriteFrame(resp);
+    }
+
+    private static void WriteFrame(JsonObject resp)
+    {
         Console.WriteLine(resp.ToJsonString());
         Console.Out.Flush();
     }
@@ -109,7 +126,9 @@ public static class Program
         {
             ["protocolVersion"] = version,
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
-            ["serverInfo"] = new JsonObject { ["name"] = "novara-mcp", ["version"] = "5.0.0" }
+            // N5-T5-01: report the real assembly version (csproj <Version>) - a hardcoded "5.0.0"
+            // drifted from the actual release and misled MCP clients.
+            ["serverInfo"] = new JsonObject { ["name"] = "novara-mcp", ["version"] = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0" }
         });
     }
 

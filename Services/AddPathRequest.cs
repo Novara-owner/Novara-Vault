@@ -68,9 +68,13 @@ public static class AddPathRequest
             if (File.Exists(PendingPath))
             {
                 var json = File.ReadAllText(PendingPath);
-                File.Delete(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingPathFile>(json);
-                if (j != null && !string.IsNullOrWhiteSpace(j.Path)) return j.Path;
+                
+                if (j != null && !string.IsNullOrWhiteSpace(j.Path))
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return j.Path;
+                }
             }
         }
         catch { }

@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,7 +16,17 @@ namespace Novara.Services;
 
 public static class ToastService
 {
-    private const string AppId = "Novara.App"; // AUMID
+    // N3-35: AUMID + Start-Menu shortcut must follow the Debug/Release split like every other
+    // identity (IPC events, mutex, Run key, context-menu keys - design doc 2.7). Sharing
+    // "Novara.App" between both builds made the two versions overwrite each other's shortcut
+    // and notification registration.
+#if DEBUG
+    private const string AppId = "Novara.App.Dev";
+    private const string ShortcutName = "Novara.Dev.lnk";
+#else
+    private const string AppId = "Novara.App";
+    private const string ShortcutName = "Novara.lnk";
+#endif
     private static bool _registered;
 
     public static void EnsureRegistered()
@@ -54,7 +69,7 @@ public static class ToastService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Microsoft", "Windows", "Start Menu", "Programs");
         Directory.CreateDirectory(dir);
-        var lnk = Path.Combine(dir, "Novara.lnk");
+        var lnk = Path.Combine(dir, ShortcutName); // N3-35: versioned shortcut name (.Dev in Debug)
         var exe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Novara.exe");
         ShortcutHelper.CreateWithAppId(lnk, exe, AppId);
     }

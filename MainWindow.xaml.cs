@@ -42,6 +42,12 @@ public sealed partial class MainWindow : Window
     private TrashPage? _trashPage; // recycle bin (3.0-14)
     private object? _preTrashContent; // page shown before the trash button opened the trash page
     private bool _trashChanged; // trash mutations happened; rebuild the tab page on close
+    // N2-01: MCP wrote new entries directly into the shared Database from a pipe thread - the
+    // cached page instance missed them and its next PersistAll would drop them (P0). A stale page
+    // instance is replaced wholesale on the user's next navigation to it (safe point: no dialogs
+    // or drag state can be mid-flight on a page the user is not looking at; LoadFromStore is not
+    // re-runnable so the instance itself must be swapped, same technique as ReloadPages).
+    private bool _memoStale, _planStale, _fileStale, _diaryStale;
 
     // ---- Auto-hiding hamburger menu (4.0): collapsed to a floating 8x48 vertical bar near the right
     //      edge (breathing horizontally), melts into the hamburger on hover/click, auto-collapses 2s
@@ -130,7 +136,7 @@ public sealed partial class MainWindow : Window
         sb.Completed += (_, _) =>
         {
             var fadeOut = new Storyboard();
-            var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromSeconds(3) };
+            var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromMilliseconds(1500) }; // N2-43: F5 contract = toast gone in ~2s (0.2 in + 1.5 hold + 0.3 out); 3s hold broke it
             Storyboard.SetTarget(fo, toast); Storyboard.SetTargetProperty(fo, "Opacity"); fadeOut.Children.Add(fo);
             fadeOut.Completed += (_, _) => { if (_toast == toast) { ToastHost.Children.Remove(toast); _toast = null; } };
             fadeOut.Begin();
@@ -176,6 +182,11 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        CarouselPageList = new[] { CarouselPage0, CarouselPage1, CarouselPage2, CarouselPage3 }; // 9.3: XAML fields are instance members - init in ctor
+        BuildCarouselMenus(); // 9.3: carousel page 0 - real-rendered context menus (static content, language is restart-applied anyway)
+        BuildCarouselPage1(); // 9.3: carousel page 1 - four NavBar-style tab buttons + per-page intro text
+        BuildCarouselPage2(); // 9.3: carousel page 2 - hamburger handle auto-demo (cursor + melt mirror)
+        BuildCarouselPage3(); // 9.3: carousel page 3 - privacy lock showcase (settings list + flowing border)
 
         // Window-level dialogs get shadows only - their scrims already cover the full window,
         // so the chrome veil must NOT stack on top (driveChrome:false).
@@ -184,6 +195,7 @@ public sealed partial class MainWindow : Window
         ApplyStartupTheme();
 
         this.SizeChanged += (_, e) => UpdateWelcomeLayout(e.Size.Width, e.Size.Height);
+        this.SizeChanged += (_, _) => UpdateWorkspaceSwitcherPosition(); 
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(CustomTitleBar);
@@ -235,7 +247,7 @@ public sealed partial class MainWindow : Window
             AddHotkey(Windows.System.VirtualKey.Number2, Windows.System.VirtualKeyModifiers.Control, () => SwitchTab("File"));
             AddHotkey(Windows.System.VirtualKey.Number3, Windows.System.VirtualKeyModifiers.Control, () => SwitchTab("Plan"));
             AddHotkey(Windows.System.VirtualKey.Number4, Windows.System.VirtualKeyModifiers.Control, () => SwitchTab("Diary"));
-            AddHotkey((Windows.System.VirtualKey)188, Windows.System.VirtualKeyModifiers.Control, NavigateToSettings); // VK_OEM_COMMA = Ctrl+,
+            AddHotkey((Windows.System.VirtualKey)188, Windows.System.VirtualKeyModifiers.Control, () => NavigateToSettings()); // VK_OEM_COMMA = Ctrl+,
             AddHotkey(Windows.System.VirtualKey.Back, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, OpenTrashPage);
 
             // Defer all native/IO work to after Loaded: early native calls crash CLR on
@@ -273,6 +285,13 @@ public sealed partial class MainWindow : Window
         if (App.Store != null) App.Store.Database.AppSettings ??= new AppSettings();
         App.ApplyStoredSettings();
         TrashPage.CleanupExpired(); // 3.0-14: purge soft-deleted items past the 7-day window
+        // 9.3 Quick Capture + Auto-Lock: system-wide hotkeys (Win32 RegisterHotKey on the main window).
+        // Registered here for plaintext startup; re-registered after unlock (settings become readable only then).
+        Services.GlobalHotkeyService.Initialize(this, OnQuickCaptureHotkey, OnLockNowHotkey);
+        WireNavGlowRelocation(); 
+        Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdLockNow,
+            Services.GlobalHotkeyService.MOD_CONTROL | Services.GlobalHotkeyService.MOD_SHIFT, 0x4C); // Ctrl+Shift+L - LockNow guards itself
+        ApplyQuickCaptureHotkey();
         
         McpService.AuthorizeClient = clientPath =>
         {
@@ -387,6 +406,7 @@ public sealed partial class MainWindow : Window
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Closing += AppWindow_Closing;
+        UpdateWorkspaceSwitcherPosition(); 
 
         // D1 (Round 5): clear lock PIN on window deactivation (rule G13)
         this.Activated += (_, args) =>
@@ -408,8 +428,13 @@ public sealed partial class MainWindow : Window
         App.UpdateTitleBarColors();
 
         // 6. Corrupted store dialog (plain-DB path)
-        if (loadResult?.Status is LoadStatus.Corrupted or LoadStatus.IoError)
+        // N2-03: IoError must NOT share the corrupt dialog - the rebuild button would guide the user
+        // into ResetDatabase on a HEALTHY db after a transient IO failure (AV/indexer/disk-full).
+        
+        if (loadResult?.Status == LoadStatus.Corrupted)
             ShowCorruptStoreDialog();
+        else if (loadResult?.Status == LoadStatus.IoError)
+            ShowIoErrorDialog(); // E3-12: transient read failure - retry only, NEVER offer rebuild
 
         // 7. Lock screen (encrypted DB)
         if (App.Store is { IsEncrypted: true }) ShowLockScreen();
@@ -469,6 +494,7 @@ private void CreateTrayIcon()
         catch
         {
 
+            _trayIcon.Dispose(); 
             _trayIcon = null;
         }
     }
@@ -539,14 +565,22 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
         if (RootFrame.Content is DiaryEditorPage editor)
         {
-            try { await editor.SaveCurrentDiaryAsync(); } catch { }
+            try
+            {
+                
+                
+                var saveTask = editor.SaveCurrentDiaryAsync();
+                await System.Threading.Tasks.Task.WhenAny(saveTask, System.Threading.Tasks.Task.Delay(3000));
+            }
+            catch { }
         }
 
         // E3-02: nothing is loaded yet (lock screen / encrypted cold start) - nothing to save, allow close.
         // SaveSync returns false on !_loaded, which would otherwise cancel the close forever.
+        
+        
         if (App.Store is { IsLoaded: false })
         {
-            _closingHandled = false;
             _closeAllowed = true;
             this.Close();
             return;
@@ -562,6 +596,126 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         catch { _closeAllowed = false; _closingHandled = false; return; }
         _closeAllowed = true;
         this.Close();
+    }
+
+    
+
+    private string _qcMode = "todo"; // todo / note / memo - to-do is the most common capture
+    private IntPtr _qcPrevForeground;
+    private bool _qcAnimating;
+
+    /// <summary>(Re)apply the Quick Capture hotkey from settings. Called on plaintext startup and after unlock.</summary>
+    public void ApplyQuickCaptureHotkey()
+    {
+        Services.GlobalHotkeyService.Unregister(Services.GlobalHotkeyService.IdQuickCapture);
+        var s = App.Store?.Database.AppSettings;
+        if (s is not { QuickCaptureEnabled: true }) return;
+        var (mods, vk) = Services.GlobalHotkeyService.ParsePreset(s.QuickCaptureHotkey);
+        if (!Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdQuickCapture, mods, vk))
+            App.ShowToast(App.GetString("QuickCapture_HotkeyConflict")); // combo owned by another app - say so and stay off
+    }
+
+    private void OnQuickCaptureHotkey()
+    {
+        // Locked database: never show the capture bar (nothing can be written and no side entrance) - just raise the lock screen.
+        if (LockScreenFrame.Visibility == Visibility.Visible) { ShowMainWindow(); return; }
+        ShowQuickCapture();
+    }
+
+    private void OnLockNowHotkey()
+    {
+        if (LockScreenFrame.Visibility == Visibility.Visible) return; // already locked
+        LockNow(); // internally guards "no privacy lock" / double-fire
+    }
+
+    private void ShowQuickCapture()
+    {
+        if (QuickCaptureOverlay.Visibility == Visibility.Visible) { QuickCaptureBox.Focus(FocusState.Programmatic); QuickCaptureBox.SelectAll(); return; }
+        _qcPrevForeground = GetForegroundWindow(); // hand focus back to the user's app when done
+        ShowMainWindow(); // restore from tray / minimized + foreground
+        QuickCaptureBox.Text = "";
+        SetQcMode("todo");
+        QuickCaptureHint.Text = App.GetString("QuickCapture_Hint");
+        QuickCaptureOverlay.Visibility = Visibility.Visible;
+        var sb = new Storyboard();
+        var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, QuickCaptureScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
+        var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, QuickCaptureBar); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
+        QuickCaptureTransform.ScaleX = 0.94; QuickCaptureTransform.ScaleY = 0.94; QuickCaptureTransform.TranslateY = 24; 
+        Motion.AddDialogShowTransform(sb, QuickCaptureTransform); // M1: EmphasizedDecelerate (Motion)
+        sb.Begin();
+        QuickCaptureBox.Focus(FocusState.Programmatic);
+    }
+
+    private void HideQuickCapture()
+    {
+        if (_qcAnimating || QuickCaptureOverlay.Visibility != Visibility.Visible) return;
+        _qcAnimating = true;
+        var sb = new Storyboard();
+        var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, QuickCaptureScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
+        var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, QuickCaptureBar); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
+        Motion.AddDialogHideTransform(sb, QuickCaptureTransform); // M1: EmphasizedAccelerate (Motion)
+        sb.Completed += (_, _) =>
+        {
+            QuickCaptureOverlay.Visibility = Visibility.Collapsed;
+            _qcAnimating = false;
+            if (_qcPrevForeground != IntPtr.Zero && _qcPrevForeground != WinRT.Interop.WindowNative.GetWindowHandle(this))
+                SetForegroundWindow(_qcPrevForeground); // hand focus back to the user's app
+        };
+        sb.Begin();
+    }
+
+    private void SetQcMode(string mode)
+    {
+        _qcMode = mode;
+        // Button captions (reused nav/stats wording); assigned here to keep the XAML free of x:Bind text
+        QcModeMemo.Content = App.GetString("Nav_Tab_Memo");
+        QcModeTodo.Content = App.GetString("Setting_Stats_Todos");
+        QcModeNote.Content = App.GetString("Setting_Stats_Notes");
+        // Selected state = brand-blue border + brand text (explicit values only - no runtime Style swap, MCP trap #2)
+        var hot = App.GetBrush("AppPrimaryButtonBrush");
+        var cool = App.GetBrush("AppBorderBrush");
+        var coolText = App.GetBrush("AppTextSecondaryBrush");
+        QcModeMemo.BorderBrush = mode == "memo" ? hot : cool; QcModeMemo.Foreground = mode == "memo" ? hot : coolText;
+        QcModeTodo.BorderBrush = mode == "todo" ? hot : cool; QcModeTodo.Foreground = mode == "todo" ? hot : coolText;
+        QcModeNote.BorderBrush = mode == "note" ? hot : cool; QcModeNote.Foreground = mode == "note" ? hot : coolText;
+    }
+
+    private void QuickCaptureBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            if (_qcAnimating) return; 
+            var t = QuickCaptureBox.Text.Trim();
+            if (t.Length == 0) return; // M5: empty capture is a no-op
+            switch (_qcMode)
+            {
+                case "memo": _memoPage ??= new BasicMemoPage(); _memoPage.QuickCaptureMemo(t); break;
+                case "note": _planPage ??= new PlanPage(); _planPage.QuickCaptureNote(t); break;
+                default: _planPage ??= new PlanPage(); _planPage.QuickCaptureTodo(t); break;
+            }
+            HideQuickCapture();
+        }
+        else if (e.Key == Windows.System.VirtualKey.Escape) { e.Handled = true; HideQuickCapture(); }
+        else if (e.Key == Windows.System.VirtualKey.Tab)
+        {
+            e.Handled = true;
+            SetQcMode(_qcMode switch { "todo" => "note", "note" => "memo", _ => "todo" });
+            QuickCaptureBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void QcModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ReferenceEquals(sender, QcModeMemo)) SetQcMode("memo");
+        else if (ReferenceEquals(sender, QcModeNote)) SetQcMode("note");
+        else SetQcMode("todo");
+        QuickCaptureBox.Focus(FocusState.Programmatic);
+    }
+
+    private void QuickCaptureScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, QuickCaptureScrim)) HideQuickCapture();
     }
 
     private void ShowMainWindow()
@@ -592,7 +746,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             // the process and the last diary edit is lost.
             if (RootFrame.Content is DiaryEditorPage pendingEditor)
             {
-                try { await pendingEditor.SaveCurrentDiaryAsync(); } catch { }
+                try { await pendingEditor.SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); } catch { } 
             }
             if (saveFirst)
             {
@@ -621,6 +775,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                     }
                 }
             }
+            // N3-07: unregister hotkeys only on the actual-exit path. It used to run at method entry -
+            // when the SaveSync below failed and the session was kept (C6), the Quick Capture and
+            // Ctrl+Shift+L hotkeys stayed dead for the rest of the run (no re-registration path).
+            // The X-close path (AppWindow_Closing) never unregisters early - same semantics here.
+            Services.GlobalHotkeyService.UnregisterAll(); // 9.3: no hotkeys without a running process
             try
             {
                 RemoveTrayIcon();
@@ -648,6 +807,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     
     
@@ -783,6 +945,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             store.Database.AppSettings ??= new AppSettings();
             CloseBehavior = store.Database.AppSettings.CloseBehavior;
             App.ApplyStoredSettings();
+            // N2-04: MCP legacy permission migration must re-run here. At startup it ran on the
+            // EMPTY placeholder AppSettings (encrypted db not yet loaded, SaveAsync no-op'd on
+            // !_loaded), and LoadWithPassword replaced the whole Database instance afterwards,
+            // silently discarding the in-memory migration - pre-9.2#5 authorizations would hit
+            
+            if (McpPermissions.EnsureMigrated(store.Database.AppSettings))
+                _ = store.SaveAsync();
             // N5W1-01: L61 encrypted-side parity - startup applied VisibleTabs from an empty db; the real
             // custom tabs must take effect the moment the decrypted settings are available.
             if (store.Database.AppSettings.VisibleTabs is { Count: > 0 } unlockedTabs)
@@ -820,6 +989,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         // now. Shown after the migration dialog: if both appear, the user handles the top one first,
         // cancelling it reveals the other; a restart re-offers the migration on next launch anyway.
         if (_themeChangedWhileLocked) { _themeChangedWhileLocked = false; if (App.CurrentTheme == "跟随系统") ShowThemeRestartOverlay(); }
+
+        // 9.3 Quick Capture: settings become readable only now (encrypted startup) - (re)apply the hotkey.
+        ApplyQuickCaptureHotkey();
     }
 
     // ---- Dialog depth aid: global outer dimming layer (title bar + navigation area) ----
@@ -835,6 +1007,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void VeilShow()
     {
+        EnsureChromeBlur(); 
         _veilCount++;
         ChromeScrim.Visibility = Visibility.Visible;
         
@@ -864,6 +1037,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     }
 
     
+    
+    public void VeilHideImmediate()
+    {
+        _veilCount--;
+        if (_veilCount > 0) return;
+        _veilCount = 0;
+        ChromeScrim.Visibility = Visibility.Collapsed;
+        ChromeScrim.Opacity = 0;
+    }
+
+    
     public void VeilClear()
     {
         _veilCount = 0;
@@ -886,9 +1070,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         MigrateFormatTitle.Text = App.GetString(_migrateIsKdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
         MigrateLaterButton.Visibility = Visibility.Visible;
         MigrateConfirmText.Text = App.GetString("Security_Migrate_Confirm");
-        MigrateFormatDialogTransform.ScaleX = 0.92;
-        MigrateFormatDialogTransform.ScaleY = 0.92;
-        MigrateFormatDialogTransform.TranslateY = 20;
+        MigrateFormatDialogTransform.ScaleX = 0.94; MigrateFormatDialogTransform.ScaleY = 0.94; MigrateFormatDialogTransform.TranslateY = 24;
         MigrateFormatDialog.Opacity = 0;
         MigrateFormatOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -896,11 +1078,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         Storyboard.SetTarget(da, MigrateFormatScrim); Storyboard.SetTargetProperty(da, "Opacity"); sb.Children.Add(da);
         var dda = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(dda, MigrateFormatDialog); Storyboard.SetTargetProperty(dda, "Opacity"); sb.Children.Add(dda);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, MigrateFormatDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, MigrateFormatDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -911,11 +1089,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         Storyboard.SetTarget(so, MigrateFormatScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, MigrateFormatDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, MigrateFormatDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, MigrateFormatDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => MigrateFormatOverlay.Visibility = Visibility.Collapsed;
         sb.Begin();
     }
@@ -1160,11 +1334,46 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _trashPage ??= new TrashPage();
         TrashPage.CleanupExpired(); 
         _trashPage.Refresh(); // always rebuild from the database
+        var prevContent = RootFrame.Content;
         RootFrame.Content = _trashPage;
+        PlayPageIn(prevContent); // M2: page-in transition
         _trashPage.StealFocus(); // P2-2: steal focus from the first focusable element (no black focus border)
         NavBar.Visibility = Visibility.Collapsed;
         BottomToolbarPanel.Visibility = Visibility.Collapsed;
         CustomTitleBar.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// N2-02/D13: trash mutations (restore / delete-forever / clear-all) invalidate every cached
+    /// tab page - rebuild all four so their LoadFromStore picks up the new data before any
+    /// PersistAll can physically drop a restored (no-card, not-soft-deleted) entry from the db.
+    /// Consumed by CloseTrashPage AND NavigateToPage (the SearchJump / palette / IPC bypass).
+    /// </summary>
+    private void InvalidateTrashStaleTabs()
+    {
+        if (!_trashChanged) return;
+        _trashChanged = false;
+        _memoPage = new BasicMemoPage();
+        _planPage = new PlanPage();
+        _filePathPage = new FilePathPage();
+        _diaryPage = new DiaryPage();
+        _memoStale = _planStale = _fileStale = _diaryStale = false; // fresh instances already contain the new data
+    }
+
+    /// <summary>
+    /// N2-01: called by the MCP service after a successful direct write into the shared Database.
+    /// Marks every already-created tab page stale; each instance is swapped for a fresh one when
+    /// the user next navigates to it (see NavigateToPage). Safe to call from any thread.
+    /// </summary>
+    public void NotifyExternalDbMutation()
+    {
+        App.UiQueue?.TryEnqueue(() =>
+        {
+            _memoStale = _memoPage is not null;
+            _planStale = _planPage is not null;
+            _fileStale = _filePathPage is not null;
+            _diaryStale = _diaryPage is not null;
+        });
     }
 
     /// <summary>Leave the trash page and restore whatever was shown before.</summary>
@@ -1181,19 +1390,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             // PersistAll on such a stale page physically dropped a restored entry from the db (D13).
             if (_trashChanged)
             {
-                _trashChanged = false;
                 bool wasMemo = ReferenceEquals(prev, _memoPage), wasPlan = ReferenceEquals(prev, _planPage),
                      wasFile = ReferenceEquals(prev, _filePathPage), wasDiary = ReferenceEquals(prev, _diaryPage);
-                _memoPage = new BasicMemoPage();
-                _planPage = new PlanPage();
-                _filePathPage = new FilePathPage();
-                _diaryPage = new DiaryPage();
+                InvalidateTrashStaleTabs();
                 if (wasMemo) prev = _memoPage;
                 else if (wasPlan) prev = _planPage;
                 else if (wasFile) prev = _filePathPage;
                 else if (wasDiary) prev = _diaryPage;
             }
             RootFrame.Content = prev;
+            PlayPageIn(_trashPage); // M2: page-in transition (previous = the trash page we are leaving)
             RestoreChromeFor(prev);
         }
     }
@@ -1252,6 +1458,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             NavBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(visibleItems[i], i);
         }
+        _navIndicatorPlaced = false; 
+        NavIndicator.Opacity = 0;
         UpdateNavBarVisibility();
     }
 
@@ -1264,6 +1472,560 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _ => string.Empty
     };
 
+    
+
+    private int _carouselPage;
+
+    /// <summary>Show the promo carousel on true first launch; debug builds replay it every launch.</summary>
+    private void MaybeShowWelcomeCarousel()
+    {
+#if DEBUG
+        ShowWelcomeCarousel();
+#else
+        if (App.Store?.Database.AppSettings is { HasCompletedCarousel: false }) ShowWelcomeCarousel(); // N4-01: own flag - HasCompletedWelcome is already true by the time we get here (set right before this call in WelcomeOverlay_Tapped)
+#endif
+    }
+
+    private void ShowWelcomeCarousel()
+    {
+        _carouselPage = 0;
+        BuildCarouselDots();
+        SetCarouselPage(0);
+        EnsureCarouselBlur(); // owner-approved frosted backdrop: blur + tint while the carousel is up
+        CarouselBlurHost.Visibility = Visibility.Visible;
+        WelcomeCarousel.Visibility = Visibility.Visible;
+        WelcomeCarousel.Opacity = 0;
+        var sb = new Storyboard();
+        var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        Storyboard.SetTarget(oi, WelcomeCarousel); Storyboard.SetTargetProperty(oi, "Opacity"); sb.Children.Add(oi);
+        sb.Begin();
+        CarouselCard.Focus(FocusState.Programmatic);
+        CarouselP0Title.Text = App.GetString("Carousel_P0_Title");
+        StartCarouselFloat();
+    }
+
+    private void CloseWelcomeCarousel()
+    {
+        StopCarouselFloat();
+        CarouselBlurHost.Visibility = Visibility.Collapsed; // blur visual goes with it - zero idle cost
+        WelcomeCarousel.Opacity = 0;
+        WelcomeCarousel.Visibility = Visibility.Collapsed;
+        var s = App.Store?.Database.AppSettings;
+        if (s != null && !s.HasCompletedCarousel)
+        {
+            s.HasCompletedCarousel = true; // played once - never again (N4-01: persisted under its own flag, welcome flag keeps its E4-25 tap-time write)
+            _ = App.Store?.SaveAsync();
+        }
+    }
+
+    private void CarouselClose_Click(object sender, RoutedEventArgs e) => CloseWelcomeCarousel();
+
+    // ===================== 9.3 carousel page 0: real-rendered context menus =====================
+
+    /// <summary>
+    /// 9.3 Fill the four carousel menu shells with real-rendered menu items (owner call: native
+    /// drawing instead of screenshots - theme-adaptive, visually identical to the real menus).
+    /// Text keys / icon paths / metrics are exactly the ones the real context menus use.
+    /// </summary>
+    private void BuildCarouselMenus()
+    {
+        FillCarouselMenu(CarouselMenuMemo, new UIElement[]
+        {
+            MakeCarouselMenuRow("Menu_New_Group", IconData.NewGroup),
+            MakeCarouselMenuRow("Menu_New_Entry", string.Join(" ", IconData.NewEntry)),
+        });
+        FillCarouselMenu(CarouselMenuPath, new UIElement[]
+        {
+            MakeCarouselMenuRow("Menu_New_Path", IconData.NavFile),
+            MakeCarouselMenuRow("Menu_DetectPath", IconData.RefreshPaths),
+        });
+        FillCarouselMenu(CarouselMenuPlan, new UIElement[]
+        {
+            MakeCarouselMenuRow("Menu_New_Todo", string.Join(" ", IconData.Todo)),
+            MakeCarouselMenuRow("Menu_New_Note", string.Join(" ", IconData.Note)),
+            MakeCarouselMenuRow("Menu_AddReminder", IconData.Reminder),
+            MakeCarouselMenuSeparator(),
+            MakeCarouselMenuRow("Menu_CloseAllDesktop", IconData.CancelDesktop),
+        });
+        FillCarouselMenu(CarouselMenuDiary, new UIElement[]
+        {
+            MakeCarouselMenuRow("Diary_New_Document", IconData.Document),
+            MakeCarouselMenuRow("Menu_New_Diary", IconData.NewDiary),
+            MakeCarouselMenuRow("Diary_Import_Document", IconData.Import),
+        });
+    }
+
+    private static void FillCarouselMenu(Border shell, UIElement[] rows)
+    {
+        var stack = new StackPanel();
+        foreach (var row in rows) stack.Children.Add(row);
+        shell.Child = stack;
+    }
+
+    // One menu row = Viewbox(16x16) wrapping PathIcon + 14px text - the GlassMenuFlyoutItemStyle template layout.
+    private static StackPanel MakeCarouselMenuRow(string textKey, string pathData)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Padding = new Thickness(12, 9, 12, 9) };
+        var icon = new PathIcon
+        {
+            Data = App.CreateGeometry(pathData),
+            Foreground = App.GetBrush("IconForegroundBrush"),
+        };
+        row.Children.Add(new Viewbox
+        {
+            Width = 16,
+            Height = 16,
+            Stretch = Stretch.Uniform,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = icon,
+        });
+        row.Children.Add(new TextBlock
+        {
+            Text = App.GetString(textKey),
+            FontSize = 14,
+            Foreground = App.GetBrush("AppTextPrimaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return row;
+    }
+
+    // Stand-in for the default MenuFlyoutSeparator (1px line, inset from both sides).
+    private static Border MakeCarouselMenuSeparator()
+        => new() { Height = 1, Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(4, 5, 4, 5) };
+
+    // 9.3 Gentle floating loop (owner idea): CompositionTarget.Rendering drives TranslateTransform.Y
+    // with a sine wave - frame-synced with the display refresh (DispatcherTimer ticked at only ~30fps,
+    // owner feedback), no Storyboard on layout properties (3.5 red line), pure render-transform updates.
+    // Elapsed time comes from Stopwatch so the phase stays correct regardless of frame rate.
+    private double _carouselFloatStart; // Stopwatch seconds when the loop (re)started
+
+    private Microsoft.UI.Composition.SpriteVisual? _carouselBlurVisual; // frosted backdrop, created lazily on first show
+
+    /// <summary>
+    /// 9.3 Owner-approved frosted backdrop: everything behind the carousel is blurred (Composition
+    /// BackdropBrush -> Win2D GaussianBlurEffect) and a low-opacity theme tint sits on top (XAML
+    /// CarouselTint). Created once; the host is Collapsed when the carousel closes, so the effect
+    /// costs nothing while idle.
+    /// </summary>
+    private void EnsureCarouselBlur()
+    {
+        if (_carouselBlurVisual != null) return;
+        try
+        {
+            var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(CarouselBlurHost).Compositor;
+            var blur = new Microsoft.Graphics.Canvas.Effects.GaussianBlurEffect
+            {
+                Name = "Blur",
+                BlurAmount = 6f, 
+                BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Hard,
+                Optimization = Microsoft.Graphics.Canvas.Effects.EffectOptimization.Balanced,
+                Source = new Microsoft.UI.Composition.CompositionEffectSourceParameter("Backdrop"),
+            };
+            var factory = compositor.CreateEffectFactory(blur);
+            var brush = factory.CreateBrush();
+            brush.SetSourceParameter("Backdrop", compositor.CreateBackdropBrush());
+            _carouselBlurVisual = compositor.CreateSpriteVisual();
+            _carouselBlurVisual.Brush = brush;
+            _carouselBlurVisual.Size = new System.Numerics.Vector2((float)CarouselBlurHost.ActualWidth, (float)CarouselBlurHost.ActualHeight);
+            CarouselBlurHost.SizeChanged += (_, e) =>
+            {
+                if (_carouselBlurVisual != null)
+                    _carouselBlurVisual.Size = new System.Numerics.Vector2((float)e.NewSize.Width, (float)e.NewSize.Height);
+            };
+            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(CarouselBlurHost, _carouselBlurVisual);
+        }
+        catch (System.Exception ex)
+        {
+            // blur is decorative - a failure (e.g. Win2D native missing) must not break the carousel
+            System.Diagnostics.Debug.WriteLine($"carousel blur init failed: {ex.Message}");
+            _carouselBlurVisual = null;
+        }
+    }
+
+    
+    
+    private Microsoft.UI.Composition.SpriteVisual? _chromeBlurVisual;
+    private void EnsureChromeBlur()
+    {
+        if (_chromeBlurVisual != null) return;
+        try
+        {
+            var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(ChromeBlurHost).Compositor;
+            var blur = new Microsoft.Graphics.Canvas.Effects.GaussianBlurEffect
+            {
+                Name = "Blur",
+                BlurAmount = 6f,
+                BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Soft, 
+                Optimization = Microsoft.Graphics.Canvas.Effects.EffectOptimization.Balanced,
+                Source = new Microsoft.UI.Composition.CompositionEffectSourceParameter("Backdrop"),
+            };
+            var brush = compositor.CreateEffectFactory(blur).CreateBrush();
+            brush.SetSourceParameter("Backdrop", compositor.CreateBackdropBrush());
+            _chromeBlurVisual = compositor.CreateSpriteVisual();
+            _chromeBlurVisual.Brush = brush;
+            _chromeBlurVisual.Size = new System.Numerics.Vector2((float)ChromeBlurHost.ActualWidth, (float)ChromeBlurHost.ActualHeight);
+            ChromeBlurHost.SizeChanged += (_, e) =>
+            {
+                if (_chromeBlurVisual != null)
+                    _chromeBlurVisual.Size = new System.Numerics.Vector2((float)e.NewSize.Width, (float)e.NewSize.Height);
+            };
+            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(ChromeBlurHost, _chromeBlurVisual);
+        }
+        catch
+        {
+            _chromeBlurVisual = null; // blur is decorative - a failure must not break dialogs
+        }
+    }
+
+    private void StartCarouselFloat()
+    {
+        StopCarouselFloat();
+        _carouselFloatStart = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency;
+        _carouselDemoStart = 0; // demo clock restarts with the carousel
+        CompositionTarget.Rendering += CarouselFloatFrame;
+    }
+
+    private void CarouselFloatFrame(object? sender, object e)
+    {
+        // N4-19: these five arrays used to be allocated every frame (60Hz GC churn) - the control
+        // references are stable for the window lifetime, so build them once on the first frame.
+        if (_floatPhases == null)
+        {
+            _floatPhases = new[] { 0.0, Math.PI / 2, Math.PI, Math.PI * 3 / 2 };
+            _floatTransforms = new[] { CarouselFloatT0, CarouselFloatT1, CarouselFloatT2, CarouselFloatT3 };
+            _floatScales = new[] { CarouselMenuScale0, CarouselMenuScale1, CarouselMenuScale2, CarouselMenuScale3 };
+            _floatTabPhases = new[] { Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4 };
+            _floatTabTransforms = new[] { CarouselP1FloatT0, CarouselP1FloatT1, CarouselP1FloatT2, CarouselP1FloatT3 };
+        }
+        var t = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency - _carouselFloatStart;
+        var phases = _floatPhases;
+        var transforms = _floatTransforms!;
+        var scales = _floatScales!;
+        for (int i = 0; i < 4; i++)
+        {
+            // hover lift/scale ease toward their target and stack ON TOP of the sine float - the
+            // float loop owns Translate.Y, so hover must never write it directly (owner request:
+            // menu scales up + lifts on pointer hover)
+            _menuHoverLift[i] += (_menuHoverLiftTarget[i] - _menuHoverLift[i]) * 0.18;
+            _menuHoverScale[i] += (_menuHoverScaleTarget[i] - _menuHoverScale[i]) * 0.18;
+            transforms[i].Y = 5 * Math.Sin(2 * Math.PI * t / 3.0 + phases[i]) + _menuHoverLift[i];
+            scales[i].ScaleX = scales[i].ScaleY = _menuHoverScale[i];
+        }
+        // page-1 tab buttons float too (a bit wider, phase-shifted so the two groups never sway in lockstep)
+        var tabPhases = _floatTabPhases!;
+        var tabTransforms = _floatTabTransforms!;
+        for (int i = 0; i < 4; i++)
+            tabTransforms[i].Y = 6 * Math.Sin(2 * Math.PI * t / 3.0 + tabPhases[i]);
+        ApplyCarouselDemo(t - _carouselDemoStart); // page-2 demo runs on its own clock (restarted when the user lands on page 2)
+    }
+
+    // N4-19: per-frame scratch arrays, allocated once on the first rendered frame (see CarouselFloatFrame).
+    private double[]? _floatPhases;
+    private Microsoft.UI.Xaml.Media.TranslateTransform[]? _floatTransforms;
+    private Microsoft.UI.Xaml.Media.ScaleTransform[]? _floatScales;
+    private double[]? _floatTabPhases;
+    private Microsoft.UI.Xaml.Media.TranslateTransform[]? _floatTabTransforms;
+
+    // hover state of the four page-0 menus: targets eased toward per-frame in CarouselFloatFrame.
+    // Scale arrays MUST start at 1.0 - a default-zero target collapsed all four menus to nothing.
+    private readonly double[] _menuHoverLift = new double[4];
+    private readonly double[] _menuHoverScale = { 1.0, 1.0, 1.0, 1.0 };
+    private readonly double[] _menuHoverLiftTarget = new double[4];
+    private readonly double[] _menuHoverScaleTarget = { 1.0, 1.0, 1.0, 1.0 };
+
+    private void CarouselMenu_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && int.TryParse(fe.Tag as string, out var i) && i >= 0 && i < 4)
+        {
+            _menuHoverLiftTarget[i] = -6;    // lift up
+            _menuHoverScaleTarget[i] = 1.05; // slightly larger
+            Canvas.SetZIndex(fe, 10);        // hovered menu floats to the top - no more feeling squeezed between neighbors
+        }
+    }
+
+    private void CarouselMenu_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && int.TryParse(fe.Tag as string, out var i) && i >= 0 && i < 4)
+        {
+            _menuHoverLiftTarget[i] = 0;
+            _menuHoverScaleTarget[i] = 1.0;
+            Canvas.SetZIndex(fe, i);         // restore declaration order (0..3)
+        }
+    }
+
+    private void StopCarouselFloat()
+    {
+        CompositionTarget.Rendering -= CarouselFloatFrame;
+        CarouselFloatT0.Y = 0;
+        CarouselFloatT1.Y = 0;
+        CarouselFloatT2.Y = 0;
+        CarouselFloatT3.Y = 0;
+        CarouselP1FloatT0.Y = 0;
+        CarouselP1FloatT1.Y = 0;
+        CarouselP1FloatT2.Y = 0;
+        CarouselP1FloatT3.Y = 0;
+        // reset the page-2 demo props to their collapsed rest state
+        CarouselDemoCursorTranslate.X = DemoCursorStartX;
+        CarouselDemoCursorTranslate.Y = DemoCursorStartY;
+        CarouselDemoMenuFace.Width = 8;
+        CarouselDemoMenuFace.Height = 48;
+        CarouselDemoMenuFace.CornerRadius = new CornerRadius(4);
+        CarouselDemoMenuIcon.Opacity = 0;
+        CarouselDemoMenuTranslate.X = 6;
+        // N4-20: reset the hover easing state + menu scales too - without it a reopened carousel
+        // started from the mid-transition values of the previous display (single display per
+        // process, so this is purely defensive).
+        for (int i = 0; i < 4; i++)
+        {
+            _menuHoverLift[i] = 0;
+            _menuHoverScale[i] = 1.0;
+            _menuHoverLiftTarget[i] = 0;
+            _menuHoverScaleTarget[i] = 1.0;
+        }
+        CarouselMenuScale0.ScaleX = CarouselMenuScale0.ScaleY = 1.0;
+        CarouselMenuScale1.ScaleX = CarouselMenuScale1.ScaleY = 1.0;
+        CarouselMenuScale2.ScaleX = CarouselMenuScale2.ScaleY = 1.0;
+        CarouselMenuScale3.ScaleX = CarouselMenuScale3.ScaleY = 1.0;
+    }
+
+    // ===================== 9.3 carousel page 1: four NavBar-style tab buttons + intro =====================
+
+    /// <summary>
+    /// 9.3 Fill the four tab buttons (real NavBar layout: Path 20x20 + 14px text, real icon paths
+    /// and Nav_Tab_* keys) and preselect the first tab so the intro area is never empty.
+    /// </summary>
+    private void BuildCarouselPage1()
+    {
+        CarouselP1Title.Text = App.GetString("Carousel_P1_Title");
+        BuildCarouselP1Tab(CarouselP1BtnMemo, IconData.NavMemo, "Nav_Tab_Memo");
+        BuildCarouselP1Tab(CarouselP1BtnFile, IconData.NavFile, "Nav_Tab_File");
+        BuildCarouselP1Tab(CarouselP1BtnPlan, IconData.NavPlan, "Nav_Tab_Plan");
+        BuildCarouselP1Tab(CarouselP1BtnDiary, IconData.NavDiary, "Nav_Tab_Diary");
+        SetCarouselP1Selection(CarouselP1BtnMemo, "Carousel_P1_Memo"); // default = first tab (owner-approved)
+    }
+
+    // One tab button content = Path(20x20) + 14px text - the real NavBar button layout.
+    private static void BuildCarouselP1Tab(Button btn, string iconPath, string textKey)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        panel.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+        {
+            Width = 20,
+            Height = 20,
+            Stretch = Stretch.Uniform,
+            Data = App.CreateGeometry(iconPath),
+            Fill = App.GetBrush("IconForegroundBrush"),
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = App.GetString(textKey),
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        btn.Content = panel;
+    }
+
+    private void CarouselP1Tab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string introKey)
+            SetCarouselP1Selection(btn, introKey);
+    }
+
+    private Microsoft.UI.Xaml.Media.ThemeShadow? _carouselP1Shadow; // carousel-only receiver - the real nav receiver lives inside the hidden NavBar
+
+    private void SetCarouselP1Selection(Button selected, string introKey)
+    {
+        // Full replica of the real NavBar selection visuals (UpdateNavSelection): raised background,
+        // brand-blue text+icon on selection, dim gray text + 0.6 fade otherwise, NO border.
+        // The lift reads through ThemeShadow: on the dialog background the raised face alone is
+        // invisible (same tone), the Z=20 shadow is what makes the selection obvious (real nav parity).
+        var buttons = new[] { CarouselP1BtnMemo, CarouselP1BtnFile, CarouselP1BtnPlan, CarouselP1BtnDiary };
+        var dimBrush = App.GetBrush("AppTextTertiaryBrush");
+        var brandBrush = App.GetBrush("AppPrimaryButtonBrush");
+        var iconBrush = App.GetBrush("IconForegroundBrush");
+        var clearBg = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        var raisedBg = App.GetBrush("NavFaceRaisedBrush");
+        try
+        {
+            if (_carouselP1Shadow == null)
+            {
+                _carouselP1Shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
+                _carouselP1Shadow.Receivers.Add(CarouselP1ShadowReceiver);
+                foreach (var b in buttons) b.Shadow = _carouselP1Shadow;
+            }
+        }
+        catch { }
+        foreach (var b in buttons)
+        {
+            bool sel = b == selected;
+            b.Background = sel ? raisedBg : clearBg;
+            b.Foreground = sel ? brandBrush : dimBrush; // TextBlock inherits - same as the real NavBar
+            b.Translation = sel ? new System.Numerics.Vector3(0f, 0f, 20f) : System.Numerics.Vector3.Zero; // lift = the real nav signal
+            SetNavOpacity(b, sel ? 1.0 : 0.6, NavBar.IsLoaded); // same pulse engine as the real NavBar
+            if (b.Content is StackPanel sp && sp.Children.Count > 0 && sp.Children[0] is Microsoft.UI.Xaml.Shapes.Path icon)
+                icon.Fill = sel ? brandBrush : iconBrush;
+        }
+        // intro text: swap content, fade in 200ms (opacity animation precedent: ShowWelcomeCarousel)
+        CarouselP1Intro.Text = App.GetString(introKey);
+        CarouselP1Intro.Opacity = 0;
+        var sb = new Storyboard();
+        var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(oi, CarouselP1Intro); Storyboard.SetTargetProperty(oi, "Opacity"); sb.Children.Add(oi);
+        sb.Begin();
+    }
+
+    // ===================== 9.3 carousel page 2: hamburger handle auto-demo =====================
+
+    /// <summary>9.3 Fill page-2 texts and the mirrored hamburger icon (real IconData.Menu).</summary>
+    private void BuildCarouselPage2()
+    {
+        CarouselP2Title.Text = App.GetString("Carousel_P2_Title");
+        CarouselP2Intro.Text = App.GetString("Carousel_P2_Desc");
+        CarouselDemoMenuIcon.Data = App.CreateGeometry(IconData.Menu);
+    }
+
+    // Demo script constants (owner-approved loop, 4.5s per round). Cursor tip coordinates are
+    // carousel-card pixels; the end point tracks the handle position (margin right 70 / bottom 115).
+    private const double DemoCursorStartX = 140, DemoCursorStartY = 150; // far side of the card
+    private const double DemoCursorEndX = 600, DemoCursorEndY = 313;     // tip lands on the handle bar
+
+    private static double DemoEaseInOut(double t) => t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
+    private static double DemoCubicOut(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 3); // real melt easing
+    private static double DemoLerp(double a, double b, double k) => a + (b - a) * k;
+
+    private double _carouselDemoStart; // demo-local clock origin - reset whenever the user lands on page 2
+
+    private double CarouselClockSeconds() => (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency - _carouselFloatStart;
+
+    /// <summary>
+    /// 9.3 Page-2 demo timeline (demo-local clock): cursor approaches (1.0s) -> handle melts open
+    /// (0.32s, real transition) -> hold (1.08s) -> cursor leaves AND handle melts back starting at
+    /// the SAME instant (real PointerExited behavior - owner: the collapse must follow the cursor,
+    /// not run ahead of it) -> short breathing rest (1.2s) -> loop. Mirror of the real hamburger
+    
+    /// </summary>
+    private void ApplyCarouselDemo(double t)
+    {
+        double phase = t % 4.4;
+        double p; // melt progress: 0 = collapsed bar, 1 = expanded hamburger
+        double cx, cy;
+        if (phase < 1.0)
+        {
+            double k = DemoEaseInOut(phase);
+            cx = DemoLerp(DemoCursorStartX, DemoCursorEndX, k);
+            cy = DemoLerp(DemoCursorStartY, DemoCursorEndY, k);
+            p = 0;
+        }
+        else if (phase < 1.32) { cx = DemoCursorEndX; cy = DemoCursorEndY; p = DemoCubicOut((phase - 1.0) / 0.32); }
+        else if (phase < 2.4) { cx = DemoCursorEndX; cy = DemoCursorEndY; p = 1; }
+        else
+        {
+            // leave phase [2.4, 3.2) and rest [3.2, 4.4): collapse starts exactly when the cursor
+            // starts moving away (same instant, no head start - that gap read as two animations)
+            if (phase < 3.2)
+            {
+                double k = DemoEaseInOut((phase - 2.4) / 0.8);
+                cx = DemoLerp(DemoCursorEndX, DemoCursorStartX, k);
+                cy = DemoLerp(DemoCursorEndY, DemoCursorStartY, k);
+            }
+            else { cx = DemoCursorStartX; cy = DemoCursorStartY; }
+            p = phase < 2.72 ? 1 - DemoCubicOut((phase - 2.4) / 0.32) : 0;
+        }
+
+        CarouselDemoCursorTranslate.X = cx;
+        CarouselDemoCursorTranslate.Y = cy;
+        // ApplyMenuProgress mirror (real: width/height/corner/icon opacity in lockstep)
+        CarouselDemoMenuFace.Width = 8 + (56 - 8) * p;
+        CarouselDemoMenuFace.Height = 48 + (32 - 48) * p;
+        CarouselDemoMenuFace.CornerRadius = new CornerRadius(4 + (8 - 4) * p);
+        CarouselDemoMenuIcon.Opacity = p;
+        
+        CarouselDemoMenuTranslate.X = p > 0.01 ? 6 : 6 + Math.Sin(t * 2 * Math.PI / 3.2) * 3;
+    }
+
+    // ===================== 9.3 carousel page 3: privacy lock showcase =====================
+
+    /// <summary>9.3 Fill page-3 texts: all cards replicate real settings-page entries (owner-picked:
+    /// MCP above, archive/restore below) and the lock card shows the unlocked state with two brand
+    /// blue buttons (Windows Hello on the left of the master switch - owner call).</summary>
+    private void BuildCarouselPage3()
+    {
+        CarouselP3Title.Text = App.GetString("Carousel_P3_Title");
+        CarouselP3Intro.Text = App.GetString("Carousel_P3_Desc");
+        CarouselMcpTitle.Text = App.GetString("Setting_Mcp_Title");
+        CarouselMcpAuditText.Text = App.GetString("Setting_Mcp_Audit_Button");
+        CarouselMcpConfigText.Text = App.GetString("Setting_Mcp_Config");
+        CarouselMcpToggleText.Text = App.GetString("Setting_Autostart_Off");
+        CarouselArchiveTitle.Text = App.GetString("Setting_Archive_Title");
+        CarouselArchiveButtonText.Text = App.GetString("Setting_Archive_ImportExport");
+        CarouselLockTitle.Text = App.GetString("Setting_PrivacyLock_Title");
+        CarouselLockHelloText.Text = App.GetString("Setting_WinHello_Title");
+        CarouselLockSetupText.Text = App.GetString("Setting_PrivacyLock_Setup");
+    }
+
+    // Flowing brand border removed (owner call: didn't work visually). Page-3 cards are pure
+    // Viewbox-scaled replicas now - no per-frame code needed for this page.
+
+
+    private Grid[] CarouselPageList = System.Array.Empty<Grid>();
+
+    private void BuildCarouselDots()
+    {
+        CarouselDots.Children.Clear();
+        for (int i = 0; i < CarouselPageList.Length; i++)
+        {
+            var idx = i;
+            // Border directly (no Button shell) - a transparent-background Button flashes system
+            // colors on hover (3.5 trap) and the dots must not react to hover at all.
+            var dot = new Border
+            {
+                CornerRadius = new CornerRadius(5),
+                Height = 10,
+                Width = idx == 0 ? 26 : 10,
+                Background = idx == 0 ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush"),
+                Margin = new Thickness(5, 5, 5, 5),
+            };
+            dot.Tapped += (_, _) => SetCarouselPage(idx);
+            CarouselDots.Children.Add(dot);
+        }
+    }
+
+    private void SetCarouselPage(int index)
+    {
+        // N2-47: wheel/dot page switches don't guarantee PointerExited - stale hover targets would
+        // ease a menu toward lifted/scaled on the next show until the pointer re-entered and left.
+        Array.Fill(_menuHoverLiftTarget, 0);
+        Array.Fill(_menuHoverScaleTarget, 1.0);
+        if (index < 0 || index >= CarouselPageList.Length) return;
+        _carouselPage = index;
+        if (index == 2) _carouselDemoStart = CarouselClockSeconds(); // owner call: landing on page 2 replays the demo from its first frame
+        for (int i = 0; i < CarouselPageList.Length; i++)
+            CarouselPageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        // 9.3: the X button appears ONLY on the last page - the user reads every card before closing (owner call)
+        CarouselCloseButton.Visibility = index == CarouselPageList.Length - 1 ? Visibility.Visible : Visibility.Collapsed;
+        // dots: selected grows into a brand-blue pill, others stay small gray dots
+        int dotIdx = 0;
+        foreach (var child in CarouselDots.Children)
+        {
+            if (child is Border dot)
+            {
+                bool sel = dotIdx == index;
+                dot.Width = sel ? 26 : 10;
+                dot.Background = sel ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush");
+                dotIdx++;
+            }
+        }
+    }
+
+    private void WelcomeCarousel_WheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(WelcomeCarousel).Properties.MouseWheelDelta;
+        if (delta < 0) SetCarouselPage(_carouselPage + 1); // scroll down = next page
+        else if (delta > 0) SetCarouselPage(_carouselPage - 1); // scroll up = previous page
+        e.Handled = true;
+    }
+
     private void ShowMainContent()
     {
         BottomToolbarPanel.Visibility = Visibility.Visible;
@@ -1274,6 +2036,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         NavigateToPage(tab);
         UpdateNavSelection(navButton);
         UpdateNavBarVisibility(); // G7: single visible tab hides the whole bar (welcome-click path must not force-show it)
+        UpdateWorkspaceSwitcher(); // 9.3 Workspace: title-bar switcher visibility from the workspace list
     }
 
     private (string Tab, Button Nav) FirstVisibleTab()
@@ -1349,6 +2112,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 App.Store.SaveSync(); // E4-25: synchronous persist - a fast exit right after the welcome tap must not lose the flag
             }
             ShowMainContent();
+            MaybeShowWelcomeCarousel(); // 9.3: first-launch promo carousel (debug builds replay every launch)
             NavBar.Opacity = 0;
             var fadeIn = new Storyboard();
             var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
@@ -1502,7 +2266,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _searchPage ??= new SearchPage();
         _searchPage.ApplyTexts();
         _searchPage.ResetSearch(); // always re-enter blank - the instance is cached
+        var prevContent = RootFrame.Content;
         RootFrame.Content = _searchPage;
+        PlayPageIn(prevContent); // M2: page-in transition
         // Full-blank page like settings: hide the navbar / settings button / custom title bar.
         NavBar.Visibility = Visibility.Collapsed;
         BottomToolbarPanel.Visibility = Visibility.Collapsed;
@@ -1519,6 +2285,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (prev != null)
         {
             RootFrame.Content = prev;
+            PlayPageIn(_searchPage); // M2: page-in transition (previous = the search page we are leaving)
             RestoreChromeFor(prev); // D14: unified restore - full-screen pages (incl. trash) keep their chrome hidden
         }
     }
@@ -1638,6 +2405,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         string tag = kind switch { "memo" => "Memo", "path" => "File", "todo" => "Plan", "note" => "Plan", "diary" => "Diary", _ => "" };
         if (tag != "" && !IsTabVisible(tag)) { App.ShowToast(App.GetString("Common_Tab_Hidden_Toast")); return; }
         CloseSearchPage();
+        EnsureTargetWorkspaceVisible(kind, id); 
         switch (kind)
         {
             case "memo":
@@ -1666,6 +2434,38 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         RestoreChromeFor(RootFrame.Content);
     }
 
+    /// <summary>9.3 Workspace C2: if the jump target belongs to a workspace, switch to it so the
+    /// card is visible after the jump (search stays global, but the landing page must show it).</summary>
+    private void EnsureTargetWorkspaceVisible(string kind, string id)
+    {
+        var db = App.Store?.Database;
+        if (db == null) return;
+        string? wsId = null;
+        if (kind == "memo" && Guid.TryParse(id, out var mg)) wsId = db.MemoEntries.FirstOrDefault(x => x.Id == mg)?.WorkspaceId;
+        else if (kind == "path" && Guid.TryParse(id, out var pg)) wsId = db.PathBackupItems.FirstOrDefault(x => x.Id == pg)?.WorkspaceId;
+        else if (kind == "todo" && Guid.TryParse(id, out var tg)) wsId = db.TodoCards.FirstOrDefault(x => x.Id == tg)?.WorkspaceId;
+        else if (kind == "note" && Guid.TryParse(id, out var ng)) wsId = db.NoteCards.FirstOrDefault(x => x.Id == ng)?.WorkspaceId;
+        else if (kind == "diary") wsId = db.DiaryItems.FirstOrDefault(x => x.Id == id)?.WorkspaceId;
+
+        if (!string.IsNullOrEmpty(wsId) && App.CurrentWorkspaceId != wsId)
+        {
+            App.CurrentWorkspaceId = wsId;
+            UpdateWorkspaceSwitcher();
+            RefreshWorkspaceFilters();
+            return;
+        }
+        // N3-43: the target is UNASSIGNED (WorkspaceId empty) while a workspace view is active -
+        // unassigned cards are hidden under any workspace filter, so the flash target would be
+        
+        // card is reachable (search is global by design, doc 9.3 UI decisions #3).
+        if (string.IsNullOrEmpty(wsId) && !string.IsNullOrEmpty(App.CurrentWorkspaceId))
+        {
+            App.CurrentWorkspaceId = "";
+            UpdateWorkspaceSwitcher();
+            RefreshWorkspaceFilters();
+        }
+    }
+
     /// <summary>
     /// Retry flashing the jump target. Every attempt (including the first) waits for the target
     /// page to finish its post-content-switch layout, so TransformToVisual/ChangeView never run
@@ -1685,6 +2485,18 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void NavigateToPage(string tag)
     {
+        // N2-02: leaving the trash page via SearchJump / RunPaletteCommand / IPC edit all funnel
+        // through here and previously bypassed CloseTrashPage's rebuild - the cached tab page stayed
+        // stale and its next PersistAll physically dropped restored entries from the db (D13 class).
+        // Any navigation OUT of the trash page must run the same invalidation first.
+        if (_trashChanged && ReferenceEquals(RootFrame.Content, _trashPage))
+            InvalidateTrashStaleTabs();
+        var previous = RootFrame.Content; // M2: page-in transition dedup anchor
+        // N2-01: swap a page instance that missed external (MCP) db writes.
+        if (_memoStale && tag == "Memo") { _memoPage = new BasicMemoPage(); _memoStale = false; }
+        else if (_planStale && tag == "Plan") { _planPage = new PlanPage(); _planStale = false; }
+        else if (_fileStale && tag == "File") { _filePathPage = new FilePathPage(); _fileStale = false; }
+        else if (_diaryStale && tag == "Diary") { _diaryPage = new DiaryPage(); _diaryStale = false; }
         switch (tag)
         {
             case "Memo":
@@ -1704,6 +2516,39 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 RootFrame.Content = _diaryPage;
                 break;
         }
+        PlayPageIn(previous);
+    }
+
+    
+
+    private Storyboard? _pageInBoard;
+
+    
+    
+    
+    
+    private void PlayPageIn(object? previous)
+    {
+        if (ReferenceEquals(previous, RootFrame.Content)) return;
+        _pageInBoard?.Stop();
+        _pageInBoard = null;
+        var tt = RootFrame.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        RootFrame.RenderTransform = tt;
+        RootFrame.Opacity = 0;
+        tt.Y = 12;
+        var sb = new Storyboard();
+        var fi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(240) };
+        Storyboard.SetTarget(fi, RootFrame); Storyboard.SetTargetProperty(fi, "Opacity"); sb.Children.Add(fi);
+        sb.Children.Add(Services.Motion.Eased(0, 260, Services.Motion.Decelerate, tt, "Y"));
+        _pageInBoard = sb;
+        sb.Completed += (_, _) =>
+        {
+            if (_pageInBoard != sb) return; // a newer transition took over - it owns the reset
+            _pageInBoard = null;
+            RootFrame.Opacity = 1;
+            tt.Y = 0;
+        };
+        sb.Begin();
     }
 
     private void UpdateNavSelection(Button selected)
@@ -1747,7 +2592,92 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         bool planSelected = selected == NavPlan;
         NavPlanFilterButton.Visibility = planSelected ? Visibility.Visible : Visibility.Collapsed;
         NavPlanFilterIcon.Foreground = planSelected ? brandBrush : iconBrush;
+        UpdateNavIndicator(selected); 
     }
+
+    
+
+    private bool _navIndicatorPlaced;
+
+    
+    
+    private void WireNavGlowRelocation()
+    {
+        NavBar.SizeChanged += (_, _) =>
+        {
+            if (_selectedNavButton == null) return;
+            _navIndicatorPlaced = false;
+            UpdateNavIndicator(_selectedNavButton);
+        };
+    }
+
+    
+    
+    
+    private void UpdateNavIndicator(Button selected)
+    {
+        if (NavBar.Visibility != Visibility.Visible || selected == null
+            || selected.Visibility != Visibility.Visible || selected.ActualWidth < 1)
+        {
+            
+            var pending = selected;
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => { if (pending != null && NavBar.Visibility == Visibility.Visible && ReferenceEquals(_selectedNavButton, pending) && pending.Visibility == Visibility.Visible && pending.ActualWidth >= 1) UpdateNavIndicator(pending); }); // N5-T2-03
+            return;
+        }
+        var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
+        NavIndicator.Width = selected.ActualWidth; 
+        NavIndicator.Opacity = 1;
+        if (!_navIndicatorPlaced)
+        {
+            SetNavGlowX(pt.X); 
+            _navIndicatorPlaced = true;
+            return;
+        }
+        SlideNavGlow(pt.X);
+    }
+
+    
+    
+    private void SetNavGlowX(double x)
+    {
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator);
+            visual.Offset = new System.Numerics.Vector3((float)x, visual.Offset.Y, 0);
+        }
+        catch
+        {
+            
+            try { var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator); v.StopAnimation("Offset.X"); v.Offset = new System.Numerics.Vector3(0, v.Offset.Y, 0); } catch { }
+            NavIndicatorTranslate.X = x;
+        }
+    }
+
+    private void SlideNavGlow(double x)
+    {
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator);
+            float startX = visual.Offset.X;
+            var comp = visual.Compositor;
+            var anim = comp.CreateScalarKeyFrameAnimation();
+            anim.Duration = TimeSpan.FromMilliseconds(Services.Motion.Normal);
+            
+            anim.InsertKeyFrame(0.4f, Lerp(startX, (float)x, 0.55f));
+            anim.InsertKeyFrame(0.75f, Lerp(startX, (float)x, 0.87f));
+            anim.InsertKeyFrame(1.0f, (float)x);
+            visual.StartAnimation("Offset.X", anim);
+        }
+        catch
+        {
+            
+            try { var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator); v.StopAnimation("Offset.X"); v.Offset = new System.Numerics.Vector3(0, v.Offset.Y, 0); } catch { }
+            NavIndicatorTranslate.X = x;
+        }
+    }
+
+    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
     
     private static void SetNavOpacity(Microsoft.UI.Xaml.FrameworkElement el, double opacity, bool animate)
@@ -1831,6 +2761,96 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         menu.ShowAt(NavPlan, new Windows.Foundation.Point(0, NavPlan.ActualHeight + 4));
     }
 
+    // ===================== 9.3 Workspace: title-bar switcher =====================
+
+    /// <summary>Update the switcher's visibility/icon/text/color from the workspace list and App.CurrentWorkspaceId.</summary>
+    public void UpdateWorkspaceSwitcher()
+    {
+        var ws = App.Store?.Database.AppSettings.Workspaces;
+        if (ws == null || ws.Count == 0)
+        {
+            WorkspaceSwitcherButton.Visibility = Visibility.Collapsed;
+            App.CurrentWorkspaceId = "";
+            return;
+        }
+
+        WorkspaceSwitcherButton.Visibility = Visibility.Visible;
+        var brand = App.GetBrush("AppPrimaryButtonBrush");
+        var normal = App.GetBrush("AppTextSecondaryBrush");
+        var iconNormal = App.GetBrush("IconForegroundBrush");
+
+        var current = ws.FirstOrDefault(w => w.Id == App.CurrentWorkspaceId);
+        if (current == null) App.CurrentWorkspaceId = ""; 
+        bool active = current != null;
+        WorkspaceSwitcherIcon.Data = App.CreateGeometry(active ? IconData.GetGroupPath(current!.IconKey) : IconData.Mix);
+        WorkspaceSwitcherIcon.Foreground = active ? brand : iconNormal;
+        WorkspaceSwitcherText.Text = active ? current!.Name : App.GetString("Workspace_All");
+        WorkspaceSwitcherText.Foreground = active ? brand : normal;
+    }
+
+    /// <summary>9.3 Workspace: re-apply the workspace filter on every already-built tab page.
+    /// Unbuilt pages apply the filter lazily in their LoadFromStore.</summary>
+    public void RefreshWorkspaceFilters()
+    {
+        _memoPage?.ApplyCardFilters();
+        _filePathPage?.ApplyCardFilters();
+        _planPage?.ApplyCardFilters();
+        _diaryPage?.ApplyCardFilters();
+    }
+
+    
+    
+    private void UpdateWorkspaceSwitcherPosition()
+    {
+        if (_appWindow == null) return;
+        try
+        {
+            double rightInset = _appWindow.TitleBar.RightInset; // physical pixels
+            double scale = Content.XamlRoot?.RasterizationScale ?? 1.0;
+            double rightMargin = rightInset / scale + 8; // logical pixels + 8px gap
+            WorkspaceSwitcherButton.Margin = new Thickness(0, 0, rightMargin, 0);
+        }
+        catch { }
+    }
+
+    private void WorkspaceSwitcherButton_Click(object sender, RoutedEventArgs e)
+    {
+        var ws = App.Store?.Database.AppSettings.Workspaces;
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var activeBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        var iconBrush = App.GetBrush("IconForegroundBrush");
+
+        MenuFlyoutItem MakeItem(string text, string iconPath, bool active)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? activeBrush : normalBrush };
+            item.Icon = active
+                ? new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = activeBrush }
+                : new PathIcon { Data = App.CreateGeometry(iconPath), Foreground = iconBrush, Opacity = 0.6 };
+            return item;
+        }
+
+        var all = MakeItem(App.GetString("Workspace_All"), IconData.Mix, string.IsNullOrEmpty(App.CurrentWorkspaceId));
+        all.Click += (_, _) => { App.CurrentWorkspaceId = ""; UpdateWorkspaceSwitcher(); RefreshWorkspaceFilters(); };
+        menu.Items.Add(all);
+
+        if (ws != null)
+            foreach (var w in ws)
+            {
+                var item = MakeItem(w.Name, IconData.GetGroupPath(w.IconKey), w.Id == App.CurrentWorkspaceId);
+                var wid = w.Id;
+                item.Click += (_, _) => { App.CurrentWorkspaceId = wid; UpdateWorkspaceSwitcher(); RefreshWorkspaceFilters(); };
+                menu.Items.Add(item);
+            }
+
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var manage = MakeItem(App.GetString("Workspace_Manage"), string.Join(" ", IconData.Settings), false);
+        manage.Click += (_, _) => NavigateToSettings(openWorkspace: true);
+        menu.Items.Add(manage);
+
+        menu.ShowAt(WorkspaceSwitcherButton, new Windows.Foundation.Point(0, WorkspaceSwitcherButton.ActualHeight + 4));
+    }
+
     private void UpdateNavBarVisibility()
     {
         // G1: welcome overlay visible -> navbar hidden (bug fix: ApplyVisibleTabs on startup
@@ -1858,6 +2878,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _filePathPage = null!;
         _planPage = null!;
         _diaryPage = null!;
+        _memoStale = _planStale = _fileStale = _diaryStale = false; // N2-01: fresh instances below already contain external writes
         _diaryEditorPage?.Shutdown(); 
         _diaryEditorPage = null!; 
         _settingsPage = null!;
@@ -1879,6 +2900,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             BottomToolbarPanel.Visibility = Visibility.Visible;
             CustomTitleBar.Visibility = Visibility.Visible;
         }
+        UpdateWorkspaceSwitcher(); 
     }
 
     public void UpsertDiary(DiaryEntry entry)
@@ -1947,7 +2969,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         fadeOut.Begin();
     }
 
-    private void NavigateToSettings()
+    private void NavigateToSettings(bool openWorkspace = false)
     {
         _settingsPage ??= new SettingsPage();
         _previousContent = RootFrame.Content;
@@ -1968,6 +2990,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             BottomToolbarPanel.Visibility = Visibility.Collapsed;
             CustomTitleBar.Visibility = Visibility.Collapsed;
             WelcomeOverlay.Visibility = Visibility.Collapsed;
+            if (openWorkspace) _settingsPage.OpenWorkspaceManagement(); 
 
             var fadeIn = new Storyboard();
             var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
@@ -2029,6 +3052,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void ShowCorruptStoreDialog()
     {
+        StoreCorruptDangerIcon.Data = App.CreateGeometry(IconData.Danger); // N2-13: danger triangle
         _corruptDialogIsIoError = false; // E3-12
         StoreCorruptTitleText.Text = App.GetString("Store_Corrupt_Title");
         StoreCorruptDetailText.Text = App.GetString("Store_Corrupt_Detail");
@@ -2053,9 +3077,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void ShowCorruptDialogCore()
     {
-        StoreCorruptDialogTransform.ScaleX = 0.92;
-        StoreCorruptDialogTransform.ScaleY = 0.92;
-        StoreCorruptDialogTransform.TranslateY = 20;
+        StoreCorruptDialogTransform.ScaleX = 0.94; StoreCorruptDialogTransform.ScaleY = 0.94; StoreCorruptDialogTransform.TranslateY = 24;
         StoreCorruptDialog.Opacity = 0;
         StoreCorruptOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -2122,15 +3144,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 LockScreenFrame.Content = null;
                 WelcomeEntryAnimation.Begin();
             }
+            else
+            {
+                ShowMainContent(); // N2-49: plaintext + skipped-welcome rebuild left RootFrame empty and chrome hidden - unrecoverable without a restart
+            }
         }
     }
 
     private void ShowSaveFailedDialog()
     {
         _animSaveFailedHide = false; // R1 (Round 5): reset re-entry flag when new animation takes over (prevent stuck state)
-        SaveFailedDialogTransform.ScaleX = 0.92;
-        SaveFailedDialogTransform.ScaleY = 0.92;
-        SaveFailedDialogTransform.TranslateY = 20;
+        SaveFailedDialogTransform.ScaleX = 0.94; SaveFailedDialogTransform.ScaleY = 0.94; SaveFailedDialogTransform.TranslateY = 24;
         SaveFailedDialog.Opacity = 0;
         SaveFailedOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -2238,7 +3262,7 @@ private void ShowThemeRestartOverlay()
         // user cannot cancel mid-flow; if they somehow did, abort the restart below.
         if (RootFrame.Content is DiaryEditorPage pendingEditor)
         {
-            try { await pendingEditor.SaveCurrentDiaryAsync(); } catch { }
+            try { await pendingEditor.SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); } catch { } 
             if (ThemeRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; } // cancelled during flush
         }
 
@@ -2261,6 +3285,7 @@ private void ShowThemeRestartOverlay()
         catch
         {
             // C3: launch failed - keep current session, retryable
+            AcquireSingleInstance(); 
             _restarting = false;
             return;
         }
@@ -2319,12 +3344,13 @@ private void ShowThemeRestartOverlay()
 
     private void ShowMcpAuthorizeDialog(string clientPath, Action<bool> onResult)
     {
+        // N2-50/E3-11: the plaintext welcome page occludes the target page - the dialog would open
+        // unseen and be dropped when the welcome tap navigates away. The agent just re-requests.
+        if (WelcomeOverlay.Visibility == Visibility.Visible) { onResult?.Invoke(false); return; }
         _mcpAuthorizeResult = onResult;
         McpAuthorizePath.Text = clientPath;
         McpAuthorizePath.Visibility = string.IsNullOrEmpty(clientPath) ? Visibility.Collapsed : Visibility.Visible;
-        McpAuthorizeDialogTransform.ScaleX = 0.92;
-        McpAuthorizeDialogTransform.ScaleY = 0.92;
-        McpAuthorizeDialogTransform.TranslateY = 20;
+        McpAuthorizeDialogTransform.ScaleX = 0.94; McpAuthorizeDialogTransform.ScaleY = 0.94; McpAuthorizeDialogTransform.TranslateY = 24;
         McpAuthorizeDialog.Opacity = 0;
         McpAuthorizeOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -2332,11 +3358,7 @@ private void ShowThemeRestartOverlay()
         Storyboard.SetTarget(da, McpAuthorizeScrim); Storyboard.SetTargetProperty(da, "Opacity"); sb.Children.Add(da);
         var dda = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(dda, McpAuthorizeDialog); Storyboard.SetTargetProperty(dda, "Opacity"); sb.Children.Add(dda);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, McpAuthorizeDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, McpAuthorizeDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
         StartMcpAuthorizeExpiry(); // N4C-01
     }
@@ -2355,11 +3377,7 @@ private void ShowThemeRestartOverlay()
         Storyboard.SetTarget(so, McpAuthorizeScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, McpAuthorizeDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, McpAuthorizeDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, McpAuthorizeDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) =>
         {
             McpAuthorizeOverlay.Visibility = Visibility.Collapsed; _mcpAuthorizeAnimating = false;
@@ -2378,12 +3396,15 @@ private void ShowThemeRestartOverlay()
 
     private void McpAuthorizeAllow_Click(object sender, RoutedEventArgs e)
     {
+        // N2-50/E3-11: the plaintext welcome page occludes the target page - navigating to settings
+        // from under it stranded RootFrame empty. Same guard as HandleEditRequest.
+        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
         // 9.2#5 (D4): land the fresh client on its permission editor immediately - the default set
         // only reads non-sensitive zones, so the user should see and adjust the matrix right away.
         var path = McpAuthorizePath.Text;
         if (!string.IsNullOrEmpty(path) && App.Store != null)
         {
-            McpPermissions.EnsureDefaultRecord(App.Store.Database.AppSettings, path); // idempotent, pre-seeds before the pipe-thread write
+            McpService.SeedDefaultPermission(path); // N2-21: pre-seed under WhitelistGate (idempotent, before the pipe-thread write)
             NavigateToSettings();
             DispatcherQueue.TryEnqueue(() => _settingsPage?.OpenMcpPermEditor(path)); // next frame - page may have just been created
         }

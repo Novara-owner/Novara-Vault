@@ -1,10 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.LockScreenPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:app="using:Novara"
+    xmlns:services="using:Novara.Services"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Background="{ThemeResource AppSurfaceBrush}">
@@ -88,6 +89,9 @@
                     </Grid.ColumnDefinitions>
 
                     
+
+
+
                     <PasswordBox x:Name="PasswordInput" Grid.Column="0" Width="340" Height="48" MaxLength="64"
                                  PlaceholderText="{x:Bind app:App.GetString(\'Lock_Password_Placeholder\')}"
                                  CornerRadius="14"
@@ -255,10 +259,15 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_Hint\')}"
-                                       HorizontalAlignment="Left" VerticalAlignment="Center"
-                                       FontSize="18" FontWeight="SemiBold"
-                                       Foreground="#FFFF4545" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <PathIcon x:Name="ForgotDangerIcon" Foreground="#FF4545" />
+                                </Viewbox>
+                                <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_Hint\')}"
+                                           VerticalAlignment="Center"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           Foreground="#FFFF4545" />
+                            </StackPanel>
                             <Button HorizontalAlignment="Right" VerticalAlignment="Center"
                                     Width="28" Height="28"
                                     Style="{StaticResource NovaraIconButtonStyle}"
@@ -282,7 +291,8 @@
                                     Click="ForgotCancel_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="160" Height="36"
+                            <services:CountdownBorder x:Name="ForgotCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="ForgotConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
                                     Background="#CCFF4545" Foreground="#FFFFFFFF"
                                     CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                     BorderThickness="0"
@@ -316,9 +326,10 @@
                                 </Button.Template>
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_ConfirmButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
+                            </services:CountdownBorder>
+                            </Grid>
                         </Grid>
-                    </Grid>
-                </Border>
+                    </Border>
             </Grid>
         </Grid>
 

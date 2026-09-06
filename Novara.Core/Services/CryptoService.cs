@@ -85,7 +85,10 @@ public static class CryptoService
 
     public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt, int iterations = LegacyIterations, byte[]? associatedData = null)
     {
-        if (data.Length < GcmNonceSize + GcmTagSize) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
+        // N3-23: nonce(12)+tag(16) is the framing overhead - a cipher body must carry at least 1
+        // byte of real ciphertext, so the strict floor is 29, not 28 (28 = zero-length body that
+        // would otherwise slip past the guard and fail later inside AesGcm).
+        if (data.Length < GcmNonceSize + GcmTagSize + 1) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
         var key = DeriveKey(password, deriveSalt, iterations);
         var nonce = data.AsSpan(0, GcmNonceSize);
         var tag = data.AsSpan(GcmNonceSize, GcmTagSize);
@@ -107,10 +110,20 @@ public static class CryptoService
 
     private static byte[] Decompress(byte[] data)
     {
+        
+        const long MaxDecompressed = 256L * 1024 * 1024;
         using var input = new MemoryStream(data);
         using var gz = new GZipStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
-        gz.CopyTo(output);
+        var buffer = new byte[81920];
+        int read;
+        long total = 0;
+        while ((read = gz.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            total += read;
+            if (total > MaxDecompressed) throw new InvalidOperationException("decompressed payload exceeds the safety limit");
+            output.Write(buffer, 0, read);
+        }
         return output.ToArray();
     }
 }

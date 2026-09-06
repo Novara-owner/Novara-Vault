@@ -1,4 +1,10 @@
 
+
+
+
+
+
+
 using Windows.Security.Credentials;
 using Windows.Security.Credentials.UI;
 
@@ -47,7 +53,11 @@ public static class WindowsHelloService
         {
             var vault = new PasswordVault();
             foreach (var c in vault.FindAllByResource(Resource))
-                if (c.UserName == UserName) vault.Remove(c);
+                if (c.UserName == UserName)
+                {
+                    try { c.RetrievePassword(); } catch { } 
+                    vault.Remove(c);
+                }
         }
         catch { }
     }
@@ -77,6 +87,11 @@ public static class WindowsHelloService
     public static async Task<UserConsentVerificationResult> RequestVerificationAsync(string message)
     {
         try { return await UserConsentVerifier.RequestVerificationAsync(message); }
-        catch { return UserConsentVerificationResult.DeviceNotPresent; }
+        catch (System.Exception ex)
+        {
+            
+            System.Diagnostics.Debug.WriteLine($"Windows Hello verification error: {ex.Message}");
+            return UserConsentVerificationResult.DeviceBusy; 
+        }
     }
 }

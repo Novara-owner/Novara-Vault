@@ -127,4 +127,25 @@ public class DatabaseHealthTests : IDisposable
         h2p[4] = 2; h2p[5] = 0; 
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h2p, gcmBody)));
     }
+
+    [Fact]
+    public void Verify_GcmV3_KdfHardened_Structured_And_ExplicitVersionGate()
+    {
+        
+        
+        var gcmBody = new byte[12 + 16 + 32];
+        RandomNumberGenerator.Fill(gcmBody);
+        var h3 = new byte[22];
+        BitConverter.TryWriteBytes(h3.AsSpan(0, 4), 0x41564F4E);
+        h3[4] = 3; h3[5] = 1; // v3 + encrypted
+        Assert.Equal(DataFileIntegrity.EncryptedStructured, DatabaseHealth.VerifyDataFile(WriteDataFile(h3, gcmBody)));
+
+        var truncated = gcmBody[..20]; 
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h3, truncated)));
+
+        var h3p = new byte[22];
+        BitConverter.TryWriteBytes(h3p.AsSpan(0, 4), 0x41564F4E);
+        h3p[4] = 3; h3p[5] = 0; 
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h3p, gcmBody)));
+    }
 }

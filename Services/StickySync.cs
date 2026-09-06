@@ -24,8 +24,16 @@ public static class StickySync
     {
         var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
         var tmp = JsonPath + ".tmp";
-        File.WriteAllText(tmp, json);
-        File.Move(tmp, JsonPath, true);
+        try
+        {
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, JsonPath, true);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch { } // N4-24: N3-21 pattern - don't leave a stray *.tmp behind on failure
+            throw;
+        }
     }
 
 
@@ -405,6 +413,9 @@ public static class StickySync
     private static void ApplyTodoChanges()
     {
         if (_applying) return;
+        
+        
+        if (App.Store?.IsSaveSuppressed == true) return;
         _applying = true;
         try
         {
@@ -412,6 +423,7 @@ public static class StickySync
             if (db == null) return;
             var data = Load();
             if (data?.Notes is not { Count: > 0 }) return;
+            bool changed = false;
             foreach (var n in data.Notes)
             {
                 if (n.Kind != "todo" || n.Items == null) continue;
@@ -421,9 +433,12 @@ public static class StickySync
                 var states = BuildStatesFromItems(todo, n.Items);
                 if (StatesEqual(todo.CheckedStates, states)) continue;
                 todo.CheckedStates = states;
-                App.Store?.SaveAsync();
+                changed = true;
                 _onTodoChanged?.Invoke(id, states);
             }
+            // N3-33: save ONCE after the loop (the debounce inside SaveAsync already coalesced, but
+            // N fire-and-forget calls per round was needless churn); UI notify stays per-card above.
+            if (changed) App.Store?.SaveAsync();
         }
         catch { }
         finally { _applying = false; }
@@ -490,15 +505,20 @@ internal static class StickiesLock
 
     public static IDisposable Enter()
     {
-        try { Mutex.WaitOne(); }
-        catch (AbandonedMutexException) { /* previous holder died while holding it - we now own it */ }
-        return new Releaser(Mutex);
+        // N2-09 (N1-41 parity with the host side): bounded wait - the host holding the lock must
+        // not freeze the main-program UI forever (all callers run on the UI thread). On timeout
+        // proceed WITHOUT the lock: atomic tmp+move writes keep the file consistent, and
+        // last-writer-wins is an acceptable degradation for a stuck host.
+        bool acquired;
+        try { acquired = Mutex.WaitOne(TimeSpan.FromSeconds(3)); }
+        catch (AbandonedMutexException) { acquired = true; } // previous holder died while holding it - we now own it
+        return new Releaser(acquired ? Mutex : null);
     }
 
     private sealed class Releaser : IDisposable
     {
         private Mutex? _m;
-        public Releaser(Mutex m) => _m = m;
+        public Releaser(Mutex? m) => _m = m;
         public void Dispose()
         {
             try { _m?.ReleaseMutex(); } catch { }

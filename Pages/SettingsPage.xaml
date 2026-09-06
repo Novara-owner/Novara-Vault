@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:app="using:Novara"
     xmlns:local="using:Novara.Pages"
+    xmlns:services="using:Novara.Services"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
@@ -275,7 +276,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Background="Transparent" Margin="24,0,24,12">
+        <Grid Grid.Row="0" Background="Transparent" Margin="24,20,24,12">
             <Button x:Name="BackButton"
                     Click="BackButton_Click"
                     Width="36" Height="36"
@@ -666,6 +667,36 @@
                 </Grid>
             </Border>
 
+            
+            <Border x:Name="QuickCaptureCard" CornerRadius="12"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" x:Name="QuickCaptureTitleText" Margin="4,0,0,0"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Margin="-8,0,0,0">
+                        <Button x:Name="QuickCaptureHotkeyButton" Width="160" Height="40"
+                                Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                                VerticalAlignment="Center" Click="QuickCaptureHotkeyButton_Click">
+                            <TextBlock x:Name="QuickCaptureHotkeyText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="QuickCaptureSwitchButton" Width="160" Height="40"
+                                Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                                VerticalAlignment="Center" Click="QuickCaptureSwitchButton_Click">
+                            <TextBlock x:Name="QuickCaptureSwitchText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <Border x:Name="Card6" CornerRadius="12" Opacity="0"
                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                     BorderBrush="{ThemeResource AppBorderBrush}"
@@ -856,6 +887,52 @@
                 <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
             </Border>
 
+            
+            <Border x:Name="NetActivityCard" CornerRadius="12"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" x:Name="NetActivityTitleText" Margin="4,0,0,0"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                    <Button Grid.Column="2" x:Name="NetActivityPanelButton" Width="160" Height="40"
+                            Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                            VerticalAlignment="Center" Margin="-8,0,0,0" Click="NetActivityPanelButton_Click">
+                        <TextBlock x:Name="NetActivityPanelButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            
+            <Border x:Name="WorkspaceCard" CornerRadius="12"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" x:Name="WorkspaceCardTitleText" Margin="4,0,0,0"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                    <Button Grid.Column="2" x:Name="WorkspaceManageButton" Width="160" Height="40"
+                            Style="{StaticResource SettingsDropdownButtonStyle}" CornerRadius="10" FontSize="14"
+                            VerticalAlignment="Center" Margin="-8,0,0,0" Click="WorkspaceManageButton_Click">
+                        <TextBlock x:Name="WorkspaceManageButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <Border x:Name="Card10" CornerRadius="12" Opacity="0"
                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                     BorderBrush="{ThemeResource AppBorderBrush}"
@@ -984,41 +1061,13 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Background="#CCFF4545" Foreground="#FFFFFFFF"
-                            CornerRadius="10" FontSize="14" FontWeight="SemiBold"
+                            Style="{StaticResource SettingsDropdownButtonStyle}"
+                            CornerRadius="10" FontSize="14"
                             VerticalAlignment="Center"
                             Margin="-8,0,0,0"
-                            BorderThickness="0"
                             x:Name="ResetDataButton"
                             Click="ResetDataButton_Click">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
-                                    <VisualStateManager.VisualStateGroups>
-                                        <VisualStateGroup x:Name="CommonStates">
-                                            <VisualState x:Name="Normal" />
-                                            <VisualState x:Name="PointerOver">
-                                                <Storyboard>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
-                                                    </ObjectAnimationUsingKeyFrames>
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="Pressed">
-                                                <Storyboard>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
-                                                    </ObjectAnimationUsingKeyFrames>
-                                                </Storyboard>
-                                            </VisualState>
-                                            <VisualState x:Name="Disabled" />
-                                        </VisualStateGroup>
-                                    </VisualStateManager.VisualStateGroups>
-                                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Grid>
-                            </ControlTemplate>
-                        </Button.Template>
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Reset_Button\')}"
+                        <TextBlock x:Name="ResetDataButtonText"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Button>
@@ -1068,7 +1117,12 @@
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTitle\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="ResetConfirmDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ResetConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -1081,14 +1135,15 @@
                                 Click="ResetCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36"
-                                Background="#CCFF4545" Foreground="#FFFFFFFF"
-                                CornerRadius="10" FontSize="14" FontWeight="SemiBold"
-                                BorderThickness="0"
-                                Click="ResetConfirmButton_Click">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                        <services:CountdownBorder x:Name="ResetConfirmCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="ResetConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
+                                    Background="#CCFF4545" Foreground="#FFFFFFFF"
+                                    CornerRadius="10" FontSize="14" FontWeight="SemiBold"
+                                    BorderThickness="0"
+                                    Click="ResetConfirmButton_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
                                         <VisualStateManager.VisualStateGroups>
                                             <VisualStateGroup x:Name="CommonStates">
                                                 <VisualState x:Name="Normal" />
@@ -1115,12 +1170,80 @@
                             </Button.Template>
                             <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Reset_Button\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
+                        </services:CountdownBorder>
                     </Grid>
                 </Grid>
             </Border>
         </Grid>
 
         <!-- ================================================================ -->
+
+        
+        <Grid x:Name="PageWipeOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="PageWipeScrim" Background="#2E000000" Tapped="PageWipeScrim_Tapped" />
+            <Border x:Name="PageWipeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="PageWipeDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="PageWipeTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="PageWipeClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="PageWipeMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="PageWipeSoftButton_Click">
+                            <TextBlock x:Name="PageWipeSoftText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14" Click="PageWipeHardButton_Click">
+                            <TextBlock x:Name="PageWipeHardText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="PageWipeFinalOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="PageWipeFinalScrim" Background="#2E000000" Tapped="PageWipeFinalScrim_Tapped" />
+            <Border x:Name="PageWipeFinalDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="PageWipeFinalDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="PageWipeFinalDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="PageWipeFinalTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="PageWipeFinalClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="PageWipeFinalMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="PageWipeFinalCancel_Click">
+                            <TextBlock x:Name="PageWipeFinalCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <services:CountdownBorder x:Name="PageWipeFinalCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="PageWipeFinalOkButton" HorizontalAlignment="Center" Width="160" Height="36" Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14" Click="PageWipeFinalOk_Click">
+                                <TextBlock x:Name="PageWipeFinalOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </services:CountdownBorder>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- ================================================================ -->
         <Grid x:Name="SetPasswordOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -1172,13 +1295,13 @@
                                   FontSize="13"
                                   Content="{x:Bind app:App.GetString(\'Setting_PrivacyLock_LockoutLabel\')}" />
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="SetPasswordClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="SetPasswordConfirm_Click">
@@ -1223,13 +1346,13 @@
                                    FontSize="14" TextWrapping="Wrap" LineHeight="22"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}" />
                         <Grid>
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="WindowsHelloClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString('Common_Button_Cancel')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="WindowsHelloGotoSettings_Click">
@@ -1295,13 +1418,13 @@
                                      MaxLength="64" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ChangePasswordClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ChangePasswordConfirm_Click">
@@ -1328,10 +1451,15 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
-                                   HorizontalAlignment="Left" VerticalAlignment="Center"
-                                   FontSize="18" FontWeight="SemiBold"
-                                   Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="CloseLockDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
+                                       VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="#FF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
@@ -1352,13 +1480,13 @@
                                      MaxLength="64" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ClosePrivacyLockClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ClosePrivacyLockConfirm_Click">
@@ -1511,6 +1639,99 @@
                 </Border>
             </Grid>
 
+            
+            <Grid x:Name="QuickCaptureInfoOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="QuickCaptureInfoScrim" Background="#2E000000" Tapped="QuickCaptureInfoScrim_Tapped" />
+                <Border x:Name="QuickCaptureInfoDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="QuickCaptureInfoDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <TextBlock x:Name="QuickCaptureInfoTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="QuickCaptureInfoClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <TextBlock x:Name="QuickCaptureInfoMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <Grid Grid.Row="2" Margin="0,24,0,0">
+                            <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="QuickCaptureInfoCancel_Click">
+                                <TextBlock x:Name="QuickCaptureInfoCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="QuickCaptureInfoOk_Click">
+                                <TextBlock x:Name="QuickCaptureInfoOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            
+            <Grid x:Name="PageGroupLossOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="PageGroupLossScrim" Background="#2E000000" Tapped="PageGroupLossScrim_Tapped" />
+                <Border x:Name="PageGroupLossDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="PageGroupLossDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <PathIcon x:Name="PageGroupLossDangerIcon" Foreground="#FF4545" />
+                                </Viewbox>
+                                <TextBlock x:Name="PageGroupLossTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                            </StackPanel>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="PageGroupLossClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <TextBlock x:Name="PageGroupLossMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <Grid Grid.Row="2" Margin="0,24,0,0">
+                            <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="PageGroupLossCancel_Click">
+                                <TextBlock x:Name="PageGroupLossCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="PageGroupLossOk_Click">
+                                <TextBlock x:Name="PageGroupLossOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            
+            <Grid x:Name="NetActivityOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="NetActivityScrim" Background="#2E000000" Tapped="NetActivityScrim_Tapped" />
+                <Border x:Name="NetActivityDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="560" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="NetActivityDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <TextBlock x:Name="NetActivityPanelTitle" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="NetActivityClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <ScrollViewer Grid.Row="1" MaxHeight="400" Margin="0,16,0,0">
+                            <StackPanel x:Name="NetActivityList" Spacing="8" />
+                        </ScrollViewer>
+                        <Button Grid.Row="2" HorizontalAlignment="Right" Margin="0,16,0,0" Width="160" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="NetActivityClear_Click">
+                            <TextBlock x:Name="NetActivityClearText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+
         <Grid x:Name="PrivacyLockWarningOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="PrivacyLockWarningScrim" Background="#2E000000" Tapped="PrivacyLockWarningScrim_Tapped" />
             <Border x:Name="PrivacyLockWarningDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -1524,10 +1745,15 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
-                                   HorizontalAlignment="Left" VerticalAlignment="Center"
-                                   FontSize="18" FontWeight="SemiBold"
-                                   Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="PrivacyLockWarnDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
+                                       VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
@@ -1635,13 +1861,13 @@
                                      MaxLength="64" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ImportExportPasswordClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ImportExportPasswordConfirm_Click">
@@ -1691,17 +1917,72 @@
                               FontSize="13"
                               Content="{x:Bind app:App.GetString(\'Setting_ExportOptions_IncludePaths\')}" />
                     <Grid Grid.Row="3" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="ExportOptionsCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="190" Height="40"
+                        <Button HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="ExportOptionsConfirm_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+
+        <Grid x:Name="ExportPlainWarnOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="ExportPlainWarnScrim" Background="#2E000000" Tapped="ExportPlainWarnScrim_Tapped" />
+            <Border x:Name="ExportPlainWarnDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ExportPlainWarnDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="ExportPlainWarnIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="ExportPlainWarnTitle"
+                                       VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="#FF4545" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="ExportPlainWarnClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}"
+                                  StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="ExportPlainWarnBody" Grid.Row="1"
+                               FontSize="13" LineHeight="20" TextWrapping="Wrap"
+                               Foreground="#FF4545"
+                               Margin="0,16,0,0" />
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="ExportPlainWarnCancel_Click">
+                            <TextBlock x:Name="ExportPlainWarnCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="ExportPlainWarnConfirm_Click">
+                            <TextBlock x:Name="ExportPlainWarnConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -1760,13 +2041,13 @@
                     <CheckBox x:Name="EncIncludePathsCheckBox" Grid.Row="4" Margin="0,12,0,0" FontSize="13"
                               Foreground="{ThemeResource AppTextSecondaryBrush}" />
                     <Grid Grid.Row="5" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="EncExportCancel_Click">
                             <TextBlock x:Name="EncExportCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="EncExportConfirmButton" HorizontalAlignment="Right" Width="190" Height="40"
+                        <Button x:Name="EncExportConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="EncExportConfirm_Click" IsEnabled="False">
@@ -1811,13 +2092,13 @@
                     <TextBox x:Name="EncImportPwdBox" Grid.Row="2" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
                              Margin="0,14,0,0" TextChanged="EncImportPwdBox_TextChanged" />
                     <Grid Grid.Row="3" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="EncImportPwdCancel_Click">
                             <TextBlock x:Name="EncImportCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="EncImportConfirmButton" HorizontalAlignment="Right" Width="190" Height="40"
+                        <Button x:Name="EncImportConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="EncImportPwdConfirm_Click" IsEnabled="False">
@@ -1890,10 +2171,15 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_Import_Title\')}"
-                               HorizontalAlignment="Left" VerticalAlignment="Center"
-                               FontSize="18" FontWeight="SemiBold"
-                               Foreground="#FFFF4545" />
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <PathIcon x:Name="ImportConfirmDangerIcon" Foreground="#FF4545" />
+                        </Viewbox>
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Import_Title\')}"
+                                   VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="#FFFF4545" />
+                    </StackPanel>
                     <TextBlock Grid.Row="1"
                                Text="{x:Bind app:App.GetString(\'Setting_Import_ConfirmTip\')}"
                                FontSize="14"
@@ -1986,13 +2272,13 @@
                                      MaxLength="64" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="190" Height="40"
+                            <Button HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ResetPasswordClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="190" Height="40"
+                            <Button HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ResetPasswordConfirm_Click">
@@ -2289,7 +2575,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Backup_RestoreConfirm_Title\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="BackupRestoreDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Backup_RestoreConfirm_Title\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="BackupRestoreConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2325,7 +2616,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Backup_DeleteConfirm_Title\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="BackupDeleteDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Backup_DeleteConfirm_Title\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="BackupDeleteConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2565,13 +2861,13 @@
                     <TextBlock x:Name="McpPermDeleteHint" Grid.Row="2" FontSize="12" Foreground="{ThemeResource AppTextSecondaryBrush}"
                                TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" />
                     <Grid Grid.Row="3" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="190" Height="40"
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="McpPermToggleAll_Click">
                             <TextBlock x:Name="McpPermToggleAllText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="190" Height="40"
+                        <Button HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="McpPermSave_Click">
@@ -2654,7 +2950,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock x:Name="McpResetConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="McpResetConfirmDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="McpResetConfirmTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpResetConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2683,7 +2984,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock x:Name="McpRevokeConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="McpRevokeConfirmDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="McpRevokeConfirmTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpRevokeConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2748,7 +3054,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock x:Name="McpAuditClearConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="McpAuditClearDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="McpAuditClearConfirmTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpAuditClearConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2808,7 +3119,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock x:Name="McpDeleteConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="McpDeleteConfirmDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="McpDeleteConfirmTitleText" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="McpDeleteConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -2876,12 +3192,12 @@
                     </ScrollViewer>
                     <!-- Row 4: Buttons -->
                     <Grid Grid.Row="4" Margin="0,20,0,0">
-                        <Button x:Name="CsvImportPreviewCancelBtn" HorizontalAlignment="Left" Width="190" Height="40"
+                        <Button x:Name="CsvImportPreviewCancelBtn" HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14"
                                 Click="CsvImportPreviewCancel_Click" Visibility="Collapsed">
                             <TextBlock x:Name="CsvImportPreviewCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="CsvImportPreviewConfirmBtn" HorizontalAlignment="Right" Width="190" Height="40"
+                        <Button x:Name="CsvImportPreviewConfirmBtn" HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14"
                                 Click="CsvImportPreviewConfirm_Click">
                             <TextBlock x:Name="CsvImportPreviewConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -2926,6 +3242,146 @@
                                 Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14"
                                 Click="CsvExportNoticeConfirm_Click">
                             <TextBlock x:Name="CsvExportNoticeConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="WorkspaceManageOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="WorkspaceManageScrim" Background="#2E000000" Tapped="WorkspaceManageScrim_Tapped" />
+            <Border x:Name="WorkspaceManageDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="WorkspaceManageDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="WorkspaceManageTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Name="WorkspaceNewButton" Width="120" Height="32"
+                                    Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="13"
+                                    VerticalAlignment="Center" Click="WorkspaceNewButton_Click">
+                                <TextBlock x:Name="WorkspaceNewButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button VerticalAlignment="Center" Width="28" Height="28"
+                                    Style="{StaticResource NovaraIconButtonStyle}" Click="WorkspaceManageClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                      Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                    <ScrollViewer Grid.Row="1" MaxHeight="320" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="WorkspaceListPanel" Spacing="8" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="WorkspaceEditOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="WorkspaceEditScrim" Background="#2E000000" Tapped="WorkspaceEditScrim_Tapped" />
+            <Border x:Name="WorkspaceEditDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="WorkspaceEditDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="WorkspaceEditTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}" Click="WorkspaceEditClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" x:Name="WorkspaceEditNameLabel" FontSize="12" FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
+                        <TextBox Grid.Row="1" x:Name="WorkspaceNameTextBox"
+                                 Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" />
+                    </Grid>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" x:Name="WorkspaceEditIconLabel" FontSize="12" FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
+                        <ScrollViewer Grid.Row="1" x:Name="WorkspaceIconScrollViewer"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                      HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled"
+                                      ZoomMode="Disabled" Background="Transparent" Height="56">
+                            <StackPanel x:Name="WorkspaceIconPanel" Orientation="Horizontal" Spacing="8" />
+                        </ScrollViewer>
+                    </Grid>
+                    <Grid Grid.Row="3" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14"
+                                Click="WorkspaceEditCancel_Click">
+                            <TextBlock x:Name="WorkspaceEditCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="WorkspaceEditConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14"
+                                Click="WorkspaceEditConfirm_Click">
+                            <TextBlock x:Name="WorkspaceEditConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="WorkspaceDeleteOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="WorkspaceDeleteScrim" Background="#2E000000" Tapped="WorkspaceDeleteScrim_Tapped" />
+            <Border x:Name="WorkspaceDeleteDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="WorkspaceDeleteDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="WorkspaceDeleteDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="WorkspaceDeleteTitle" VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold" Foreground="#FF4545" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28"
+                                Style="{StaticResource NovaraIconButtonStyle}" Click="WorkspaceDeleteClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Grid.Row="1" x:Name="WorkspaceDeleteDesc" FontSize="14" LineHeight="22" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,20,0,0" />
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14"
+                                Click="WorkspaceDeleteCancel_Click">
+                            <TextBlock x:Name="WorkspaceDeleteCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36"
+                                Style="{StaticResource McpDangerButtonStyle}" CornerRadius="10" FontSize="14"
+                                Click="WorkspaceDeleteConfirm_Click">
+                            <TextBlock x:Name="WorkspaceDeleteConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>

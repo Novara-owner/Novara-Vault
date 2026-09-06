@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using System.Diagnostics;
 using System.Net.Http;
 
@@ -76,7 +81,18 @@ public static class ApiDiagnoseService
     // ---- Pipeline ----
 
     /// <summary>Run the four-item diagnosis. Pure of UI; inject a handler for offline testing.</summary>
+    // 9.3: wrapper reports the activity; core body untouched.
     public static async System.Threading.Tasks.Task<ApiDiagnoseReport> DiagnoseAsync(
+        string? url, string? key, string? model,
+        System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
+    {
+        NetworkActivityService.Begin("NetActivity_Kind_Diagnose", url ?? "");
+        bool activityOk = false; // N3-06: report the real outcome (Reachable), not a hardcoded true
+        try { var r = await DiagnoseAsyncCore(url, key, model, ct, handler); activityOk = r.Reachable; return r; }
+        finally { NetworkActivityService.End(activityOk); }
+    }
+
+    private static async System.Threading.Tasks.Task<ApiDiagnoseReport> DiagnoseAsyncCore(
         string? url, string? key, string? model,
         System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
     {
@@ -98,7 +114,7 @@ public static class ApiDiagnoseService
         }
 
         // Step A: reachability gate via the model-list probe (0 token).
-        var probe = await ApiProbeService.ProbeAsync(url, key, ct, handler);
+        var probe = await ApiProbeService.ProbeAsync(url, key, ct, handler, recordActivity: false); // N4-47: the diagnose wrapper already records the session - no nested "probe" entry
         report.Vendor = probe.Vendor;
         report.Protocol = probe.Protocol;
         report.Endpoint = probe.Endpoint;
