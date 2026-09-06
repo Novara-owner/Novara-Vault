@@ -14,22 +14,22 @@ Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, 
 
 ---
 
-## What's New in 5.0
+## What's New in 6.0
 
-- **MCP Agent interface** — 14 tools let an AI assistant create, read, update, list, and search your cards, with token auth and sensitive-field redaction
-- **Records page** — HTML diary and Markdown documents in one place, with a source/preview split editor
-- **API relay probe** — detect model substitution, "watering down", and poisoning at API relay stations (8 weighted probes)
-- **8 memo entry types** — Bank Card, WiFi, and ID added alongside Email, Account, API Key, Website, and Custom
-- **CSV import/export** — auto-detects Novara, KeePass, and Bitwarden formats
-- **PDF / HTML collection export**, **indexed fuzzy global search**, **Windows Hello unlock**, and **rolling auto-backup**
+- **Motion design system** — a hidden-light navigation glow, page transitions, dialog depth and staggered entrances: every animation now draws from one token-based layer, so the app moves consistently instead of in one-off effects
+- **Workspaces** — virtual groups that span all five data types; switch spaces and every list reshapes at once
+- **Quick Capture** — a global hotkey to jot a memo, todo, or note from any app
+- **Network activity indicator** — Novara's only outbound calls (API detection) are never silent; the title bar names the endpoint
+- **Welcome tour** — a four-page walkthrough of the real UI on first launch
+- **Hardened in depth** — five exhaustive verification rounds across the whole codebase; encrypted state changes are now fully transactional
 
 ## Security & Privacy Lock
 
-Optional password protection backed by **AES-256-GCM authenticated encryption**. Once enabled, your entire database is encrypted at rest — every memo, path, todo, note, and record becomes unreadable without the correct password. Passwords may be **6 to 64 characters**, never stored in plaintext (only a salted SHA-256 hash is kept locally). There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
+Optional password protection backed by **AES-256-GCM authenticated encryption**. Once enabled, your entire database is encrypted at rest — every memo, path, todo, note, and record becomes unreadable without the correct password. Passwords may be **6 to 64 characters** and are never stored in plaintext: only a salted, versioned hash is kept locally (PBKDF2-SHA256 with 3,000,000 iterations since its second revision). There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
 
-GCM adds **authenticated encryption**: any tampering with the encrypted file is detected by the cryptographic tag, so corrupted or modified data is reported instead of silently misread. Databases created by Novara 2.0 (legacy AES-CBC) are seamlessly migrated to the new format after one confirmation on first unlock.
+GCM adds **authenticated encryption**: any tampering with the encrypted file is detected by the cryptographic tag, so corrupted or modified data is reported instead of silently misread. Older databases upgrade in place: the 2.0-era AES-CBC format migrates to GCM after one confirmation, and since 5.3 the key derivation is calibrated at **3,000,000 PBKDF2 iterations** (format v3) via a one-time opt-in prompt.
 
-Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
+Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). And since 5.1 the vault can lock itself: on demand (**Ctrl+Shift+L**), after an idle timeout of your choosing, or whenever Windows locks its session. The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
 
 <p align="center">
   <img src="images/English-UnlockPage.png" alt="Privacy lock screen" width="420" />
@@ -51,7 +51,9 @@ Eight built-in entry types cover the majority of use cases:
 - **ID** — identity documents
 - **Custom** — unlimited flexible key-value fields
 
-Starred and pinned entries are lifted to the top, and every card displays its key information on the second line so you can identify entries at a glance.
+Starred and pinned entries are lifted to the top, and every card displays its key information on the second line so you can identify entries at a glance. Sensitive field rows carry a one-click copy button, and a built-in generator creates random passwords, UUIDs, and tokens right inside the entry dialogs.
+
+Email, account, website, and WiFi entries also accept a **TOTP secret** (paste an `otpauth://` URI or a Base32 key): the card then shows a live 6-digit code with remaining seconds, a countdown bar, and one-click copy — a proper two-factor companion without a phone.
 
 <p align="center">
   <img src="images/English-MemoPage.png" alt="Memo manager" width="720" />
@@ -128,9 +130,15 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
   <img src="images/English-MdEditor-PreviewMode.png" alt="Markdown editor preview" width="420" />
 </p>
 
+## Workspaces
+
+Sometimes one flat list isn't enough, but folders are overkill. A **workspace** is a virtual filter that spans memos, paths, todos, notes, and records at once: create a space for a project, assign cards to it, and switching spaces reshapes every list. Cards never move between "folders" — the database stays flat — so a card can belong to your workflow without being locked into it.
+
 ## Global Search
 
-Press **Ctrl+K** anywhere to search memos, paths, todos, notes, and records in one aggregated list. Since 5.0, search is **indexed** for speed and supports **fuzzy matching** (subsequence matching, e.g. "memo" hits "memorandum"), with title hits ranked first. Click a result to jump straight to the item — Novara navigates, scrolls the target into view, and pulses it with a brand-colored flash.
+Press **Ctrl+K** anywhere to search memos, paths, todos, notes, and records in one aggregated list. Search is **indexed** for speed and supports **fuzzy matching** (subsequence matching, e.g. "memo" hits "memorandum"), with title hits ranked first. Click a result to jump straight to the item — Novara navigates, scrolls the target into view, and pulses it with a brand-colored flash.
+
+Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands — create a memo / todo / note / diary, open the recycle bin or settings, lock the vault now.
 
 <p align="center">
   <img src="images/English-GlobalSearch.png" alt="Global search" width="720" />
@@ -159,8 +167,9 @@ Novara exposes a native **MCP server** (Model Context Protocol) so any AI agent 
 - **Off by default** — you opt in, then copy a token
 - **Token auth** — fixed-time comparison; passed via `NOVARA_MCP_TOKEN` or `--token`
 - **Unlock gate** — the database must be unlocked; a locked/encrypted store refuses every request
-- **Process whitelist** — first connection from any process requires your explicit approval
-- **Separate delete permission** — deletion is its own opt-in toggle
+- **Per-client approval & permissions** — the first connection from any process requires your explicit approval, and each approved client gets its own read / create / update / delete matrix across the five data types. New clients start read-only everywhere except memos — the credential vault is the last thing an agent should touch, so it is the first thing that's held back
+- **Deletion master switch** — deleting requires both the client's own permission bit and a global toggle
+- **Audit log** — every call (allowed, redacted, or denied) is recorded locally. You always know what your AI has accessed
 - **Sensitive-field redaction** — password/key/token fields read back as `****`, are excluded from search, and cannot be smuggled out by renaming their labels
 
 See [`docs/MCP.md`](docs/MCP.md) for the full tool reference and client configuration.
@@ -181,8 +190,9 @@ Light, Dark, and Follow System themes with a unified brand-button system (primar
 
 Your data moves with you, freely and without vendor lock-in:
 
-- **Native backup** — plaintext `.novabak` export with an MD5 integrity header; path entries excluded by default for new-machine migration
-- **CSV import/export** — auto-detects Novara, KeePass, and Bitwarden dialects for migrating credentials
+- **Encrypted backups** — export an authenticated `.novaenc` container protected by a separate backup password; plaintext exports warn when your vault is encrypted
+- **Native backup** — plaintext `.novabak` export with a SHA-256 integrity header (older MD5-headered files still import); path entries excluded by default for new-machine migration
+- **CSV import/export** — auto-detects Novara, KeePass, Bitwarden, and the Firefox / Chrome / 1Password / Proton Pass dialects for migrating credentials
 - **PDF / HTML collection** — export all records as a printable HTML or PDF collection
 - **Markdown export** — per-entry Markdown, with or without images
 - **Rolling auto-backup** — up to 10 local snapshots you can restore from
@@ -191,14 +201,16 @@ Your data moves with you, freely and without vendor lock-in:
 
 - **Auto-start with Windows** — your workspace is ready when you log in
 - **System tray mode** — keep Novara running silently in the background
+- **Quick Capture** — Ctrl+Shift+N from anywhere: a small overlay takes the text and dispatches it to a memo, todo, or note
 - **Global right-click menu** — add any folder/file to path backups from Explorer, or open Novara from the desktop
 - **Desktop reminders** — countdown cards keep working even when the app is closed
 
 ## Data & Privacy at a Glance
 
 - **Local-first**: everything stays on your machine — no cloud, no telemetry, no account
-- **Authenticated encryption**: AES-256-GCM with PBKDF2 key derivation (100,000 iterations)
+- **Authenticated encryption**: AES-256-GCM with PBKDF2 key derivation (3,000,000 iterations since format v3)
 - **Portable single file**: `data.novadb` holds all seven partitions; optional password protects the whole database
+- **Health check**: encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone
 - **Agent-ready without data leaks**: the MCP interface never sends your data anywhere by itself
 

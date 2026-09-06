@@ -46,7 +46,7 @@ Four tabs + a settings page + an optional privacy lock:
 
 | Tab | Function |
 |--------|------|
-| **Memo** | Manages account / password / API Key / email / website / bank card / WiFi / ID / custom entries in groups; double-click to copy, star & pin, API connectivity detection |
+| **Memo** | Manages account / password / API Key / email / website / bank card / WiFi / ID / custom entries in groups; per-field copy buttons, TOTP two-factor, star & pin, API connectivity detection |
 | **File path backup** | Registers local file / folder paths, one-click existence / validity detection (green / red status), copy / open |
 | **Plan** | Todo + note cards (star / pin / sort / expand); "Send to desktop" standalone sticky note; timed reminders |
 | **Records** | Rich-text diary (HTML) + Markdown document dual-format editor, timeline review, filtering |
@@ -98,7 +98,7 @@ Novara/
 **Layering principle**:
 
 - `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
-- The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / RelayCommand, etc.
+- The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
 - `Pages/` contains nine pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage.
 
 **Core decoupling**:
@@ -147,21 +147,21 @@ The file header is a fixed 22 bytes:
 
 ### 4.4 Data model in detail
 
-**MemoGroup (memo group)**: `Id` / `Name` / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `PinnedAt` / `IsDeleted` / `DeletedAt` / `Order`.
+**MemoGroup (memo group)**: `Id` / `Name` / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned`. Groups are physically deleted (never soft-deleted); their entries are rescued as standalone entries first.
 
-**MemoEntry (memo entry)**: `Id` / `GroupId` (foreign key, null = ungrouped) / `Name` / `Type` / `KeyInfo` / `Fields` (list of `EntryField`) / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Protocol` (API detection success status).
+**MemoEntry (memo entry)**: `Id` / `GroupId` (foreign key, null = ungrouped) / `Name` / `Type` / `KeyInfo` / `Fields` (list of `EntryField`) / `IconKey` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `WorkspaceId` / `Protocol` (API detection success status).
 
 **EntryField (entry field)**: `Label` / `Value` / `CanCopy` (whether one-click copy is allowed; true for sensitive fields).
 
-**FilePathEntry (file path entry)**: `Id` / `Name` / `Path` / `Note` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order`.
+**FilePathEntry (file path entry)**: `Id` / `Name` / `Path` / `Note` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `WorkspaceId`. (The path page keeps UI-list order; there is no separate `Order` field.)
 
-**TodoCard (todo)**: `Id` / `Title` / `IconKey` / `MainText` / `SubTexts` / `CheckedStates` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order` / `ReminderAt` / `ReminderSetAt`.
+**TodoCard (todo)**: `Id` / `Title` / `IconKey` / `MainText` / `SubTexts` / `CheckedStates` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `Order` / `ReminderAt` / `ReminderSetAt` / `WorkspaceId`.
 
-**NoteCard (note)**: `Id` / `Title` / `IconKey` / `Content` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `Order` / `ReminderAt` / `ReminderSetAt`.
+**NoteCard (note)**: `Id` / `Title` / `IconKey` / `Content` / `CreatedAt` / `IsStarred` / `IsPinned` / `IsDeleted` / `DeletedAt` / `Order` / `ReminderAt` / `ReminderSetAt` / `WorkspaceId`.
 
-**DiaryEntry (diary / document)**: `Id` / `Title` / `Content` / `CreatedAt` / `ModifiedAt` / `IsPinned` / `PinnedAt` / `IsStarred` / `IsDeleted` / `DeletedAt` / `Order` / `Format` ("html" = rich-text diary default / "markdown" = MD document, zero migration).
+**DiaryEntry (diary / document)**: `Id` / `Title` / `Content` / `CreatedAt` / `ModifiedAt` / `IsPinned` / `PinnedAt` / `IsStarred` / `IsDeleted` / `DeletedAt` / `Order` / `Format` ("html" = rich-text diary default / "markdown" = MD document, zero migration) / `WorkspaceId`.
 
-**AppSettings (settings)**: theme / language / auto-start / context menu / close behavior / visible tabs / privacy lock / welcome page / backup / MCP, etc. (see 4.6).
+**AppSettings (settings)**: theme / language / auto-start / context menu / close behavior / visible tabs / privacy lock / auto-lock / welcome page & tour / backup / MCP (master switch, per-client permission matrices, audit settings) / workspaces, etc.
 
 ### 4.5 Data conventions
 
@@ -169,6 +169,7 @@ The file header is a fixed 22 bytes:
 - **Stored values are language-independent**: internal enum / status values (Type, Theme, CloseBehavior, VisibleTabs) **are persisted as Chinese literals**, with display text translated by the UI layer. Future versions must not write language-dependent literals to storage.
 - **Soft delete**: all five entity types (memo entry / file path / todo / note / diary) carry `IsDeleted / DeletedAt` for soft delete, moving to the recycle bin.
 - **Sorting**: todo / note / diary use the `Order` field (0 = not manually sorted, time descending; >0 = user drag-defined order).
+- **Workspaces**: each of the five entity types carries a `WorkspaceId` (empty = unassigned). Workspaces themselves live in `AppSettings` as a flat list of names — a virtual filter layer, not a storage hierarchy.
 - **New card placement**: newly created cards are always inserted at the front of the "non-pinned area" (after pinned cards, before regular cards).
 
 ---
@@ -177,8 +178,8 @@ The file header is a fixed 22 bytes:
 
 ### 5.1 Encryption algorithm
 
-- **Encryption**: AES-256-GCM (v2). 12-byte nonce + 16-byte tag; authentication relies on the GCM tag, the MD5 field is zeroed and not verified.
-- **Key derivation**: PBKDF2-SHA256, 100,000 iterations.
+- **Encryption**: AES-256-GCM (v2 header structure; parameters are implied by the version byte). 12-byte nonce + 16-byte tag; authentication relies on the GCM tag, the MD5 field is zeroed and not verified.
+- **Key derivation**: PBKDF2-SHA256, **3,000,000 iterations** since format v3 (5.3+; ≈340 ms unlock on the reference machine). v2 databases upgrade through a one-time opt-in prompt; refusal is remembered and the manual entry stays in Settings.
 - **Legacy compatibility**: 2.0 legacy data used AES-CBC (v1); after unlock it is automatically migrated to v2 GCM.
 
 ### 5.2 Version matrix
@@ -187,11 +188,12 @@ The file header is a fixed 22 bytes:
 |------|------|
 | v1 plaintext | always v1 (2.0 compatible), no encryption |
 | v1 CBC | 2.0 legacy encryption; a one-time migration confirmation pops up after unlock → upgrade to v2 |
-| v2 GCM | the current encryption scheme |
+| v2 GCM | GCM with 100,000-iteration PBKDF2 (3.0–5.2 format) |
+| v3 GCM | GCM with 3,000,000-iteration PBKDF2 — the current scheme; **not readable by versions ≤ 5.2.0** |
 
 ### 5.3 Password hash stored separately
 
-The password hash is stored in a separate plaintext small file `security.dat` (dual salt: hash salt + derivation salt, salted SHA256), **not encrypted along with the database** — because there is no readable key during the lock-screen phase. When the database is encrypted, the password hash must be independently readable to verify unlock.
+The password hash is stored in a separate plaintext small file `security.dat` (dual salt: hash salt + derivation salt), **not encrypted along with the database** — because there is no readable key during the lock-screen phase. The hash format is versioned: V1 = salted SHA-256 (legacy files keep working), V2 = PBKDF2-SHA256 with 3,000,000 iterations (new files; legacy files upgrade silently after the first successful verification).
 
 ### 5.4 Password-change transaction
 
@@ -424,8 +426,8 @@ The settings page is a card-based layout, with these main cards:
 
 | Card | Function |
 |------|------|
-| Data overview | entries / groups / todo completion rate / storage usage (off by default; default-expanded once enabled) |
-| MCP interface | master switch + authorization list + configuration (see 16) |
+| Data overview | entries / groups / todo completion rate / storage usage + database health indicators (encryption status, latest backup, snapshot count, integrity, orphan references) (off by default; default-expanded once enabled) |
+| MCP interface | master switch + per-client permission matrices + audit log viewer + configuration (see 16) |
 | Display mode (theme) | light / dark / follow system (storage + restart loop) |
 | Language | five-language switch (storage + restart loop) |
 | Custom tabs | check/uncheck the four tabs (keep at least 1) |
@@ -433,7 +435,9 @@ The settings page is a card-based layout, with these main cards:
 | Global context menu | desktop / file context menu switch |
 | Window exit behavior | exit directly / tray-resident |
 | Privacy lock | set password / change password / turn off lock / warning — four dialogs |
-| Data backup | snapshot / restore / auto backup |
+| Auto-lock | idle timeout (5 / 10 / 30 / 60 minutes / never) + lock on Windows session lock + Lock Now hotkey |
+| Network activity | local-activity trail; shows the endpoint whenever an API-detection call goes out |
+| Data backup | snapshot / restore / auto backup / encrypted `.novaenc` export & import |
 | Data archive & restore | import / export (native / CSV / MD / HTML / PDF) |
 | Reset vault | high-risk confirmation → delete three files & rebuild |
 | Official site | open novara.xin |
@@ -445,7 +449,7 @@ The settings page is a card-based layout, with these main cards:
 - C turn off lock: decrypt to plaintext & write → delete security.dat.
 - D warning: red text + red three-state confirmation button.
 
-**Import/export**: export is always plaintext (with MD5 header); with a lock, both require password verification; import does not overwrite security.dat / lockout.dat; after import, ReloadPages + prompt to restart for language/theme changes to take effect.
+**Import/export**: plaintext exports carry a SHA-256 integrity header (dual-header detection keeps older MD5-headered files importable); encrypted `.novaenc` exports use a separate backup password. With a lock, both directions require password verification; import does not overwrite security.dat / lockout.dat; after import, ReloadPages + prompt to restart for language/theme changes to take effect.
 
 ---
 
@@ -469,6 +473,10 @@ When the search page opens, an index is prebuilt once (`RebuildIndex`, lowercasi
 - Source label: a brand-color small label at the card's top-right (memo / path / plan / diary / document).
 - Source filter: mixed / memo / file / plan / diary / document.
 - Click a result to jump + target card flash (scale pulse + brand-color border flash + restore the original color).
+
+### 13.4 Command palette
+
+Typing `>` as the first character switches the same input box into a command launcher: create memo / todo / note / diary / document, open the recycle bin or settings, lock now. Commands reuse the result-card rendering (icon + label), keyboard-navigable, with no match falling back to the search empty state.
 
 ---
 
@@ -539,7 +547,7 @@ MCP client (stdio)
     ↓ JSON-RPC
 NovaraMCP.exe (pure forwarding stdio front end, hand-written JSON-RPC: initialize / tools/list / tools/call / ping)
     ↓ named pipe Novara.Mcp
-Main process McpService (unlock gate → token auth → process whitelist → redaction → CRUD)
+Main process McpService (unlock gate → token auth → process approval → permission matrix → redaction → CRUD)
 ```
 
 ### 16.2 Tool list (14 tools)
@@ -549,19 +557,21 @@ Main process McpService (unlock gate → token auth → process whitelist → re
 | Create | create_memo / create_todo / create_note / create_diary / create_path |
 | Update | update_memo / update_todo / update_note / update_diary / update_path |
 | Query | list_items / read_item / search_items |
-| Delete | delete_item (soft delete, off by default, must be enabled in settings) |
+| Delete | delete_item (soft delete; requires the client's delete bit AND the global master switch) |
 
 ### 16.3 Security model
 
 - **Privacy lock gate**: all requests are rejected while the database is locked.
 - **Token auth**: the master switch is off by default; enabling it auto-generates a token (Base64Url 32B).
-- **Process whitelist**: the first connection pops a confirmation; the path is recorded in the whitelist.
+- **Per-client approval + permission matrix**: the first connection pops a confirmation; after approval, each client gets a 20-bit matrix (read / create / update / delete × five data types). New clients start read-only everywhere except memos; a mixed listing never leaks unreadable partitions.
+- **Deletion master switch**: the global toggle is AND-ed with the client's own delete bit.
+- **Audit log**: every call — including denied attempts — is recorded locally (process / time / tool / target / result), with length-capped, credential-masked fields; viewable from the MCP card.
 - **Redaction**: sensitive fields (password / API Key) are redacted in output; `update` cannot tamper with existing sensitive fields, but can add new sensitive fields.
 - **Write boundary**: `create` / `update` / `delete` (soft delete); the recycle bin is not exposed; `format` cannot be changed.
 
 ### 16.4 Settings page MCP card
 
-Title + collapse / configure / master switch three buttons + authorization list panel (empty state with a centered hint, non-empty follows the content, each row = path + red revoke). Four dialogs: configure (Key reset / JSON copy / delete-permission dropdown) / reset confirm / JSON select (JSON / prompt) / delete-permission confirm.
+Title + collapse / audit log / configure / master switch buttons + the authorization list panel (empty state with a centered hint, non-empty follows the content, each row = process + permission button + red revoke). After approving a client you land on its permission-matrix dialog; four further dialogs: configure (Key reset / JSON copy) / reset confirm / JSON select (JSON / prompt) / delete-permission confirm.
 
 ---
 
@@ -612,7 +622,7 @@ Data: `TodoCard` / `NoteCard` add `ReminderAt` (due time) + `ReminderSetAt` (set
 
 | Format | Purpose | Notes |
 |------|------|------|
-| Native backup (.novabak) | full backup / restore | always plaintext (with MD5 header); with a lock, password verification required; import validates + rollback + Id dedup |
+| Native backup (.novabak) | full backup / restore | plaintext, with a SHA-256 integrity header (older MD5-headered files importable); with a lock, password verification required; import validates + rollback + Id dedup |
 | CSV | memo import / export | compatible with KeePass / Bitwarden, three dialects, auto-detected |
 | Markdown | summary / single entry / document original | read-only, cannot be imported |
 | HTML collection | records page collection | brand logo + official site + tagline + print-friendly CSS |
@@ -672,8 +682,8 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 ### Novara.Core (pure logic)
 
 - **NovaraStore**: `Load` / `LoadWithPassword` / `SaveAsync` (SemaphoreSlim serialization + snapshot merge + 300ms debounce) / `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt` (rollback on failure) / `ExportBackup` (always plaintext + soft-delete filter) / `ImportBackup` (validate + rollback + normalize + Id dedup) / `ResetDatabase`; writes use tmp+Move atomic replacement + Flush(true).
-- **CryptoService**: `Encrypt` (v1 CBC) / `Decrypt` + `EncryptGcm` / `DecryptGcm` (v2); PBKDF2-SHA256 100,000 iterations.
-- **PasswordService**: `security.dat` dual salt + salted SHA256 constant-time comparison; `lockout.dat` (FailCount/Until/Enabled); `SetBaseDir` path injection.
+- **CryptoService**: `Encrypt` (v1 CBC) / `Decrypt` + `EncryptGcm` / `DecryptGcm` (v2/v3 GCM); PBKDF2-SHA256 3,000,000 iterations since format v3. Also `ExportBackup` (plaintext), `ExportBackupEncrypted` (`.novaenc` v4 container), and GZip decompression-bomb protection.
+- **PasswordService**: `security.dat` dual salt + versioned password hash (V1 salted SHA256 → V2 PBKDF2-SHA256 3M) with constant-time comparison; `lockout.dat` (FailCount/Until/Enabled); `SetBaseDir` path injection.
 - **ApiProbeService**: tier 1 — vendor identification + protocol matrix + error classification + redaction (see 20).
 - **ApiChatClient**: shared chat client (OpenAI/Anthropic/Gemini protocols + streaming + usage/TTFT + chat-endpoint derivation).
 - **ApiDiagnoseService**: tier 2 — reachability + balance inference + metadata + latency (see 20).
@@ -697,6 +707,11 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 - **ReminderScheduler**: schtasks one-shot task registration.
 - **ChunkedRender**: chunked rendering helper (DispatcherQueue low-priority per-frame).
 - **HtmlSanitizer**: XSS whitelist sanitizer (extracted from DiaryEditorPage, reused by HTML export / MCP format=html).
+- **Motion**: token-based animation layer (6.0) — durations, easing factories, dialog show/hide transform channels, stagger wiring; every animation in the app draws from here.
+- **DialogDepth**: dialog infrastructure — ThemeShadow attach, veil (fullscreen scrim) show/hide, optional blur/tint depth treatment for overlays.
+- **GlobalHotkeyService**: global hotkeys — Quick Capture (Ctrl+Shift+N) and Lock Now (Ctrl+Shift+L).
+- **NetworkActivityService**: local-only network trail; "Begin/End" sessions around user-triggered API calls drive the title-bar indicator.
+- **CountdownBorder**: 30-second cooldown control used by destructive confirmations (hard delete / clear / reset).
 - **RelayCommand**: minimal ICommand implementation (tray command binding).
 - **EditRequest / AddPathRequest / ReminderEditRequest / ReminderDueRequest / ShowWindowRequest**: IPC requests (pending json + named event).
 
@@ -714,9 +729,11 @@ dotnet publish -r win-x64 --self-contained
 
 Key pitfalls (must follow):
 
-- **Novara.pri**: must be manually added after publish; without it, the app crashes with `0xc000027b` on launch.
-- **StickNoteHost independent publish**: the Host is `EnableMsixTooling=true`, and its publish produces `resources.pri` (MSIX resource). If the Host is published directly into the main program's publish directory, `resources.pri` interferes with XAML loading → `0xc000027b` on launch. The correct way: publish the Host to a separate temporary directory and copy only `StickNoteHost.exe`. `resources.pri` must never appear in the publish directory.
+- **Empty the publish folder first**: `dotnet publish -o` only overwrites same-name files and never deletes leftovers. A stale `Novara.pri` from a previous version combined with new DLLs misaligns the compiled XBF resources and crashes every modified page (`InvalidCastException` in generated code).
+- **Novara.pri**: must be manually added after publish (the publish output does not include it); verify its mtime matches the DLLs' batch. Without it, the app crashes with `0xc000027b` on launch. On an x64-forced project the file lives under `bin\x64\Release\...`.
+- **StickNoteHost ships as a full self-contained bundle**: publish the Host to a separate temporary directory, then copy the complete output (exe + dll + deps.json + runtimeconfig + native libraries) into a `Host\` subfolder of the publish directory. Shipping the bare `StickNoteHost.exe` apphost alone dies instantly on clean machines (Event 1023). `resources.pri` inside `Host\` is harmless; it must never appear at the publish root.
 - **NovaraMCP independent publish**: a pure net8.0 console, `PublishSingleFile=true` + `SelfContained=true`, publish produces a single self-contained exe (no `resources.pri`). Copy only `NovaraMCP.exe` to the main program's publish directory.
+- **Win2D check**: verify `Microsoft.Graphics.Canvas.dll` and `Microsoft.Graphics.Canvas.Interop.dll` are present in the publish folder (used by the blur treatments); a missing pair degrades silently.
 - Uninstaller: delete the auto-start registry entry + before deleting `data.novadb`, first clear the Hidden|ReadOnly attributes.
 - Data retention semantics: choosing "keep data" on uninstall leaves `%LocalAppData%\Novara` as-is; reinstall restores automatically.
 - After clearing bin/obj, the first compile requires `dotnet restore` first (otherwise NETSDK1004).
@@ -784,7 +801,11 @@ Novara/
 | 2.0 | 2026-08-07 | Four tabs + settings page + privacy lock; encrypted storage / tray / theme / bilingual |
 | 3.0 | 2026-08-12 | Desktop sticky notes, global search (Ctrl+K), AES-256-GCM upgrade + long passwords, five languages, card recycle bin, system-level reminders, global context menu |
 | 4.0 | 2026-08-18 | Card drag sorting, todo desktop bidirectional sync, diary MD export, API detection upgrade, chunked rendering / crash log / data backup / write debounce, unit-test engineering |
-| 5.0 | 2026-08-19 | Records page repositioning (Format field + MD editor), MCP Agent interface (14 tools), Windows Hello unlock (project completion) |
+| 5.0 | 2026-08-19 | Records page repositioning (Format field + MD editor), MCP Agent interface (14 tools), Windows Hello unlock |
+| 5.1 | 2026-08-29 | MCP audit log, Auto-Lock & Lock Now, SHA-256 export headers |
+| 5.2 | 2026-08-29 | Encrypted backup export/import (`.novaenc`), sync-lock livelock fix |
+| 5.3 | 2026-08-31 | KDF hardening (format v3, 3,000,000 iterations), Agent Permission Center, TOTP, secret generator, command palette, database health check, Host full-bundle deployment |
+| 6.0 | 2026-09-06 | Motion design system, Workspaces, Quick Capture, network activity indicator, welcome tour; five full verification rounds (~250 fixes) and MCP security hardening |
 
 ---
 

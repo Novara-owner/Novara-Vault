@@ -6,6 +6,75 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-09-06
+
+### Added
+
+- **Motion design system** — one token-based animation layer drives the whole UI: a "hidden-light" navigation glow that traces the selected tab, page transitions, dialog depth and staggered entrances, card entrances, and press feedback. Durations and easing curves come from a single source (`Services/Motion.cs`), so motion stays consistent instead of accumulating one-off effects.
+- **Workspaces** — lightweight virtual groups that span all five data types. Assign cards to a space and switching spaces reshapes every list at once; the database itself stays flat, nothing moves.
+- **Quick Capture** — a global hotkey opens an always-on-top entry box from any app; dispatch the text to a memo, todo, or note and get back to work.
+- **Network activity indicator** — the title bar shows a local-only state and briefly names the endpoint whenever Novara makes one of its user-triggered API calls, so outbound traffic is never silent.
+- **Welcome tour** — a four-page walkthrough on first launch, built from the real UI: menus, navigation, the desktop-note demo, and the privacy lock.
+
+### Changed
+
+- Unpinning a card now keeps it where it is on the plan and records pages (matching memo behavior) instead of dropping it back into time order; context menus order "Pin" before "Star" everywhere.
+
+### Fixed
+
+- Roughly 250 issues from five exhaustive verification rounds over the entire codebase. Highlights: encrypted state transitions (enable / disable / migrate / re-encrypt) are now fully transactional — there is no window where the disk holds plaintext while memory believes it is encrypted; snapshot restore is two-phase with rollback; IPC pending-write files are atomic; a stale chunked render can no longer duplicate recycle-bin cards; title input no longer swallows IME candidate confirmation.
+
+### Security
+
+- MCP hardening: malformed JSON gets a spec-compliant `-32700` error response instead of hanging the client until timeout; `read_item` argument validation happens before the permission gate; audit-log fields are length-capped and credential-masked; chat response bodies are capped at 32 MB.
+- The CSV formula-injection guard now round-trips symmetrically: values that begin with a quote keep it through export and import.
+- Snapshot file names are validated before delete or restore, blocking path traversal out of the backup directory.
+- `serverInfo.version` in the MCP handshake reports the real assembly version.
+
+## [5.3.0] - 2026-08-31
+
+### Added
+
+- **TOTP two-factor** — paste an `otpauth://` URI or a Base32 secret into email / account / website / WiFi entries. Memo cards show a live 6-digit code with remaining seconds, a countdown bar, and one-click copy.
+- **Agent Permission Center** — each approved MCP client gets its own 20-bit permission matrix (read / create / update / delete across the five data types). New clients start read-only everywhere except memos; deletion additionally requires a global master switch. Unauthorized attempts land in the audit log.
+- **Database health check** — the data overview card gains encryption status, latest backup, snapshot count, file integrity, and orphan-reference indicators.
+- **Secret generator** — random passwords, UUIDs, and tokens generated inside entry dialogs.
+- **Command palette** — Ctrl+K doubles as a command launcher via a `>` prefix: create items, open pages, lock now.
+- **Remark copy buttons** — remark fields gained one-click copy buttons alongside the other sensitive fields.
+
+### Changed
+
+- **Key derivation hardened (format v3)** — PBKDF2-SHA256 iterations raised from 100,000 to 3,000,000 (about 340 ms unlock on the reference machine). v2 databases migrate through a one-time opt-in prompt; the lock-screen password hash moved to PBKDF2 as well. Databases upgraded to v3 cannot be opened by versions 5.2.0 and earlier.
+- **Desktop sticky-note host ships as a complete self-contained bundle** in a `Host\` subfolder — the old bare-exe deployment died instantly on clean machines (Event 1023, "The application to execute does not exist").
+- Soft-delete confirmation dialogs unified across all pages; refreshed trash / lock / command-line icons.
+
+### Security
+
+- AngleSharp updated to 1.5.0 (CVE-2026-54570).
+- The machine-local `AppxMSBuildToolsPath` MSBuild property was removed from the public project file.
+
+## [5.2.0] - 2026-08-29
+
+### Added
+
+- **Encrypted backup export / import (`.novaenc`)** — a self-contained v4 container (password → KDF → AES-256-GCM, header bound as AAD) protected by a separate backup password with a strength meter. Plaintext exports now warn that the file contains sensitive data.
+
+### Fixed
+
+- Root-caused the sync-lock livelock (session-lock criterion) and a regression in the privacy-gated startup flow.
+
+## [5.1.0] - 2026-08-29
+
+### Added
+
+- **MCP audit log** — every agent call is recorded locally: who (process), when, which tool, which object, and the result — including denied attempts. Viewable from the MCP settings card.
+- **Auto-Lock & Lock Now** — lock on demand (Ctrl+Shift+L), after an idle timeout (5 / 10 / 30 / 60 minutes), or when Windows locks its session.
+- **SHA-256 integrity headers** for plaintext exports; older MD5-headered files remain importable via dual-header detection.
+
+### Fixed
+
+- Around 20 fixes from the N6 verification round, including a startup crash (`0xc000027b`) reported on some machines.
+
 ## [5.0.0] - 2026-08-25
 
 ### Added
