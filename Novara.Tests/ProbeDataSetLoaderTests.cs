@@ -81,6 +81,19 @@ public class ProbeDataSetLoaderTests
         Assert.Equal("bad-benchmark-question", e2);
     }
 
+    [Fact]
+    public void Validate_CapsPoisoningPatternCount()
+    {
+        // N3-30: a hostile dataset must not stall the whole probe set - patterns are matched
+        // serially with a 1s ReDoS guard each, so an unbounded list would cost N seconds.
+        var ds = ProbeDataSetLoader.Default();
+        for (int i = 0; i < 200; i++) ds.PoisoningStrongPatterns.Add("curl");   // 200 > 64 cap
+        for (int i = 0; i < 150; i++) ds.PoisoningWeakPatterns.Add("https?://"); // 150 > 64 cap
+        Assert.True(ProbeDataSetLoader.Validate(ds, out var error), error);
+        Assert.Equal(64, ds.PoisoningStrongPatterns.Count);
+        Assert.Equal(64, ds.PoisoningWeakPatterns.Count);
+    }
+
     // ---- Prove the refactor is data-driven (not hardcoded) ----
 
     [Fact]

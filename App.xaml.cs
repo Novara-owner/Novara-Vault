@@ -95,6 +95,9 @@ public partial class App : Application
 
     public static string CurrentLanguage { get; private set; } = "zh-CN"; // zh-CN / en-US / zh-TW / ko-KR / ja-JP (i18n, default Chinese)
 
+    
+    public static string CurrentWorkspaceId { get; set; } = "";
+
     /// <summary>Data folder name: Debug builds (dev/test) use "Novara-Dev" to keep test data isolated from the installed release; Release builds use "Novara".</summary>
     public static string DataDirName =>
 #if DEBUG
@@ -138,15 +141,16 @@ public partial class App : Application
 
     public static void PlayCardEntrance(FrameworkElement fe, int index = 0)
     {
+        
+        
         fe.Opacity = 0;
         if (fe.RenderTransform is not TranslateTransform tt) { tt = new TranslateTransform(); fe.RenderTransform = tt; }
-        tt.Y = 30;
+        tt.Y = 18;
         var sb = new Storyboard();
-        var delay = TimeSpan.FromMilliseconds(index * 120);
-        var fadeIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(350), BeginTime = delay, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        int delay = index * Services.Motion.Stagger;
+        var fadeIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(260), BeginTime = TimeSpan.FromMilliseconds(delay), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(fadeIn, fe); Storyboard.SetTargetProperty(fadeIn, "Opacity"); sb.Children.Add(fadeIn);
-        var slideUp = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), BeginTime = delay, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(slideUp, tt); Storyboard.SetTargetProperty(slideUp, "Y"); sb.Children.Add(slideUp);
+        sb.Children.Add(Services.Motion.Eased(0, 300, Services.Motion.Decelerate, tt, "Y", delay));
         _entranceBoards.Remove(fe); _entranceBoards.Add(fe, sb); 
         sb.Begin();
     }
@@ -552,6 +556,10 @@ public partial class App : Application
                         Environment.Exit(0);
                         return;
                     }
+                    
+                    
+                    if (McpPermissions.EnsureMigrated(Store.Database.AppSettings))
+                        _ = Store.SaveAsync();
                     McpService.Start();
                 }
                 catch (Exception ex)

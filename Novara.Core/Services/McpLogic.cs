@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using Novara.Models;
 
 namespace Novara.Services;
@@ -88,10 +93,12 @@ public static class McpLogic
 
     public static readonly string[] AllTypes = { TypeMemo, TypeTodo, TypeNote, TypeDiary, TypePath };
 
+    // Sensitive labels (exact match after lowercasing). Must stay in sync with the labels the
     
     private static readonly HashSet<string> SensitiveLabels = new(StringComparer.Ordinal)
     {
-        "密码", "password", "密钥", "secret", "token", "key", "api key", "apikey", "api_key", "passwd"
+        "密码", "password", "密钥", "secret", "token", "key", "api key", "apikey", "api_key", "passwd",
+        "邮箱密码", "cvv", "totp"
     };
 
     public static bool IsSensitiveLabel(string? label)
@@ -284,7 +291,7 @@ public static class McpLogic
     { "邮箱", "账户", "API Key", "网站", "银行卡", "WiFi", "证件", "自定义" };
 
     public static string CreateMemo(NovaraDatabase db, string name, string type, string? keyInfo,
-        List<McpFieldInput>? fields, Guid? groupId, string? iconKey)
+        List<McpFieldInput>? fields, Guid? groupId, string? iconKey, string? workspaceId = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new McpError("备忘名称 name 必填");
         // NM17: whitelist the type - junk strings used to enter the DB verbatim.
@@ -297,13 +304,15 @@ public static class McpLogic
             Name = name.Trim(), Type = type,
             KeyInfo = keyInfo ?? "", IconKey = iconKey ?? "",
             CreatedAt = DateTime.Now, GroupId = groupId,
+            WorkspaceId = workspaceId ?? "", // N2-69: parity with UI creation - land in the active workspace
             Fields = (fields ?? new()).Select(f => new EntryField { Label = f.Label, Value = f.Value, CanCopy = f.CanCopy }).ToList()
         };
+        // (no Order here: MemoEntry has none - the memo page's order is the UI list order)
         db.MemoEntries.Add(e);
         return e.Id.ToString();
     }
 
-    public static string CreateTodo(NovaraDatabase db, string title, string mainText, List<string>? subTexts, string? iconKey)
+    public static string CreateTodo(NovaraDatabase db, string title, string mainText, List<string>? subTexts, string? iconKey, string? workspaceId = null)
     {
         if (string.IsNullOrWhiteSpace(title)) throw new McpError("待办标题 title 必填");
         if (string.IsNullOrWhiteSpace(mainText)) throw new McpError("待办内容 mainText 必填");
@@ -311,38 +320,63 @@ public static class McpLogic
         {
             Title = title.Trim(), MainText = mainText.Trim(), IconKey = iconKey ?? "",
             SubTexts = (subTexts ?? new()).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList(),
-            CreatedAt = DateTime.Now
+            CreatedAt = DateTime.Now, WorkspaceId = workspaceId ?? "" // N2-69
         };
         e.CheckedStates = Enumerable.Repeat(false, e.SubTexts.Count + 1).ToList();
+        if (db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0)) e.Order = 1; // N2-69: manual-order parity
         db.TodoCards.Add(e);
         return e.Id.ToString();
     }
 
-    public static string CreateNote(NovaraDatabase db, string title, string content, string? iconKey)
+    public static string CreateNote(NovaraDatabase db, string title, string content, string? iconKey, string? workspaceId = null)
     {
         if (string.IsNullOrWhiteSpace(title)) throw new McpError("便签标题 title 必填");
         if (string.IsNullOrWhiteSpace(content)) throw new McpError("便签内容 content 必填");
-        var e = new NoteCard { Title = title.Trim(), Content = content, IconKey = iconKey ?? "", CreatedAt = DateTime.Now };
+        var e = new NoteCard { Title = title.Trim(), Content = content, IconKey = iconKey ?? "", CreatedAt = DateTime.Now, WorkspaceId = workspaceId ?? "" }; // N2-69
+        if (db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0)) e.Order = 1; // N2-69: manual-order parity
         db.NoteCards.Add(e);
         return e.Id.ToString();
     }
 
-    public static string CreateDiary(NovaraDatabase db, string title, string content, string? format)
+    public static string CreateDiary(NovaraDatabase db, string title, string content, string? format, string? workspaceId = null)
     {
         if (string.IsNullOrWhiteSpace(title)) throw new McpError("文档标题 title 必填");
-        if (content == null) throw new McpError("文档内容 content 必填");
+        if (string.IsNullOrWhiteSpace(content)) throw new McpError("文档内容 content 必填"); 
         var fmt = string.IsNullOrWhiteSpace(format) ? "markdown" : format.Trim().ToLowerInvariant();
         if (fmt != "markdown" && fmt != "html") throw new McpError("format 仅支持 markdown 或 html");
-        var e = new DiaryEntry { Title = title.Trim(), Content = content, Format = fmt, CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now };
+        var e = new DiaryEntry { Title = TruncateTitle(title.Trim()), Content = content, Format = fmt, CreatedAt = DateTime.Now, ModifiedAt = DateTime.Now, WorkspaceId = workspaceId ?? "" }; // N2-69
+        if (db.DiaryItems.Any(x => x.Order > 0)) e.Order = 1; // N2-69: manual-order parity
         db.DiaryItems.Add(e);
         return e.Id;
     }
 
-    public static string CreatePath(NovaraDatabase db, string name, string path, string? note)
+    
+    private static string TruncateTitle(string title)
+    {
+        if (string.IsNullOrEmpty(title)) return title;
+        int nonSpace = 0;
+        foreach (var c in title) if (!char.IsWhiteSpace(c)) nonSpace++;
+        if (nonSpace <= 120) return title;
+        var sb = new System.Text.StringBuilder();
+        int kept = 0;
+        foreach (var c in title)
+        {
+            if (!char.IsWhiteSpace(c))
+            {
+                if (kept >= 120) break;
+                kept++;
+            }
+            sb.Append(c);
+        }
+        return sb.ToString().Trim();
+    }
+
+    public static string CreatePath(NovaraDatabase db, string name, string path, string? note, string? workspaceId = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new McpError("路径名称 name 必填");
         if (string.IsNullOrWhiteSpace(path)) throw new McpError("路径 path 必填");
-        var e = new FilePathEntry { Name = name.Trim(), Path = path.Trim(), Note = note ?? "", CreatedAt = DateTime.Now };
+        var e = new FilePathEntry { Name = name.Trim(), Path = path.Trim(), Note = note ?? "", CreatedAt = DateTime.Now, WorkspaceId = workspaceId ?? "" }; // N2-69
+        // (no Order here: FilePathEntry has none - the path page's order is the UI list order)
         db.PathBackupItems.Add(e);
         return e.Id.ToString();
     }
@@ -350,14 +384,17 @@ public static class McpLogic
     // ===================== update =====================
 
     public static void UpdateMemo(NovaraDatabase db, string id, string? name, string? type, string? keyInfo,
-        List<McpFieldInput>? fields, Guid? groupId, string? iconKey)
+        List<McpFieldInput>? fields, Guid? groupId, string? iconKey, bool clearGroupId = false)
     {
         var e = FindMemo(db, id);
         if (name != null) { if (string.IsNullOrWhiteSpace(name)) throw new McpError("name 不能为空"); e.Name = name.Trim(); }
         if (type != null) { type = type.Trim(); if (!MemoTypes.Contains(type)) throw new McpError($"未知备忘类型: {type}（可选：邮箱/账户/API Key/网站/银行卡/WiFi/证件/自定义）"); e.Type = type; }
         if (keyInfo != null) e.KeyInfo = keyInfo;
         if (iconKey != null) e.IconKey = iconKey;
-        if (groupId.HasValue)
+        // N2-68: an explicitly EMPTY groupId moves the entry to uncategorized - the old GetGuid
+        // collapse made "not provided" and "explicitly empty" identical, so MCP could never un-group.
+        if (clearGroupId) e.GroupId = null;
+        else if (groupId.HasValue)
         {
             if (!db.MemoGroups.Any(g => g.Id == groupId.Value)) throw new McpError("分组不存在");
             e.GroupId = groupId;
@@ -411,9 +448,21 @@ public static class McpLogic
     public static void UpdateDiary(NovaraDatabase db, string id, string? title, string? content)
     {
         var e = FindDiary(db, id);
-        if (title != null) { if (string.IsNullOrWhiteSpace(title)) throw new McpError("title 不能为空"); e.Title = title.Trim(); }
-        if (content != null) e.Content = content;
-        e.ModifiedAt = DateTime.Now;
+        // N3-26: only bump ModifiedAt when at least one field actually changed - a no-op call
+        // (id only, or identical values) must not push the entry to the top of "recently modified".
+        bool changed = false;
+        if (title != null)
+        {
+            if (string.IsNullOrWhiteSpace(title)) throw new McpError("title 不能为空");
+            var t = TruncateTitle(title.Trim()); // N1-32
+            if (!string.Equals(e.Title, t, StringComparison.Ordinal)) { e.Title = t; changed = true; }
+        }
+        if (content != null)
+        {
+            if (content.Length == 0) throw new McpError("content 不能为空"); // N3-26: mirror UpdateTodo/Note
+            if (!string.Equals(e.Content, content, StringComparison.Ordinal)) { e.Content = content; changed = true; }
+        }
+        if (changed) e.ModifiedAt = DateTime.Now;
     }
 
     public static void UpdatePath(NovaraDatabase db, string id, string? name, string? path, string? note)

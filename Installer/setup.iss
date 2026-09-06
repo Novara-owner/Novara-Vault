@@ -6,7 +6,7 @@
 ; ============================================================
 
 #define MyAppName "Novara"
-#define MyAppVersion "5.3.0"
+#define MyAppVersion "6.0.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 ; E4-39: relative to this script (Installer\..\.. = the Desktop folder where Novara_Publish lives),
@@ -75,6 +75,14 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; 卸载时删除开机自启注册表项（2.5 写入的 HKCU\...\Run\Novara，防止卸载后开机报错）
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Novara"; Flags: uninsdeletevalue
+; N2-22: context-menu shell keys registered at runtime (ContextMenuService) survive uninstall and
+; point at the removed exe - clicking them errors out. dontcreatekey = install never creates them
+; (the app owns registration), uninsdeletekey = the uninstaller removes the whole shell key.
+Root: HKCU; Subkey: "Software\Classes\DesktopBackground\shell\NovaraOpen"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\*\shell\NovaraAddPath"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\NovaraAddPath"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.md\shell\NovaraImport"; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.markdown\shell\NovaraImport"; Flags: uninsdeletekey dontcreatekey
 
 ; WebView2 runtime data (Novara.exe.WebView2\) is generated next to the exe at runtime and is NOT
 ; in the install manifest - without this the uninstaller would leave the whole folder behind.
@@ -172,6 +180,9 @@ begin
     // E5-11: kill the desktop sticky-note host first - an uninstall while StickNoteHost is running
     // would leave a tray-resident process whose files are locked / orphaned.
     Exec('taskkill.exe', '/IM StickNoteHost.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // N4-52: the MCP frontend exe sits next to Novara.exe (single self-contained file) - without
+    // this kill an uninstall/upgrade while it runs locks the file (install side already kills both).
+    Exec('taskkill.exe', '/IM NovaraMCP.exe /F /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // 默认保留（5.1.1：卸载确认 → 数据选择，默认保留）
     DeleteDataOnUninstall := False;
     // 静默卸载（/SILENT /VERYSILENT）：跳过交互弹窗直接保留数据——弹窗在静默模式下会阻塞自动化卸载（2026-08-05 实测卡住）

@@ -1,4 +1,9 @@
 
+
+
+
+
+
 using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -71,7 +76,7 @@ public static class RelayProbeService
     public static string BuildNonce()
     {
         Span<byte> b = stackalloc byte[4];
-        Random.Shared.NextBytes(b);
+        System.Security.Cryptography.RandomNumberGenerator.Fill(b); 
         return Convert.ToHexString(b).ToLowerInvariant();
     }
 
@@ -208,11 +213,21 @@ public static class RelayProbeService
         if (string.IsNullOrEmpty(reply)) return ProbeVerdict.Pass;
         strongPatterns ??= CurrentDataSet.PoisoningStrongPatterns;
         weakPatterns ??= CurrentDataSet.PoisoningWeakPatterns;
-        foreach (var p in strongPatterns)
-            if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase)) return ProbeVerdict.Fail;
-        foreach (var p in weakPatterns)
-            if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase)) return ProbeVerdict.Warn; // N5V-05: match the strong-pattern case posture - casing must not gate a WARN
-        return ProbeVerdict.Pass;
+        
+        var timeout = TimeSpan.FromSeconds(1);
+        try
+        {
+            foreach (var p in strongPatterns)
+                if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Fail;
+            foreach (var p in weakPatterns)
+                if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Warn; // N5V-05: match the strong-pattern case posture - casing must not gate a WARN
+            return ProbeVerdict.Pass;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            
+            return ProbeVerdict.Pass;
+        }
     }
 
     public static bool CheckAnchor(string reply, string anchor)
@@ -264,7 +279,18 @@ public static class RelayProbeService
     // ---- Pipeline ----
 
     /// <summary>Run the full 8-probe suite. Pure of UI; inject a handler for offline testing.</summary>
+    // 9.3: wrapper reports the activity; core body untouched.
     public static async System.Threading.Tasks.Task<RelayProbeReport> ProbeAsync(
+        string? url, string? key, string? model,
+        System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null, ProbeDataSet? dataSet = null)
+    {
+        NetworkActivityService.Begin("NetActivity_Kind_Relay", url ?? "");
+        bool activityOk = false; // N3-06: report the real outcome (Reachable), not a hardcoded true
+        try { var r = await ProbeAsyncCore(url, key, model, ct, handler, dataSet); activityOk = r.Reachable; return r; }
+        finally { NetworkActivityService.End(activityOk); }
+    }
+
+    private static async System.Threading.Tasks.Task<RelayProbeReport> ProbeAsyncCore(
         string? url, string? key, string? model,
         System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null, ProbeDataSet? dataSet = null)
     {
@@ -358,7 +384,9 @@ public static class RelayProbeService
     {
         
         
-        var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = "hi", MaxTokens = 5 }, ct, handler);
+        // N3-28: carry the per-probe REQ-nonce (auditability + defeats transparent caching that
+        // could serve a canned "hi" reply) - the nonce parameter was dead before.
+        var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = "hi REQ-" + nonce, MaxTokens = 5 }, ct, handler);
         if (!chat.Ok) return Result("identity", ProbeVerdict.Skip, ChatFailSummary(chat), chat.Detail);
         var (v, suspect, summary) = AnalyzeIdentity(model, chat.ModelReturned);
         return Result("identity", v, summary, chat.ModelReturned ?? "", suspect, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
@@ -369,12 +397,15 @@ public static class RelayProbeService
         int correct = 0, total = 0, tokens = 0, completion = 0;
         foreach (var q in dataSet.BenchmarkQuestions)
         {
-            var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = q.Prompt + " REQ-" + nonce, MaxTokens = 2000 }, ct, handler);
-            if (!chat.Ok) continue;
+            
+            
+            var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = q.Prompt + " REQ-" + nonce, MaxTokens = 256 }, ct, handler);
+            // N2-35: count EVERY question - the old `if (!chat.Ok) continue` let a relay answer 1/3
+            // and score a Pass (failures never dented the 0.20 weight).
             total++;
             tokens += chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0;
             completion += chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0;
-            if (CheckBenchmarkAnswer(q.Expected, chat.Content)) correct++;
+            if (chat.Ok && CheckBenchmarkAnswer(q.Expected, chat.Content)) correct++;
         }
         if (total == 0) return Result("benchmark", ProbeVerdict.Skip, "unreachable", "", null, tokens, completion);
         var verdict = correct == total ? ProbeVerdict.Pass : correct * 2 >= total ? ProbeVerdict.Warn : ProbeVerdict.Fail;

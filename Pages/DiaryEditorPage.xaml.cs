@@ -96,7 +96,7 @@ var editor=new T.Editor({{
     T.TextAlign.configure({{types:['heading','paragraph','image']}})
   ],
   content:'',
-  onUpdate:function(){{}},
+  onUpdate:function(){{if(window.__mdLoading!==true)window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}, // N5-S7-01: 图片缩放/移除链接等程序化变更不派发 input，onUpdate 全量兜底（__mdLoading 拦截载入 setContent）
   onSelectionUpdate:function(){{notifyFormatState()}}
 }});
 function notifyFormatState(){{window.chrome.webview.postMessage(JSON.stringify({{action:'formatState',bold:editor.isActive('bold'),italic:editor.isActive('italic'),underline:editor.isActive('underline')}}))}}
@@ -111,12 +111,13 @@ function execAlign(a){{editor.chain().focus().setTextAlign(a).run()}}
 function execCodeBlock(){{editor.chain().focus().toggleCodeBlock().run()}}
 function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}}
 function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
-function setAll(ht,hb){{tel.textContent=ht||'';editor.commands.setContent(hb||'');updateTitleSpacing()}}
+function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing()}} // N5-S7-01: 载入 setContent 触发的 onUpdate 不算用户编辑
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
 tel.addEventListener('input',function(){{updateTitleSpacing()}});
 function getTitle(){{return tel.innerHTML}}
 function getBody(){{return editor.getHTML()}}
 bel.addEventListener('click',function(e){{var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a){{e.preventDefault();var href=a.getAttribute('href');if(href)window.chrome.webview.postMessage(JSON.stringify({{action:'openLink',url:href}}))}}}});
+bel.addEventListener('input',function(){{window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // N3-15: native input fires on user typing/paste only - ProseMirror's programmatic setContent mutates the DOM silently, so this is a reliable 'user touched the body' signal
 var ctxMenu=document.createElement('div');
 ctxMenu.style.cssText='position:fixed;z-index:9999;background:{10};border:1px solid {3};border-radius:8px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:none;';
 var unlinkItem=document.createElement('div');
@@ -133,6 +134,7 @@ bel.addEventListener('contextmenu',function(e){{var a=e.target&&e.target.closest
 document.addEventListener('click',function(e){{if(!ctxMenu.contains(e.target))hideCtx()}});
 window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setAll':setAll(m.title||'',m.body||'');break;case'insertImage':insertImage(m.base64,m.filename,m.mime);break;case'execBold':execBold();break;case'execItalic':execItalic();break;case'execUnderline':execUnderline();break;case'execForeColor':execForeColor(m.color);break;case'execClear':execClear();break;case'execUndo':execUndo();break;case'execRedo':execRedo();break;case'execAlign':execAlign(m.align);break;case'execCodeBlock':execCodeBlock();break;case'execHorizontalRule':execHorizontalRule();break;}}}}catch(err){{}}}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
+tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}}); // N4D-04: 标题禁止回车（防多行标题拼接）；N5-RC-02: IME 组合态确认候选词不拦（与上方长度拦截同守卫口径）
 tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';var sel=window.getSelection();if(sel&&sel.rangeCount&&tel.contains(sel.anchorNode)){{try{{sel.deleteFromDocument()}}catch(err){{}}}}var t=tel.textContent.replace(/\s/g,'');var rem=120-t.length;if(rem<=0)return;var out='',ns=0;for(var i=0;i<txt.length;i++){{var ch=txt.charAt(i);out+=ch;if(!/\s/.test(ch)){{ns++;if(ns>=rem)break}}}}document.execCommand('insertText',false,out)}});
 notifyFormatState();
 </script></body></html>";
@@ -160,6 +162,9 @@ notifyFormatState();
     }
 
     
+
+
+
     private const string MarkdownHtmlTemplate = @"<!DOCTYPE html>
 <html><head><meta charset='utf-8'><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
@@ -192,6 +197,7 @@ body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:tr
 var tel=document.getElementById('title');
 var ta=document.getElementById('md-editor');
 var pv=document.getElementById('md-preview');
+pv.addEventListener('click',function(e){{var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a&&a.href){{e.preventDefault();e.stopPropagation();try{{window.chrome.webview.postMessage(JSON.stringify({{action:'openLink',url:a.href}}))}}catch(err){{}}}}}}); // N2-37d: container-level click takeover - links never reach browser navigation (target/_blank/popup paths included); the host opens them via the whitelisted opener
 function setMd(t,b){{tel.textContent=t||'';ta.value=b||'';updateTitleSpacing();autoResize();renderPreview()}}
 function autoResize(){{var doc=document.documentElement;var prev=doc.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(doc.scrollTop!==prev)doc.scrollTop=prev}}
 function renderPreview(){{pv.innerHTML=window.NovaraMd.render(ta.value)}}
@@ -210,7 +216,7 @@ function mdHeading(n){{prefixLines('#'.repeat(n)+' ')}}
 function mdBullet(){{prefixLines('- ')}}
 function mdOrdered(){{prefixLines('1. ')}}
 function mdQuote(){{prefixLines('> ')}}
-function mdLink(){{wrapSel('[','](url)','text')}}
+function mdLink(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);var looksUrl=sel.length>0&&!/\s/.test(sel)&&/^[a-zA-Z0-9-]/.test(sel)&&/\.[a-zA-Z0-9-]{{2,}}/.test(sel);var href=looksUrl?(sel.indexOf('://')>=0?sel:'https://'+sel):'url';var text=sel.length>0?sel:'链接';ta.setRangeText('['+text+']('+href+')',s,e,'end');if(!looksUrl){{var hs=s+text.length+3;ta.setSelectionRange(hs,hs+3);}}ta.focus();autoResize()}} // N2-37e: domain-shaped selection auto-fills the href (Typora parity); plain text keeps the url placeholder with it pre-selected for direct typing. NOTE: regex quantifier braces MUST be doubled in this templated ({{2,}}) - this whole template runs through string.Format, a bare quantifier brace is parsed as a format placeholder and threw FormatException at runtime (blank editor)
 function mdImage(){{wrapSel('![','](url)','alt')}}
 function mdCodeBlock(lang){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);ta.setRangeText('```'+(lang||'')+'\n'+sel+'\n```',s,e,'end');ta.focus()}}
 function mdHr(){{insertBlock('\n\n---\n\n')}}
@@ -223,6 +229,7 @@ tel.addEventListener('input',function(){{updateTitleSpacing()}});
 ta.addEventListener('input',function(){{autoResize()}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
+tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}}); // N4D-04: 标题禁止回车（防多行标题拼接）；N5-RC-02: IME 组合态确认候选词不拦（与上方长度拦截同守卫口径）
 tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';var sel=window.getSelection();if(sel&&sel.rangeCount&&tel.contains(sel.anchorNode)){{try{{sel.deleteFromDocument()}}catch(err){{}}}}var t=tel.textContent.replace(/\s/g,'');var rem=120-t.length;if(rem<=0)return;var out='',ns=0;for(var i=0;i<txt.length;i++){{var ch=txt.charAt(i);out+=ch;if(!/\s/.test(ch)){{ns++;if(ns>=rem)break}}}}document.execCommand('insertText',false,out)}});
 window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setMd':setMd(m.title||'',m.body||'');break;case'showWrite':showWrite();break;case'showPreview':showPreview();break;case'mdBold':mdBold();break;case'mdItalic':mdItalic();break;case'mdStrike':mdStrike();break;case'mdInlineCode':mdInlineCode();break;case'mdHeading':mdHeading(m.level||1);break;case'mdBullet':mdBullet();break;case'mdOrdered':mdOrdered();break;case'mdQuote':mdQuote();break;case'mdLink':mdLink();break;case'mdImage':mdImage();break;case'mdCodeBlock':mdCodeBlock(m.lang||'');break;case'mdHr':mdHr();break;case'mdTable':mdTable();break;case'mdClearFormat':mdClearFormat();break;case'mdUndo':mdUndo();break;case'mdRedo':mdRedo();break;}}}}catch(err){{}}}});
 </script></body></html>";
@@ -292,14 +299,84 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         
     }
 
+    private void OnNavigationStarting(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
+    {
+        var uri = e.Uri;
+        // N2-37d: Chromium's blocked-popup placeholder - it must NEVER replace the editor document
+        // (owner-tested: entire page blank, unrecoverable without restart). Cancel unconditionally;
+        // the document-level click takeover above makes this path unreachable in normal flows.
+        if (uri == "about:blank#blocked")
+        {
+            e.Cancel = true;
+            return;
+        }
+        
+        
+        if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            e.Cancel = true;
+            OpenExternalLink(uri.ToString()); // N2-37: parity with rich-text mode - preview links open through the whitelisted opener instead of dying silently
+        }
+        else if (!uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) &&
+                 !uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+        {
+            
+            // against the data: base URL NAVIGATED AWAY - the editor DOM got replaced by an empty
+            // document, killing the JS bundle (mode switch dead, only XAML chrome remained).
+            // Cancel everything that is not the bundle's own data:/about: document.
+            e.Cancel = true;
+        }
+    }
+
+    /// <summary>
+    
+    /// unhandled, WebView2 replaced the editor document (owner-tested blank page). Open through
+    /// the whitelisted opener instead of spawning a popup.
+    /// </summary>
+    private void OnNewWindowRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NewWindowRequestedEventArgs e)
+    {
+        e.Handled = true;
+        if (!string.IsNullOrEmpty(e.Uri)) OpenExternalLink(e.Uri);
+    }
+
     private void OnNavigationCompleted(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
         if (!e.IsSuccess) { _webViewReady = false; return; } 
         _navigatingFormat = null; // N4D-02: the in-flight template has landed and matches _loadedFormat
         _webViewReady = true;
         SetDiaryContent(_currentDiary);
+        _ = RebaselineContentAfterRenderAsync(); // N2-38: re-baseline the dirty snapshot from the editor's normalized output
         UpdateToolbarForFormat();
         UpdateMdViewSwitch(true); 
+    }
+
+    /// <summary>N3-15: set by the editor's native input event (user typing/paste), cleared on every
+    /// content load. While true the post-render re-baseline must NOT overwrite _initialContent -
+    /// doing so would fold the user's fresh edits into the baseline and a subsequent save-compare
+    /// would see "clean" and silently drop them.</summary>
+    private bool _userEditedSinceRender;
+
+    /// <summary>
+    
+    /// comparing the sanitized SOURCE snapshot against getHTML() made every legacy entry open as
+    /// "dirty" (spurious save + ModifiedAt bump). Re-baseline from the editor's own normalized
+    /// output shortly after the render; MD round-trips are stable so only HTML re-baselines.
+    /// </summary>
+    private async System.Threading.Tasks.Task RebaselineContentAfterRenderAsync()
+    {
+        try
+        {
+            await System.Threading.Tasks.Task.Delay(500); // let SetDiaryContent's script settle (user-speed edits are far slower)
+            if (!_webViewReady || _loadedFormat == "markdown") return;
+            if (_userEditedSinceRender) return; // N3-15: keep the source snapshot as baseline - the user's in-window edits must stay dirty
+            var body = await GetJsStringAsync("getBody()");
+            // N4-07: store the SANITIZED body - the save side compares Sanitize(getBody()) (line ~662)
+            // and Tiptap emits "color: #7276FF" while the sanitizer normalizes to "color:#7276FF", so
+            // the raw baseline never matched and every colored entry re-opened as spurious-dirty.
+            if (body != null) _initialContent = HtmlSanitizer.Sanitize(body);
+        }
+        catch { }
     }
 
     private void OnWebMessageReceived(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs args)
@@ -325,6 +402,10 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
                 var url = doc.RootElement.TryGetProperty("url", out var u) ? u.GetString() : null;
                 if (!string.IsNullOrWhiteSpace(url)) OpenExternalLink(url);
             }
+            else if (action == "userEdited")
+            {
+                _userEditedSinceRender = true; // N3-15: see RebaselineContentAfterRenderAsync
+            }
         }
         catch { }
     }
@@ -332,7 +413,12 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     private static void OpenExternalLink(string url)
     {
         var target = url.Trim();
-        if (!target.Contains("://")) target = "https://" + target;
+        // N3-39: prepend https:// only when there is NO scheme at all - a scheme is text before the
+        // first ':' that appears before any '/'. "mailto:user@x" has a scheme and must not become
+        // "https://mailto:..." (which broke mailto even though the whitelist below allows it).
+        var colon = target.IndexOf(':');
+        var slash = target.IndexOf('/');
+        if (colon < 0 || (slash >= 0 && slash < colon)) target = "https://" + target;
         // NH3 (defense-in-depth): only schemes the HtmlSanitizer whitelist allows may reach
         // ShellExecute. file://, javascript:, ms-* etc. are dropped even if a future regression
         // ever lets one through the content layer.
@@ -384,6 +470,16 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             ContentWebView.NavigationCompleted -= OnNavigationCompleted;
             ContentWebView.NavigationCompleted += OnNavigationCompleted;
 
+            
+            cv.NavigationStarting -= OnNavigationStarting;
+            cv.NavigationStarting += OnNavigationStarting;
+
+            
+            // and hit NewWindowRequested - unhandled, WebView2 left the editor document (owner-tested
+            // blank page). Route them through the whitelisted opener instead.
+            cv.NewWindowRequested -= OnNewWindowRequested;
+            cv.NewWindowRequested += OnNewWindowRequested;
+
             ContentWebView.NavigateToString(_loadedFormat == "markdown" ? GetMarkdownHtml() : GetEditorHtml());
             _navigatingFormat = _loadedFormat; // N4D-02: remember which template is in flight
         }
@@ -421,6 +517,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         else if (_webViewReady)
         {
             SetDiaryContent(diary);
+            if (format != "markdown") _ = RebaselineContentAfterRenderAsync(); // N3-11: N2-38 only re-baselined the first open (OnNavigationCompleted); a cached-editor re-open lands here and must re-baseline too, otherwise every legacy entry opened a second time still compared dirty
         }
         else if (_navigatingFormat != null && _navigatingFormat != format)
         {
@@ -444,6 +541,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     private void SetDiaryContent(DiaryEntry? diary)
     {
         if (diary == null) return;
+        _userEditedSinceRender = false; // N3-15: fresh content load - the edit window restarts
         string title = (diary.Title == "(无标题)" || diary.Title == App.GetString("DiaryEditor_Untitled")) ? "" : diary.Title;
         if (_loadedFormat == "markdown")
             PostMessageAsync("setMd", new { title = title, body = diary.Content });
@@ -502,6 +600,12 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         {
             var cv = ContentWebView.CoreWebView2;
             if (cv == null || !_webViewReady) { System.Diagnostics.Debug.WriteLine($"PostMessage 丢弃（WebView2 未就绪）: {action}"); return; }
+            // N4-08: toolbar commands reach ProseMirror programmatically and never dispatch a native
+            // input event, so the JS "userEdited" signal (N3-15) misses them - a command applied inside
+            // the 500ms re-baseline window used to be folded into the baseline and silently dropped on
+            // save. Mark C#-side for every mutating command (md* edits the MD textarea and never
+            // re-baselines, so it needs no flag).
+            if (action.StartsWith("exec", StringComparison.Ordinal) || action == "insertImage") _userEditedSinceRender = true;
             var msg = new Dictionary<string, object> { ["action"] = action };
             if (data != null)
                 foreach (var p in data.GetType().GetProperties())
@@ -538,8 +642,11 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         if (!BackButton.IsEnabled) return; // N4D-03: swallow rapid double-clicks while the first navigation's fade-out is still running
         BackButton.IsEnabled = false;
         bool wasNew = _currentDiary == null;
-        bool saved = await SaveCurrentDiaryAsync();
+        bool saved;
+        try { saved = await SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); }
+        catch { saved = false; } // N2-39: a hung WebView2 script must not wedge the back button (N1-31 parity with the exit/lock/restart paths)
         if (saved) App.ShowToast(App.GetString(wasNew ? "Common_Toast_Created" : "Common_Toast_Modified"));
+        else if (_userEditedSinceRender) App.ShowToast(App.GetString("Editor_SaveFail_Toast")); 
         App.MainWindow?.NavigateBackFromEditor(); // re-enabled by ClearContent/LoadDiary when the editor is next used
     }
 
@@ -590,6 +697,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         {
             entry.CreatedAt = DateTime.Now;
             entry.ModifiedAt = entry.CreatedAt;
+            entry.WorkspaceId = App.CurrentWorkspaceId; 
         }
         else
         {
@@ -674,9 +782,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         AlignPickerScrim.Visibility = Visibility.Visible;
         AlignPickerPanel.Visibility = Visibility.Visible; AlignPickerPanel.Opacity = 0; AlignPickerTranslate.Y = -12;
         var sb = new Storyboard();
-        var fi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(230), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var fi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = Services.Motion.Decelerate() };
         Storyboard.SetTarget(fi, AlignPickerPanel); Storyboard.SetTargetProperty(fi, "Opacity"); sb.Children.Add(fi);
-        var si = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(260), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var si = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(220), EasingFunction = Services.Motion.Decelerate() };
         Storyboard.SetTarget(si, AlignPickerPanel); Storyboard.SetTargetProperty(si, "(UIElement.RenderTransform).(TranslateTransform.Y)"); sb.Children.Add(si);
         sb.Begin();
     }
@@ -687,9 +795,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         _isAlignPickerOpen = false;
         AlignPickerScrim.Visibility = Visibility.Collapsed;
         var sb = new Storyboard();
-        var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(180), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(150), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(fo, AlignPickerPanel); Storyboard.SetTargetProperty(fo, "Opacity"); sb.Children.Add(fo);
-        var so = new DoubleAnimation { To = -12, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var so = new DoubleAnimation { To = -10, Duration = TimeSpan.FromMilliseconds(170), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(so, AlignPickerPanel); Storyboard.SetTargetProperty(so, "(UIElement.RenderTransform).(TranslateTransform.Y)"); sb.Children.Add(so);
         sb.Completed += (_, _) => { AlignPickerPanel.Visibility = Visibility.Collapsed; }; sb.Begin();
     }
@@ -721,6 +829,10 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void ResetFormatStates()
     {
+        
+        HideAlignPickerPanel();
+        HideColorPickerPanel();
+        HideMdHeadingPickerPanel();
         _isBold = _isItalic = _isUnderline = false;
         // NH9: per-document defaults - a reused editor instance must not inherit the previous
         // document's Preview mode or collapsed toolbar.
@@ -742,36 +854,18 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
         
         
-        private static (double Dx, double Dy, double Sx, double Sy) MeltMetrics(Grid container)
-        {
-            var parent = container.Parent as FrameworkElement;
-            double pw = parent?.ActualWidth ?? 0, ph = parent?.ActualHeight ?? 0;
-            if (pw <= 0 || ph <= 0) return (0, 0, 1, 1);
-            var tl = container.TransformToVisual(parent).TransformPoint(new Windows.Foundation.Point(0, 0));
-            double cx = tl.X + container.ActualWidth / 2.0, cy = tl.Y + container.ActualHeight / 2.0;
-            double dx = (pw - 46.0) - cx, dy = (ph - 46.0) - cy;
-            double s = System.Math.Max(0.05, System.Math.Min(1.0, 52.0 / System.Math.Max(container.ActualWidth, 1)));
-            return (dx, dy, s, s);
-        }
-
         private void MeltToolbarAway(Grid container, Microsoft.UI.Xaml.Media.CompositeTransform tr)
         {
             if (_isToolbarCollapsed) return;
             HideAlignPickerPanel();
+            HideColorPickerPanel();
+            HideMdHeadingPickerPanel(); 
             _isToolbarCollapsed = true;
-            ExpandButton.Visibility = Visibility.Collapsed; 
-            var (dx, dy, scx, scy) = MeltMetrics(container);
-            tr.CenterX = container.ActualWidth / 2.0; tr.CenterY = container.ActualHeight / 2.0;
+            ExpandButton.Visibility = Visibility.Collapsed;
             var sb = new Storyboard();
-            var tx = new DoubleAnimation { To = dx, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(tx, tr); Storyboard.SetTargetProperty(tx, "TranslateX"); sb.Children.Add(tx);
-            var ty = new DoubleAnimation { To = dy, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var ty = new DoubleAnimation { To = 16, Duration = TimeSpan.FromMilliseconds(180), EasingFunction = Services.Motion.Accelerate() };
             Storyboard.SetTarget(ty, tr); Storyboard.SetTargetProperty(ty, "TranslateY"); sb.Children.Add(ty);
-            var sx = new DoubleAnimation { To = scx, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(sx, tr); Storyboard.SetTargetProperty(sx, "ScaleX"); sb.Children.Add(sx);
-            var sy = new DoubleAnimation { To = scy, Duration = TimeSpan.FromMilliseconds(340), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(sy, tr); Storyboard.SetTargetProperty(sy, "ScaleY"); sb.Children.Add(sy);
-            var f = new DoubleAnimation { To = 0, BeginTime = TimeSpan.FromMilliseconds(170), Duration = TimeSpan.FromMilliseconds(170), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(180), EasingFunction = Services.Motion.Accelerate() };
             Storyboard.SetTarget(f, container); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
             sb.Completed += (_, _) => { container.Visibility = Visibility.Collapsed; tr.TranslateX = 0; tr.TranslateY = 0; tr.ScaleX = 1; tr.ScaleY = 1; container.Opacity = 1; ShowExpandButton(); };
             sb.Begin();
@@ -779,21 +873,13 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
         private void MeltToolbarBack(Grid container, Microsoft.UI.Xaml.Media.CompositeTransform tr)
         {
-            ExpandButton.Visibility = Visibility.Collapsed; 
-            var (dx, dy, scx, scy) = MeltMetrics(container);
-            tr.CenterX = container.ActualWidth / 2.0; tr.CenterY = container.ActualHeight / 2.0;
-            tr.TranslateX = dx; tr.TranslateY = dy; tr.ScaleX = scx; tr.ScaleY = scy;
+            ExpandButton.Visibility = Visibility.Collapsed;
+            tr.TranslateX = 0; tr.TranslateY = 16; tr.ScaleX = 1; tr.ScaleY = 1;
             container.Opacity = 0; container.Visibility = Visibility.Visible;
             var sb = new Storyboard();
-            var tx = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(tx, tr); Storyboard.SetTargetProperty(tx, "TranslateX"); sb.Children.Add(tx);
-            var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(240), EasingFunction = Services.Motion.Decelerate() };
             Storyboard.SetTarget(ty, tr); Storyboard.SetTargetProperty(ty, "TranslateY"); sb.Children.Add(ty);
-            var sxa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(sxa, tr); Storyboard.SetTargetProperty(sxa, "ScaleX"); sb.Children.Add(sxa);
-            var sya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(sya, tr); Storyboard.SetTargetProperty(sya, "ScaleY"); sb.Children.Add(sya);
-            var f = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(220), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var f = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = Services.Motion.Decelerate() };
             Storyboard.SetTarget(f, container); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
             sb.Begin();
         }
@@ -863,9 +949,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         ColorPickerScrim.Visibility = Visibility.Visible;
         ColorPickerPanel.Visibility = Visibility.Visible; ColorPickerPanel.Opacity = 0; ColorPickerTranslate.Y = -12;
         var sb = new Storyboard();
-        var fi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(230), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var fi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = Services.Motion.Decelerate() };
         Storyboard.SetTarget(fi, ColorPickerPanel); Storyboard.SetTargetProperty(fi, "Opacity"); sb.Children.Add(fi);
-        var si = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(260), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var si = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(220), EasingFunction = Services.Motion.Decelerate() };
         Storyboard.SetTarget(si, ColorPickerPanel); Storyboard.SetTargetProperty(si, "(UIElement.RenderTransform).(TranslateTransform.Y)"); sb.Children.Add(si);
         sb.Begin();
     }
@@ -876,9 +962,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         _isColorPickerOpen = false;
         ColorPickerScrim.Visibility = Visibility.Collapsed;
         var sb = new Storyboard();
-        var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(180), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(150), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(fo, ColorPickerPanel); Storyboard.SetTargetProperty(fo, "Opacity"); sb.Children.Add(fo);
-        var so = new DoubleAnimation { To = -12, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var so = new DoubleAnimation { To = -10, Duration = TimeSpan.FromMilliseconds(170), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(so, ColorPickerPanel); Storyboard.SetTargetProperty(so, "(UIElement.RenderTransform).(TranslateTransform.Y)"); sb.Children.Add(so);
         sb.Completed += (_, _) => { ColorPickerPanel.Visibility = Visibility.Collapsed; }; sb.Begin();
     }
@@ -926,12 +1012,31 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
             var bytes = ms.ToArray();
             if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge")); return; }
             
-            if (_currentImageBytes + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded")); return; }
-            _currentImageBytes += bytes.Length;
+            // N3-41: re-anchor on the REAL DOM before every insert - _currentImageBytes only grew on
+            // insert and never shrank when the user deleted an image, so the 20MB cap eventually
+            // rejected legal inserts by counting stale/removed bytes.
+            long existing = await QueryEmbeddedImageBytesAsync();
+            if (existing + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded")); return; }
+            _currentImageBytes = existing + bytes.Length;
             var mime = file.FileType.ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
             PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(bytes), filename = file.Name, mime });
         }
         catch { }
+    }
+
+    /// <summary>N3-41: sum the DECODED bytes of every data:-embedded image currently in the editor body
+    /// (HTML format only). Falls back to the tracked counter when the DOM query fails (MD format /
+    /// WebView hiccup), so the cap never hard-fails on a stale count.</summary>
+    private async System.Threading.Tasks.Task<long> QueryEmbeddedImageBytesAsync()
+    {
+        try
+        {
+            if (ContentWebView.CoreWebView2 == null || !_webViewReady || _loadedFormat != "html") return _currentImageBytes;
+            const string js = "(()=>{let s=0;document.querySelectorAll('#body img').forEach(im=>{const src=im.getAttribute('src')||'';const m=/^data:[^;]*;base64,(.*)$/.exec(src);if(m){try{s+=(atob(m[1])||'').length}catch(e){}}});return String(s)})()";
+            var r = await ContentWebView.CoreWebView2.ExecuteScriptAsync(js);
+            return long.TryParse(r, out var v) ? v : _currentImageBytes;
+        }
+        catch { return _currentImageBytes; }
     }
 
     // ================================================================
@@ -1021,10 +1126,11 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         HideMdHeadingPickerPanel();
         _isToolbarCollapsed = true;
         var sb = new Storyboard();
-        var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(280), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        
+        var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(Services.Motion.DlgOut), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(f, MdToolbarContainer); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
-        var s = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(320), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(s, MdToolbarTranslate); Storyboard.SetTargetProperty(s, "TranslateY"); sb.Children.Add(s);
+        var s2 = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(Services.Motion.DlgOut), EasingFunction = Services.Motion.Accelerate() };
+        Storyboard.SetTarget(s2, MdToolbarTranslate); Storyboard.SetTargetProperty(s2, "TranslateY"); sb.Children.Add(s2);
         sb.Completed += (_, _) => { MdToolbarContainer.Visibility = Visibility.Collapsed; ShowExpandButton(); }; sb.Begin();
     }
 

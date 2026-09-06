@@ -124,6 +124,18 @@ public sealed partial class StickyNoteWindow : Window
             // scroll position while they were reading a long todo. Skip when nothing actually changed.
             if (!TodoItemsEqual(_items, items))
             {
+                
+                if (_todoDirty && _items != null)
+                {
+                    // N2-63a: merge by LABEL instead of by index - a main-program add/remove/reorder
+                    // inside the debounce window made index-paired writes check the wrong rows.
+                    var byLabel = new Dictionary<string, StickyTodoItem>();
+                    foreach (var it in _items)
+                        if (!string.IsNullOrEmpty(it.Label) && !byLabel.ContainsKey(it.Label)) byLabel[it.Label] = it;
+                    foreach (var it in items)
+                        if (!string.IsNullOrEmpty(it.Label) && byLabel.TryGetValue(it.Label, out var keep))
+                            it.Checked = keep.Checked;
+                }
                 _items = items;
                 RenderTodoList();
             }
@@ -148,7 +160,7 @@ public sealed partial class StickyNoteWindow : Window
             NoteBox.HorizontalAlignment = HorizontalAlignment.Stretch;
             CountdownText.Visibility = Visibility.Visible;
             UpdateCountdown();
-            StartCountdownTimer();
+            if (!_dueFired) StartCountdownTimer(); // N2-59: FireDue owns the card after firing - a concurrent main-program write (SetContent) must not restart a timer that only early-returns on _dueFired
         }
         else
         {
@@ -238,6 +250,7 @@ public sealed partial class StickyNoteWindow : Window
             for (int i = 1; i < items.Count; i++) if (!items[i].Checked) { allSubChecked = false; break; }
             items[0].Checked = allSubChecked;
         }
+        _todoDirty = true; 
         RenderTodoList();
         ScheduleSaveTodoItems();
     }
@@ -252,7 +265,10 @@ public sealed partial class StickyNoteWindow : Window
             {
                 _saveTodoTimer.Stop();
                 _saveTodoTimer = null;
-                if (_items != null) App.UpdateTodoItems(NoteId, _items);
+                // N2-63b: clear the dirty flag only after the write landed - a failed write keeps
+                // the toggles pending so the next SetContent merge still preserves them.
+                var ok = _items != null && App.UpdateTodoItems(NoteId, _items);
+                if (ok) _todoDirty = false;
             };
         }
         _saveTodoTimer.Stop();
@@ -265,13 +281,22 @@ public sealed partial class StickyNoteWindow : Window
         if (_saveTodoTimer == null) return;
         _saveTodoTimer.Stop();
         _saveTodoTimer = null;
-        if (_items != null) App.UpdateTodoItems(NoteId, _items);
+        // N2-63b: same as the debounced path - reset only after the write landed
+        var ok = _items != null && App.UpdateTodoItems(NoteId, _items);
+        if (ok) _todoDirty = false;
     }
 
     /// <summary>Reminder countdown: live mm/dd-based remaining time, refreshed every second.</summary>
     private void UpdateCountdown()
     {
-        if (!IsReminder || DueTime == null) return;
+        if (!IsReminder || DueTime == null)
+        {
+            // N3-46: defensive state (reminder card without a due time) - fold the countdown text
+            // instead of leaving it Visible with stale/empty content (a blank gap in the card body).
+            CountdownText.Visibility = Visibility.Collapsed;
+            return;
+        }
+        CountdownText.Visibility = Visibility.Visible;
         var remain = DueTime.Value - DateTimeOffset.Now;
         if (remain.TotalSeconds <= 0)
         {
@@ -293,6 +318,7 @@ public sealed partial class StickyNoteWindow : Window
     {
         if (_dueFired) return;
         _dueFired = true;
+        StopCountdownTimer(); 
         
         var toast = NoteBox.Text ?? "";
         if (toast.Length > 120) toast = toast.Substring(0, 120) + "…";
@@ -301,7 +327,7 @@ public sealed partial class StickyNoteWindow : Window
         for (int i = 0; i < 3; i++)
         {
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; return; } // D18/E4-03: abort the sequence and re-arm for the next due
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; } // D18/E4-03: abort the sequence and re-arm for the next due (N3-03: actually restart the countdown timer - resetting the flags alone left the card frozen forever)
             try { _ = NativeMethods.MessageBeep(0x30); } catch { }
             await Task.Delay(500);
         }
@@ -310,16 +336,16 @@ public sealed partial class StickyNoteWindow : Window
         for (int i = 0; i < 5; i++)
         {
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; return; }
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; } // N3-03: restart the countdown timer on abort
             RootBorder.Background = red;
             await Task.Delay(300);
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); return; } // E3-19/E4-03: restore the background before aborting - it was left deep red when postponed mid-pulse (E4-35: recompute from _lastTheme so a theme change mid-sequence is not reverted)
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; } // E3-19/E4-03: restore the background before aborting - it was left deep red when postponed mid-pulse (E4-35: recompute from _lastTheme so a theme change mid-sequence is not reverted); N3-03: restart the countdown timer
             ApplyTheme(_lastTheme); // E5-22: restore from the current theme (was baseBg, captured before the beeps - a theme change mid-sequence would otherwise be reverted on the normal path)
             await Task.Delay(300);
         }
         if (_closed) return;
-        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); return; } // E5-21: symmetric with :194 - restore the theme before aborting (ultra-narrow timing after the final pulse, theme change mid-sequence)
+        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; } // E5-21: symmetric with :194 - restore the theme before aborting (ultra-narrow timing after the final pulse, theme change mid-sequence); N3-03: restart the countdown timer
         App.NoteWindows.Remove(NoteId);
         Close();
         App.RemoveNote(NoteId); // remove data from stickies.json (content-driven lifecycle picks it up)
@@ -328,6 +354,8 @@ public sealed partial class StickyNoteWindow : Window
     private void StartCountdownTimer()
     {
         if (_countdownTimer != null) return;
+        
+        if (!IsReminder || DueTime == null) return;
         _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _countdownTimer.Tick += (_, _) => UpdateCountdown();
         _countdownTimer.Start();
@@ -381,6 +409,7 @@ public sealed partial class StickyNoteWindow : Window
     private string _lastTheme = "light";
     private List<StickyTodoItem>? _items; // todo rows (index 0 = main, 1..n = sub)
     private DispatcherTimer? _saveTodoTimer; // debounce for todo write-back
+    private bool _todoDirty; 
 
     public void HideFromTaskbar()
     {
@@ -460,6 +489,10 @@ public sealed partial class StickyNoteWindow : Window
         double scale = NativeMethods.GetDpiForWindow(hwnd) / 96.0;
         var mi = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
         _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi);
+        // N2-60: waW/waH are MONITOR-RELATIVE sizes but SetWindowSizePos takes VIRTUAL-SCREEN
+        // coordinates - anchor to the work area's actual origin so a default position on a
+        // secondary monitor lands there instead of at the primary's top-left.
+        int ox = mi.rcWork.Left, oy = mi.rcWork.Top;
         int waW = mi.rcWork.Right - mi.rcWork.Left;
         int waH = mi.rcWork.Bottom - mi.rcWork.Top;
         int w = (int)(waW * 0.28), h = (int)(waH * 0.58);
@@ -469,20 +502,23 @@ public sealed partial class StickyNoteWindow : Window
         {
             // Reminder cards: note-sized (300x180 logical), anchored bottom-right,
             // new cards stagger to the left. waW is physical (MONITORINFO units).
+            // N3-47: margin + stagger are logical - multiply by scale like the note branch below,
+            // otherwise high-DPI reminders crowd the corner (stagger/24px shrank to sub-pixel).
             int rw = (int)(300 * scale), rh = (int)(180 * scale);
-            int x = waW - rw - 24 - PositionIndex * 32;
-            int y = waH - rh - 24;
-            if (x < 0) x = 0;
-            if (y < 0) y = 0; // E5-23: upper bound clamp (extremely high DPI + tiny work area could push y above the screen, symmetric with the x clamp)
+            int margin = (int)(24 * scale);
+            int x = ox + waW - rw - margin - (int)(PositionIndex * 32 * scale);
+            int y = oy + waH - rh - margin;
+            if (x < ox) x = ox;
+            if (y < oy) y = oy; // E5-23: upper bound clamp (extremely high DPI + tiny work area could push y above the screen, symmetric with the x clamp)
             NativeMethods.SetWindowSizePos(hwnd, x, y, rw, rh);
         }
         else
         {
             // E4-33: clamp the initial position into the work area (multi-card cascades used to run off-screen)
-            int nx = (int)((200 + PositionIndex * 32) * scale);
-            int ny = (int)((220 + PositionIndex * 32) * scale);
-            nx = Math.Clamp(nx, 0, Math.Max(0, waW - w - 24));
-            ny = Math.Clamp(ny, 0, Math.Max(0, waH - h - 24));
+            int nx = ox + (int)((200 + PositionIndex * 32) * scale);
+            int ny = oy + (int)((220 + PositionIndex * 32) * scale);
+            nx = Math.Clamp(nx, ox, Math.Max(ox, ox + waW - w - 24));
+            ny = Math.Clamp(ny, oy, Math.Max(oy, oy + waH - h - 24));
             NativeMethods.SetWindowSizePos(hwnd, nx, ny, w, h);
         }
     }
@@ -538,9 +574,11 @@ public sealed partial class StickyNoteWindow : Window
             // E4-33: keep at least 60px of the window inside the work area so it can never be dragged off-screen
             var mi = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
             _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi);
-            const int MinVisible = 60;
-            nx = Math.Clamp(nx, mi.rcWork.Left - _dragStartW + MinVisible, mi.rcWork.Right - MinVisible);
-            ny = Math.Clamp(ny, mi.rcWork.Top - _dragStartH + MinVisible, mi.rcWork.Bottom - MinVisible);
+            // N3-48: rcWork is PHYSICAL pixels - a hardcoded 60 would silently shrink to ~30 logical
+            
+            int minVis = (int)(60 * NativeMethods.GetDpiForWindow(hwnd) / 96.0);
+            nx = Math.Clamp(nx, mi.rcWork.Left - _dragStartW + minVis, mi.rcWork.Right - minVis);
+            ny = Math.Clamp(ny, mi.rcWork.Top - _dragStartH + minVis, mi.rcWork.Bottom - minVis);
             NativeMethods.SetWindowSizePos(hwnd, nx, ny, _dragStartW, _dragStartH);
             return;
         }
@@ -560,7 +598,17 @@ public sealed partial class StickyNoteWindow : Window
         if (b) B = _dragStartY + _dragStartH + dy;
         if (R - L < minW) { if (l) L = R - minW; else R = L + minW; }
         if (B - T < minH) { if (t) T = B - minH; else B = T + minH; }
-        NativeMethods.SetWindowSizePos(hwnd, L, T, R - L, B - T);
+        
+        var mi2 = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi2);
+        // N3-48: scale the "60 logical px visible" floor like the move branch (rcWork is physical).
+        int minVis2 = (int)(60 * scale);
+        int w = R - L, h = B - T;
+        L = Math.Clamp(L, mi2.rcWork.Left - w + minVis2, mi2.rcWork.Right - minVis2);
+        T = Math.Clamp(T, mi2.rcWork.Top - h + minVis2, mi2.rcWork.Bottom - minVis2);
+        w = R - L; h = B - T; // N4-13: recompute AFTER the anchor clamp - the pre-clamp size made the
+        // anchored right/bottom edge drift instead of the dragged left/top edge shrinking against it
+        NativeMethods.SetWindowSizePos(hwnd, L, T, w, h);
         e.Handled = true;
     }
 

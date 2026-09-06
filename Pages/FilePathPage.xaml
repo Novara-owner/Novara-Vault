@@ -30,7 +30,6 @@
         <Canvas x:Name="DragLayer" IsHitTestVisible="False" Grid.RowSpan="3" />
 
         <TextBlock x:Name="EmptyHint"
-                   Text="{x:Bind app:App.GetString(\'Path_Empty_Tip\')}"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    TextAlignment="Center"

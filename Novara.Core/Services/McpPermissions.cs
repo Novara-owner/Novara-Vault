@@ -70,7 +70,11 @@ public static class McpPermissions
         }
         if (method is "list_items" or "read_item" or "search_items")
         {
-            if (string.IsNullOrEmpty(typeArg) || typeArg == "all") return AllRead;
+            // N2-67: an OMITTED type (null/empty) is the normal mixed form and demands AllRead;
+            // an EXPLICIT "all" is not a valid type at all - fall through to None so the execution
+            
+            // (previously the two layers disagreed: permission pass, execution throw).
+            if (string.IsNullOrEmpty(typeArg)) return AllRead;
             var z = Zone(typeArg);
             return z?.r ?? McpPerm.None;
         }
@@ -99,9 +103,16 @@ public static class McpPermissions
     }
 
     public static McpPerm GetFor(AppSettings s, string clientPath)
-        => s.McpClientPermissions.FirstOrDefault(r => r.Path == clientPath)?.Permissions != null
-            ? (McpPerm)s.McpClientPermissions.First(r => r.Path == clientPath).Permissions
-            : McpPerm.None;
+    {
+        
+        
+        try
+        {
+            var rec = s.McpClientPermissions.ToList().FirstOrDefault(r => r.Path == clientPath);
+            return rec?.Permissions != null ? (McpPerm)rec.Permissions : McpPerm.None;
+        }
+        catch { return McpPerm.None; } 
+    }
 
     /// <summary>Idempotent: create the default-set record unless one already exists (the authorize
     /// dialog may pre-create it before the server-side write lands).</summary>
@@ -113,8 +124,8 @@ public static class McpPermissions
 
     /// <summary>D2 one-shot migration: legacy authorized paths get the full capability set so
     /// upgrading never shrinks existing agents. Flag prevents ghost revival after the user revokes
-    /// everything (empty lists must stay empty). Returns true when a migration actually happened
-    /// (caller persists).</summary>
+    /// everything (empty lists must stay empty). Returns true on the first call (so the caller
+    /// persists the McpPermMigrated flag), regardless of whether any path was actually migrated.</summary>
     public static bool EnsureMigrated(AppSettings s)
     {
         if (s.McpPermMigrated) return false;

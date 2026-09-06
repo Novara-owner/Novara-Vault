@@ -134,9 +134,13 @@ public static class PasswordService
             using (var sr = new StreamReader(fs))
                 text = sr.ReadToEnd();
             var sf = JsonSerializer.Deserialize<SecurityFile>(text);
-            if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.Hash)) return SecurityHealth.Damaged;
-            Convert.FromBase64String(sf.HashSalt);
-            Convert.FromBase64String(sf.Hash);
+            
+            
+            if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.DeriveSalt) || string.IsNullOrEmpty(sf.Hash)) return SecurityHealth.Damaged;
+            
+            if (Convert.FromBase64String(sf.HashSalt).Length != SaltSize) return SecurityHealth.Damaged;
+            if (Convert.FromBase64String(sf.DeriveSalt).Length != SaltSize) return SecurityHealth.Damaged;
+            if (Convert.FromBase64String(sf.Hash).Length != HashSize) return SecurityHealth.Damaged;
             return SecurityHealth.Ok;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -245,14 +249,22 @@ public static class PasswordService
     private static void AtomicWrite(string path, string content)
     {
         var tmp = path + ".tmp";
-        using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+        try
         {
-            using var w = new StreamWriter(fs);
-            w.Write(content);
-            w.Flush();
-            fs.Flush(true); // E3-13: flush to disk incl. cache - a half-written security.dat on power loss would lock the data
+            using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                using var w = new StreamWriter(fs);
+                w.Write(content);
+                w.Flush();
+                fs.Flush(true); // E3-13: flush to disk incl. cache - a half-written security.dat on power loss would lock the data
+            }
+            File.Move(tmp, path, true);
         }
-        File.Move(tmp, path, true);
+        catch
+        {
+            try { File.Delete(tmp); } catch { } // N4-24: N3-21 pattern - a failed write must not leave a stray *.tmp behind
+            throw;
+        }
     }
 
     public static void SetLockoutUntil(DateTime until)

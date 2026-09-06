@@ -14,4 +14,5 @@ public class DiaryEntry
     public DateTime DeletedAt { get; set; }
     public int Order { get; set; } 
     public string Format { get; set; } = "html"; // "html" = rich-text diary (default) / "markdown" = MD document; legacy rows lack this field -> deserialize to "html" (zero migration)
+    public string WorkspaceId { get; set; } = ""; // 9.3 Workspace: owning workspace id (empty = unassigned)
 }

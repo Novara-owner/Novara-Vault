@@ -83,10 +83,21 @@ public sealed partial class PlanPage : Page
         DeleteCancelText.Text = App.GetString("Common_Button_Cancel");
         DeleteConfirmText.Text = App.GetString("Common_Button_Delete");
         KeyDown += Page_KeyDown; // ND1: was accidentally swallowed into the comment line during the snapshot re-insertion - Esc close was dead on this page
+        // N4-29: past date/time keeps the reminder dialog's confirm disabled (schtasks would silently fail)
+        SetReminderDatePicker.DateChanged += (_, _) => UpdateSetReminderConfirmState();
+        SetReminderTimePicker.TimeChanged += (_, _) => UpdateSetReminderConfirmState();
         Loaded += (_, _) => { LoadFromStore(); RefreshAllReminderBorders(); }; // E4-16 + N4P-02: reload is idempotent (_storeLoaded); the explicit refresh restarts the 30s timer Unloaded stopped and surfaces reminders that came due while the page was hidden
         Unloaded += (_, _) => { NewTodoOverlay.Visibility = Visibility.Collapsed; NewNoteOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; ReminderOverlay.Visibility = Visibility.Collapsed; // E3-19: reminder dialog was the only overlay not cleaned on tab switch (M4)
         // ND6: fold the remaining three overlays too - an open scrim left behind desynced from the chrome veil after a tab switch.
         SetReminderScrim.Opacity = 0; CancelReminderScrim.Opacity = 0; ReminderDueScrim.Opacity = 0;
+        
+        // skipping it left the reminder swallowed forever (_dueShown kept the card, fields stayed
+        // set, the gradient border froze red).
+        if (ReminderDueOverlay.Visibility == Visibility.Visible && _dueReminderCard != null)
+        {
+            ClearReminderOnCard(_dueReminderCard);
+            _dueReminderCard = null;
+        }
         SetReminderOverlay.Visibility = Visibility.Collapsed; CancelReminderOverlay.Visibility = Visibility.Collapsed; ReminderDueOverlay.Visibility = Visibility.Collapsed;
         DialogDepth.VeilClear(); 
         _editingTodoCard = null; _editingNoteCard = null; _pendingDeleteCard = null; _editingReminderId = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; } _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll();
@@ -103,6 +114,11 @@ public sealed partial class PlanPage : Page
         if (ReminderOverlay.Visibility == Visibility.Visible) { HideReminderDialog(); e.Handled = true; return; }
         if (NewNoteOverlay.Visibility == Visibility.Visible) { HideNewNoteDialog(); e.Handled = true; return; }
         if (NewTodoOverlay.Visibility == Visibility.Visible) { HideNewTodoDialog(); e.Handled = true; return; }
+        // N4P-07 (legacy N4 round leftovers): the three reminder-family dialogs never joined the
+        // Esc chain. Due-dialog hide carries its own teardown (ClearReminderOnCard), same as close/confirm.
+        if (SetReminderOverlay.Visibility == Visibility.Visible) { HideSetReminderDialog(); e.Handled = true; return; }
+        if (CancelReminderOverlay.Visibility == Visibility.Visible) { HideCancelReminderDialog(); e.Handled = true; return; }
+        if (ReminderDueOverlay.Visibility == Visibility.Visible) { HideReminderDueDialog(); e.Handled = true; return; }
     }
 
     private async void LoadFromStore()
@@ -180,7 +196,7 @@ public sealed partial class PlanPage : Page
         _entrancePlayed = true; // P0-1: cascade already played per-card above
         _bulkLoading = false;
         ReorderCards(); 
-        UpdateEmptyHint(); // P0-1: sets Visibility by count (FloatInHint alone wouldn't re-show after the start-hide)
+        ApplyCardFilters(); 
         RefreshAllReminderBorders(); 
         if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); } // N5P-01: run the deferred rebuild now that every entry has a card
     }
@@ -205,12 +221,24 @@ public sealed partial class PlanPage : Page
                 else if (noteById.TryGetValue(id, out var n)) notes.Add(n);
             }
         }
+        // N2-01: MCP writes land directly in the db without UI cards - keep db entries that are
+        // neither on a card nor soft-deleted across the rebuild (P0, same as the memo page).
+        var todoKnownIds = todos.Select(x => x.Id).Concat(softDeletedTodos.Select(x => x.Id)).ToHashSet();
+        var todoOrphans = todoById.Values.Where(x => !x.IsDeleted && !todoKnownIds.Contains(x.Id)).ToList();
+        var noteKnownIds = notes.Select(x => x.Id).Concat(softDeletedNotes.Select(x => x.Id)).ToHashSet();
+        var noteOrphans = noteById.Values.Where(x => !x.IsDeleted && !noteKnownIds.Contains(x.Id)).ToList();
+        // N2-16: an entry can be both on a card AND soft-deleted (MCP deleted it without a UI
+        // refresh) - it must land in the db exactly once.
+        var todoSeen = todos.Select(x => x.Id).ToHashSet();
+        var noteSeen = notes.Select(x => x.Id).ToHashSet();
         db.TodoCards.Clear();
         db.TodoCards.AddRange(todos);
-        db.TodoCards.AddRange(softDeletedTodos); // keep soft-deleted items (trash)
+        db.TodoCards.AddRange(softDeletedTodos.Where(x => !todoSeen.Contains(x.Id))); // keep soft-deleted items (trash)
+        db.TodoCards.AddRange(todoOrphans);
         db.NoteCards.Clear();
         db.NoteCards.AddRange(notes);
-        db.NoteCards.AddRange(softDeletedNotes);
+        db.NoteCards.AddRange(softDeletedNotes.Where(x => !noteSeen.Contains(x.Id)));
+        db.NoteCards.AddRange(noteOrphans);
         App.Store?.SaveAsync();
     }
 
@@ -221,8 +249,12 @@ public sealed partial class PlanPage : Page
         if (db == null) return;
         bool manual = db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0);
         if (!manual) return;
-        foreach (var t in db.TodoCards) if (!t.IsPinned && t.Order > 0) t.Order++;
-        foreach (var n in db.NoteCards) if (!n.IsPinned && n.Order > 0) n.Order++;
+        // N2-41 (N1-33 parity): only cards in the ACTIVE workspace and not soft-deleted take part -
+        // bumping other workspaces' (and trashed) cards polluted their order space.
+        var wsId = App.CurrentWorkspaceId;
+        bool inView(string? wid) => string.IsNullOrEmpty(wsId) || wid == wsId;
+        foreach (var t in db.TodoCards) if (!t.IsPinned && !t.IsDeleted && inView(t.WorkspaceId) && t.Order > 0) t.Order++;
+        foreach (var n in db.NoteCards) if (!n.IsPinned && !n.IsDeleted && inView(n.WorkspaceId) && n.Order > 0) n.Order++;
         if (todo != null) todo.Order = 1;
         if (note != null) note.Order = 1;
     }
@@ -263,19 +295,43 @@ public sealed partial class PlanPage : Page
         App.Store?.SaveAsync();
     }
 
-    private void UpdateEmptyHint() { bool anyVisible = false; foreach (var c in CardList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; } if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; } EmptyHint.Visibility = Visibility.Visible; EmptyHint.Text = _currentFilter switch { "todo" => App.GetString("Plan_Filter_Todo_Empty"), "note" => App.GetString("Plan_Filter_Note_Empty"), _ => App.GetString("Plan_Empty_Tip") }; FloatInHint(); }
+    private void UpdateEmptyHint() { bool anyVisible = false; foreach (var c in CardList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; } if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; } EmptyHint.Visibility = Visibility.Visible; EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch { "todo" => App.GetString("Plan_Filter_Todo_Empty"), "note" => App.GetString("Plan_Filter_Note_Empty"), _ => App.GetString("Plan_Empty_Tip") }; FloatInHint(); }
 
     
     public string GetFilter() => _currentFilter;
     public void SetFilter(string filter)
     {
         _currentFilter = filter;
+        ApplyCardFilters();
+    }
+
+    
+    public void ApplyCardFilters()
+    {
+        string wsId = App.CurrentWorkspaceId;
+        bool wsActive = !string.IsNullOrEmpty(wsId);
+        var db = App.Store?.Database;
+        // N3-38: pre-index WorkspaceId per card id ONCE - the per-card FirstOrDefault over the whole
+        
+        // every toggle re-scanned both lists per child.
+        Dictionary<Guid, string>? wsById = null;
+        if (wsActive && db != null)
+        {
+            wsById = new Dictionary<Guid, string>();
+            foreach (var t in db.TodoCards) wsById[t.Id] = t.WorkspaceId ?? "";
+            foreach (var n in db.NoteCards) if (!wsById.ContainsKey(n.Id)) wsById[n.Id] = n.WorkspaceId ?? "";
+        }
         foreach (var child in CardList.Children)
         {
             if (child is not Border b) continue;
             bool isNote = b.Tag is string tg && tg == "note";
-            bool show = filter == "all" || (filter == "note" && isNote) || (filter == "todo" && !isNote);
-            b.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            bool typeMatch = _currentFilter == "all" || (_currentFilter == "note" && isNote) || (_currentFilter == "todo" && !isNote);
+            bool wsMatch = true;
+            // N3-38: dict lookup replaces the per-card double FirstOrDefault. Missing id => hidden,
+            // matching the original (t == null && n == null -> cw == null -> false under a ws filter).
+            if (wsById != null && _cardIds.TryGetValue(b, out var id))
+                wsMatch = wsById.TryGetValue(id, out var cw) && cw == wsId;
+            b.Visibility = (typeMatch && wsMatch) ? Visibility.Visible : Visibility.Collapsed;
         }
         UpdateEmptyHint();
     }
@@ -344,7 +400,7 @@ public sealed partial class PlanPage : Page
     {
         _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
         UpdateReminderConfirmState(); // UI-2: initial validity (explicit - empty assignment may not raise TextChanged)
-        ReminderDialogTransform.ScaleX = 0.92; ReminderDialogTransform.ScaleY = 0.92; ReminderDialogTransform.TranslateY = 20;
+        ReminderDialogTransform.ScaleX = 0.94; ReminderDialogTransform.ScaleY = 0.94; ReminderDialogTransform.TranslateY = 24;
         ReminderDialog.Opacity = 0; ReminderScrim.Opacity = 0;
         ReminderOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
         var sb = new Storyboard();
@@ -352,11 +408,7 @@ public sealed partial class PlanPage : Page
         Storyboard.SetTarget(si, ReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ReminderDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -367,11 +419,7 @@ public sealed partial class PlanPage : Page
         Storyboard.SetTarget(so, ReminderScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ReminderDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ReminderDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ReminderDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => ReminderOverlay.Visibility = Visibility.Collapsed;
         DialogDepth.VeilHide();
         sb.Begin();
@@ -389,6 +437,8 @@ public sealed partial class PlanPage : Page
         var d = ReminderDatePicker.Date;
         var t = ReminderTimePicker.Time;
         var due = new DateTimeOffset(d.Year, d.Month, d.Day, t.Hours, t.Minutes, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(d.Year, d.Month, d.Day)));
+        
+        if (due.LocalDateTime <= DateTime.Now) { _confirming = false; App.ShowToast(App.GetString("Reminder_Past_Time")); FlashTextBox(ReminderContentBox); return; }
         if (isEdit)
             Services.StickySync.UpdateReminder(_editingReminderId!, content, due);
         else
@@ -398,9 +448,9 @@ public sealed partial class PlanPage : Page
         HideReminderDialog();
     }
 
-    public void ShowNewItemDialog(string title) { _confirming = false; _editingTodoCard = null; NewTodoDialogTitle.Text = title; TodoNameBox.Text = ""; MainTodoBox.Text = ""; UpdateTodoConfirmState(); SubTodoPanel.Children.Clear(); SubTodoPanel.Children.Add(new TextBlock{Text=App.GetString("Plan_Todo_SubLabel"),FontSize=12,FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=App.GetBrush("AppTextSecondaryBrush"),Margin=new Thickness(0,0,0,8)}); SubTodoPanel.Children.Add(CreateSubTodoBox()); LoadIconSelector(); NewTodoDialogTransform.ScaleX = 0.92; NewTodoDialogTransform.ScaleY = 0.92; NewTodoDialogTransform.TranslateY = 20; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewTodoDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Begin(); }
+    public void ShowNewItemDialog(string title) { _confirming = false; _editingTodoCard = null; NewTodoDialogTitle.Text = title; TodoNameBox.Text = ""; MainTodoBox.Text = ""; UpdateTodoConfirmState(); SubTodoPanel.Children.Clear(); SubTodoPanel.Children.Add(new TextBlock{Text=App.GetString("Plan_Todo_SubLabel"),FontSize=12,FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=App.GetBrush("AppTextSecondaryBrush"),Margin=new Thickness(0,0,0,8)}); SubTodoPanel.Children.Add(CreateSubTodoBox()); LoadIconSelector(); NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin(); }
 
-    private void HideNewTodoDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewTodoScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewTodoDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewTodoDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Completed -= OnNewTodoHideCompleted; sb.Completed += OnNewTodoHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
+    private void HideNewTodoDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewTodoScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewTodoDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, NewTodoDialogTransform); sb.Completed -= OnNewTodoHideCompleted; sb.Completed += OnNewTodoHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnNewTodoHideCompleted(object? sender, object e) { NewTodoOverlay.Visibility = Visibility.Collapsed; _editingTodoCard = null; }
 
     private void LoadIconSelector() { _selectedIconKey = null; IconPanel.Children.Clear(); foreach (var key in IconData.GroupIconKeysInOrder()) { var b = new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), Tag = key, Child = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } } }; b.Tapped += IconBorder_Tapped; IconPanel.Children.Add(b); } }
@@ -476,7 +526,7 @@ public sealed partial class PlanPage : Page
         var mainText = MainTodoBox.Text.Trim(); if (string.IsNullOrWhiteSpace(mainText)) { _confirming = false; FlashTextBox(MainTodoBox); return; }
         var subTexts = new List<string>();
         for (int i = 0; i < SubTodoPanel.Children.Count; i++) { if (SubTodoPanel.Children[i] is TextBox stb) { var t = stb.Text.Trim(); if (!string.IsNullOrWhiteSpace(t)) subTexts.Add(t); } }
-        if (_editingTodoCard != null) { var old = _editingTodoCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; var oldStates = _todoData.TryGetValue(old, out var od) ? od.checkedStates : null; var oldSubTexts = od.subTexts; var newStates = new List<bool>(); { bool mainKept = oldStates != null && oldStates.Count > 0 && mainText == od.mainText; newStates.Add(mainKept && oldStates![0]); var used = new bool[oldSubTexts?.Count ?? 0]; for (int si = 0; si < subTexts.Count; si++) { bool orig = false; if (oldSubTexts != null && oldStates != null) { for (int oi = 0; oi < oldSubTexts.Count; oi++) { if (!used[oi] && oldSubTexts[oi] == subTexts[si] && oi + 1 < oldStates.Count) { orig = oldStates[oi + 1]; used[oi] = true; break; } } } newStates.Add(orig); } } _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _todoData.Remove(old); _todoCollapsed.Remove(old); _todoCompletedBadges.Remove(old); _cardExpandBtns.Remove(old); _todoRowPanels.Remove(old); _createdAt.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildTodoCard(name, iconKey, mainText, subTexts, newStates); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } App.PlayCardEntrance(nc);
+        if (_editingTodoCard != null) { var old = _editingTodoCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); bool wasReminder = _reminderCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; var oldStates = _todoData.TryGetValue(old, out var od) ? od.checkedStates : null; var oldSubTexts = od.subTexts; var newStates = new List<bool>(); { bool mainKept = oldStates != null && oldStates.Count > 0 && mainText == od.mainText; newStates.Add(mainKept && oldStates![0]); var used = new bool[oldSubTexts?.Count ?? 0]; for (int si = 0; si < subTexts.Count; si++) { bool orig = false; if (oldSubTexts != null && oldStates != null) { for (int oi = 0; oi < oldSubTexts.Count; oi++) { if (!used[oi] && oldSubTexts[oi] == subTexts[si] && oi + 1 < oldStates.Count) { orig = oldStates[oi + 1]; used[oi] = true; break; } } } newStates.Add(orig); } } _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _todoData.Remove(old); _todoCollapsed.Remove(old); _todoCompletedBadges.Remove(old); _cardExpandBtns.Remove(old); _todoRowPanels.Remove(old); _createdAt.Remove(old); _reminderCards.Remove(old); _dueShown.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildTodoCard(name, iconKey, mainText, subTexts, newStates); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } if (wasReminder) { _reminderCards.Add(nc); } App.PlayCardEntrance(nc);
 
             if (_cardIds.TryGetValue(old, out var editTid))
             {
@@ -491,6 +541,7 @@ public sealed partial class PlanPage : Page
                 
                 if (Services.StickySync.Contains(editTid.ToString()))
                     Services.StickySync.UpdateNote(editTid.ToString(), "todo", name, "", BuildTodoItems(mainText, subTexts, newStates));
+                if (wasReminder) RefreshReminderBorder(nc); // N2-25: AFTER the _cardIds assignment - the call reads the map and early-returned when invoked before it
             }
             _cardIds.Remove(old);
             ReorderCards(); 
@@ -502,7 +553,7 @@ public sealed partial class PlanPage : Page
             _bulkLoading = true;
             var nc2 = BuildTodoCard(name, iconKey, mainText, subTexts);
             _bulkLoading = false;
-            var te2 = new TodoCard { Title = name, IconKey = iconKey, MainText = mainText, SubTexts = new List<string>(subTexts), CheckedStates = _todoData.TryGetValue(nc2, out var nd3) ? new List<bool>(nd3.checkedStates) : new List<bool>(), CreatedAt = DateTime.Now };
+            var te2 = new TodoCard { Title = name, IconKey = iconKey, MainText = mainText, SubTexts = new List<string>(subTexts), CheckedStates = _todoData.TryGetValue(nc2, out var nd3) ? new List<bool>(nd3.checkedStates) : new List<bool>(), CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
             AssignNewCardOrder(te2, null);
             App.Store?.Database.TodoCards.Add(te2);
             _cardIds[nc2] = te2.Id;
@@ -811,7 +862,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = CardList.Children.IndexOf(card);
+        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, CardList); // N2-06: origin in visible-slot space
 
         
         
@@ -864,7 +915,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         foreach (var child in CardList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            if (child is FrameworkElement fe)
+            
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(CardList).TransformPoint(new Point(0, 0)).Y;
                 if (ptInList.Y < top + fe.ActualHeight / 2) break;
@@ -878,7 +930,12 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     {
         
         
-        index = Math.Max(index, _pinnedCards.Count);
+        
+        int pinnedVisible = 0;
+        foreach (var c in CardList.Children)
+            if (c is Border pb && pb.Visibility == Visibility.Visible && _pinnedCards.Contains(pb))
+                pinnedVisible++;
+        index = Math.Max(index, pinnedVisible);
         
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
@@ -971,19 +1028,56 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
+        _ = RefreshReminderBorder(card); 
 
         
-        int curIdx = CardList.Children.IndexOf(card);
-        if (curIdx != dropIndex)
+        // N2-06: dropIndex is in "slot space including the dragged card" - convert to the
+        // without-self space, then translate back to a physical Children index (hidden cards stay put).
+        int curVisible = CountVisibleBeforeIn(card, CardList);
+        int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
+        if (dst != curVisible)
         {
             CardList.Children.Remove(card);
-            if (curIdx < dropIndex) dropIndex--;
-            CardList.Children.Insert(dropIndex, card);
+            CardList.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, CardList), card);
         }
 
         PersistManualOrder();
     }
 
+    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> in
+    /// <paramref name="container"/> (visible-slot space matching ComputeDropIndex; the drop
+    /// indicator itself is excluded).</summary>
+    private int CountVisibleBeforeIn(FrameworkElement card, Panel container)
+    {
+        int n = 0;
+        foreach (var child in container.Children)
+        {
+            if (ReferenceEquals(child, card)) break;
+            if (ReferenceEquals(child, _dropIndicator)) continue;
+            if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible) n++;
+        }
+        return n;
+    }
+
+    /// <summary>N2-06: physical Children index where a card must land to become the
+    /// <paramref name="visibleSlot"/>-th visible card (call AFTER removing the dragged card).</summary>
+    private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
+    {
+        int seen = 0;
+        var children = container.Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is FrameworkElement fe && fe.Visibility == Visibility.Visible)
+            {
+                if (seen == visibleSlot) return i;
+                seen++;
+            }
+        }
+        return children.Count;
+    }
+
+    
+    
     
     private void PersistManualOrder()
     {
@@ -992,14 +1086,24 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         var todoById = db.TodoCards.ToDictionary(x => x.Id);
         var noteById = db.NoteCards.ToDictionary(x => x.Id);
         int order = 0;
+        // N2-06 two-pass: visible cards take 1..N in the just-dragged order, then hidden cards
+        // (other workspaces/filters) continue in their own relative order.
         foreach (var child in CardList.Children)
         {
             
             
-            if (child is Border b && _cardIds.TryGetValue(b, out var id))
+            if (child is Border b && b.Visibility == Visibility.Visible && _cardIds.TryGetValue(b, out var id))
             {
                 if (todoById.TryGetValue(id, out var t)) t.Order = ++order;
                 else if (noteById.TryGetValue(id, out var n)) n.Order = ++order;
+            }
+        }
+        foreach (var child in CardList.Children)
+        {
+            if (child is Border b && b.Visibility != Visibility.Visible && _cardIds.TryGetValue(b, out var idH))
+            {
+                if (todoById.TryGetValue(idH, out var tH)) tH.Order = ++order;
+                else if (noteById.TryGetValue(idH, out var nH)) nH.Order = ++order;
             }
         }
         PersistOrderAndSave();
@@ -1008,9 +1112,10 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue; var m = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var si = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _starredCards.Contains(card) ? App.GetString("Menu_Unstar") : App.GetString("Menu_Star"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _starredCards.Contains(card) ? IconData.Unstar : IconData.Star), Foreground = App.GetBrush("IconForegroundBrush") } }; si.Click += (_, _) => { if (_starredCards.Contains(card)) { _starredCards.Remove(card); if (_starIcons.TryGetValue(card, out var sv)) sv.Visibility = Visibility.Collapsed; } else { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var sv)) sv.Visibility = Visibility.Visible; } SyncCardStar(card, _starredCards.Contains(card)); };
-        var pi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _pinnedCards.Contains(card) ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _pinnedCards.Contains(card) ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") } }; pi.Click += (_, _) => { if (_pinnedCards.Contains(card)) { _pinnedCards.Remove(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Collapsed; } else { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Visible; } SyncCardPin(card, _pinnedCards.Contains(card)); ReorderCards(); PersistOrderAndSave(); };
+        var pi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _pinnedCards.Contains(card) ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _pinnedCards.Contains(card) ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") } }; pi.Click += (_, _) => { bool willPin = !_pinnedCards.Contains(card); if (willPin) { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Visible; } else { _pinnedCards.Remove(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Collapsed; } SyncCardPin(card, willPin); if (willPin) ReorderCards(); 
+PersistOrderAndSave(); };
         var ei = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Edit"), Icon = new PathIcon { Data = MakeGroup(IconData.Edit), Foreground = App.GetBrush("IconForegroundBrush") } }; ei.Click += (_, _) => { if (card.Tag is string tg && tg == "note") ShowEditNoteDialog(card); else ShowEditTodoDialog(card); };
-        m.Items.Add(si); m.Items.Add(pi);
+        m.Items.Add(pi); m.Items.Add(si); 
         
         if (card.Tag is string tg2 && tg2 is "note" or "todo")
         {
@@ -1067,25 +1172,37 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         var target = DateTime.Now.AddHours(1);
         SetReminderDatePicker.Date = new DateTimeOffset(target.Date);
         SetReminderTimePicker.Time = new TimeSpan(target.Hour, 0, 0);
-        SetReminderDialogTransform.ScaleX = 0.92; SetReminderDialogTransform.ScaleY = 0.92; SetReminderDialogTransform.TranslateY = 20;
+        UpdateSetReminderConfirmState(); // N4-29: initial M5 state (default target is Now+1h, enabled)
+        SetReminderDialogTransform.ScaleX = 0.94; SetReminderDialogTransform.ScaleY = 0.94; SetReminderDialogTransform.TranslateY = 24;
         SetReminderDialog.Opacity = 0; SetReminderScrim.Opacity = 0;
         SetReminderOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, SetReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, SetReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, SetReminderDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); }
+        Motion.AddDialogShowTransform(sb, SetReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
-    private void HideSetReminderDialog() { DialogDepth.VeilClear(); SetReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
+    private void HideSetReminderDialog() { DialogDepth.VeilHideImmediate(); SetReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
     private void SetReminderClose_Click(object s, RoutedEventArgs e) => HideSetReminderDialog();
     private void SetReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, SetReminderScrim)) HideSetReminderDialog(); }
+
+    // N4-29: schtasks silently fails to register a past moment (exit code ignored) and the system
+    // reminder would never fire - M5: the confirm button stays disabled until the picked date+time
+    // is in the future. Wired to DateChanged/TimeChanged in the constructor.
+    private void UpdateSetReminderConfirmState()
+    {
+        var due = SetReminderDatePicker.Date.Date + SetReminderTimePicker.Time;
+        SetReminderConfirmButton.IsEnabled = due > DateTime.Now;
+    }
 
     private void SetReminderConfirm_Click(object s, RoutedEventArgs e)
     {
         if (_pendingReminderCard == null) return;
         var card = _pendingReminderCard;
         var due = SetReminderDatePicker.Date.Date + SetReminderTimePicker.Time;
+        
+        if (due <= DateTime.Now) { UpdateSetReminderConfirmState(); SetReminderConfirmButton.IsEnabled = false; return; }
         SetReminderOnCard(card, due);
         HideSetReminderDialog();
     }
@@ -1095,17 +1212,17 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         if (_pendingReminderCard == null) return;
         CancelReminderTitleText.Text = App.GetString("Menu_CancelReminder");
         CancelReminderMessageText.Text = App.GetString("Reminder_Cancel_ConfirmTip");
-        CancelReminderDialogTransform.ScaleX = 0.92; CancelReminderDialogTransform.ScaleY = 0.92; CancelReminderDialogTransform.TranslateY = 20;
+        CancelReminderDialogTransform.ScaleX = 0.94; CancelReminderDialogTransform.ScaleY = 0.94; CancelReminderDialogTransform.TranslateY = 24;
         CancelReminderDialog.Opacity = 0; CancelReminderScrim.Opacity = 0;
         CancelReminderOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, CancelReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, CancelReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, CancelReminderDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); }
+        Motion.AddDialogShowTransform(sb, CancelReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
-    private void HideCancelReminderDialog() { DialogDepth.VeilClear(); CancelReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
+    private void HideCancelReminderDialog() { DialogDepth.VeilHideImmediate(); CancelReminderOverlay.Visibility = Visibility.Collapsed; _pendingReminderCard = null; }
     private void CancelReminderClose_Click(object s, RoutedEventArgs e) => HideCancelReminderDialog();
     private void CancelReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, CancelReminderScrim)) HideCancelReminderDialog(); }
 
@@ -1237,11 +1354,14 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         foreach (var (card, _) in _cardIds)
         {
             if (card.Tag is not string tg || (tg != "note" && tg != "todo")) continue;
-            if (dueCard == null && IsReminderDue(card)) dueCard = card;
+            // N4-28: the due card must ALSO get its border refreshed (p=1 = full red) - the old
+            // if/else-if chain skipped it because IsReminderDue consumed the branch.
+            if (dueCard == null && IsReminderDue(card)) { dueCard = card; if (RefreshReminderBorder(card)) anyReminder = true; }
             else if (RefreshReminderBorder(card)) anyReminder = true;
         }
         if (anyReminder) StartReminderRefresh();
-        if (dueCard != null && _dueShown.Add(dueCard)) ShowReminderDueDialog(dueCard); // N4P-01: fire once per reminder - an unconfirmed dialog must not re-toast + re-animate every 30s
+        
+        if (dueCard != null && ReminderDueOverlay.Visibility != Visibility.Visible && _dueShown.Add(dueCard)) ShowReminderDueDialog(dueCard); // N4P-01: fire once per reminder - an unconfirmed dialog must not re-toast + re-animate every 30s
     }
 
     private bool IsReminderDue(Border card)
@@ -1275,21 +1395,25 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         ReminderDueConfirmText.Text = App.GetString("Reminder_Due_Confirm");
         var toast = content.Length > 120 ? content.Substring(0, 120) + "…" : content;
         Services.ToastService.Show(App.GetString("Reminder_Due_Title"), toast); 
-        ReminderDueDialogTransform.ScaleX = 0.92; ReminderDueDialogTransform.ScaleY = 0.92; ReminderDueDialogTransform.TranslateY = 20;
+        ReminderDueDialogTransform.ScaleX = 0.94; ReminderDueDialogTransform.ScaleY = 0.94; ReminderDueDialogTransform.TranslateY = 24;
         ReminderDueDialog.Opacity = 0; ReminderDueScrim.Opacity = 0;
         ReminderDueOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, ReminderDueScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, ReminderDueDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, ReminderDueDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); }
+        Motion.AddDialogShowTransform(sb, ReminderDueDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
     private void HideReminderDueDialog()
     {
-        DialogDepth.VeilClear();
+        DialogDepth.VeilHideImmediate();
         ReminderDueOverlay.Visibility = Visibility.Collapsed;
         if (_dueReminderCard != null) { ClearReminderOnCard(_dueReminderCard); _dueReminderCard = null; }
+        // N3-37: another card may be due right NOW - fire it immediately instead of letting it sit
+        // until the next 30s tick (simultaneous dues used to pop one dialog, then stall the rest
+        // for up to 30s of stale border + missed notification timing).
+        DispatcherQueue.TryEnqueue(RefreshAllReminderBorders);
     }
 
     private void ReminderDueClose_Click(object s, RoutedEventArgs e) => HideReminderDueDialog();
@@ -1303,8 +1427,11 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         {
             if (cid == id && card.Tag is string tg && (tg == "todo" || tg == "note"))
             {
-                _dueShown.Add(card); // N4P-01: system-pull/forward path fires the dialog directly - register it so the 30s tick does not re-fire while unconfirmed
-                ShowReminderDueDialog(card);
+                
+                
+                if (ReminderDueOverlay.Visibility == Visibility.Visible) return true;
+                if (!_dueShown.Add(card)) return true; // N3-08: the 30s tick already fired this card - re-showing would double-dialog/toast and overwrite _dueReminderCard, orphaning the first card's reminder fields + its schtasks task
+                ShowReminderDueDialog(card); // N4P-01: system-pull/forward path fires the dialog directly - register it so the 30s tick does not re-fire while unconfirmed
                 return true;
             }
         }
@@ -1399,8 +1526,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         _flashOriginalBgs.Remove(tb);
         _flashCtsMap.Remove(tb);
     }
-    private void ShowDeleteConfirmDialog() { DeleteConfirmMessageText.Text = _pendingDeleteCard != null && _pendingDeleteCard.Tag is string tg && tg == "note" ? App.GetString("Plan_Note_Delete_ConfirmTip") : App.GetString("Plan_Todo_Delete_ConfirmTip"); DeleteConfirmDialogTransform.ScaleX = 0.92; DeleteConfirmDialogTransform.ScaleY = 0.92; DeleteConfirmDialogTransform.TranslateY = 20; DeleteConfirmDialog.Opacity = 0; DeleteConfirmScrim.Opacity = 0; DeleteConfirmOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, DeleteConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, DeleteConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, DeleteConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Begin(); }
-    private void HideDeleteConfirmDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, DeleteConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, DeleteConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, DeleteConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Completed -= OnDeleteConfirmHideCompleted; sb.Completed += OnDeleteConfirmHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
+    private void ShowDeleteConfirmDialog() { DeleteConfirmMessageText.Text = _pendingDeleteCard != null && _pendingDeleteCard.Tag is string tg && tg == "note" ? App.GetString("Plan_Note_Delete_ConfirmTip") : App.GetString("Plan_Todo_Delete_ConfirmTip"); DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24; DeleteConfirmDialog.Opacity = 0; DeleteConfirmScrim.Opacity = 0; DeleteConfirmOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, DeleteConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, DeleteConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, DeleteConfirmDialogTransform); sb.Begin(); }
+    private void HideDeleteConfirmDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, DeleteConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, DeleteConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, DeleteConfirmDialogTransform); sb.Completed -= OnDeleteConfirmHideCompleted; sb.Completed += OnDeleteConfirmHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; } // N4P-11: re-arm after the overlay is truly gone
     private void DeleteConfirmClose_Click(object s, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteConfirmScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog(); }
@@ -1515,8 +1642,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         LoadIconSelector();
         SelectIcon(d.iconKey);
         UpdateTodoConfirmState(); // UI-2: edit-fill -> recompute validity
-        NewTodoDialogTransform.ScaleX = 0.92; NewTodoDialogTransform.ScaleY = 0.92; NewTodoDialogTransform.TranslateY = 20; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
-        var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewTodoDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Begin();
+        NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
+        var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin();
     }
     private void ShowEditNoteDialog(Border card)
     {
@@ -1532,11 +1659,11 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         LoadNoteIconSelector();
         SelectNoteIcon(d.iconKey);
         UpdateNoteConfirmState(); // UI-2: edit-fill -> recompute validity
-        NewNoteDialogTransform.ScaleX = 0.92; NewNoteDialogTransform.ScaleY = 0.92; NewNoteDialogTransform.TranslateY = 20; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
-        var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewNoteDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Begin();
+        NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
+        var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin();
     }
-    public void ShowNewNoteDialog() { _confirming = false; _editingNoteCard = null; NoteNameBox.Text = ""; NoteContentBox.Text = ""; UpdateNoteConfirmState(); LoadNoteIconSelector(); NewNoteDialogTransform.ScaleX = 0.92; NewNoteDialogTransform.ScaleY = 0.92; NewNoteDialogTransform.TranslateY = 20; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewNoteDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Begin(); }
-    private void HideNewNoteDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewNoteScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewNoteDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") }) { var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(a, NewNoteDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a); } sb.Completed -= OnNewNoteHideCompleted; sb.Completed += OnNewNoteHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
+    public void ShowNewNoteDialog() { _confirming = false; _editingNoteCard = null; NoteNameBox.Text = ""; NoteContentBox.Text = ""; UpdateNoteConfirmState(); LoadNoteIconSelector(); NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin(); }
+    private void HideNewNoteDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewNoteScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewNoteDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, NewNoteDialogTransform); sb.Completed -= OnNewNoteHideCompleted; sb.Completed += OnNewNoteHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnNewNoteHideCompleted(object? sender, object e) { NewNoteOverlay.Visibility = Visibility.Collapsed; _editingNoteCard = null; }
     private void CloseNewNote_Click(object s, RoutedEventArgs e) => HideNewNoteDialog();
     private void NewNoteScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, NewNoteScrim)) HideNewNoteDialog(); }
@@ -1544,8 +1671,67 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     private void NoteIconBorder_Tapped(object s, TappedRoutedEventArgs e) { if (s is Border b && b.Tag is string k) { SelectNoteIcon(k); CenterNoteIconInScrollViewer(b); UpdateNoteConfirmState(); } }
     private void SelectNoteIcon(string key) { _noteSelectedIconKey = key; var d = App.GetBrush("AppSurfaceBrush"); var n = App.GetBrush("AppSurfaceOverlayBrush"); foreach (var c in NoteIconPanel.Children) if (c is Border b && b.Tag is string k) { bool o = k == key; b.Background = o ? d : n; b.BorderBrush = o ? App.GetBrush("AppBorderBrush") : null; b.BorderThickness = new Thickness(o ? 1 : 0); } }
     private void CenterNoteIconInScrollViewer(Border t) { var r = t.TransformToVisual(NoteIconPanel); var p = r.TransformPoint(new Point(0, 0)); double o = p.X - (NoteIconScrollViewer.ViewportWidth / 2) + (t.ActualWidth / 2); o = Math.Max(0, Math.Min(o, NoteIconScrollViewer.ScrollableWidth)); NoteIconScrollViewer.ChangeView(o, null, null, false); }
+    
+    // Single-line captures land as real cards through the same build/map/reorder pipeline as the
+    // dialogs. When this page has never been built (hotkey used while another tab is open), the
+    // entity goes straight into the database - LoadFromStore renders it on the first visit.
+
+    public void QuickCaptureTodo(string text)
+    {
+        var t = text.Trim(); if (t.Length == 0) return;
+        if (!_storeLoaded)
+        {
+            var te0 = new TodoCard { Title = t, MainText = t, IconKey = GetRandomIconKey(), CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
+            AssignNewCardOrder(te0, null);
+            App.Store?.Database.TodoCards.Add(te0);
+            _ = App.Store?.SaveAsync();
+            App.ShowToast(App.GetString("Common_Toast_Created"));
+            return;
+        }
+        var iconKey = GetRandomIconKey();
+        _bulkLoading = true;
+        var nc = BuildTodoCard(t, iconKey, t, new List<string>()); // title and main text carry the same line: main text is the checkable item
+        _bulkLoading = false;
+        var te = new TodoCard { Title = t, IconKey = iconKey, MainText = t, SubTexts = new List<string>(), CheckedStates = _todoData.TryGetValue(nc, out var td) ? new List<bool>(td.checkedStates) : new List<bool>(), CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
+        AssignNewCardOrder(te, null);
+        App.Store?.Database.TodoCards.Add(te);
+        _cardIds[nc] = te.Id;
+        App.PlayCardEntrance(nc);
+        ReorderCards(); // N4P-03 parity
+        PersistOrderAndSave();
+        SetFilter(_currentFilter); // N4P-10 parity: a card created under an active filter must respect it
+        App.ShowToast(App.GetString("Common_Toast_Created"));
+    }
+
+    public void QuickCaptureNote(string text)
+    {
+        var t = text.Trim(); if (t.Length == 0) return;
+        if (!_storeLoaded)
+        {
+            var ne0 = new NoteCard { Title = t, Content = t, IconKey = GetRandomIconKey(), CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
+            AssignNewCardOrder(null, ne0);
+            App.Store?.Database.NoteCards.Add(ne0);
+            _ = App.Store?.SaveAsync();
+            App.ShowToast(App.GetString("Common_Toast_Created"));
+            return;
+        }
+        var iconKey = GetRandomIconKey();
+        _bulkLoading = true;
+        var nc = BuildNoteCard(t, iconKey, t); // title = card name, content = the same line
+        _bulkLoading = false;
+        var ne = new NoteCard { Title = t, IconKey = iconKey, Content = t, IsExpanded = _noteExpanded.TryGetValue(nc, out var nexp) && nexp, CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
+        AssignNewCardOrder(null, ne);
+        App.Store?.Database.NoteCards.Add(ne);
+        _cardIds[nc] = ne.Id;
+        App.PlayCardEntrance(nc);
+        ReorderCards();
+        PersistOrderAndSave();
+        SetFilter(_currentFilter);
+        App.ShowToast(App.GetString("Common_Toast_Created"));
+    }
+
     private void NewNoteConfirm_Click(object s, RoutedEventArgs e) { if (_confirming) return; _confirming = true; bool isEdit = _editingNoteCard != null; // E3-10
-        var name = NoteNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(NoteNameBox); return; } var iconKey = _noteSelectedIconKey ?? GetRandomIconKey(); var content = NoteContentBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(NoteContentBox); return; } if (_editingNoteCard != null) { var old = _editingNoteCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; bool wasExpanded = _noteExpanded.TryGetValue(old, out var we) && we; _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _noteData.Remove(old); _cardExpandBtns.Remove(old); _noteExpanded.Remove(old); _createdAt.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildNoteCard(name, iconKey, content, wasExpanded); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } App.PlayCardEntrance(nc);
+        var name = NoteNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(NoteNameBox); return; } var iconKey = _noteSelectedIconKey ?? GetRandomIconKey(); var content = NoteContentBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(NoteContentBox); return; } if (_editingNoteCard != null) { var old = _editingNoteCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); bool wasReminder = _reminderCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; bool wasExpanded = _noteExpanded.TryGetValue(old, out var we) && we; _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _noteData.Remove(old); _cardExpandBtns.Remove(old); _noteExpanded.Remove(old); _createdAt.Remove(old); _reminderCards.Remove(old); _dueShown.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildNoteCard(name, iconKey, content, wasExpanded); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } if (wasReminder) { _reminderCards.Add(nc); } App.PlayCardEntrance(nc);
 
             if (_cardIds.TryGetValue(old, out var editNid))
             {
@@ -1559,6 +1745,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
                 
                 if (Services.StickySync.Contains(editNid.ToString()))
                     Services.StickySync.UpdateNote(editNid.ToString(), "note", name, content);
+                if (wasReminder) RefreshReminderBorder(nc); // N2-25: AFTER the _cardIds assignment (see todo flow)
             }
             _cardIds.Remove(old);
             ReorderCards(); 
@@ -1568,7 +1755,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
             _bulkLoading = true;
             var nc2 = BuildNoteCard(name, iconKey, content);
             _bulkLoading = false;
-            var ne2 = new NoteCard { Title = name, IconKey = iconKey, Content = content, IsExpanded = _noteExpanded.TryGetValue(nc2, out var nexp2) && nexp2, CreatedAt = DateTime.Now };
+            var ne2 = new NoteCard { Title = name, IconKey = iconKey, Content = content, IsExpanded = _noteExpanded.TryGetValue(nc2, out var nexp2) && nexp2, CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
             AssignNewCardOrder(null, ne2);
             App.Store?.Database.NoteCards.Add(ne2);
             _cardIds[nc2] = ne2.Id;

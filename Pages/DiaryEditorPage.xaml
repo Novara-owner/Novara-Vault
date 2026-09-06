@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.DiaryEditorPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -328,7 +328,7 @@
             
             <!-- ND2: wrapped in a per-picker Overlay so DialogDepth pairs each Scrim with its own panel -->
             <Grid x:Name="MdHeadingPickerOverlay">
-            <Grid x:Name="MdHeadingPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="MdHeadingPickerScrim_Tapped" />
+            <Grid x:Name="MdHeadingPickerScrim" Visibility="Collapsed" Background="Transparent" Tapped="MdHeadingPickerScrim_Tapped" />
 
             <Border x:Name="MdHeadingPickerPanel"
                     Visibility="Collapsed"
@@ -380,7 +380,7 @@
             </Grid>
 
             <Grid x:Name="ColorPickerOverlay">
-            <Grid x:Name="ColorPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="ColorPickerScrim_Tapped" />
+            <Grid x:Name="ColorPickerScrim" Visibility="Collapsed" Background="Transparent" Tapped="ColorPickerScrim_Tapped" />
 
             <Border x:Name="ColorPickerPanel"
                     Visibility="Collapsed"
@@ -440,7 +440,7 @@
             </Grid>
 
             <Grid x:Name="AlignPickerOverlay">
-            <Grid x:Name="AlignPickerScrim" Visibility="Collapsed" Background="#2E000000" Tapped="AlignPickerScrim_Tapped" />
+            <Grid x:Name="AlignPickerScrim" Visibility="Collapsed" Background="Transparent" Tapped="AlignPickerScrim_Tapped" />
 
             <Border x:Name="AlignPickerPanel"
                     Visibility="Collapsed"

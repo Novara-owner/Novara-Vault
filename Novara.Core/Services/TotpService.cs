@@ -105,21 +105,24 @@ public static class TotpService
     {
         var counterBytes = new byte[8];
         for (int i = 7; i >= 0; i--) { counterBytes[i] = (byte)(counter & 0xff); counter >>= 8; }
-        System.Security.Cryptography.HMAC hmac = algorithm switch
+        using System.Security.Cryptography.HMAC hmac = algorithm switch
         {
             "SHA256" => new HMACSHA256(key),
             "SHA512" => new HMACSHA512(key),
             _ => new HMACSHA1(key),
-        };
+        }; 
         var hs = hmac.ComputeHash(counterBytes);
         var offset = hs[^1] & 0x0f;
         var snum = ((hs[offset] & 0x7f) << 24) | (hs[offset + 1] << 16) | (hs[offset + 2] << 8) | hs[offset + 3];
+        // N2-30: defensive clamp - digits<1 makes Math.Pow(10,negative) truncate to 0 (divide by
+        // zero) and digits>=19 overflows the long cast; unreachable via TryParse (6..10) but cheap.
+        if (digits is < 1 or > 10) digits = 6;
         var mod = (long)Math.Pow(10, digits);
         return (snum % mod).ToString().PadLeft(digits, '0');
     }
 
     public static string ComputeCode(TotpConfig config, long unixNow)
-        => ComputeCode(config.Key, config.Algorithm, unixNow / config.Period, config.Digits);
+        => ComputeCode(config.Key, config.Algorithm, unixNow / (config.Period > 0 ? config.Period : 30), config.Digits); 
 
     public static string ComputeCode(TotpConfig config)
         => ComputeCode(config, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
@@ -127,6 +130,7 @@ public static class TotpService
     /// <summary>Seconds until the current window rolls over (1..period).</summary>
     public static int RemainingSeconds(int period, long unixNow)
     {
+        if (period <= 0) period = 30; // N2-31: direct-construction guard (parity with ComputeCode N1-53) - unixNow % 0 throws
         var rem = (int)(period - unixNow % period);
         return rem == 0 ? period : rem;
     }

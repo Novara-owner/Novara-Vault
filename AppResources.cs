@@ -38,6 +38,54 @@ public static class AppResources
         { "Totp_InvalidRender", "（验证器配置无法解析）" },
         { "Cmd_NoMatch", "未找到匹配命令" },
         { "Cmd_Mode_Hint", "提示：输入 > 前缀执行命令" },
+        { "QuickCapture_Hint", "Enter 捕获 · Tab 切换类型 · Esc 离开" },
+        { "QuickCapture_HotkeyConflict", "快速捕获热键注册失败：该组合可能已被其他程序占用" },
+        { "Setting_QuickCapture", "快速捕获" },
+        { "Setting_QuickCapture_Desc", "系统级热键随时唤起捕获条，一键记录备忘 / 待办 / 便签。需要 Novara 正在运行。" },
+        { "Setting_QuickCapture_On", "开启" },
+        { "Setting_QuickCapture_Off", "关闭" },
+        { "Setting_DataWipe", "数据清除" },
+        { "DataWipe_All", "全部数据" },
+        { "DataWipe_Memo", "备忘页数据" },
+        { "DataWipe_Path", "文件页数据" },
+        { "DataWipe_Plan", "计划页数据" },
+        { "DataWipe_Diary", "记录页数据" },
+        { "DataWipe_PageName_Memo", "备忘页" },
+        { "DataWipe_PageName_Path", "文件页" },
+        { "DataWipe_PageName_Plan", "计划页" },
+        { "DataWipe_PageName_Diary", "记录页" },
+        { "DataWipe_Stat", "{0}现有 {1} 条数据，请选择处理方式。" },
+        { "DataWipe_Final_Desc", "将彻底删除{0}的全部数据，删除后无法找回。" },
+        { "DataWipe_Soft_Btn", "移入回收站" },
+        { "DataWipe_Hard_Btn", "彻底删除" },
+        { "DataWipe_Final_Title", "最终确认" },
+        { "DataWipe_GroupLoss_Title", "分组数据将丢失" },
+        { "DataWipe_GroupLoss_Desc", "移入回收站会保留全部条目，但所有分组将被永久删除且不可恢复。条目本身不受影响，可在回收站恢复。" },
+        { "DataWipe_Done_Hard", "已彻底删除" },
+        { "NetActivity_Active", "检测中" },
+        { "NetActivity_Panel", "网络活动" },
+        { "NetActivity_Kind_Probe", "连通检测" },
+        { "NetActivity_Kind_Protocol", "协议检测" },
+        { "NetActivity_Kind_Diagnose", "接口诊断" },
+        { "NetActivity_Kind_Relay", "中转探针" },
+        { "NetActivity_Empty", "暂无网络活动记录" },
+        { "NetActivity_Clear", "清空记录" },
+        { "NetActivity_Open", "查看记录" },
+        { "Carousel_P0_Title", "所有内容，都藏在右键菜单里" },
+        { "Carousel_P1_Title", "顶部标签，一点就到" },
+        { "Carousel_P1_Memo", "分组管理账号、密码与 API Key，双击即复制" },
+        { "Carousel_P1_Path", "登记常用路径，一键检测、复制或打开" },
+        { "Carousel_P1_Plan", "待办与便签卡片，支持提醒与桌面便签联动" },
+        { "Carousel_P1_Diary", "富文本日记与 Markdown 文档，随时回顾" },
+        { "Carousel_P2_Title", "随手呼出，收放自如" },
+        { "Carousel_P2_Desc", "鼠标靠近右下角的蓝色小把手，全局菜单随手展开；移开即收起" },
+        { "Carousel_P3_Title", "你的数据，只属于你" },
+        { "Carousel_P3_Desc", "隐私锁 + AES-256-GCM 全库加密——锁上之后，数据以密文存储，谁也读不走" },
+        { "ExportPlain_WarnTitle", "敏感数据警告" },
+        { "ExportPlain_WarnBody", "即将导出的文件包含您的全部敏感信息（密码、密钥、私密日记）的明文。请妥善保管导出文件：不要发送给他人，不要上传到不受信任的位置。" },
+        { "ExportPlain_WarnConfirm", "仍要导出" },
+        { "Setting_CsvImport_EmptyPreview", "（无有效条目）" },
+        { "OpenFile_Fail", "无法打开该路径：没有关联的程序" },
         { "Common_Button_Close", "关闭" },
         { "Common_Button_Confirm", "确定" },
         { "Common_Button_Delete", "删除" },
@@ -120,6 +168,24 @@ public static class AppResources
         { "Setting_CsvImport_UnknownInfo", "无法自动识别条目类型，请选择统一类型：" },
         { "Setting_CsvImport_Skipped", "，另有 {0} 条因缺必填字段或重复被跳过" },
         { "Setting_ExportMd_NoticeTitle", "导出 Markdown" },
+        { "Setting_Export_FileNameSummary", "数据汇总" }, 
+        { "Setting_Export_FileNameCollection", "记录合集" }, 
+        { "Export_Summary_Title", "Novara 数据汇总" }, // N3-45: summary heading (mixed policy - template text localized, body data untouched)
+        { "Export_ExportedAt", "导出时间：{0}" }, // N3-45
+        { "Export_Section_Memo", "备忘" }, // N3-45
+        { "Export_Section_Uncategorized", "未分类" }, // N3-45
+        { "Export_Section_Path", "路径备份" }, // N3-45
+        { "Export_Section_Plan", "计划" }, // N3-45
+        { "Export_Section_Todo", "待办" }, // N3-45
+        { "Export_Section_Note", "便签" }, // N3-45
+        { "Export_Section_Diary", "日记" }, // N3-45
+        { "Export_Empty", "（空）" }, // N3-45
+        { "Export_Label_Path", "路径：" }, // N3-45
+        { "Export_Label_Note", "备注：" }, // N3-45
+        { "Export_Untitled", "（无标题）" }, // N3-45
+        { "Export_Html_Tagline", "本地优先的个人知识管家" }, // N3-45
+        { "Export_Html_Slogan", "Novara · 本地优先 · 私密安心" }, // N3-45
+        { "Export_Website", "官网：" }, // N3-45
         { "Setting_ExportMd_NoticeDesc", "Markdown 格式仅供阅读和打印，无法导入回 Novara。如需备份数据以便日后恢复，请使用「原生格式」。是否继续导出 Markdown？" },
         { "Setting_Archive_Import", "导入" },
         { "Setting_Archive_ImportExport", "导入 / 导出" },
@@ -141,6 +207,9 @@ public static class AppResources
         { "Setting_WinHello_Enable_Title", "启用 Windows Hello" },
         { "Setting_WinHello_Enable_Message", "开启前需先验证一次 Windows Hello，验证成功后即可启用，失败则保持关闭。若未弹出验证窗口，请检查电脑是否已设置 Windows Hello。" },
         { "Setting_WinHello_GotoSettings", "打开 Windows 设置" },
+        { "Editor_SaveFail_Toast", "编辑内容未能保存" }, // N5-S7-03
+        { "Reminder_Past_Time", "所选时间已过期，请重新选择" }, // N5-S6-04/NEW-P-01
+        { "Hello_Update_Fail", "Windows Hello 凭据同步失败，已回退密码解锁" }, // N4-36
         { "Setting_PrivacyLock_ChangePassword", "修改密码" },
         { "Setting_PrivacyLock_ConfirmLabel", "确认密码" },
         { "Setting_PrivacyLock_ConfirmPlaceholder", "请再次输入密码" },
@@ -190,6 +259,7 @@ public static class AppResources
         { "Path_Edit_Title", "修改路径备份" },
 
         { "Common_Toast_Copied", "已复制" },
+        { "Common_Toast_CopyFail", "复制失败（剪贴板被占用）" },
         { "Common_Toast_Detected", "已检测" },
         { "Common_Toast_Deleted", "已删除" },
         { "Common_Toast_Restored", "已恢复" },
@@ -313,6 +383,7 @@ public static class AppResources
         { "Memo_ApiDiag_Item_Latency", "延迟 / TTFT" },
         { "Memo_ApiDiag_Reachable", "可达" },
         { "Memo_ApiDiag_Unreachable", "不可达" },
+        { "Memo_ApiDiag_Timeout", "超时（180 秒）" }, // N3-61: replace the hardcoded English "timeout (180s)"
         { "Memo_ApiDiag_BalanceOk", "有额度（最小请求成功）" },
         { "Memo_ApiDiag_BalanceQuota", "可能额度耗尽：{0}" },
         { "Memo_ApiDiag_BalanceUnknown", "无法判断：{0}" },
@@ -351,6 +422,8 @@ public static class AppResources
         { "Setting_AutoLock_Title", "自动锁定" },
         { "Setting_AutoLock_Sync", "同步锁定" },
         { "Setting_AutoLock_Never", "从不" },
+        { "Setting_AutoLock_Seconds", "{0} 秒" }, // N5-S10-04
+        { "Setting_AutoLock_Minutes", "{0} 分钟" }, // N5-S10-04
         { "Setting_AutoLock_SyncConfirm_Title", "同步 Windows 锁定" },
         { "Setting_AutoLock_SyncConfirm_Desc", "开启后，Windows 锁定（Win+L）时 Novara 将立即一起锁定，无需等待空闲超时。" },
         { "Setting_AutoLock_SyncConfirm_Ok", "确认开启" },
@@ -612,6 +685,19 @@ public static class AppResources
         { "Setting_Mcp_DeleteConfirm_Message", "开启后 Agent 有权限删除已有条目，删除会进入回收站，可随时恢复。确定开启吗？" },
         { "Setting_Mcp_DeleteConfirm_Ok", "开启" },
         { "Setting_Mcp_Hint", "请帮我把本地应用 Novara 配置为 MCP（Model Context Protocol）服务器。\n\n【Novara 是什么】\nNovara 是本机个人知识管理应用，通过 MCP 暴露 14 个工具（前缀 mcp__novara__），管理备忘、待办、便签、日记/文档、路径备份五类数据。\n\n【配置内容】\n下面这段是标准的 MCP 服务器配置，请合并进我所用 Agent/客户端的 MCP 配置文件：\n\n{JSON}\n\n【请按步骤操作】\n1. 识别我当前使用的 Agent/客户端（Claude Desktop / Cursor / VS Code / Codex / DeepSeek Harness 等），不确定就问我。\n2. 找到它的 MCP 配置文件（如 Claude Desktop 的 claude_desktop_config.json、Cursor 的 mcp.json），把上面配置合并进去，保持 JSON 合法。\n3. 让我重启或重载客户端使配置生效。\n4. 生效后确认能看到 mcp__novara__ 开头的工具，然后调用 mcp__novara__list_items 验证一次并告诉我结果。\n\n【注意】\n- 配置里的 token 是访问凭证，原样填入，不要修改或外传。\n- 若提示「未授权」，打开 Novara 在弹窗点「允许」。\n- 若提示「MCP 接口已关闭」，去 Novara 设置页开启。\n- 若提示「数据库未解锁」，打开 Novara 输入隐私锁密码解锁后再试。\n- 若提示「访问令牌无效」，去 Novara 设置页「MCP 接口」卡片复制最新配置（或重置 Key）。" },
+        { "Workspace_Title", "工作空间" },
+        { "Workspace_All", "全部" },
+        { "Workspace_Manage", "管理工作空间" },
+        { "Workspace_New", "新建工作空间" },
+        { "Workspace_Edit", "编辑工作空间" },
+        { "Workspace_EditShort", "编辑" },
+        { "Workspace_Delete", "删除" },
+        { "Workspace_Name", "名称" },
+        { "Workspace_NamePlaceholder", "工作空间名称" },
+        { "Workspace_Empty", "暂无工作空间" },
+        { "Workspace_DeleteTitle", "删除工作空间" },
+        { "Workspace_DeleteDesc", "删除后，该空间下的内容将变为「未分配」，不会被删除。" },
+        { "Workspace_EmptyHint", "该工作空间下暂无内容" },
     };
 
     public static readonly IReadOnlyDictionary<string, string> En = new Dictionary<string, string>
@@ -647,6 +733,54 @@ public static class AppResources
         { "Totp_InvalidRender", "(unparseable authenticator config)" },
         { "Cmd_NoMatch", "No matching command" },
         { "Cmd_Mode_Hint", "Tip: type > to run commands" },
+        { "QuickCapture_Hint", "Enter to capture · Tab to switch · Esc to leave" },
+        { "QuickCapture_HotkeyConflict", "Failed to register the Quick Capture hotkey: the combo may be in use by another app" },
+        { "Setting_QuickCapture", "Quick Capture" },
+        { "Setting_QuickCapture_Desc", "A system-wide hotkey opens the capture bar anywhere - one line into memo / to-do / note. Requires Novara to be running." },
+        { "Setting_QuickCapture_On", "On" },
+        { "Setting_QuickCapture_Off", "Off" },
+        { "Setting_DataWipe", "Data Wipe" },
+        { "DataWipe_All", "All data" },
+        { "DataWipe_Memo", "Memo page data" },
+        { "DataWipe_Path", "Paths page data" },
+        { "DataWipe_Plan", "Plan page data" },
+        { "DataWipe_Diary", "Records page data" },
+        { "DataWipe_PageName_Memo", "Memo page" },
+        { "DataWipe_PageName_Path", "Paths page" },
+        { "DataWipe_PageName_Plan", "Plan page" },
+        { "DataWipe_PageName_Diary", "Records page" },
+        { "DataWipe_Stat", "{0} currently has {1} item(s). Choose how to proceed." },
+        { "DataWipe_Final_Desc", "This permanently deletes all data on the {0}. It cannot be undone." },
+        { "DataWipe_Soft_Btn", "Move to Recycle Bin" },
+        { "DataWipe_Hard_Btn", "Delete permanently" },
+        { "DataWipe_Final_Title", "Final confirmation" },
+        { "DataWipe_GroupLoss_Title", "Groups will be lost" },
+        { "DataWipe_GroupLoss_Desc", "Moving to the Recycle Bin keeps all entries, but every group is permanently deleted and cannot be recovered. The entries themselves are unaffected and can be restored from the Recycle Bin." },
+        { "DataWipe_Done_Hard", "Permanently deleted" },
+        { "NetActivity_Active", "Testing" },
+        { "NetActivity_Panel", "Network activity" },
+        { "NetActivity_Kind_Probe", "Connectivity check" },
+        { "NetActivity_Kind_Protocol", "Protocol check" },
+        { "NetActivity_Kind_Diagnose", "Diagnostics" },
+        { "NetActivity_Kind_Relay", "Relay probe" },
+        { "NetActivity_Empty", "No network activity recorded" },
+        { "NetActivity_Clear", "Clear log" },
+        { "NetActivity_Open", "View log" },
+        { "Carousel_P0_Title", "Everything lives in the right-click menu" },
+        { "Carousel_P1_Title", "Switch tabs with one click" },
+        { "Carousel_P1_Memo", "Group accounts, passwords and API keys - double-click to copy" },
+        { "Carousel_P1_Path", "Bookmark local paths, verify, copy or open in one click" },
+        { "Carousel_P1_Plan", "Todo and note cards, with reminders and desktop stickies" },
+        { "Carousel_P1_Diary", "Rich-text diaries and Markdown documents, always at hand" },
+        { "Carousel_P2_Title", "Everything at your fingertips" },
+        { "Carousel_P2_Desc", "Move toward the blue handle in the lower-right corner - the menu opens as you approach and tucks away when you leave" },
+        { "Carousel_P3_Title", "Your data belongs to you alone" },
+        { "Carousel_P3_Desc", "Privacy lock + AES-256-GCM full-database encryption - once locked, everything stays as ciphertext no one can read" },
+        { "ExportPlain_WarnTitle", "Sensitive Data Warning" },
+        { "ExportPlain_WarnBody", "The file you are about to export contains ALL of your sensitive data (passwords, keys, private diaries) in PLAINTEXT. Guard the exported file carefully: never send it to anyone and never upload it to a place you do not trust." },
+        { "ExportPlain_WarnConfirm", "Export anyway" },
+        { "Setting_CsvImport_EmptyPreview", "(no valid entries)" },
+        { "OpenFile_Fail", "Cannot open this path: no program is associated with it" },
         { "Common_Button_Close", "Close" },
         { "Common_Button_Confirm", "OK" },
         { "Common_Button_Delete", "Delete" },
@@ -729,6 +863,24 @@ public static class AppResources
         { "Setting_CsvImport_UnknownInfo", "Cannot auto-detect entry type. Please select:" },
         { "Setting_CsvImport_Skipped", ", {0} more skipped (missing required fields or duplicates)" },
         { "Setting_ExportMd_NoticeTitle", "Export Markdown" },
+        { "Setting_Export_FileNameSummary", "Summary" }, // N3-45
+        { "Setting_Export_FileNameCollection", "Records" }, // N3-45
+        { "Export_Summary_Title", "Novara Data Summary" }, // N3-45
+        { "Export_ExportedAt", "Exported: {0}" }, // N3-45
+        { "Export_Section_Memo", "Memo" }, // N3-45
+        { "Export_Section_Uncategorized", "Uncategorized" }, // N3-45
+        { "Export_Section_Path", "Path Backups" }, // N3-45
+        { "Export_Section_Plan", "Plan" }, // N3-45
+        { "Export_Section_Todo", "To-Do" }, // N3-45
+        { "Export_Section_Note", "Notes" }, // N3-45
+        { "Export_Section_Diary", "Diary" }, // N3-45
+        { "Export_Empty", "(empty)" }, // N3-45
+        { "Export_Label_Path", "Path: " }, // N3-45
+        { "Export_Label_Note", "Note: " }, // N3-45
+        { "Export_Untitled", "(Untitled)" }, // N3-45
+        { "Export_Html_Tagline", "A local-first personal knowledge manager" }, // N3-45
+        { "Export_Html_Slogan", "Novara · Local-first · Private by design" }, // N3-45
+        { "Export_Website", "Website: " }, // N3-45
         { "Setting_ExportMd_NoticeDesc", "Markdown is read-only for viewing and printing, and cannot be imported back into Novara. To back up your data for later restore, use \"Native Format\". Continue exporting Markdown?" },
         { "Setting_Archive_Import", "Import" },
         { "Setting_Archive_ImportExport", "Import / Export" },
@@ -750,6 +902,9 @@ public static class AppResources
         { "Setting_WinHello_Enable_Title", "Enable Windows Hello" },
         { "Setting_WinHello_Enable_Message", "Windows Hello requires one verification before enabling. It turns on only if verification succeeds; otherwise it stays off. If no verification window appears, check that Windows Hello is set up on this PC." },
         { "Setting_WinHello_GotoSettings", "Open Windows Settings" },
+        { "Editor_SaveFail_Toast", "Your edits could not be saved" }, // N5-S7-03
+        { "Reminder_Past_Time", "The selected time has already passed - please choose again" }, // N5-S6-04/NEW-P-01
+        { "Hello_Update_Fail", "Windows Hello credential sync failed - password unlock remains available" }, // N4-36
         { "Setting_PrivacyLock_ChangePassword", "Change Password" },
         { "Setting_PrivacyLock_ConfirmLabel", "Confirm Password" },
         { "Setting_PrivacyLock_ConfirmPlaceholder", "Re-enter password" },
@@ -799,6 +954,7 @@ public static class AppResources
         { "Path_Edit_Title", "Edit Path Backup" },
 
         { "Common_Toast_Copied", "Copied" },
+        { "Common_Toast_CopyFail", "Copy failed (clipboard in use)" },
         { "Common_Toast_Detected", "Checked" },
         { "Common_Toast_Deleted", "Deleted" },
         { "Common_Toast_Restored", "Restored" },
@@ -922,6 +1078,7 @@ public static class AppResources
         { "Memo_ApiDiag_Item_Latency", "Latency / TTFT" },
         { "Memo_ApiDiag_Reachable", "Reachable" },
         { "Memo_ApiDiag_Unreachable", "Unreachable" },
+        { "Memo_ApiDiag_Timeout", "Timeout (180s)" }, // N3-61
         { "Memo_ApiDiag_BalanceOk", "Has quota (minimal request succeeded)" },
         { "Memo_ApiDiag_BalanceQuota", "Possibly out of quota: {0}" },
         { "Memo_ApiDiag_BalanceUnknown", "Cannot determine: {0}" },
@@ -958,6 +1115,8 @@ public static class AppResources
         { "Setting_Theme_System", "Follow System" },
         { "Setting_Autostart_On", "On" },
         { "Setting_AutoLock_Title", "Auto-Lock" },
+        { "Setting_AutoLock_Seconds", "{0} sec" }, // N5-S10-04
+        { "Setting_AutoLock_Minutes", "{0} min" }, // N5-S10-04
         { "Setting_AutoLock_Sync", "Sync Lock" },
         { "Setting_AutoLock_Never", "Never" },
         { "Setting_AutoLock_SyncConfirm_Title", "Sync Windows Lock" },
@@ -1221,6 +1380,19 @@ public static class AppResources
         { "Setting_Mcp_DeleteConfirm_Message", "When enabled, the agent can delete existing items. Deleted items go to Trash and can be restored. Enable?" },
         { "Setting_Mcp_DeleteConfirm_Ok", "Enable" },
         { "Setting_Mcp_Hint", "Please help me configure the local app Novara as an MCP (Model Context Protocol) server.\n\n【What Novara is】\nNovara is a local personal knowledge-management app that exposes 14 tools over MCP (prefixed with mcp__novara__) for managing five kinds of data: memos, todos, notes, diaries/documents, and path backups.\n\n【Configuration】\nBelow is the standard MCP server configuration. Please merge it into the MCP config file of the agent/client I use:\n\n{JSON}\n\n【Steps】\n1. Identify the agent/client I am using (Claude Desktop / Cursor / VS Code / Codex / DeepSeek Harness, etc.). If unsure, ask me.\n2. Locate its MCP config file (e.g. claude_desktop_config.json for Claude Desktop, mcp.json for Cursor), merge the config above into it, and keep the JSON valid.\n3. Restart or reload the client so the config takes effect.\n4. After it takes effect, confirm you can see tools starting with mcp__novara__, then call mcp__novara__list_items once to verify and report the result.\n\n【Notes】\n- The token in the config is an access credential; keep it unchanged and do not share it.\n- If it says \"unauthorized\", open Novara and click \"Allow\" in the prompt.\n- If it says \"MCP interface is disabled\", enable it in Novara's settings.\n- If it says \"database is locked\", open Novara and unlock it with the privacy-lock password first.\n- If it says \"invalid access token\", copy the latest config from Novara's Settings > \"MCP interface\" card (or reset the Key)." },
+        { "Workspace_Title", "Workspaces" },
+        { "Workspace_All", "All" },
+        { "Workspace_Manage", "Manage Workspaces" },
+        { "Workspace_New", "New Workspace" },
+        { "Workspace_Edit", "Edit Workspace" },
+        { "Workspace_EditShort", "Edit" },
+        { "Workspace_Delete", "Delete" },
+        { "Workspace_Name", "Name" },
+        { "Workspace_NamePlaceholder", "Workspace name" },
+        { "Workspace_Empty", "No workspaces yet" },
+        { "Workspace_DeleteTitle", "Delete Workspace" },
+        { "Workspace_DeleteDesc", "Items in this workspace will become \"Unassigned\" and will not be deleted." },
+        { "Workspace_EmptyHint", "No content in this workspace" },
     };
     public static readonly IReadOnlyDictionary<string, string> ZhTw = new Dictionary<string, string>
     {
@@ -1251,6 +1423,54 @@ public static class AppResources
         { "Totp_InvalidRender", "（驗證器設定無法解析）" },
         { "Cmd_NoMatch", "找不到符合的命令" },
         { "Cmd_Mode_Hint", "提示：輸入 > 前綴執行命令" },
+        { "QuickCapture_Hint", "Enter 捕獲 · Tab 切換類型 · Esc 離開" },
+        { "QuickCapture_HotkeyConflict", "快速捕獲熱鍵註冊失敗：該組合可能已被其他程式占用" },
+        { "Setting_QuickCapture", "快速捕獲" },
+        { "Setting_QuickCapture_Desc", "系統級熱鍵隨時喚起捕獲列，一鍵記錄備忘 / 待辦 / 便籤。需要 Novara 正在執行。" },
+        { "Setting_QuickCapture_On", "開啟" },
+        { "Setting_QuickCapture_Off", "關閉" },
+        { "Setting_DataWipe", "資料清除" },
+        { "DataWipe_All", "全部資料" },
+        { "DataWipe_Memo", "備忘頁資料" },
+        { "DataWipe_Path", "檔案頁資料" },
+        { "DataWipe_Plan", "計劃頁資料" },
+        { "DataWipe_Diary", "記錄頁資料" },
+        { "DataWipe_PageName_Memo", "備忘頁" },
+        { "DataWipe_PageName_Path", "檔案頁" },
+        { "DataWipe_PageName_Plan", "計劃頁" },
+        { "DataWipe_PageName_Diary", "記錄頁" },
+        { "DataWipe_Stat", "{0}現有 {1} 條資料，請選擇處理方式。" },
+        { "DataWipe_Final_Desc", "將徹底刪除{0}的全部資料，刪除後無法找回。" },
+        { "DataWipe_Soft_Btn", "移入資源回收筒" },
+        { "DataWipe_Hard_Btn", "徹底刪除" },
+        { "DataWipe_Final_Title", "最終確認" },
+        { "DataWipe_GroupLoss_Title", "分組資料將遺失" },
+        { "DataWipe_GroupLoss_Desc", "移入資源回收筒會保留全部條目，但所有分組將被永久刪除且不可恢復。條目本身不受影響，可在資源回收筒恢復。" },
+        { "DataWipe_Done_Hard", "已徹底刪除" },
+        { "NetActivity_Active", "檢測中" },
+        { "NetActivity_Panel", "網路活動" },
+        { "NetActivity_Kind_Probe", "連通檢測" },
+        { "NetActivity_Kind_Protocol", "協議檢測" },
+        { "NetActivity_Kind_Diagnose", "介面診斷" },
+        { "NetActivity_Kind_Relay", "中轉探針" },
+        { "NetActivity_Empty", "暫無網路活動記錄" },
+        { "NetActivity_Clear", "清空記錄" },
+        { "NetActivity_Open", "查看記錄" },
+        { "Carousel_P0_Title", "所有內容，都藏在右鍵選單裡" },
+        { "Carousel_P1_Title", "頂部標籤，一點就到" },
+        { "Carousel_P1_Memo", "分組管理帳號、密碼與 API Key，雙擊即複製" },
+        { "Carousel_P1_Path", "登記常用路徑，一鍵檢測、複製或開啟" },
+        { "Carousel_P1_Plan", "待辦與便簽卡片，支援提醒與桌面便簽" },
+        { "Carousel_P1_Diary", "富文字日記與 Markdown 文件，隨時回顧" },
+        { "Carousel_P2_Title", "隨手呼出，收放自如" },
+        { "Carousel_P2_Desc", "滑鼠靠近右下角的藍色小把手，選單隨手展開；移開即收起" },
+        { "Carousel_P3_Title", "你的資料，只屬於你" },
+        { "Carousel_P3_Desc", "隱私鎖 + AES-256-GCM 全庫加密——鎖上之後，資料以密文儲存，誰也讀不走" },
+        { "ExportPlain_WarnTitle", "敏感資料警告" },
+        { "ExportPlain_WarnBody", "即將匯出的檔案包含您的全部敏感資訊（密碼、金鑰、私密日記）的明文。請妥善保管匯出檔案：不要傳送給他人，不要上傳到不受信任的位置。" },
+        { "ExportPlain_WarnConfirm", "仍要匯出" },
+        { "Setting_CsvImport_EmptyPreview", "（無有效條目）" },
+        { "OpenFile_Fail", "無法開啟該路徑：沒有關聯的程式" },
         { "Common_Button_Close", "關閉" },
         { "Common_Button_Confirm", "確定" },
         { "Common_Button_Delete", "刪除" },
@@ -1333,6 +1553,24 @@ public static class AppResources
         { "Setting_CsvImport_UnknownInfo", "無法自動識別條目類型，請選擇統一類型：" },
         { "Setting_CsvImport_Skipped", "，另有 {0} 條因缺必填欄位或重複被跳過" },
         { "Setting_ExportMd_NoticeTitle", "匯出 Markdown" },
+        { "Setting_Export_FileNameSummary", "資料彙總" }, // N3-45
+        { "Setting_Export_FileNameCollection", "記錄合集" }, // N3-45
+        { "Export_Summary_Title", "Novara 資料彙總" }, // N3-45
+        { "Export_ExportedAt", "匯出時間：{0}" }, // N3-45
+        { "Export_Section_Memo", "備忘" }, // N3-45
+        { "Export_Section_Uncategorized", "未分類" }, // N3-45
+        { "Export_Section_Path", "路徑備份" }, // N3-45
+        { "Export_Section_Plan", "計劃" }, // N3-45
+        { "Export_Section_Todo", "待辦" }, // N3-45
+        { "Export_Section_Note", "便籤" }, // N3-45
+        { "Export_Section_Diary", "日記" }, // N3-45
+        { "Export_Empty", "（空）" }, // N3-45
+        { "Export_Label_Path", "路徑：" }, // N3-45
+        { "Export_Label_Note", "備註：" }, // N3-45
+        { "Export_Untitled", "（無標題）" }, // N3-45
+        { "Export_Html_Tagline", "本地優先的個人知識管家" }, // N3-45
+        { "Export_Html_Slogan", "Novara · 本地優先 · 私密安心" }, // N3-45
+        { "Export_Website", "官網：" }, // N3-45
         { "Setting_ExportMd_NoticeDesc", "Markdown 格式僅供閱讀和列印，無法匯入回 Novara。如需備份資料以便日後還原，請使用「原生格式」。是否繼續匯出 Markdown？" },
         { "Setting_Archive_Import", "匯入" },
         { "Setting_Archive_ImportExport", "匯入 / 匯出" },
@@ -1354,6 +1592,9 @@ public static class AppResources
         { "Setting_WinHello_Enable_Title", "啟用 Windows Hello" },
         { "Setting_WinHello_Enable_Message", "開啟前需先驗證一次 Windows Hello，驗證成功後即可啟用，失敗則維持關閉。若未彈出驗證視窗，請檢查電腦是否已設定 Windows Hello。" },
         { "Setting_WinHello_GotoSettings", "開啟 Windows 設定" },
+        { "Editor_SaveFail_Toast", "編輯內容未能儲存" }, // N5-S7-03
+        { "Reminder_Past_Time", "所選時間已過期，請重新選擇" }, // N5-S6-04/NEW-P-01
+        { "Hello_Update_Fail", "Windows Hello 憑證同步失敗，已回退密碼解鎖" }, // N4-36
         { "Setting_PrivacyLock_ChangePassword", "修改密碼" },
         { "Setting_PrivacyLock_ConfirmLabel", "確認密碼" },
         { "Setting_PrivacyLock_ConfirmPlaceholder", "請再次輸入密碼" },
@@ -1401,6 +1642,7 @@ public static class AppResources
         { "Diary_Modified_At", "修改于 {0}" },
         { "Path_Edit_Title", "修改路徑備份" },
         { "Common_Toast_Copied", "已複製" },
+        { "Common_Toast_CopyFail", "複製失敗（剪貼簿被占用）" },
         { "Common_Toast_Detected", "已檢測" },
         { "Common_Toast_Deleted", "已刪除" },
         { "Common_Toast_Restored", "已恢復" },
@@ -1524,6 +1766,7 @@ public static class AppResources
         { "Memo_ApiDiag_Item_Latency", "延遲 / TTFT" },
         { "Memo_ApiDiag_Reachable", "可達" },
         { "Memo_ApiDiag_Unreachable", "不可達" },
+        { "Memo_ApiDiag_Timeout", "逾時（180 秒）" }, // N3-61
         { "Memo_ApiDiag_BalanceOk", "有額度（最小請求成功）" },
         { "Memo_ApiDiag_BalanceQuota", "可能額度耗盡：{0}" },
         { "Memo_ApiDiag_BalanceUnknown", "無法判斷：{0}" },
@@ -1558,6 +1801,8 @@ public static class AppResources
         { "Setting_Language_English", "English" },
         { "Setting_Theme_Dark", "深色模式" },
         { "Setting_Theme_System", "跟隨系統" },
+        { "Setting_AutoLock_Seconds", "{0} 秒" }, // N5-S10-04
+        { "Setting_AutoLock_Minutes", "{0} 分鐘" }, // N5-S10-04
         { "Setting_Autostart_On", "開啟" },
         { "Setting_AutoLock_Title", "自動鎖定" },
         { "Setting_AutoLock_Sync", "同步鎖定" },
@@ -1819,6 +2064,19 @@ public static class AppResources
         { "Setting_Mcp_DeleteConfirm_Message", "開啟後 Agent 有權限刪除已有項目，刪除會進入回收站，可隨時恢復。確定開啟嗎？" },
         { "Setting_Mcp_DeleteConfirm_Ok", "開啟" },
         { "Setting_Mcp_Hint", "請幫我把本機應用 Novara 設定為 MCP（Model Context Protocol）伺服器。\n\n【Novara 是什麼】\nNovara 是本機個人知識管理應用，透過 MCP 暴露 14 個工具（前綴 mcp__novara__），管理備忘、待辦、便簽、日記/文件、路徑備份五類資料。\n\n【設定內容】\n下面這段是標準的 MCP 伺服器設定，請合併進我所用 Agent/用戶端的 MCP 設定檔：\n\n{JSON}\n\n【請按步驟操作】\n1. 識別我目前使用的 Agent/用戶端（Claude Desktop / Cursor / VS Code / Codex / DeepSeek Harness 等），不確定就問我。\n2. 找到它的 MCP 設定檔（如 Claude Desktop 的 claude_desktop_config.json、Cursor 的 mcp.json），把上面設定合併進去，保持 JSON 合法。\n3. 讓我重啟或重載用戶端使設定生效。\n4. 生效後確認能看到 mcp__novara__ 開頭的工具，然後呼叫 mcp__novara__list_items 驗證一次並告訴我結果。\n\n【注意】\n- 設定裡的 token 是存取憑證，原樣填入，不要修改或外傳。\n- 若提示「未授權」，打開 Novara 在彈窗點「允許」。\n- 若提示「MCP 介面已關閉」，去 Novara 設定頁開啟。\n- 若提示「資料庫未解鎖」，打開 Novara 輸入隱私鎖密碼解鎖後再試。\n- 若提示「存取權杖無效」，去 Novara 設定頁「MCP 介面」卡片複製最新設定（或重設 Key）。" },
+        { "Workspace_Title", "工作空間" },
+        { "Workspace_All", "全部" },
+        { "Workspace_Manage", "管理工作空間" },
+        { "Workspace_New", "新建工作空間" },
+        { "Workspace_Edit", "編輯工作空間" },
+        { "Workspace_EditShort", "編輯" },
+        { "Workspace_Delete", "刪除" },
+        { "Workspace_Name", "名稱" },
+        { "Workspace_NamePlaceholder", "工作空間名稱" },
+        { "Workspace_Empty", "暫無工作空間" },
+        { "Workspace_DeleteTitle", "刪除工作空間" },
+        { "Workspace_DeleteDesc", "刪除後，此空間下的內容將變為「未分配」，不會被刪除。" },
+        { "Workspace_EmptyHint", "此工作空間下暫無內容" },
     };
     public static readonly IReadOnlyDictionary<string, string> Ko = new Dictionary<string, string>
     {
@@ -1850,6 +2108,54 @@ public static class AppResources
         { "Totp_InvalidRender", "(인증 설정을 해석할 수 없음)" },
         { "Cmd_NoMatch", "일치하는 명령 없음" },
         { "Cmd_Mode_Hint", "팁: > 접두어로 명령 실행" },
+        { "QuickCapture_Hint", "Enter로 캡처 · Tab으로 전환 · Esc로 닫기" },
+        { "QuickCapture_HotkeyConflict", "빠른 캡처 단축키 등록 실패: 다른 앱이 조합을 사용 중일 수 있습니다" },
+        { "Setting_QuickCapture", "빠른 캡처" },
+        { "Setting_QuickCapture_Desc", "시스템 전역 단축키로 캡처 바를 열어 메모 / 할 일 / 노트를 한 줄로 기록합니다. Novara가 실행 중이어야 합니다." },
+        { "Setting_QuickCapture_On", "켜기" },
+        { "Setting_QuickCapture_Off", "끄기" },
+        { "Setting_DataWipe", "데이터 지우기" },
+        { "DataWipe_All", "모든 데이터" },
+        { "DataWipe_Memo", "메모 페이지 데이터" },
+        { "DataWipe_Path", "파일 페이지 데이터" },
+        { "DataWipe_Plan", "계획 페이지 데이터" },
+        { "DataWipe_Diary", "기록 페이지 데이터" },
+        { "DataWipe_PageName_Memo", "메모 페이지" },
+        { "DataWipe_PageName_Path", "파일 페이지" },
+        { "DataWipe_PageName_Plan", "계획 페이지" },
+        { "DataWipe_PageName_Diary", "기록 페이지" },
+        { "DataWipe_Stat", "{0}에 항목이 {1}개 있습니다. 처리 방법을 선택하세요." },
+        { "DataWipe_Final_Desc", "{0}의 모든 데이터를 영구 삭제합니다. 되돌릴 수 없습니다." },
+        { "DataWipe_Soft_Btn", "휴지통으로 이동" },
+        { "DataWipe_Hard_Btn", "영구 삭제" },
+        { "DataWipe_Final_Title", "최종 확인" },
+        { "DataWipe_GroupLoss_Title", "그룹이 사라집니다" },
+        { "DataWipe_GroupLoss_Desc", "휴지통으로 이동하면 모든 항목이 유지되지만 모든 그룹이 영구 삭제되어 복구할 수 없습니다. 항목 자체는 영향을 받지 않으며 휴지통에서 복원할 수 있습니다." },
+        { "DataWipe_Done_Hard", "영구 삭제됨" },
+        { "NetActivity_Active", "테스트 중" },
+        { "NetActivity_Panel", "네트워크 활동" },
+        { "NetActivity_Kind_Probe", "연결 검사" },
+        { "NetActivity_Kind_Protocol", "프로토콜 검사" },
+        { "NetActivity_Kind_Diagnose", "진단" },
+        { "NetActivity_Kind_Relay", "릴레이 프로브" },
+        { "NetActivity_Empty", "기록된 네트워크 활동이 없습니다" },
+        { "NetActivity_Clear", "기록 지우기" },
+        { "NetActivity_Open", "기록 보기" },
+        { "Carousel_P0_Title", "모든 내용은 우클릭 메뉴 안에" },
+        { "Carousel_P1_Title", "상단 탭, 한 번 클릭으로 이동" },
+        { "Carousel_P1_Memo", "계정·비밀번호·API 키를 그룹으로 관리, 두 번 클릭으로 복사" },
+        { "Carousel_P1_Path", "자주 쓰는 경로를 등록하고 한 번에 확인·복사·열기" },
+        { "Carousel_P1_Plan", "할 일과 메모 카드, 알림과 데스크톱 스티키 연동" },
+        { "Carousel_P1_Diary", "서식 있는 일기와 Markdown 문서를 언제든 돌아보기" },
+        { "Carousel_P2_Title", "손쉽게 열고, 깔끔하게 닫기" },
+        { "Carousel_P2_Desc", "오른쪽 아래 파란 손잡이에 마우스를 가까이 하면 메뉴가 열리고, 치우면 접힙니다" },
+        { "Carousel_P3_Title", "데이터는 오직 당신의 것" },
+        { "Carousel_P3_Desc", "프라이버시 잠금 + AES-256-GCM 전체 암호화 - 잠그면 데이터는 누구도 읽을 수 없는 암호문으로 저장됩니다" },
+        { "ExportPlain_WarnTitle", "민감 데이터 경고" },
+        { "ExportPlain_WarnBody", "내보내려는 파일에는 모든 민감 정보(비밀번호, 키, 개인 일기)가 평문으로 담깁니다. 내보낸 파일을 안전하게 보관하세요: 타인에게 보내거나 신뢰할 수 없는 곳에 업로드하지 마세요." },
+        { "ExportPlain_WarnConfirm", "그래도 내보내기" },
+        { "Setting_CsvImport_EmptyPreview", "(유효한 항목 없음)" },
+        { "OpenFile_Fail", "이 경로를 열 수 없음: 연결된 프로그램이 없습니다" },
         { "Common_Button_Close", "닫기" },
         { "Common_Button_Confirm", "확인" },
         { "Common_Button_Delete", "삭제" },
@@ -1932,6 +2238,24 @@ public static class AppResources
         { "Setting_CsvImport_UnknownInfo", "항목 유형을 자동 감지할 수 없습니다. 통일 유형을 선택하세요:" },
         { "Setting_CsvImport_Skipped", ", {0}개 더 건너뜀(필수 필드 누락 또는 중복)" },
         { "Setting_ExportMd_NoticeTitle", "Markdown 내보내기" },
+        { "Setting_Export_FileNameSummary", "데이터 요약" }, // N3-45
+        { "Setting_Export_FileNameCollection", "기록 모음" }, // N3-45
+        { "Export_Summary_Title", "Novara 데이터 요약" }, // N3-45
+        { "Export_ExportedAt", "내보낸 시간: {0}" }, // N3-45
+        { "Export_Section_Memo", "메모" }, // N3-45
+        { "Export_Section_Uncategorized", "미분류" }, // N3-45
+        { "Export_Section_Path", "경로 백업" }, // N3-45
+        { "Export_Section_Plan", "계획" }, // N3-45
+        { "Export_Section_Todo", "할 일" }, // N3-45
+        { "Export_Section_Note", "쪽지" }, // N3-45
+        { "Export_Section_Diary", "일기" }, // N3-45
+        { "Export_Empty", "(비어 있음)" }, // N3-45
+        { "Export_Label_Path", "경로: " }, // N3-45
+        { "Export_Label_Note", "메모: " }, // N3-45
+        { "Export_Untitled", "(제목 없음)" }, // N3-45
+        { "Export_Html_Tagline", "로컬 우선 개인 지식 관리자" }, // N3-45
+        { "Export_Html_Slogan", "Novara · 로컬 우선 · 안심 프라이버시" }, // N3-45
+        { "Export_Website", "웹사이트: " }, // N3-45
         { "Setting_ExportMd_NoticeDesc", "Markdown은 보기 및 인쇄 전용이며 Novara로 다시 가져올 수 없습니다. 나중에 복원하기 위해 데이터를 백업하려면 「네이티브 형식」을 사용하세요. Markdown을 계속 내보내시겠습니까?" },
         { "Setting_Archive_Import", "가져오기" },
         { "Setting_Archive_ImportExport", "가져오기 / 내보내기" },
@@ -1953,6 +2277,9 @@ public static class AppResources
         { "Setting_WinHello_Enable_Title", "Windows Hello 활성화" },
         { "Setting_WinHello_Enable_Message", "활성화 전에 Windows Hello 인증이 한 번 필요합니다. 인증에 성공하면 활성화되고, 실패하면 꺼진 상태로 유지됩니다. 인증 창이 나타나지 않으면 이 PC에 Windows Hello가 설정되어 있는지 확인하세요." },
         { "Setting_WinHello_GotoSettings", "Windows 설정 열기" },
+        { "Editor_SaveFail_Toast", "편집 내용을 저장하지 못했습니다" }, // N5-S7-03
+        { "Reminder_Past_Time", "선택한 시간이 이미 지났습니다 - 다시 선택하세요" }, // N5-S6-04/NEW-P-01
+        { "Hello_Update_Fail", "Windows Hello 자격 증명 동기화 실패 - 비밀번호 잠금 해제로 대체됩니다" }, // N4-36
         { "Setting_PrivacyLock_ChangePassword", "비밀번호 변경" },
         { "Setting_PrivacyLock_ConfirmLabel", "비밀번호 확인" },
         { "Setting_PrivacyLock_ConfirmPlaceholder", "비밀번호를 다시 입력하세요" },
@@ -2000,6 +2327,7 @@ public static class AppResources
         { "Diary_Modified_At", "{0}에 수정됨" },
         { "Path_Edit_Title", "경로 백업 수정" },
         { "Common_Toast_Copied", "복사됨" },
+        { "Common_Toast_CopyFail", "복사 실패(클립보드 사용 중)" },
         { "Common_Toast_Detected", "확인됨" },
         { "Common_Toast_Deleted", "삭제됨" },
         { "Common_Toast_Restored", "복원됨" },
@@ -2123,6 +2451,7 @@ public static class AppResources
         { "Memo_ApiDiag_Item_Latency", "지연 시간 / TTFT" },
         { "Memo_ApiDiag_Reachable", "접근 가능" },
         { "Memo_ApiDiag_Unreachable", "접근 불가" },
+        { "Memo_ApiDiag_Timeout", "시간 초과(180초)" }, // N3-61
         { "Memo_ApiDiag_BalanceOk", "잔액 있음(최소 요청 성공)" },
         { "Memo_ApiDiag_BalanceQuota", "잔액 부족 가능성: {0}" },
         { "Memo_ApiDiag_BalanceUnknown", "판단 불가: {0}" },
@@ -2155,6 +2484,8 @@ public static class AppResources
         { "Memo_RelayProbe_LoadDataset", "외부 프로브 데이터셋 로드(재시작 필요)" },
         { "Memo_RelayProbe_Localhost", "로컬 엔드포인트(localhost/127.0.0.1)가 감지되었습니다. 중계 프로브는 API 프록시/중계소를 대상으로 하며, 로컬 모델에는 중계 치팅 시나리오가 없습니다. 계속하시겠습니까?" },
         { "Setting_Language_English", "English" },
+        { "Setting_AutoLock_Seconds", "{0}초" }, // N5-S10-04
+        { "Setting_AutoLock_Minutes", "{0}분" }, // N5-S10-04
         { "Setting_Theme_Dark", "다크 모드" },
         { "Setting_Theme_System", "시스템 팔로우" },
         { "Setting_Autostart_On", "켜기" },
@@ -2417,6 +2748,19 @@ public static class AppResources
         { "Setting_Mcp_DeleteConfirm_Message", "활성화하면 에이전트가 기존 항목을 삭제할 수 있습니다. 삭제된 항목은 휴지통으로 이동하며 복원할 수 있습니다. 활성화하시겠습니까?" },
         { "Setting_Mcp_DeleteConfirm_Ok", "활성화" },
         { "Setting_Mcp_Hint", "로컬 앱 Novara를 MCP(Model Context Protocol) 서버로 구성해 주세요.\n\n【Novara란】\nNovara는 로컬 개인 지식 관리 앱으로, MCP를 통해 14개 도구(접두사 mcp__novara__)를 노출하며 메모·할 일·일기/문서·경로 백업 등 5가지 데이터를 관리합니다.\n\n【구성 내용】\n아래는 표준 MCP 서버 구성입니다. 제가 사용하는 Agent/클라이언트의 MCP 설정 파일에 병합해 주세요:\n\n{JSON}\n\n【단계】\n1. 제가 사용 중인 Agent/클라이언트를 식별하세요(Claude Desktop / Cursor / VS Code / Codex / DeepSeek Harness 등). 불확실하면 물어보세요.\n2. MCP 설정 파일을 찾아(예: Claude Desktop의 claude_desktop_config.json, Cursor의 mcp.json) 위 구성을 병합하고 JSON이 유효하도록 하세요.\n3. 클라이언트를 다시 시작하거나 다시 로드하여 구성을 적용하세요.\n4. 적용 후 mcp__novara__로 시작하는 도구가 보이는지 확인하고, mcp__novara__list_items를 한 번 호출해 검증한 뒤 결과를 알려주세요.\n\n【주의】\n- 구성의 token은 접근 자격 증명이므로 그대로 두고 수정하거나 외부에 공유하지 마세요.\n- \"미승인\" 메시지가 나오면 Novara를 열고 프롬프트에서 \"허용\"을 클릭하세요.\n- \"MCP 인터페이스가 비활성화됨\" 메시지가 나오면 Novara 설정에서 활성화하세요.\n- \"데이터베이스가 잠겨 있음\" 메시지가 나오면 Novara를 열고 개인정보 잠금 비밀번호로 잠금을 해제한 후 다시 시도하세요.\n- \"액세스 토큰이 잘못됨\" 메시지가 나오면 Novara 설정의 \"MCP 인터페이스\" 카드에서 최신 구성을 복사하세요(또는 키 재설정)." },
+        { "Workspace_Title", "워크스페이스" },
+        { "Workspace_All", "전체" },
+        { "Workspace_Manage", "워크스페이스 관리" },
+        { "Workspace_New", "새 워크스페이스" },
+        { "Workspace_Edit", "워크스페이스 편집" },
+        { "Workspace_EditShort", "편집" },
+        { "Workspace_Delete", "삭제" },
+        { "Workspace_Name", "이름" },
+        { "Workspace_NamePlaceholder", "워크스페이스 이름" },
+        { "Workspace_Empty", "아직 워크스페이스가 없습니다" },
+        { "Workspace_DeleteTitle", "워크스페이스 삭제" },
+        { "Workspace_DeleteDesc", "삭제 후 이 워크스페이스의 항목은 '미할당'으로 바뀌며 삭제되지 않습니다." },
+        { "Workspace_EmptyHint", "이 워크스페이스에 콘텐츠가 없습니다" },
     };
     public static readonly IReadOnlyDictionary<string, string> Ja = new Dictionary<string, string>
     {
@@ -2448,6 +2792,54 @@ public static class AppResources
         { "Totp_InvalidRender", "（認証設定を解析できません）" },
         { "Cmd_NoMatch", "一致するコマンドがありません" },
         { "Cmd_Mode_Hint", "ヒント: > 接頭辞でコマンドを実行" },
+        { "QuickCapture_Hint", "Enter でキャプチャ · Tab で切替 · Esc で閉じる" },
+        { "QuickCapture_HotkeyConflict", "クイックキャプチャのホットキー登録に失敗：他のアプリが使用中の可能性があります" },
+        { "Setting_QuickCapture", "クイックキャプチャ" },
+        { "Setting_QuickCapture_Desc", "システム全体のホットキーでキャプチャバーを開き、メモ / ToDo / ノートを一行で記録します。Novara の起動中のみ有効です。" },
+        { "Setting_QuickCapture_On", "オン" },
+        { "Setting_QuickCapture_Off", "オフ" },
+        { "Setting_DataWipe", "データ消去" },
+        { "DataWipe_All", "すべてのデータ" },
+        { "DataWipe_Memo", "メモページのデータ" },
+        { "DataWipe_Path", "ファイルページのデータ" },
+        { "DataWipe_Plan", "計画ページのデータ" },
+        { "DataWipe_Diary", "記録ページのデータ" },
+        { "DataWipe_PageName_Memo", "メモページ" },
+        { "DataWipe_PageName_Path", "ファイルページ" },
+        { "DataWipe_PageName_Plan", "計画ページ" },
+        { "DataWipe_PageName_Diary", "記録ページ" },
+        { "DataWipe_Stat", "{0}には{1}件のデータがあります。処理方法を選択してください。" },
+        { "DataWipe_Final_Desc", "{0}のすべてのデータを完全に削除します。元に戻せません。" },
+        { "DataWipe_Soft_Btn", "ゴミ箱へ移動" },
+        { "DataWipe_Hard_Btn", "完全に削除" },
+        { "DataWipe_Final_Title", "最終確認" },
+        { "DataWipe_GroupLoss_Title", "グループは失われます" },
+        { "DataWipe_GroupLoss_Desc", "ゴミ箱へ移動してもすべてのエントリは保持されますが、すべてのグループは完全に削除され復元できません。エントリ自体は影響を受けず、ゴミ箱から復元できます。" },
+        { "DataWipe_Done_Hard", "完全に削除しました" },
+        { "NetActivity_Active", "テスト中" },
+        { "NetActivity_Panel", "ネットワーク活動" },
+        { "NetActivity_Kind_Probe", "接続チェック" },
+        { "NetActivity_Kind_Protocol", "プロトコルチェック" },
+        { "NetActivity_Kind_Diagnose", "診断" },
+        { "NetActivity_Kind_Relay", "リレープローブ" },
+        { "NetActivity_Empty", "記録されたネットワーク活動はありません" },
+        { "NetActivity_Clear", "記録を消去" },
+        { "NetActivity_Open", "記録を表示" },
+        { "Carousel_P0_Title", "すべての内容は右クリックメニューの中" },
+        { "Carousel_P1_Title", "上部のタブでワンクリック切り替え" },
+        { "Carousel_P1_Memo", "アカウント・パスワード・API キーをグループ管理、ダブルクリックでコピー" },
+        { "Carousel_P1_Path", "よく使うパスを登録してワンクリックで確認・コピー・開く" },
+        { "Carousel_P1_Plan", "TODO とメモカード、リマインダーとデスクトップ付箋に対応" },
+        { "Carousel_P1_Diary", "リッチテキスト日記と Markdown 文書をいつでも振り返り" },
+        { "Carousel_P2_Title", "指先ひとつで呼び出す" },
+        { "Carousel_P2_Desc", "右下の青いハンドルにマウスを近づけるとメニューが開き、離すと閉じます" },
+        { "Carousel_P3_Title", "あなたのデータは、あなただけのもの" },
+        { "Carousel_P3_Desc", "プライバシーロック + AES-256-GCM データベース全体の暗号化 - ロックするとデータは誰にも読めない暗号文で保存されます" },
+        { "ExportPlain_WarnTitle", "機密データの警告" },
+        { "ExportPlain_WarnBody", "エクスポートするファイルには、すべての機密情報（パスワード・キー・プライベートな日記）が平文で含まれます。エクスポートしたファイルを厳重に管理してください：他人に送ったり、信頼できない場所にアップロードしたりしないでください。" },
+        { "ExportPlain_WarnConfirm", "それでも書き出す" },
+        { "Setting_CsvImport_EmptyPreview", "（有効なエントリはありません）" },
+        { "OpenFile_Fail", "このパスを開けません：関連付けられたプログラムがありません" },
         { "Common_Button_Close", "閉じる" },
         { "Common_Button_Confirm", "OK" },
         { "Common_Button_Delete", "削除" },
@@ -2530,6 +2922,24 @@ public static class AppResources
         { "Setting_CsvImport_UnknownInfo", "エントリタイプを自動検出できません。統一タイプを選択してください：" },
         { "Setting_CsvImport_Skipped", "、{0}件は必須フィールド欠落または重複のためスキップ" },
         { "Setting_ExportMd_NoticeTitle", "Markdown エクスポート" },
+        { "Setting_Export_FileNameSummary", "データ集計" }, // N3-45
+        { "Setting_Export_FileNameCollection", "記録コレクション" }, // N3-45
+        { "Export_Summary_Title", "Novara データ集計" }, // N3-45
+        { "Export_ExportedAt", "エクスポート日時: {0}" }, // N3-45
+        { "Export_Section_Memo", "メモ" }, // N3-45
+        { "Export_Section_Uncategorized", "未分類" }, // N3-45
+        { "Export_Section_Path", "パスバックアップ" }, // N3-45
+        { "Export_Section_Plan", "予定" }, // N3-45
+        { "Export_Section_Todo", "ToDo" }, // N3-45
+        { "Export_Section_Note", "付箋" }, // N3-45
+        { "Export_Section_Diary", "日記" }, // N3-45
+        { "Export_Empty", "（空）" }, // N3-45
+        { "Export_Label_Path", "パス: " }, // N3-45
+        { "Export_Label_Note", "メモ: " }, // N3-45
+        { "Export_Untitled", "（無題）" }, // N3-45
+        { "Export_Html_Tagline", "ローカル優先の個人ナレッジ管理" }, // N3-45
+        { "Export_Html_Slogan", "Novara · ローカル優先 · 安心のプライバシー" }, // N3-45
+        { "Export_Website", "公式サイト: " }, // N3-45
         { "Setting_ExportMd_NoticeDesc", "Markdown は閲覧・印刷専用で、Novara に読み戻すことはできません。後で復元するためにデータをバックアップする場合は「ネイティブ形式」を使用してください。Markdown のエクスポートを続けますか？" },
         { "Setting_Archive_Import", "インポート" },
         { "Setting_Archive_ImportExport", "インポート / エクスポート" },
@@ -2551,6 +2961,9 @@ public static class AppResources
         { "Setting_WinHello_Enable_Title", "Windows Hello を有効化" },
         { "Setting_WinHello_Enable_Message", "有効化する前に Windows Hello の認証が1回必要です。認証に成功すると有効になり、失敗した場合はオフのままです。認証ウィンドウが表示されない場合は、このPCでWindows Helloが設定されているか確認してください。" },
         { "Setting_WinHello_GotoSettings", "Windows の設定を開く" },
+        { "Editor_SaveFail_Toast", "編集内容を保存できませんでした" }, // N5-S7-03
+        { "Reminder_Past_Time", "選択した時刻はすでに過ぎています - 選び直してください" }, // N5-S6-04/NEW-P-01
+        { "Hello_Update_Fail", "Windows Hello 資格情報の同期に失敗しました - パスワード解錠にフォールバックします" }, // N4-36
         { "Setting_PrivacyLock_ChangePassword", "パスワードを変更" },
         { "Setting_PrivacyLock_ConfirmLabel", "パスワード（確認）" },
         { "Setting_PrivacyLock_ConfirmPlaceholder", "パスワードをもう一度入力" },
@@ -2598,6 +3011,7 @@ public static class AppResources
         { "Diary_Modified_At", "{0}に更新" },
         { "Path_Edit_Title", "パスバックアップを編集" },
         { "Common_Toast_Copied", "コピーしました" },
+        { "Common_Toast_CopyFail", "コピー失敗（クリップボード使用中）" },
         { "Common_Toast_Detected", "確認しました" },
         { "Common_Toast_Deleted", "削除しました" },
         { "Common_Toast_Restored", "復元しました" },
@@ -2721,6 +3135,7 @@ public static class AppResources
         { "Memo_ApiDiag_Item_Latency", "遅延 / TTFT" },
         { "Memo_ApiDiag_Reachable", "到達可能" },
         { "Memo_ApiDiag_Unreachable", "到達不可" },
+        { "Memo_ApiDiag_Timeout", "タイムアウト（180秒）" }, // N3-61
         { "Memo_ApiDiag_BalanceOk", "残高あり（最小リクエスト成功）" },
         { "Memo_ApiDiag_BalanceQuota", "残高不足の可能性: {0}" },
         { "Memo_ApiDiag_BalanceUnknown", "判定不可: {0}" },
@@ -2751,6 +3166,8 @@ public static class AppResources
         { "Memo_RelayProbe_Disclaimer2", "本ツールは意味認識型の不正中継を完全に防ぐことはできません。一部の中継はテスト質問を認識し、プローブには正規応答を、実際のリクエストには低性能モデルを返すことがあります。プローブデータセットの更新で検出率を高められますが、100%の識別は保証できません。" },
         { "Memo_RelayProbe_TokenConsumed", "総トークン消費" },
         { "Memo_RelayProbe_LoadDataset", "外部プローブデータセットを読み込む（再起動が必要）" },
+        { "Setting_AutoLock_Seconds", "{0}秒" }, // N5-S10-04
+        { "Setting_AutoLock_Minutes", "{0}分" }, // N5-S10-04
         { "Memo_RelayProbe_Localhost", "ローカルエンドポイント（localhost/127.0.0.1）が検出されました。中継プローブはAPIプロキシ/中継局を対象としており、ローカルモデルには中継不正シナリオがありません。続行しますか？" },
         { "Setting_Language_English", "English" },
         { "Setting_Theme_Dark", "ダークモード" },
@@ -3014,6 +3431,19 @@ public static class AppResources
         { "Setting_Mcp_DeleteConfirm_Title", "削除権限" },
         { "Setting_Mcp_DeleteConfirm_Message", "有効にするとエージェントが既存の項目を削除できます。削除した項目はゴミ箱に入り、復元できます。有効にしますか？" },
         { "Setting_Mcp_DeleteConfirm_Ok", "有効にする" },
+        { "Workspace_Title", "ワークスペース" },
+        { "Workspace_All", "すべて" },
+        { "Workspace_Manage", "ワークスペースを管理" },
+        { "Workspace_New", "新しいワークスペース" },
+        { "Workspace_Edit", "ワークスペースを編集" },
+        { "Workspace_EditShort", "編集" },
+        { "Workspace_Delete", "削除" },
+        { "Workspace_Name", "名前" },
+        { "Workspace_NamePlaceholder", "ワークスペース名" },
+        { "Workspace_Empty", "ワークスペースがまだありません" },
+        { "Workspace_DeleteTitle", "ワークスペースを削除" },
+        { "Workspace_DeleteDesc", "削除後、このワークスペースの項目は「未割り当て」になり、削除はされません。" },
+        { "Workspace_EmptyHint", "このワークスペースにはコンテンツがありません" },
         { "Setting_Mcp_Hint", "ローカルアプリ Novara を MCP（Model Context Protocol）サーバーとして設定してください。\n\n【Novara とは】\nNovara はローカルの個人ナレッジ管理アプリで、MCP 経由で 14 個のツール（接頭辞 mcp__novara__）を公開し、メモ・タスク・付箋・日記/ドキュメント・パスバックアップの 5 種類のデータを管理します。\n\n【設定内容】\n以下は標準の MCP サーバー設定です。私が使用するエージェント/クライアントの MCP 設定ファイルにマージしてください：\n\n{JSON}\n\n【手順】\n1. 私が使用中のエージェント/クライアントを特定してください（Claude Desktop / Cursor / VS Code / Codex / DeepSeek Harness など）。不明なら質問してください。\n2. MCP 設定ファイル（例: Claude Desktop の claude_desktop_config.json、Cursor の mcp.json）を見つけ、上記設定をマージし、JSON を正しい形に保ってください。\n3. クライアントを再起動または再読み込みして設定を反映させてください。\n4. 反映後、mcp__novara__ で始まるツールが見えることを確認し、mcp__novara__list_items を一度呼び出して検証し結果を教えてください。\n\n【注意】\n- 設定内の token はアクセス資格情報です。そのまま記入し、変更や外部共有はしないでください。\n- 「未承認」と表示されたら Novara を開き、プロンプトで「許可」をクリックしてください。\n- 「MCP インターフェースが無効です」と表示されたら Novara の設定で有効にしてください。\n- 「データベースがロックされています」と表示されたら Novara を開き、プライバシーロックのパスワードで解除してから再試行してください。\n- 「アクセストークンが無効です」と表示されたら Novara の設定の「MCP インターフェース」カードから最新の設定をコピーしてください（またはキーをリセット）。" },
     };
 }

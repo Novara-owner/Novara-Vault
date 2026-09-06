@@ -1,6 +1,8 @@
 
+
+
+
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
@@ -11,7 +13,16 @@ namespace StickNoteHost;
 
 public static class ToastService
 {
+    // Shares the MAIN app's AUMID so toasts appear under the Novara brand (the shortcut targets
+    // Novara.exe, not this Host). N3-35: mirror the main app's Debug/Release split (.Dev) -
+    // otherwise a Debug Host registers under the Release AUMID and vice versa.
+#if DEBUG
+    private const string AppId = "Novara.App.Dev";
+    private const string ShortcutName = "Novara.Dev.lnk";
+#else
     private const string AppId = "Novara.App";
+    private const string ShortcutName = "Novara.lnk";
+#endif
     private static bool _registered;
 
     public static void EnsureRegistered()
@@ -25,7 +36,9 @@ public static class ToastService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine("ToastService 注册失败: " + ex.Message);
+            // N3-49: Debug.WriteLine vanishes in Release - the tray process must log registration
+            // failures to sticknotehost_debug.txt (App.Log) so a silent toast failure is diagnosable.
+            App.Log("ToastService 注册失败: " + ex.Message);
         }
     }
 
@@ -42,7 +55,7 @@ public static class ToastService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine("ToastService 发送失败: " + ex.Message);
+            App.Log("ToastService 发送失败: " + ex.Message); // N3-49: App.Log (Release writes to %LocalAppData%\Novara\logs\)
         }
     }
 
@@ -52,7 +65,7 @@ public static class ToastService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Microsoft", "Windows", "Start Menu", "Programs");
         Directory.CreateDirectory(dir);
-        var lnk = Path.Combine(dir, "Novara.lnk");
+        var lnk = Path.Combine(dir, ShortcutName); // N3-35: versioned shortcut name (.Dev in Debug)
         // N4H-01: Environment.ProcessPath resolves to StickNoteHost.exe inside the Host process - the old
         // code wrote a Start Menu "Novara" entry targeting the Host (clicking it never opened the main app,
         // and toast activation launched the Host). Always target the MAIN app exe: release layout keeps

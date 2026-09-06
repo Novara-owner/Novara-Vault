@@ -29,6 +29,8 @@
                         <GradientStop Color="#FF34343C" Offset="0" />
                         <GradientStop Color="#FF27272E" Offset="1" />
                     </LinearGradientBrush>
+                    
+                    <Color x:Key="CarouselFadeColor">#FF2E2E35</Color>
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Light">
@@ -52,6 +54,7 @@
                         <GradientStop Color="#FFFFFFFF" Offset="0" />
                         <GradientStop Color="#FFF1F1F7" Offset="1" />
                     </LinearGradientBrush>
+                    <Color x:Key="CarouselFadeColor">#FFF8F8FB</Color>
                 </ResourceDictionary>
 
                 <ResourceDictionary x:Key="Default">
@@ -75,6 +78,7 @@
                         <GradientStop Color="#FF34343C" Offset="0" />
                         <GradientStop Color="#FF27272E" Offset="1" />
                     </LinearGradientBrush>
+                    <Color x:Key="CarouselFadeColor">#FF2E2E35</Color>
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>

@@ -47,13 +47,21 @@ public static class DatabaseHealth
             if (BitConverter.ToUInt32(header, 0) != NovaraStore.Magic) return DataFileIntegrity.Failed;
             var ver = header[4];
             var flag = header[5];
-            if (ver != NovaraStore.FileVersionLegacy && ver != NovaraStore.FileVersionCurrent)
+            // N2-14: v3 (KDF-hardened, 9.2#7) is a healthy current version - listing only Legacy/
+            
+            if (ver != NovaraStore.FileVersionLegacy && ver != NovaraStore.FileVersionCurrent && ver != NovaraStore.FileVersionKdfHardened)
                 return DataFileIntegrity.Failed;
 
             if (flag == NovaraStore.FlagEncrypted)
             {
-                // v1 CBC: minimum CBC block overhead; v2 GCM: nonce(12) + tag(16) minimum body.
-                var minBody = ver == NovaraStore.FileVersionCurrent ? 12 + 16 : 16;
+                // v1 CBC: minimum CBC block overhead; v2/v3 GCM: nonce(12) + tag(16) minimum body.
+                // N3-20: compare explicitly instead of ver >= FileVersionCurrent - the >= form leaned
+                // on enum ordering coincidentally matching the version matrix (1<2<3), which would
+                // silently misclassify future versions; the explicit whitelist matches :52 above.
+                var isGcm = ver == NovaraStore.FileVersionCurrent || ver == NovaraStore.FileVersionKdfHardened;
+                // N4-25: GCM minimum body = nonce(12) + tag(16) + at least 1 ciphertext byte (29),
+                // matching DecryptGcm's tightened lower bound - a 28-byte body is a truncated file.
+                var minBody = isGcm ? 12 + 16 + 1 : 16;
                 return fs.Length >= NovaraStore.HeaderSize + minBody
                     ? DataFileIntegrity.EncryptedStructured
                     : DataFileIntegrity.Failed;
@@ -61,10 +69,10 @@ public static class DatabaseHealth
             if (flag != NovaraStore.FlagPlain) return DataFileIntegrity.Failed;
             if (ver != NovaraStore.FileVersionLegacy) return DataFileIntegrity.Failed; // E4-19: v2 plaintext does not exist
 
-            var body = new byte[fs.Length - NovaraStore.HeaderSize];
-            fs.ReadExactly(body);
+            
+            fs.Position = NovaraStore.HeaderSize;
             var stored = header.AsSpan(6, 16).ToArray();
-            return MD5.HashData(body).AsSpan().SequenceEqual(stored)
+            return MD5.HashData(fs).AsSpan().SequenceEqual(stored)
                 ? DataFileIntegrity.DigestVerified
                 : DataFileIntegrity.Failed;
         }

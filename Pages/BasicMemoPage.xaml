@@ -375,7 +375,6 @@
 
                     <TextBlock x:Name="HintText"
                                Grid.Row="2"
-                               Text="{x:Bind app:App.GetString(\'Memo_Empty_Tip\')}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
                                TextAlignment="Center"
@@ -413,7 +412,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
@@ -488,7 +487,12 @@
                           Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
+                            <!-- N1-76 (10th fix): keep the whole dialog NON-scrolling (like every other
+                                 dialog - the title must never scroll away). The entries panel is capped
+                                 short (84px ~ 4 rows) so the dialog always fits the window and the
+                                 confirm button stays inside the card; the list itself scrolls for the
+                                 rest. Code shrinks the row further for few entries. -->
+                            <RowDefinition Height="84"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0"
                                    Text="{x:Bind app:App.GetString(\'Memo_Entry_SelectLabel\')}"
@@ -496,10 +500,13 @@
                                    FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}"
                                    Margin="0,0,0,8" />
-                        <ScrollViewer Grid.Row="1"
-                                      MaxHeight="160"
+                        <ScrollViewer x:Name="UngroupedEntriesScroll"
+                                      Grid.Row="1"
                                       VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Hidden">
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollMode="Enabled"
+                                      HorizontalScrollMode="Disabled"
+                                      ZoomMode="Disabled">
                             <StackPanel x:Name="UngroupedEntriesPanel"
                                         Spacing="4" />
                         </ScrollViewer>

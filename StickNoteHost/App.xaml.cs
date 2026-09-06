@@ -1,4 +1,4 @@
-﻿using H.NotifyIcon;
+using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -14,6 +14,10 @@ public partial class App : Application
     private static FileSystemWatcher? _watcher;
     private static bool _syncing;
     private static bool _pendingSync; // E1-17: merge instead of drop - a write during a sync schedules one more round
+    // N4-40 (ignored, owner rule 3.10#4): plain bool echo guard without event identity - the R4-SN9
+    // watcher buffer-overflow compensation read can consume it one event early in a narrow race,
+    // swallowing one legitimate sync. Self-heals on the next write; a real fix needs event
+    // correlation the watcher does not provide (disproportionate for the exposure).
     private static bool _skipNextSync; // self-write guard: skip re-render on our own todo write-back
     private static bool _firstSyncDone; // E4-13: the expired-reminder cleanup below runs only on the cold-start sync
     private static Mutex? _singleInstanceMutex;
@@ -44,7 +48,12 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        UnhandledException += (_, e) => Log($"UnhandledException: {e.Exception}");
+        
+        // window glitch must not take the whole host (and every other open sticky) down with it.
+        // e.Handled = true keeps the process alive after logging; the corrupted window may stay
+        // visually broken until the user closes it / restarts the host, which is preferable to all
+        // stickies vanishing silently (the tray Exit + main-app wake paths remain fully usable).
+        UnhandledException += (_, e) => { Log($"UnhandledException: {e.Exception}"); e.Handled = true; };
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log($"AppDomain Unhandled: {e.ExceptionObject}");
     }
 
@@ -65,6 +74,11 @@ public partial class App : Application
         catch (AbandonedMutexException)
         {
             createdNew = true; 
+            
+            
+            
+            try { _singleInstanceMutex = Mutex.OpenExisting(SingleInstanceMutexName); }
+            catch { _singleInstanceMutex = null; } 
         }
         if (!createdNew)
         {
@@ -235,24 +249,36 @@ public partial class App : Application
             int idx = 0;
             foreach (var n in data.Notes)
             {
-                if (NoteWindows.TryGetValue(n.Id, out var w))
+                // N3-50: per-window guard - one window throwing (corrupt note payload, UI race)
+                // must NOT abort the rest of this round; the window is skipped and re-synced on
+                // the next event, everything else still gets its content update.
+                try
                 {
-                    w.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
-                    w.ApplyTheme(theme);
-                    Log($"SyncNotes: 更新便签窗口 id={n.Id}");
+                    if (NoteWindows.TryGetValue(n.Id, out var w))
+                    {
+                        w.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
+                        w.ApplyTheme(theme);
+                        Log($"SyncNotes: 更新便签窗口 id={n.Id}");
+                    }
+                    else
+                    {
+                        // New window: theme goes through the ctor + Loaded re-apply (ctor-only ApplyTheme
+                        // was overwritten by first render - bug 2026-08-08, see StickyNoteWindow ctor).
+                        // N2-61: allocate one past the current max among live reminder windows - the file
+                        
+                        int reminderIdx = 0;
+                        foreach (var existing in App.NoteWindows.Values)
+                            if (existing.IsReminder) reminderIdx = Math.Max(reminderIdx, existing.PositionIndex + 1);
+                        var nw = new StickyNoteWindow(theme, n.Kind == "reminder", n.DueTime) { NoteId = n.Id, PositionIndex = n.Kind == "reminder" ? reminderIdx : idx };
+                        nw.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
+                        nw.Activate();
+                        nw.HideFromTaskbar();
+                        nw.Closed += (_, _) => Log($"便签 {n.Id} Closed");
+                        NoteWindows[n.Id] = nw;
+                        Log($"SyncNotes: 新建便签窗口 id={n.Id}");
+                    }
                 }
-                else
-                {
-                    // New window: theme goes through the ctor + Loaded re-apply (ctor-only ApplyTheme
-                    // was overwritten by first render - bug 2026-08-08, see StickyNoteWindow ctor).
-                    var nw = new StickyNoteWindow(theme, n.Kind == "reminder", n.DueTime) { NoteId = n.Id, PositionIndex = idx };
-                    nw.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
-                    nw.Activate();
-                    nw.HideFromTaskbar();
-                    nw.Closed += (_, _) => Log($"便签 {n.Id} Closed");
-                    NoteWindows[n.Id] = nw;
-                    Log($"SyncNotes: 新建便签窗口 id={n.Id}");
-                }
+                catch (Exception ex) { Log($"SyncNotes: 便签 {n.Id} 同步失败已跳过: {ex.Message}"); }
                 idx++;
             }
             Log($"SyncNotes: {NoteWindows.Count} 个便签窗口, theme={theme}");
@@ -290,8 +316,9 @@ public partial class App : Application
     }
 
     /// <summary>Atomically write stickies.json (same style as the main app's writer, E2-04: tmp + move
-    /// - our own FileSystemWatcher must never observe a half-written file).</summary>
-    private static void Save(StickyData data)
+    /// - our own FileSystemWatcher must never observe a half-written file). N2-27: returns success so
+    /// callers gating side effects (echo suppression) can release them on failure.</summary>
+    private static bool Save(StickyData data)
     {
         try
         {
@@ -301,8 +328,9 @@ public partial class App : Application
             var tmp = JsonPath + ".tmp";
             System.IO.File.WriteAllText(tmp, json);
             System.IO.File.Move(tmp, JsonPath, true);
+            return true;
         }
-        catch (Exception ex) { Log($"Save 失败: {ex.Message}"); }
+        catch (Exception ex) { Log($"Save 失败: {ex.Message}"); return false; }
     }
 
     /// <summary>Remove a card (any kind: note or reminder) from stickies.json after it is closed.</summary>
@@ -326,22 +354,45 @@ public partial class App : Application
 
     
     /// (debounced by StickyNoteWindow). Guarded so our own write does not trigger a re-render.</summary>
-    public static void UpdateTodoItems(string id, List<StickyTodoItem> items)
+    /// <summary>N2-63b: returns true when the write landed (callers gate their dirty-flag reset on it).</summary>
+    public static bool UpdateTodoItems(string id, List<StickyTodoItem> items)
     {
         try
         {
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null) return false;
                 var note = data.Notes.FirstOrDefault(n => n.Id == id);
-                if (note == null) return; // card already gone - nothing to update
-                note.Items = items;
+                if (note == null) return false; // card already gone - nothing to update
+                
+                
+                var existing = note.Items ?? new List<StickyTodoItem>();
+                // N3-10: merge by LABEL (N2-63a parity on the write-back side) - when the debounce tick
+                // beats the watcher-synced SetContent, the host's _items still holds the OLD structure
+                // while `existing` is the main program's NEW one; index-pairing wrote the check into the
+                // wrong row (delete B -> B's check landed on C). Labels are the stable join key.
+                var hostByLabel = new Dictionary<string, StickyTodoItem>();
+                foreach (var it in items)
+                    if (!string.IsNullOrEmpty(it.Label) && !hostByLabel.ContainsKey(it.Label)) hostByLabel[it.Label] = it;
+                foreach (var ex in existing)
+                    if (!string.IsNullOrEmpty(ex.Label) && hostByLabel.TryGetValue(ex.Label, out var src)) ex.Checked = src.Checked;
+                note.Items = existing;
                 _skipNextSync = true;
-                Save(data);
+                // N2-27: Save() swallows its own exceptions, so the outer catch (guard reset) is
+                // unreachable for write failures - release the echo guard explicitly on failure,
+                // otherwise the NEXT legitimate main-program write gets swallowed once.
+                if (!Save(data)) { _skipNextSync = false; Log("UpdateTodoItems: Save 失败，复位 echo 守卫"); return false; }
+                return true;
             }
         }
-        catch (Exception ex) { Log($"UpdateTodoItems 失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            
+            _skipNextSync = false;
+            Log($"UpdateTodoItems 失败: {ex.Message}");
+            return false;
+        }
     }
 
     public static void Log(string msg)
@@ -361,6 +412,14 @@ public partial class App : Application
             System.IO.Directory.CreateDirectory(dir);
 #endif
             var f = System.IO.Path.Combine(dir, "sticknotehost_debug.txt");
+            // N2-62: rolling cap - a forever-running tray process used to grow the log without
+            // bound; 1MB rotates to a single .old (kept one generation for post-mortem).
+            try
+            {
+                if (System.IO.File.Exists(f) && new System.IO.FileInfo(f).Length > 1_000_000)
+                    System.IO.File.Move(f, f + ".old", overwrite: true);
+            }
+            catch { }
             System.IO.File.AppendAllText(f, $"{DateTime.Now:HH:mm:ss.fff} {msg}\n");
         }
         catch { }
@@ -368,7 +427,13 @@ public partial class App : Application
 
     public static void ShowNote()
     {
-        foreach (var w in NoteWindows.Values) w.ShowWindow();
+        
+        // must not abort the foreach - it would leave every other sticky un-shown for this click.
+        foreach (var w in NoteWindows.Values)
+        {
+            try { w.ShowWindow(); }
+            catch (Exception ex) { Log($"ShowNote: 单窗唤起失败，跳过: {ex.Message}"); }
+        }
     }
 
 
@@ -436,15 +501,18 @@ internal static class StickiesLock
 
     public static IDisposable Enter()
     {
-        try { Mutex.WaitOne(); }
-        catch (System.Threading.AbandonedMutexException) { /* previous holder died while holding it - we now own it */ }
-        return new Releaser(Mutex);
+        
+        
+        bool acquired = false;
+        try { acquired = Mutex.WaitOne(TimeSpan.FromSeconds(3)); }
+        catch (System.Threading.AbandonedMutexException) { acquired = true; /* previous holder died while holding it - we now own it */ }
+        return new Releaser(acquired ? Mutex : null);
     }
 
     private sealed class Releaser : IDisposable
     {
         private System.Threading.Mutex? _m;
-        public Releaser(System.Threading.Mutex m) => _m = m;
+        public Releaser(System.Threading.Mutex? m) => _m = m;
         public void Dispose()
         {
             try { _m?.ReleaseMutex(); } catch { }

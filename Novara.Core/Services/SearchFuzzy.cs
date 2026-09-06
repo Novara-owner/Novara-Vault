@@ -13,7 +13,8 @@ public static class SearchFuzzy
     public static bool MatchesQuery(string text, string query)
     {
         if (string.IsNullOrEmpty(query)) return true;
-        foreach (var word in query.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        
+        foreach (var word in query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
             if (!ContainsFuzzy(text, word)) return false;
         return true;
     }
@@ -24,18 +25,46 @@ public static class SearchFuzzy
         if (text.IndexOf(word, StringComparison.Ordinal) >= 0) return true;
         // Subsequence matching only for longer words: very short words stay exact to avoid over-matching.
         if (word.Length < 4) return false;
+        // N3-44: recursion depth in MatchFrom is proportional to word.Length - an absurdly long
+        // query word (pasted blob / programmatic call) with a hot first-letter match could walk the
+        // stack into StackOverflowException. A word longer than the text can never be a subsequence
+        // of it, so that case is a hard miss; anything still plausible is bounded well below
+        // dangerous depths by this pair of guards (real queries are far shorter than 512 chars).
+        if (word.Length > text.Length) return false;
+        if (word.Length > 512) return false;
         // Bound how many unrelated chars may sit between two consecutive matched letters.
         // Keeps typo tolerance (nearby transpositions) while rejecting far-scattered matches.
         const int maxGap = 2;
-        int j = 0;
-        int prev = -1;
-        for (int i = 0; i < text.Length && j < word.Length; i++)
+        // N2-28: backtracking match from each candidate start (N1-34 added per-start retries, but
+        // WITHIN a start the greedy pass still had no backtracking - e.g. "abcd" vs "abbZZcXd":
+        // taking b@1 forces c@5 to break the gap while b@2 allows the legal c@5-d@7 chain).
+        // N4-09: MatchFrom is a pure function of (pos, wi), so failed states are memoized in
+        
+        // 3^word.Length on all-same-char words) and freezes the synchronous UI search.
+        var failed = new HashSet<(int Pos, int Wi)>();
+        for (int start = 0; start < text.Length; start++)
         {
-            if (text[i] != word[j]) continue;
-            if (prev >= 0 && i - prev - 1 > maxGap) return false;
-            prev = i;
-            j++;
+            if (text[start] != word[0]) continue;
+            if (MatchFrom(text, start + 1, 1, word, maxGap, failed)) return true;
         }
-        return j == word.Length;
+        return false;
+    }
+
+    /// <summary>N2-28: recursive backtracking subsequence match - at each letter every occurrence
+    /// within the gap window is tried, so an early greedy pick can never strand a legal chain.
+    /// N4-09: `failed` memoizes (pos, wi) states already proven dead, capping the work at
+    
+    private static bool MatchFrom(string text, int pos, int wi, string word, int maxGap, HashSet<(int Pos, int Wi)> failed)
+    {
+        if (wi == word.Length) return true;
+        int limit = Math.Min(text.Length, pos + maxGap + 1);
+        for (int i = pos; i < limit; i++)
+        {
+            if (text[i] != word[wi]) continue;
+            if (failed.Contains((i + 1, wi + 1))) continue; // memo hit: this state already failed
+            if (MatchFrom(text, i + 1, wi + 1, word, maxGap, failed)) return true;
+            failed.Add((i + 1, wi + 1)); // proven dead - never re-explore it
+        }
+        return false;
     }
 }

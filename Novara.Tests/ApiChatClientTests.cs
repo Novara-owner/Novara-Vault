@@ -48,6 +48,20 @@ public class ApiChatClientTests
         Assert.Equal(ApiChatProtocol.OpenAI, ApiChatClient.DetectProtocol("Xiaomi MiMo", "https://api.xiaomimimo.com/v1"));
     }
 
+    [Fact]
+    public void DetectProtocol_ReverseProxyContainingAnthropic_NotMisclassified()
+    {
+        // N3-31: a user reverse proxy whose URL merely CONTAINS "/anthropic" (relay name / path
+        // segment) must not flip a matrix-recognized OpenAI-compatible vendor to the Anthropic
+        // protocol - only Xiaomi MiMo / unknown / generic rely on the path signal.
+        Assert.Equal(ApiChatProtocol.OpenAI, ApiChatClient.DetectProtocol("OpenAI", "https://my-relay.com/anthropic-compat/v1"));
+        Assert.Equal(ApiChatProtocol.OpenAI, ApiChatClient.DetectProtocol("DeepSeek", "https://relay.example/anthropic/v1"));
+        // Xiaomi MiMo / unknown vendors keep the path heuristic.
+        Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol("Xiaomi MiMo", "https://api.xiaomimimo.com/anthropic"));
+        Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol(null, "https://relay.example/anthropic"));
+        Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol("generic", "https://relay.example/anthropic"));
+    }
+
     // ---- DeriveChatFromModels / ResolveChatEndpoint ----
 
     [Theory]

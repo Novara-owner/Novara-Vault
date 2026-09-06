@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 
 namespace Novara.Services;
@@ -10,7 +11,7 @@ namespace Novara.Services;
 public static class MeltAnim
 {
     private sealed class Rec { public System.EventHandler<object>? Handler; public double Val; }
-    private static readonly Dictionary<FrameworkElement, Rec> _active = new();
+    private static readonly ConditionalWeakTable<FrameworkElement, Rec> _active = new(); 
 
     
     public static void Begin(FrameworkElement panel, bool expand, double topMargin = 0)
@@ -75,7 +76,7 @@ public static class MeltAnim
                     {
                         Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler;
                         
-                        _active[panel] = new Rec { Val = targetVal };
+                        _active.Remove(panel); _active.Add(panel, new Rec { Val = targetVal });
                         if (expand) { panel.Height = double.NaN; panel.Opacity = 1; }
                         else { panel.Visibility = Visibility.Collapsed; panel.Height = double.NaN; panel.Opacity = 0; }
                         if (topMargin > 0) panel.Margin = new Thickness(0, topMargin, 0, 0);
@@ -88,7 +89,7 @@ public static class MeltAnim
                     _active.Remove(panel);
                 }
             };
-            _active[panel] = new Rec { Handler = handler, Val = expand ? 1 : 0 };
+            _active.Remove(panel); _active.Add(panel, new Rec { Handler = handler, Val = expand ? 1 : 0 });
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += handler;
         }
         catch { }

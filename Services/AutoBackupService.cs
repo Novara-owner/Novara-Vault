@@ -56,11 +56,12 @@ public static class AutoBackupService
         if (_timer == null)
         {
             _timer = new DispatcherTimer { Interval = interval };
-            _timer.Tick += (_, _) =>
+            _timer.Tick += (_, _) => System.Threading.Tasks.Task.Run(() =>
             {
+                
                 var path = CreateSnapshot(isManual: false);
                 if (path == null) System.Diagnostics.Debug.WriteLine("AutoBackup: periodic snapshot failed (disk full / file locked / no data file)"); // N4S-05: at least log it - silent null hid failures completely
-            };
+            });
             _timer.Start();
         }
         else
@@ -86,14 +87,20 @@ public static class AutoBackupService
             while (File.Exists(path))
                 path = Path.Combine(BackupDir, $"{prefix}{DateTime.Now:yyyyMMddHHmmss}-{n++}.novadb");
 
-            File.Copy(DataFilePath, path, overwrite: false);
+            
+            
+            var dataTmp = path + ".tmp";
+            File.Copy(DataFilePath, dataTmp, overwrite: false);
+            File.Move(dataTmp, path);
             try { File.SetAttributes(path, FileAttributes.Hidden); } catch { }
 
             
             if (ReadEncryptionFlag(DataFilePath) == FlagEncrypted && File.Exists(PasswordService.SecurityFilePath))
             {
                 var secPath = SecurityPairPath(path);
-                File.Copy(PasswordService.SecurityFilePath, secPath, overwrite: false);
+                var secTmp = secPath + ".tmp";
+                File.Copy(PasswordService.SecurityFilePath, secTmp, overwrite: false);
+                File.Move(secTmp, secPath);
                 try { File.SetAttributes(secPath, FileAttributes.Hidden); } catch { }
             }
 
@@ -133,6 +140,9 @@ public static class AutoBackupService
             if (!Directory.Exists(BackupDir)) return;
             foreach (var name in fileNames)
             {
+                // N5-S2-03: names are composed into delete paths - reject anything that could
+                // escape BackupDir (traversal, separators, invalid name chars) before touching disk.
+                if (!IsSafeSnapshotName(name)) continue;
                 try
                 {
                     var p = Path.Combine(BackupDir, name);
@@ -178,6 +188,9 @@ public static class AutoBackupService
     {
         try
         {
+            // N5-S2-03: same containment guard as DeleteSnapshots - the name composes into an
+            // overwrite path (data.novadb), so traversal must never reach Path.Combine.
+            if (!IsSafeSnapshotName(snapshotFileName)) return false;
             var snapshotPath = Path.Combine(BackupDir, snapshotFileName);
             if (!File.Exists(snapshotPath)) return false;
 
@@ -226,51 +239,123 @@ public static class AutoBackupService
     /// </summary>
     private static bool OverwriteWithSnapshot(string snapshotPath)
     {
-        bool snapshotEncrypted = ReadEncryptionFlag(snapshotPath) == FlagEncrypted;
+        // N2-15: a transient read failure must ABORT the restore, not treat the snapshot as
+        // plaintext - falling through would File.Delete security.dat of an encrypted db and
+        
+        int snapshotFlag = ReadEncryptionFlag(snapshotPath);
+        if (snapshotFlag < 0) return false;
+        bool snapshotEncrypted = snapshotFlag == FlagEncrypted;
         var secPair = SecurityPairPath(snapshotPath);
         if (snapshotEncrypted && !File.Exists(secPair)) return false; 
 
         
+        
         var tmpPath = DataFilePath + ".restoretmp";
-        File.Copy(snapshotPath, tmpPath, overwrite: true);
-        if (File.Exists(DataFilePath)) File.SetAttributes(DataFilePath, FileAttributes.Normal);
-        File.Move(tmpPath, DataFilePath, true);
-        try { File.SetAttributes(DataFilePath, FileAttributes.Hidden | FileAttributes.ReadOnly); } catch { }
-
-        
-        
-        if (snapshotEncrypted)
+        var tmpSec = PasswordService.SecurityFilePath + ".restoretmp";
+        var rollbackData = DataFilePath + ".restore-rollback";
+        var rollbackSec = PasswordService.SecurityFilePath + ".restore-rollback";
+        // N2-66: a previous interrupted restore leaves tmpPath carrying the snapshot's Hidden
+        // attribute - File.Copy(overwrite:true) then fails with ACCESS_DENIED forever (every
+        // retry, until the file is deleted by hand). Clear the leftover before copying.
+        foreach (var stale in new[] { tmpPath, tmpSec, rollbackData, rollbackSec })
         {
-            if (File.Exists(PasswordService.SecurityFilePath)) File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Normal);
-            File.Copy(secPair, PasswordService.SecurityFilePath, overwrite: true);
-            try { File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Hidden); } catch { }
+            if (File.Exists(stale))
+            {
+                try { File.SetAttributes(stale, FileAttributes.Normal); File.Delete(stale); } catch { }
+            }
         }
-        else
+
+        var hadData = File.Exists(DataFilePath);
+        var hadSec = File.Exists(PasswordService.SecurityFilePath);
+        try
         {
-            if (File.Exists(PasswordService.SecurityFilePath))
+            
+            if (hadData) File.Copy(DataFilePath, rollbackData, overwrite: true);
+            if (hadSec) File.Copy(PasswordService.SecurityFilePath, rollbackSec, overwrite: true);
+
+            
+            File.Copy(snapshotPath, tmpPath, overwrite: true);
+            try { File.SetAttributes(tmpPath, FileAttributes.Normal); } catch { } // copy carries the snapshot's Hidden attribute - clear it so Move never trips
+            if (snapshotEncrypted)
+            {
+                File.Copy(secPair, tmpSec, overwrite: true);
+                try { File.SetAttributes(tmpSec, FileAttributes.Normal); } catch { }
+            }
+
+            
+            File.Move(tmpPath, DataFilePath, true);
+            try { File.SetAttributes(DataFilePath, FileAttributes.Hidden | FileAttributes.ReadOnly); } catch { }
+            if (snapshotEncrypted)
+            {
+                if (hadSec) File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Normal);
+                File.Move(tmpSec, PasswordService.SecurityFilePath, true);
+                try { File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Hidden); } catch { }
+            }
+            else if (hadSec)
             {
                 File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Normal);
                 File.Delete(PasswordService.SecurityFilePath);
             }
+            return true;
         }
-        return true;
+        catch
+        {
+            
+            try
+            {
+                if (hadData && File.Exists(rollbackData))
+                {
+                    File.Copy(rollbackData, DataFilePath, overwrite: true);
+                    try { File.SetAttributes(DataFilePath, FileAttributes.Hidden | FileAttributes.ReadOnly); } catch { }
+                }
+                if (hadSec && File.Exists(rollbackSec))
+                {
+                    File.Copy(rollbackSec, PasswordService.SecurityFilePath, overwrite: true);
+                    try { File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Hidden); } catch { }
+                }
+            }
+            catch { }
+            return false;
+        }
+        finally
+        {
+            foreach (var leftover in new[] { tmpPath, tmpSec, rollbackData, rollbackSec })
+            {
+                try { if (File.Exists(leftover)) { File.SetAttributes(leftover, FileAttributes.Normal); File.Delete(leftover); } } catch { }
+            }
+        }
     }
 
     
-    private static byte ReadEncryptionFlag(string path)
+    
+    private static int ReadEncryptionFlag(string path)
     {
         try
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            if (fs.Length < 6) return 0;
+            if (fs.Length < 6) return -1; // truncated snapshot - unknown state, callers must not guess
             fs.Seek(5, SeekOrigin.Begin);
             return (byte)fs.ReadByte();
         }
-        catch { return 0; }
+        catch { return -1; }
     }
 
     
     private static string SecurityPairPath(string snapshotPath) => snapshotPath + SecuritySuffix;
+
+    /// <summary>
+    /// N5-S2-03: snapshot file names compose into delete/overwrite paths - accept only bare file
+    /// names that cannot escape BackupDir. GetInvalidFileNameChars already rejects separators,
+    /// the GetFileName round-trip additionally catches ".." segments and rooted paths.
+    /// </summary>
+    private static bool IsSafeSnapshotName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        // "." and ".." carry no separator so the round-trip below cannot catch them - reject directly.
+        if (name == "." || name == "..") return false;
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return false;
+        return Path.GetFileName(name) == name;
+    }
 
     private static void TrimToMax()
     {

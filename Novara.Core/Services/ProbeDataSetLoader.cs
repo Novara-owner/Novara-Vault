@@ -28,6 +28,8 @@ public sealed class BenchmarkQuestion
 public static class ProbeDataSetLoader
 {
     public const string DefaultFileName = "ProbeDataSet.json";
+    // N3-30: cap poisoning patterns (AnalyzePoisoning matches each serially with a 1s ReDoS guard).
+    private const int MaxPoisoningPatterns = 64;
 
     /// <summary>Built-in default dataset - the fallback used when the JSON file is missing or invalid.
     /// Kept in sync with the shipped ProbeDataSet.json.</summary>
@@ -63,16 +65,28 @@ public static class ProbeDataSetLoader
         
         foreach (var q in ds.BenchmarkQuestions)
         {
-            if (string.IsNullOrWhiteSpace(q.Prompt) || string.IsNullOrWhiteSpace(q.Expected))
-            { error = "bad-benchmark-question"; return false; }
+            if (q == null || string.IsNullOrWhiteSpace(q.Prompt) || string.IsNullOrWhiteSpace(q.Expected))
+            { error = "bad-benchmark-question"; return false; } 
         }
         var patterns = (ds.PoisoningStrongPatterns ?? new()) .Concat(ds.PoisoningWeakPatterns ?? new());
         foreach (var p in patterns)
         {
-            if (string.IsNullOrWhiteSpace(p)) continue;
+            if (string.IsNullOrWhiteSpace(p)) { error = "bad-pattern-null"; return false; } 
             try { _ = new Regex(p); }
             catch (System.Exception ex) { error = "bad-regex: " + p + " (" + ex.Message + ")"; return false; }
         }
+        // N2-29 (N1-49 follow-up): cap the dataset at 7 questions - each costs ~256 output tokens
+        
+        // blow the budget and SKIP the probe. The shipped default (3) is untouched.
+        if (ds.BenchmarkQuestions.Count > 7)
+            ds.BenchmarkQuestions = ds.BenchmarkQuestions.Take(7).ToList();
+        // N3-30: cap the poisoning pattern count too - AnalyzePoisoning runs each pattern with a
+        // 1s ReDoS guard SERIALLY, so an unbounded list lets a hostile dataset stall the whole
+        
+        if ((ds.PoisoningStrongPatterns?.Count ?? 0) > MaxPoisoningPatterns)
+            ds.PoisoningStrongPatterns = ds.PoisoningStrongPatterns!.Take(MaxPoisoningPatterns).ToList();
+        if ((ds.PoisoningWeakPatterns?.Count ?? 0) > MaxPoisoningPatterns)
+            ds.PoisoningWeakPatterns = ds.PoisoningWeakPatterns!.Take(MaxPoisoningPatterns).ToList();
         return true;
     }
 

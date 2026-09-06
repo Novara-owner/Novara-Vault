@@ -66,9 +66,13 @@ public static class MdImportRequest
             if (File.Exists(PendingMd))
             {
                 var json = File.ReadAllText(PendingMd);
-                File.Delete(PendingMd);
                 var j = JsonSerializer.Deserialize<PendingMdFile>(json);
-                if (j != null && !string.IsNullOrWhiteSpace(j.Path)) return j.Path;
+                // N2-07 (N1-60 parity): delete only after a successful deserialize
+                if (j != null && !string.IsNullOrWhiteSpace(j.Path))
+                {
+                    try { File.Delete(PendingMd); } catch { }
+                    return j.Path;
+                }
             }
         }
         catch { }

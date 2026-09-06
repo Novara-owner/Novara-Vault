@@ -38,9 +38,24 @@ public sealed partial class SettingsPage : Page
     private bool _statsEnabled;
     private bool _statsExpanded;
     private bool _animAutoLockSync;
+    private bool _animQuickCaptureInfo; // 9.3: Quick Capture info dialog hide guard
+    private bool _animPageWipe; // 9.3: per-page wipe dialog guards
+    private bool _animPageWipeFinal;
+    private bool _animPageGroupLoss;
+    private readonly System.Collections.Generic.Dictionary<Grid, int> _overlayAnimGens = new(); 
+    private bool _animNetActivity; // 9.3: network activity panel guard
     private bool _autoLockOnSystemLock; 
     private int _autoLockSeconds;       
     private bool _welcomeOnLaunch; 
+
+    
+    private bool _animWorkspaceManage;
+    private bool _animWorkspaceEdit;
+    private bool _animWorkspaceDelete;
+    private readonly List<Border> _workspaceIconBorders = new();
+    private string _workspaceSelectedIcon = "";
+    private string? _editingWorkspaceId; // null = create new
+    private string? _pendingDeleteWorkspaceId;
 
     private static readonly string[] TabNames = { "备忘", "文件", "计划", "日记" };
 
@@ -53,7 +68,19 @@ public sealed partial class SettingsPage : Page
         StatsExpandIcon.Data = App.CreateGeometry(IconData.CardCollapse);
         McpExpandIcon.Data = App.CreateGeometry(IconData.CardCollapse);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true); 
+        // N2-13: danger-triangle icon on every destructive-dialog title (one-shot Data assignment;
+        // red #FF4545 is set in XAML and matches each title's color language)
+        foreach (var dangerIcon in new Microsoft.UI.Xaml.Controls.PathIcon[]
+        {
+            ResetConfirmDangerIcon, PrivacyLockWarnDangerIcon, CloseLockDangerIcon,
+            BackupDeleteDangerIcon, BackupRestoreDangerIcon, PageWipeFinalDangerIcon,
+            PageGroupLossDangerIcon, McpDeleteConfirmDangerIcon, WorkspaceDeleteDangerIcon,
+            ImportConfirmDangerIcon, McpRevokeConfirmDangerIcon, McpResetConfirmDangerIcon,
+            McpAuditClearDangerIcon, // N2-13 sweep: red-titled dialogs that missed the first pass
+        })
+            dangerIcon.Data = App.CreateGeometry(IconData.Danger);
         KeyDown += Page_KeyDown;
+        WorkspaceNameTextBox.TextChanged += (_, _) => UpdateWorkspaceEditConfirmState(); // N2-53: live confirm-button state
         BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
 
         Unloaded += (_, _) =>
@@ -82,6 +109,7 @@ public sealed partial class SettingsPage : Page
             BackupDeleteConfirmOverlay.Visibility = Visibility.Collapsed;
             BackupRestartOverlay.Visibility = Visibility.Collapsed;
             ExportMdNoticeOverlay.Visibility = Visibility.Collapsed;
+            ExportPlainWarnOverlay.Visibility = Visibility.Collapsed; // N2-13
             McpConfigOverlay.Visibility = Visibility.Collapsed;
             McpResetConfirmOverlay.Visibility = Visibility.Collapsed;
             McpCopyOverlay.Visibility = Visibility.Collapsed;
@@ -95,19 +123,37 @@ public sealed partial class SettingsPage : Page
             EncImportPwdOverlay.Visibility = Visibility.Collapsed;   // 9.2#6
             WindowsHelloOverlay.Visibility = Visibility.Collapsed; // ND8
             McpRevokeConfirmOverlay.Visibility = Visibility.Collapsed; // ND8
+            // N2-10: the 9.3 dialogs below had their hide-guards reset (see below) but were missing
+            // from this M4 destroy list - an open dialog survived Ctrl+K/IPC/Back leaving the page
+            // (instance is cached) and reappeared on re-entry.
+            QuickCaptureInfoOverlay.Visibility = Visibility.Collapsed; // 9.3
+            PageWipeOverlay.Visibility = Visibility.Collapsed; // 9.3
+            PageWipeFinalOverlay.Visibility = Visibility.Collapsed; // 9.3
+            PageGroupLossOverlay.Visibility = Visibility.Collapsed; // 9.3
+            NetActivityOverlay.Visibility = Visibility.Collapsed; // 9.3
+            WorkspaceManageOverlay.Visibility = Visibility.Collapsed; // 9.3
+            WorkspaceEditOverlay.Visibility = Visibility.Collapsed; // 9.3
+            WorkspaceDeleteOverlay.Visibility = Visibility.Collapsed; // 9.3
             // R1 (Round 5): reset all hide-animation flags on unload (prevent stuck)
             _animSetPwd = _animChangePwd = _animCloseLock = _animWarn = _animResetConfirm = _animResetPwd = _animImportPwd = _animImportConfirm = _animImportResult = false;
             _animBackupIntro = _animBackupNow = _animBackupAuto = _animBackupRestore = _animBackupDelete = _animBackupRestoreConfirm = _animBackupDeleteConfirm = false;
             _animExportMdNotice = _animExportOptions = _animWarnShow = false; 
+            _animExportPlainWarn = false; // N2-13
             _themeRestartAnimating = _languageRestartAnimating = false; 
             _animMcpConfig = _animMcpResetConfirm = _animMcpCopy = _animMcpDeleteConfirm = _animMcpRevokeConfirm = false;
             _animMcpAudit = _animMcpAuditClear = false; 
             McpPermOverlay.Visibility = Visibility.Collapsed; 
             _animMcpPerm = false;
             _animAutoLockSync = false; 
+            _animQuickCaptureInfo = false; // 9.3: Quick Capture info dialog guard
+            _animPageWipe = false; _animPageWipeFinal = false; _animPageGroupLoss = false; // 9.3: page-wipe guards
+            _animNetActivity = false; // 9.3: network activity panel guard
+            _animWinHello = false; // N2-11: stuck guard made the Hello dialog permanently un-closable
+            _animWorkspaceManage = _animWorkspaceEdit = _animWorkspaceDelete = false; // N2-11: same for the workspace dialogs
             _pendingVerifiedAction = null; // N5T1-02: a stale gated flow must not hijack the next password verify
             _pendingExport = false;        // N5T1-02: same for the native export flag
-            _pendingReloadAfterImport = false; // N5T1-03: stale flag would fire an unrelated ReloadPages later
+            
+            
 _animCsvPreview = false;
             _animCsvExportNotice = false;
         };
@@ -191,6 +237,7 @@ _animCsvPreview = false;
         }
         if (ResetPasswordOverlay.Visibility == Visibility.Visible) { HideResetPasswordDialog(); e.Handled = true; return; }
         if (LanguageRestartOverlay.Visibility == Visibility.Visible) { _pendingLanguage = string.Empty; HideLanguageRestartOverlay(); e.Handled = true; return; }
+        if (ExportPlainWarnOverlay.Visibility == Visibility.Visible) { _pendingPlainExportContinue = null; HidePlainExportWarnDialog(); e.Handled = true; return; } // N2-13
         if (ExportOptionsOverlay.Visibility == Visibility.Visible) { HideExportOptionsDialog(); e.Handled = true; return; }
         if (ImportExportPasswordOverlay.Visibility == Visibility.Visible) { HideImportExportPasswordDialog(); e.Handled = true; return; }
         if (ThemeRestartOverlay.Visibility == Visibility.Visible) { _pendingTheme = string.Empty; HideThemeRestartOverlay(); e.Handled = true; return; }
@@ -217,6 +264,21 @@ _animCsvPreview = false;
         if (McpCopyOverlay.Visibility == Visibility.Visible) { HideMcpCopyDialog(); e.Handled = true; return; }
         if (McpDeleteConfirmOverlay.Visibility == Visibility.Visible) { HideMcpDeleteConfirmDialog(); e.Handled = true; return; }
         if (McpRevokeConfirmOverlay.Visibility == Visibility.Visible) { HideMcpRevokeConfirmDialog(); e.Handled = true; return; }
+        // N3-13: the 9.1-9.3 era dialogs were never wired into the Esc chain (N2-52 follow-up)
+        if (QuickCaptureInfoOverlay.Visibility == Visibility.Visible) { HideQuickCaptureInfoDialog(); e.Handled = true; return; }
+        if (NetActivityOverlay.Visibility == Visibility.Visible) { HideNetActivityPanel(); e.Handled = true; return; }
+        if (AutoLockSyncConfirmOverlay.Visibility == Visibility.Visible) { HideAutoLockSyncConfirmDialog(); e.Handled = true; return; }
+        if (PageWipeOverlay.Visibility == Visibility.Visible) { HidePageWipeDialog(); e.Handled = true; return; }
+        if (PageWipeFinalOverlay.Visibility == Visibility.Visible) { HidePageWipeFinalDialog(); e.Handled = true; return; }
+        if (PageGroupLossOverlay.Visibility == Visibility.Visible) { HidePageGroupLossDialog(); e.Handled = true; return; }
+        if (WorkspaceManageOverlay.Visibility == Visibility.Visible) { HideWorkspaceManage(); e.Handled = true; return; }
+        if (WorkspaceEditOverlay.Visibility == Visibility.Visible) { HideWorkspaceEdit(); e.Handled = true; return; }
+        if (WorkspaceDeleteOverlay.Visibility == Visibility.Visible) { HideWorkspaceDelete(); e.Handled = true; return; }
+        if (EncExportOverlay.Visibility == Visibility.Visible) { HideEncExportDialog(); e.Handled = true; return; }
+        if (EncImportPwdOverlay.Visibility == Visibility.Visible) { HideEncImportPwdDialog(); e.Handled = true; return; }
+        if (McpPermOverlay.Visibility == Visibility.Visible) { HideMcpPermDialog(); e.Handled = true; return; }
+        if (McpAuditOverlay.Visibility == Visibility.Visible) { HideMcpAuditDialog(); e.Handled = true; return; }
+        if (McpAuditClearConfirmOverlay.Visibility == Visibility.Visible) { HideMcpAuditClearConfirmDialog(); e.Handled = true; return; }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
@@ -357,6 +419,7 @@ private void ShowThemeRestartOverlay()
         catch
         {
             // #26: launch failed - keep session (avoid silent app loss), retryable
+            Novara.MainWindow.AcquireSingleInstance(); 
             System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
             _restarting = false;
             return;
@@ -540,9 +603,7 @@ private void ShowSetPasswordDialog()
         SetPasswordBox.Text = "";
         SetPasswordConfirmBox.Text = "";
         SetPasswordLockoutCheckBox.IsChecked = false;
-        SetPasswordDialogTransform.ScaleX = 0.92;
-        SetPasswordDialogTransform.ScaleY = 0.92;
-        SetPasswordDialogTransform.TranslateY = 20;
+        SetPasswordDialogTransform.ScaleX = 0.94; SetPasswordDialogTransform.ScaleY = 0.94; SetPasswordDialogTransform.TranslateY = 24;
         SetPasswordDialog.Opacity = 0;
         SetPasswordScrim.Opacity = 0;
         SetPasswordOverlay.Visibility = Visibility.Visible;
@@ -551,11 +612,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(si, SetPasswordScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, SetPasswordDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, SetPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, SetPasswordDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -573,11 +630,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(so, SetPasswordScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, SetPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, SetPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, SetPasswordDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { SetPasswordOverlay.Visibility = Visibility.Collapsed; _animSetPwd = false; };
         sb.Begin();
     }
@@ -594,9 +647,7 @@ private void ShowSetPasswordDialog()
         ChangePasswordOldBox.Text = "";
         ChangePasswordNewBox.Text = "";
         ChangePasswordConfirmBox.Text = "";
-        ChangePasswordDialogTransform.ScaleX = 0.92;
-        ChangePasswordDialogTransform.ScaleY = 0.92;
-        ChangePasswordDialogTransform.TranslateY = 20;
+        ChangePasswordDialogTransform.ScaleX = 0.94; ChangePasswordDialogTransform.ScaleY = 0.94; ChangePasswordDialogTransform.TranslateY = 24;
         ChangePasswordDialog.Opacity = 0;
         ChangePasswordScrim.Opacity = 0;
         ChangePasswordOverlay.Visibility = Visibility.Visible;
@@ -605,11 +656,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(si, ChangePasswordScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ChangePasswordDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ChangePasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ChangePasswordDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -622,11 +669,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(so, ChangePasswordScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ChangePasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ChangePasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ChangePasswordDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ChangePasswordOverlay.Visibility = Visibility.Collapsed; _animChangePwd = false; };
         sb.Begin();
     }
@@ -683,16 +726,22 @@ private void ShowSetPasswordDialog()
             FlashTextBox(ChangePasswordConfirmBox); // C1: roll back data.novadb to old password, consistent with security.dat
             return;
         }
-        if (WindowsHelloService.IsEnabled()) _ = System.Threading.Tasks.Task.Run(() => WindowsHelloService.Update(newPw)); // NH1+N2H-2: resync only when enabled; off UI thread (PasswordVault.Add blocks)
+        if (WindowsHelloService.IsEnabled())
+        {
+            // N4-36: observe the result - Update removes the old credential first, so a failed re-add
+            // used to disable Hello unlock silently. Still off the UI thread (PasswordVault.Add
+            // blocks); App.ShowToast marshals back through UiQueue itself. The "lock right after a
+            // change" race degrades gracefully to password unlock (by design, no data risk).
+            _ = System.Threading.Tasks.Task.Run(() => WindowsHelloService.Update(newPw))
+                .ContinueWith(t => { if (t.IsFaulted || !t.Result) App.ShowToast(App.GetString("Hello_Update_Fail")); });
+        }
         HideChangePasswordDialog();
     }
 
     private void DisablePrivacyLockButton_Click(object sender, RoutedEventArgs e)
     {
         ClosePrivacyLockPasswordBox.Text = "";
-        ClosePrivacyLockDialogTransform.ScaleX = 0.92;
-        ClosePrivacyLockDialogTransform.ScaleY = 0.92;
-        ClosePrivacyLockDialogTransform.TranslateY = 20;
+        ClosePrivacyLockDialogTransform.ScaleX = 0.94; ClosePrivacyLockDialogTransform.ScaleY = 0.94; ClosePrivacyLockDialogTransform.TranslateY = 24;
         ClosePrivacyLockDialog.Opacity = 0;
         ClosePrivacyLockScrim.Opacity = 0;
         ClosePrivacyLockOverlay.Visibility = Visibility.Visible;
@@ -701,11 +750,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(si, ClosePrivacyLockScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ClosePrivacyLockDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ClosePrivacyLockDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ClosePrivacyLockDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -718,11 +763,7 @@ private void ShowSetPasswordDialog()
         Storyboard.SetTarget(so, ClosePrivacyLockScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ClosePrivacyLockDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ClosePrivacyLockDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ClosePrivacyLockDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ClosePrivacyLockOverlay.Visibility = Visibility.Collapsed; _animCloseLock = false; };
         sb.Begin();
     }
@@ -762,9 +803,7 @@ private void ShowPrivacyLockWarningDialog()
         if (_animWarnShow) return; // E5-25: ignore re-entry while the show animation runs (double Begin = visual flicker)
         _animWarnShow = true;
         PrivacyLockWarningErrorText.Visibility = Visibility.Collapsed; // E4-27: reset the inline error each open
-        PrivacyLockWarningDialogTransform.ScaleX = 0.92;
-        PrivacyLockWarningDialogTransform.ScaleY = 0.92;
-        PrivacyLockWarningDialogTransform.TranslateY = 20;
+        PrivacyLockWarningDialogTransform.ScaleX = 0.94; PrivacyLockWarningDialogTransform.ScaleY = 0.94; PrivacyLockWarningDialogTransform.TranslateY = 24;
         PrivacyLockWarningDialog.Opacity = 0;
         PrivacyLockWarningScrim.Opacity = 0;
         PrivacyLockWarningOverlay.Visibility = Visibility.Visible;
@@ -773,11 +812,7 @@ private void ShowPrivacyLockWarningDialog()
         Storyboard.SetTarget(si, PrivacyLockWarningScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, PrivacyLockWarningDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, PrivacyLockWarningDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, PrivacyLockWarningDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Completed += (_, _) => _animWarnShow = false; // E5-25: re-arm when the show animation finished (dialog can be reopened after closing)
         sb.Begin();
     }
@@ -791,11 +826,7 @@ private void ShowPrivacyLockWarningDialog()
         Storyboard.SetTarget(so, PrivacyLockWarningScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, PrivacyLockWarningDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, PrivacyLockWarningDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, PrivacyLockWarningDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { PrivacyLockWarningOverlay.Visibility = Visibility.Collapsed; _animWarn = false; };
         sb.Begin();
     }
@@ -1073,8 +1104,458 @@ private void ShowPrivacyLockWarningDialog()
 
         ApplyToggleState(AutoLockButton, _autoLockSeconds > 0);
         AutoLockButtonText.Text = _autoLockSeconds > 0
-            ? ("" + _autoLockSeconds + "s").Replace("60s", "1min").Replace("300s", "5min").Replace("600s", "10min").Replace("1800s", "30min").Replace("3600s", "60min")
+            // N2-51: longest-first order - "3600s".Replace("600s",...) ran before the 3600s rule and
+            // turned 3600s into "310min" (the "600s" substring lives inside "3600s").
+            ? ("" + _autoLockSeconds + "s").Replace("3600s", "60min").Replace("1800s", "30min").Replace("600s", "10min").Replace("300s", "5min").Replace("60s", "1min")
             : App.GetString("Setting_AutoLock_Never");
+
+        // 9.3 Quick Capture card - same settings source, always visible (independent of the privacy lock)
+        QuickCaptureTitleText.Text = App.GetString("Setting_QuickCapture");
+        ResetDataButtonText.Text = App.GetString("Setting_DataWipe");
+        ApplyToggleState(ResetDataButton, false); // gray base like every other card (owner call)
+        NetActivityTitleText.Text = App.GetString("NetActivity_Panel");
+        ApplyToggleState(NetActivityPanelButton, false); // gray base - static style alone renders transparent
+        NetActivityPanelButtonText.Text = App.GetString("NetActivity_Open");
+        // 9.3 Workspace card + dialogs
+        WorkspaceCardTitleText.Text = App.GetString("Workspace_Title");
+        ApplyToggleState(WorkspaceManageButton, false);
+        WorkspaceManageButtonText.Text = App.GetString("Workspace_Manage");
+        WorkspaceManageTitle.Text = App.GetString("Workspace_Title");
+        WorkspaceNewButtonText.Text = App.GetString("Workspace_New");
+        WorkspaceEditNameLabel.Text = App.GetString("Workspace_Name");
+        WorkspaceEditIconLabel.Text = App.GetString("Common_Label_PickIcon");
+        WorkspaceNameTextBox.PlaceholderText = App.GetString("Workspace_NamePlaceholder");
+        WorkspaceEditCancelText.Text = App.GetString("Common_Button_Cancel");
+        WorkspaceEditConfirmText.Text = App.GetString("Common_Button_Confirm");
+        WorkspaceDeleteTitle.Text = App.GetString("Workspace_DeleteTitle");
+        WorkspaceDeleteDesc.Text = App.GetString("Workspace_DeleteDesc");
+        WorkspaceDeleteCancelText.Text = App.GetString("Common_Button_Cancel");
+        WorkspaceDeleteConfirmText.Text = App.GetString("Workspace_Delete");
+        QuickCaptureInfoTitleText.Text = App.GetString("Setting_QuickCapture");
+        QuickCaptureInfoMessageText.Text = App.GetString("Setting_QuickCapture_Desc");
+        QuickCaptureInfoCancelText.Text = App.GetString("Common_Button_Cancel");
+        QuickCaptureInfoOkText.Text = App.GetString("Common_Button_Confirm");
+        ApplyQuickCaptureState();
+    }
+
+    private void ApplyQuickCaptureState()
+    {
+        var s = App.Store?.Database.AppSettings;
+        bool on = s?.QuickCaptureEnabled ?? false;
+        ApplyToggleState(QuickCaptureSwitchButton, on);
+        QuickCaptureSwitchText.Text = App.GetString(on ? "Setting_QuickCapture_On" : "Setting_QuickCapture_Off");
+        // The hotkey picker only exists while the feature is on, styled as the off-state (gray) selector
+        QuickCaptureHotkeyButton.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        ApplyToggleState(QuickCaptureHotkeyButton, false);
+        QuickCaptureHotkeyText.Text = s?.QuickCaptureHotkey switch
+        {
+            "CtrlAltN" => "Ctrl+Alt+N",
+            "AltN" => "Alt+N",
+            "CtrlShiftSpace" => "Ctrl+Shift+Space",
+            _ => "Ctrl+Shift+N"
+        };
+    }
+
+    private void QuickCaptureSwitchButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Owner call: the switch is a dropdown (On/Off) like every other card - enabling goes
+        // through the info dialog so the feature details are seen before the hotkey is claimed.
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        var on = App.Store?.Database.AppSettings?.QuickCaptureEnabled ?? false;
+        MenuFlyoutItem MakeItem(string text, bool active)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? accentBrush : normalBrush };
+            if (active) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            return item;
+        }
+        var onItem = MakeItem(App.GetString("Setting_QuickCapture_On"), on);
+        var offItem = MakeItem(App.GetString("Setting_QuickCapture_Off"), !on);
+        onItem.Click += (_, _) => ShowQuickCaptureInfoDialog();
+        offItem.Click += (_, _) => SetQuickCaptureEnabled(false);
+        menu.Items.Add(onItem); menu.Items.Add(offItem);
+        menu.ShowAt(QuickCaptureSwitchButton, new Windows.Foundation.Point(0, QuickCaptureSwitchButton.ActualHeight + 4));
+    }
+
+    private void SetQuickCaptureEnabled(bool on)
+    {
+        var s = App.Store?.Database.AppSettings; if (s == null) return;
+        s.QuickCaptureEnabled = on;
+        ApplyQuickCaptureState();
+        _ = App.Store?.SaveAsync();
+        App.MainWindow?.ApplyQuickCaptureHotkey(); // re-register (or unregister) the system hotkey live
+    }
+
+    private void ShowQuickCaptureInfoDialog()
+    {
+        _animQuickCaptureInfo = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(QuickCaptureInfoOverlay, QuickCaptureInfoDialog, QuickCaptureInfoDialogTransform);
+    }
+    private void HideQuickCaptureInfoDialog()
+    {
+        if (_animQuickCaptureInfo) return;
+        _animQuickCaptureInfo = true;
+        HideOverlay(QuickCaptureInfoOverlay, QuickCaptureInfoDialog, QuickCaptureInfoDialogTransform, () => _animQuickCaptureInfo = false);
+    }
+    private void QuickCaptureInfoClose_Click(object sender, RoutedEventArgs e) => HideQuickCaptureInfoDialog();
+    private void QuickCaptureInfoCancel_Click(object sender, RoutedEventArgs e) => HideQuickCaptureInfoDialog();
+    private void QuickCaptureInfoScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, QuickCaptureInfoScrim)) HideQuickCaptureInfoDialog(); }
+    private void QuickCaptureInfoOk_Click(object sender, RoutedEventArgs e)
+    {
+        SetQuickCaptureEnabled(true);
+        HideQuickCaptureInfoDialog();
+        App.ShowToast(App.GetString("Common_Toast_Created"));
+    }
+
+    private void QuickCaptureHotkeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        var current = App.Store?.Database.AppSettings?.QuickCaptureHotkey;
+        foreach (var (id, label) in new[] { ("CtrlShiftN", "Ctrl+Shift+N"), ("CtrlAltN", "Ctrl+Alt+N"), ("AltN", "Alt+N"), ("CtrlShiftSpace", "Ctrl+Shift+Space") })
+        {
+            var mi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = label };
+            mi.Foreground = current == id ? accentBrush : normalBrush;
+            mi.Click += (_, _) =>
+            {
+                var s = App.Store?.Database.AppSettings; if (s == null) return;
+                s.QuickCaptureHotkey = id;
+                ApplyQuickCaptureState();
+                _ = App.Store?.SaveAsync();
+                App.MainWindow?.ApplyQuickCaptureHotkey();
+            };
+            menu.Items.Add(mi);
+        }
+        menu.ShowAt(QuickCaptureHotkeyButton, new Windows.Foundation.Point(0, QuickCaptureHotkeyButton.ActualHeight + 4));
+    }
+
+    
+
+    private void NetActivityPanelButton_Click(object sender, RoutedEventArgs e)
+    {
+        // N3-16: Show re-arms the hide guard - if this Show lands while a previous Hide animation is
+        // still in flight, the new Show animation replaces the Hide's on the same properties and its
+        // Completed never fires, leaving _animNetActivity stuck true and every close path deadlocked.
+        _animNetActivity = false;
+        NetActivityPanelTitle.Text = App.GetString("NetActivity_Panel");
+        NetActivityClearText.Text = App.GetString("NetActivity_Clear");
+        RenderNetActivityList();
+        ShowOverlay(NetActivityOverlay, NetActivityDialog, NetActivityDialogTransform);
+    }
+
+    private void RenderNetActivityList()
+    {
+        NetActivityList.Children.Clear();
+        var recent = Services.NetworkActivityService.Recent;
+        if (recent.Count == 0)
+        {
+            NetActivityList.Children.Add(new TextBlock
+            {
+                Text = App.GetString("NetActivity_Empty"),
+                FontSize = 13, Foreground = App.GetBrush("AppTextTertiaryBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 12, 0, 12),
+            });
+            return;
+        }
+        foreach (var it in recent)
+        {
+            var row = new Grid { ColumnSpacing = 10 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var kindText = new TextBlock
+            {
+                Text = App.GetString(it.KindKey) + "  " + (it.Host.Length > 0 ? it.Host : "-"),
+                FontSize = 13, Foreground = App.GetBrush("AppTextPrimaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(kindText, 0);
+            var meta = new TextBlock
+            {
+                Text = it.Time.ToString("HH:mm:ss") + "  " + (it.Success ? "✓" : "✗"),
+                FontSize = 12,
+                Foreground = it.Success ? App.GetBrush("AppTextTertiaryBrush") : new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(meta, 1);
+            row.Children.Add(kindText); row.Children.Add(meta);
+            var card = new Border
+            {
+                Background = App.GetBrush("AppSurfaceOverlayBrush"),
+                BorderBrush = App.GetBrush("AppBorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(14, 10, 14, 10),
+                Child = row,
+            };
+            NetActivityList.Children.Add(card);
+        }
+    }
+
+    private void NetActivityClear_Click(object sender, RoutedEventArgs e)
+    {
+        Services.NetworkActivityService.ClearRecent();
+        RenderNetActivityList();
+    }
+
+    private void NetActivityClose_Click(object sender, RoutedEventArgs e) => HideNetActivityPanel();
+
+    private void NetActivityScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, NetActivityScrim)) HideNetActivityPanel();
+    }
+
+    private void HideNetActivityPanel()
+    {
+        if (_animNetActivity) return;
+        _animNetActivity = true;
+        HideOverlay(NetActivityOverlay, NetActivityDialog, NetActivityDialogTransform, () => _animNetActivity = false);
+    }
+
+    // ===================== 9.3 Workspace: management dialogs =====================
+
+    public void OpenWorkspaceManagement()
+    {
+        _animWorkspaceManage = false; // N2-11: show re-arms the hide guard
+        RenderWorkspaceList();
+        ShowOverlay(WorkspaceManageOverlay, WorkspaceManageDialog, WorkspaceManageDialogTransform);
+    }
+
+    private void WorkspaceManageButton_Click(object sender, RoutedEventArgs e) => OpenWorkspaceManagement();
+
+    private void RenderWorkspaceList()
+    {
+        WorkspaceListPanel.Children.Clear();
+        var ws = App.Store?.Database.AppSettings.Workspaces;
+        if (ws == null || ws.Count == 0)
+        {
+            WorkspaceListPanel.Children.Add(new TextBlock
+            {
+                Text = App.GetString("Workspace_Empty"),
+                FontSize = 13, Foreground = App.GetBrush("AppTextTertiaryBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 20, 0, 20),
+            });
+            return;
+        }
+        foreach (var w in ws)
+        {
+            var row = new Grid { ColumnSpacing = 10 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var icon = new Viewbox { Width = 22, Height = 22, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(w.IconKey)), Foreground = App.GetBrush("IconForegroundBrush") } };
+            Grid.SetColumn(icon, 0);
+            var nameText = new TextBlock { Text = w.Name, FontSize = 14, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(nameText, 1);
+
+            var editBtn = new Button
+            {
+                Width = 64, Height = 30,
+                Style = (Style)Application.Current.Resources["NovaraOutlineButtonStyle"],
+                CornerRadius = new CornerRadius(8),
+                VerticalAlignment = VerticalAlignment.Center,
+                Content = new TextBlock { Text = App.GetString("Workspace_EditShort"), FontSize = 13, Foreground = App.GetBrush("AppTextSecondaryBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            };
+            Grid.SetColumn(editBtn, 2);
+            var wid = w.Id;
+            editBtn.Click += (_, _) => OpenWorkspaceEditDialog(wid);
+
+            var delBtn = new Button
+            {
+                Width = 64, Height = 30,
+                Style = (Style)Resources["McpDangerButtonStyle"],
+                CornerRadius = new CornerRadius(8),
+                VerticalAlignment = VerticalAlignment.Center,
+                Content = new TextBlock { Text = App.GetString("Workspace_Delete"), FontSize = 13, Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            };
+            Grid.SetColumn(delBtn, 3);
+            delBtn.Click += (_, _) => { _pendingDeleteWorkspaceId = wid; _animWorkspaceDelete = false; ShowOverlay(WorkspaceDeleteOverlay, WorkspaceDeleteDialog, WorkspaceDeleteDialogTransform); }; // N2-11: re-arm guard
+
+            row.Children.Add(icon); row.Children.Add(nameText); row.Children.Add(editBtn); row.Children.Add(delBtn);
+            WorkspaceListPanel.Children.Add(new Border
+            {
+                Background = App.GetBrush("AppSurfaceOverlayBrush"),
+                BorderBrush = App.GetBrush("AppBorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(14, 10, 14, 10),
+                Child = row,
+            });
+        }
+    }
+
+    private void WorkspaceManageClose_Click(object sender, RoutedEventArgs e) => HideWorkspaceManage();
+    private void WorkspaceManageScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, WorkspaceManageScrim)) HideWorkspaceManage();
+    }
+    private void HideWorkspaceManage()
+    {
+        if (_animWorkspaceManage) return;
+        _animWorkspaceManage = true;
+        HideOverlay(WorkspaceManageOverlay, WorkspaceManageDialog, WorkspaceManageDialogTransform, () => _animWorkspaceManage = false);
+    }
+
+    private void WorkspaceNewButton_Click(object sender, RoutedEventArgs e) => OpenWorkspaceEditDialog(null);
+
+    private void OpenWorkspaceEditDialog(string? id)
+    {
+        _animWorkspaceEdit = false; // N2-11: show re-arms the hide guard
+        _editingWorkspaceId = id;
+        BuildWorkspaceIconSelector();
+        var ws = App.Store?.Database.AppSettings.Workspaces;
+        var w = id == null ? null : ws?.FirstOrDefault(x => x.Id == id);
+        WorkspaceEditTitle.Text = App.GetString(id == null ? "Workspace_New" : "Workspace_Edit");
+        WorkspaceNameTextBox.Text = w?.Name ?? "";
+        _workspaceSelectedIcon = w?.IconKey ?? "";
+        HighlightWorkspaceIcon();
+        UpdateWorkspaceEditConfirmState(); // N2-53: M5 parity - empty name disables confirm before the user types
+        ShowOverlay(WorkspaceEditOverlay, WorkspaceEditDialog, WorkspaceEditDialogTransform);
+    }
+
+    // N2-53: M5 parity - invalid content disables the confirm button (no more silent no-op click)
+    private void UpdateWorkspaceEditConfirmState()
+        => WorkspaceEditConfirmButton.IsEnabled = !string.IsNullOrEmpty(WorkspaceNameTextBox.Text.Trim());
+
+    private void BuildWorkspaceIconSelector()
+    {
+        if (WorkspaceIconPanel.Children.Count > 0) return; // already built
+        WorkspaceIconPanel.Children.Clear(); _workspaceIconBorders.Clear();
+        foreach (var key in IconData.GroupIconKeysInOrder())
+        {
+            var b = new Border
+            {
+                Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
+                Background = App.GetBrush("AppSurfaceOverlayBrush"),
+                Tag = key,
+                Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
+            };
+            b.Tapped += WorkspaceIcon_Tapped;
+            WorkspaceIconPanel.Children.Add(b);
+            _workspaceIconBorders.Add(b);
+        }
+    }
+
+    private void WorkspaceIcon_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is Border b)
+        {
+            _workspaceSelectedIcon = b.Tag?.ToString() ?? "";
+            HighlightWorkspaceIcon();
+            CenterWorkspaceIcon(b);
+        }
+    }
+
+    private void HighlightWorkspaceIcon()
+    {
+        foreach (var icon in _workspaceIconBorders)
+        {
+            bool sel = icon.Tag?.ToString() == _workspaceSelectedIcon;
+            icon.Background = sel ? App.GetBrush("AppSurfaceBrush") : App.GetBrush("AppSurfaceOverlayBrush");
+            icon.BorderBrush = sel ? App.GetBrush("AppTextTertiaryBrush") : null;
+            icon.BorderThickness = sel ? new Thickness(1) : new Thickness(0);
+        }
+    }
+
+    private void CenterWorkspaceIcon(Border targetIcon)
+    {
+        var position = targetIcon.TransformToVisual(WorkspaceIconPanel).TransformPoint(new Windows.Foundation.Point(0, 0));
+        double targetOffset = position.X - (WorkspaceIconScrollViewer.ViewportWidth / 2) + (targetIcon.ActualWidth / 2);
+        targetOffset = Math.Max(0, Math.Min(targetOffset, WorkspaceIconScrollViewer.ScrollableWidth));
+        WorkspaceIconScrollViewer.ChangeView(targetOffset, null, null, false);
+    }
+
+    private void WorkspaceEditClose_Click(object sender, RoutedEventArgs e) => HideWorkspaceEdit();
+    private void WorkspaceEditScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, WorkspaceEditScrim)) HideWorkspaceEdit();
+    }
+    private void WorkspaceEditCancel_Click(object sender, RoutedEventArgs e) => HideWorkspaceEdit();
+    private void HideWorkspaceEdit()
+    {
+        if (_animWorkspaceEdit) return;
+        _animWorkspaceEdit = true;
+        HideOverlay(WorkspaceEditOverlay, WorkspaceEditDialog, WorkspaceEditDialogTransform, () => _animWorkspaceEdit = false);
+    }
+
+    private void WorkspaceEditConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        var name = WorkspaceNameTextBox.Text.Trim();
+        if (string.IsNullOrEmpty(name)) return; 
+        var s = App.Store?.Database.AppSettings;
+        if (s == null) { HideWorkspaceEdit(); return; }
+
+        if (_editingWorkspaceId == null)
+        {
+            
+            var newWs = new Novara.Models.WorkspaceItem
+            {
+                Name = name,
+                IconKey = string.IsNullOrEmpty(_workspaceSelectedIcon) ? "Group01" : _workspaceSelectedIcon,
+            };
+            s.Workspaces.Add(newWs);
+            App.CurrentWorkspaceId = newWs.Id; 
+        }
+        else
+        {
+            
+            var w = s.Workspaces.FirstOrDefault(x => x.Id == _editingWorkspaceId);
+            if (w != null)
+            {
+                w.Name = name;
+                if (!string.IsNullOrEmpty(_workspaceSelectedIcon)) w.IconKey = _workspaceSelectedIcon;
+            }
+        }
+
+        _ = App.Store?.SaveAsync();
+        RenderWorkspaceList();
+        App.MainWindow?.UpdateWorkspaceSwitcher();
+        App.MainWindow?.RefreshWorkspaceFilters(); 
+        HideWorkspaceEdit();
+    }
+
+    private void WorkspaceDeleteClose_Click(object sender, RoutedEventArgs e) => HideWorkspaceDelete();
+    private void WorkspaceDeleteScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, WorkspaceDeleteScrim)) HideWorkspaceDelete();
+    }
+    private void WorkspaceDeleteCancel_Click(object sender, RoutedEventArgs e) => HideWorkspaceDelete();
+    private void HideWorkspaceDelete()
+    {
+        if (_animWorkspaceDelete) return;
+        _animWorkspaceDelete = true;
+        HideOverlay(WorkspaceDeleteOverlay, WorkspaceDeleteDialog, WorkspaceDeleteDialogTransform, () => _animWorkspaceDelete = false);
+    }
+
+    private void WorkspaceDeleteConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        var wid = _pendingDeleteWorkspaceId;
+        if (string.IsNullOrEmpty(wid)) { HideWorkspaceDelete(); return; }
+        var db = App.Store?.Database;
+        if (db == null) { HideWorkspaceDelete(); return; }
+
+        
+        db.AppSettings.Workspaces.RemoveAll(x => x.Id == wid);
+
+        
+        foreach (var en in db.MemoEntries) if (en.WorkspaceId == wid) en.WorkspaceId = "";
+        foreach (var en in db.PathBackupItems) if (en.WorkspaceId == wid) en.WorkspaceId = "";
+        foreach (var en in db.TodoCards) if (en.WorkspaceId == wid) en.WorkspaceId = "";
+        foreach (var en in db.NoteCards) if (en.WorkspaceId == wid) en.WorkspaceId = "";
+        foreach (var en in db.DiaryItems) if (en.WorkspaceId == wid) en.WorkspaceId = "";
+
+        
+        if (App.CurrentWorkspaceId == wid) App.CurrentWorkspaceId = "";
+
+        _ = App.Store?.SaveAsync();
+        RenderWorkspaceList();
+        App.MainWindow?.UpdateWorkspaceSwitcher();
+        App.MainWindow?.RefreshWorkspaceFilters();
+        HideWorkspaceDelete();
     }
 
     private void SyncLockButton_Click(object sender, RoutedEventArgs e)
@@ -1101,8 +1582,15 @@ private void ShowPrivacyLockWarningDialog()
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var accentBrush = App.GetBrush("AppTextPrimaryBrush");
         var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        
         var options = new (string Label, int Seconds)[] {
-            (App.GetString("Setting_AutoLock_Never"), 0), ("30s", 30), ("1min", 60), ("5min", 300), ("10min", 600), ("30min", 1800), ("60min", 3600)
+            (App.GetString("Setting_AutoLock_Never"), 0),
+            (string.Format(App.GetString("Setting_AutoLock_Seconds"), 30), 30),
+            (string.Format(App.GetString("Setting_AutoLock_Minutes"), 1), 60),
+            (string.Format(App.GetString("Setting_AutoLock_Minutes"), 5), 300),
+            (string.Format(App.GetString("Setting_AutoLock_Minutes"), 10), 600),
+            (string.Format(App.GetString("Setting_AutoLock_Minutes"), 30), 1800),
+            (string.Format(App.GetString("Setting_AutoLock_Minutes"), 60), 3600),
         };
         foreach (var opt in options)
         {
@@ -1125,7 +1613,11 @@ private void ShowPrivacyLockWarningDialog()
     }
 
     
-    private void ShowAutoLockSyncConfirmDialog() => ShowOverlay(AutoLockSyncConfirmOverlay, AutoLockSyncConfirmDialog, AutoLockSyncConfirmDialogTransform);
+    private void ShowAutoLockSyncConfirmDialog()
+    {
+        _animAutoLockSync = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(AutoLockSyncConfirmOverlay, AutoLockSyncConfirmDialog, AutoLockSyncConfirmDialogTransform);
+    }
     private void HideAutoLockSyncConfirmDialog()
     {
         if (_animAutoLockSync) return;
@@ -1184,7 +1676,7 @@ private void ShowPrivacyLockWarningDialog()
         if (enabled)
         {
             ShowWindowsHelloDialog();
-            _ = StartWinHelloEnableAsync();
+            _ = StartWinHelloEnableAsync().ContinueWith(t => System.Diagnostics.Debug.WriteLine($"WinHello enable failed: {t.Exception}"), System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted); 
             return;
         }
         WindowsHelloService.Disable();
@@ -1240,9 +1732,8 @@ private void ShowPrivacyLockWarningDialog()
 
     private void ShowWindowsHelloDialog()
     {
-        WindowsHelloDialogTransform.ScaleX = 0.92;
-        WindowsHelloDialogTransform.ScaleY = 0.92;
-        WindowsHelloDialogTransform.TranslateY = 20;
+        _animWinHello = false; // N2-11: show re-arms the hide guard (parity with EncExport/McpPerm)
+        WindowsHelloDialogTransform.ScaleX = 0.94; WindowsHelloDialogTransform.ScaleY = 0.94; WindowsHelloDialogTransform.TranslateY = 24;
         WindowsHelloDialog.Opacity = 0;
         WindowsHelloScrim.Opacity = 0;
         WindowsHelloOverlay.Visibility = Visibility.Visible;
@@ -1251,11 +1742,7 @@ private void ShowPrivacyLockWarningDialog()
         Storyboard.SetTarget(si, WindowsHelloScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, WindowsHelloDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, WindowsHelloDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, WindowsHelloDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -1268,11 +1755,7 @@ private void ShowPrivacyLockWarningDialog()
         Storyboard.SetTarget(so, WindowsHelloScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, WindowsHelloDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, WindowsHelloDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, WindowsHelloDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) =>
         {
             WindowsHelloOverlay.Visibility = Visibility.Collapsed;
@@ -1304,11 +1787,205 @@ private void ShowPrivacyLockWarningDialog()
         store.SaveAsync();
     }
 
+    
+
     private void ResetDataButton_Click(object sender, RoutedEventArgs e)
     {
-        ResetConfirmDialogTransform.ScaleX = 0.92;
-        ResetConfirmDialogTransform.ScaleY = 0.92;
-        ResetConfirmDialogTransform.TranslateY = 20;
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var dangerBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        MenuFlyoutItem MakeItem(string text, bool danger = false)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = danger ? dangerBrush : normalBrush };
+            return item;
+        }
+        var allItem = MakeItem(App.GetString("DataWipe_All"));
+        var memoItem = MakeItem(App.GetString("DataWipe_Memo"));
+        var pathItem = MakeItem(App.GetString("DataWipe_Path"));
+        var planItem = MakeItem(App.GetString("DataWipe_Plan"));
+        var diaryItem = MakeItem(App.GetString("DataWipe_Diary"));
+        allItem.Click += (_, _) => RunPrivacyGated(ShowResetConfirmDialogFlow);
+        memoItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("memo"));
+        pathItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("path"));
+        planItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("plan"));
+        diaryItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("diary"));
+        menu.Items.Add(allItem); menu.Items.Add(memoItem); menu.Items.Add(pathItem); menu.Items.Add(planItem); menu.Items.Add(diaryItem);
+        menu.ShowAt(ResetDataButton, new Windows.Foundation.Point(0, ResetDataButton.ActualHeight + 4));
+    }
+
+    private void ShowResetConfirmDialogFlow()
+    {
+        // legacy full-reset flow, now with the 30s cooldown (global hard-delete rule)
+        _resetConfirmBusy = false; // N4-35: show re-arms the click guard (M2 show-rearm pattern - the flag stays set through the hide animation)
+        ResetConfirmCd.Completed -= OnResetConfirmCdCompleted; 
+        ResetConfirmCd.Completed += OnResetConfirmCdCompleted;
+        ResetConfirmButton.IsEnabled = false;
+        ResetConfirmButton.Opacity = 0.45;
+        ShowResetConfirmDialog();
+        ResetConfirmCd.Start(30);
+    }
+
+    private void OnResetConfirmCdCompleted()
+    {
+        ResetConfirmCd.Completed -= OnResetConfirmCdCompleted;
+        ResetConfirmButton.IsEnabled = true;
+        ResetConfirmButton.Opacity = 1;
+    }
+
+    private int _pageWipePage = 0; // 0=memo 1=path 2=plan 3=diary
+
+    private static readonly string[] PageWipeNames = { "DataWipe_PageName_Memo", "DataWipe_PageName_Path", "DataWipe_PageName_Plan", "DataWipe_PageName_Diary" };
+
+    private void ShowPageWipeDialog(string pageKey)
+    {
+        _pageWipePage = pageKey switch { "path" => 1, "plan" => 2, "diary" => 3, _ => 0 };
+        var page = _pageWipePage;
+        var (titleKey, count) = page switch
+        {
+            0 => ("DataWipe_PageName_Memo", App.Store?.Database.MemoEntries.Count(x => !x.IsDeleted)),
+            1 => ("DataWipe_PageName_Path", App.Store?.Database.PathBackupItems.Count(x => !x.IsDeleted)),
+            2 => ("DataWipe_PageName_Plan", (App.Store?.Database.TodoCards.Count(x => !x.IsDeleted) ?? 0) + (App.Store?.Database.NoteCards.Count(x => !x.IsDeleted) ?? 0)),
+            _ => ("DataWipe_PageName_Diary", App.Store?.Database.DiaryItems.Count(x => !x.IsDeleted)),
+        };
+        PageWipeTitleText.Text = App.GetString(titleKey);
+        PageWipeMessageText.Text = string.Format(App.GetString("DataWipe_Stat"), App.GetString(titleKey), count ?? 0);
+        PageWipeSoftText.Text = App.GetString("DataWipe_Soft_Btn");
+        PageWipeHardText.Text = App.GetString("DataWipe_Hard_Btn");
+        _animPageWipe = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(PageWipeOverlay, PageWipeDialog, PageWipeDialogTransform);
+    }
+
+    private void HidePageWipeDialog()
+    {
+        
+        if (_animPageWipe) return;
+        _animPageWipe = true;
+        HideOverlay(PageWipeOverlay, PageWipeDialog, PageWipeDialogTransform, () => _animPageWipe = false);
+    }
+    private void PageWipeClose_Click(object sender, RoutedEventArgs e) => HidePageWipeDialog();
+    private void PageWipeScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, PageWipeScrim)) HidePageWipeDialog(); }
+
+    private void PageWipeSoftButton_Click(object sender, RoutedEventArgs e)
+    {
+        HidePageWipeDialog();
+        if (_pageWipePage == 0)
+            ShowPageGroupLossDialog(); // memo: groups are physically removed - extra confirmation (no cooldown, owner call)
+        else
+            PerformPageWipe(_pageWipePage, soft: true);
+    }
+
+    private void PageWipeHardButton_Click(object sender, RoutedEventArgs e)
+    {
+        HidePageWipeDialog();
+        PageWipeFinalTitleText.Text = App.GetString("DataWipe_Final_Title");
+        PageWipeFinalMessageText.Text = string.Format(App.GetString("DataWipe_Final_Desc"), App.GetString(PageWipeNames[_pageWipePage]));
+        PageWipeFinalCancelText.Text = App.GetString("Common_Button_Cancel");
+        PageWipeFinalOkText.Text = App.GetString("DataWipe_Hard_Btn");
+        PageWipeFinalCd.Completed -= OnPageWipeFinalCdCompleted; 
+        PageWipeFinalCd.Completed += OnPageWipeFinalCdCompleted;
+        PageWipeFinalOkButton.IsEnabled = false;
+        PageWipeFinalOkButton.Opacity = 0.45;
+        _animPageWipeFinal = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(PageWipeFinalOverlay, PageWipeFinalDialog, PageWipeFinalDialogTransform);
+        PageWipeFinalCd.Start(30);
+    }
+
+    private void OnPageWipeFinalCdCompleted()
+    {
+        PageWipeFinalCd.Completed -= OnPageWipeFinalCdCompleted;
+        PageWipeFinalOkButton.IsEnabled = true;
+        PageWipeFinalOkButton.Opacity = 1;
+    }
+
+    private void HidePageWipeFinalDialog()
+    {
+        if (_animPageWipeFinal) return;
+        _animPageWipeFinal = true;
+        PageWipeFinalCd.Reset();
+        HideOverlay(PageWipeFinalOverlay, PageWipeFinalDialog, PageWipeFinalDialogTransform, () => _animPageWipeFinal = false);
+    }
+    private void PageWipeFinalClose_Click(object sender, RoutedEventArgs e) => HidePageWipeFinalDialog();
+    private void PageWipeFinalCancel_Click(object sender, RoutedEventArgs e) => HidePageWipeFinalDialog();
+    private void PageWipeFinalScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, PageWipeFinalScrim)) HidePageWipeFinalDialog(); }
+    private void PageWipeFinalOk_Click(object sender, RoutedEventArgs e)
+    {
+        HidePageWipeFinalDialog();
+        PerformPageWipe(_pageWipePage, soft: false);
+    }
+
+    private void ShowPageGroupLossDialog()
+    {
+        PageGroupLossTitleText.Text = App.GetString("DataWipe_GroupLoss_Title");
+        PageGroupLossMessageText.Text = App.GetString("DataWipe_GroupLoss_Desc");
+        PageGroupLossCancelText.Text = App.GetString("Common_Button_Cancel");
+        PageGroupLossOkText.Text = App.GetString("Common_Button_Confirm");
+        _animPageGroupLoss = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(PageGroupLossOverlay, PageGroupLossDialog, PageGroupLossDialogTransform);
+    }
+    private void HidePageGroupLossDialog()
+    {
+        if (_animPageGroupLoss) return;
+        _animPageGroupLoss = true;
+        HideOverlay(PageGroupLossOverlay, PageGroupLossDialog, PageGroupLossDialogTransform, () => _animPageGroupLoss = false);
+    }
+    private void PageGroupLossClose_Click(object sender, RoutedEventArgs e) => HidePageGroupLossDialog();
+    private void PageGroupLossCancel_Click(object sender, RoutedEventArgs e) => HidePageGroupLossDialog();
+    private void PageGroupLossScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, PageGroupLossScrim)) HidePageGroupLossDialog(); }
+    private void PageGroupLossOk_Click(object sender, RoutedEventArgs e)
+    {
+        HidePageGroupLossDialog();
+        PerformPageWipe(0, soft: true);
+    }
+
+    /// <summary>Execute the page wipe. Soft: all live entities become recycled (memo groups are cleared unconditionally, matching the hard path - owner call).
+    /// Hard: physical removal - memo also drops its groups. Desktop stickies of the page are removed either way.</summary>
+    private void PerformPageWipe(int page, bool soft)
+    {
+        var store = App.Store; if (store == null) return;
+        var db = store.Database;
+        var now = DateTime.Now;
+        if (page == 0)
+        {
+            foreach (var x in db.MemoEntries.Where(x => !x.IsDeleted)) { if (soft) { x.IsDeleted = true; x.DeletedAt = now; } }
+            
+            db.MemoGroups.Clear();
+            if (!soft) db.MemoEntries.RemoveAll(x => true);
+        }
+        else if (page == 1)
+        {
+            foreach (var x in db.PathBackupItems.Where(x => !x.IsDeleted)) { if (soft) { x.IsDeleted = true; x.DeletedAt = now; } }
+            if (!soft) db.PathBackupItems.RemoveAll(x => true);
+        }
+        else if (page == 2)
+        {
+            foreach (var t in db.TodoCards.Where(x => !x.IsDeleted).ToList())
+            {
+                if (soft) { t.IsDeleted = true; t.DeletedAt = now; }
+                if (Services.StickySync.Contains(t.Id.ToString())) Services.StickySync.RemoveNote(t.Id.ToString());
+            }
+            foreach (var n in db.NoteCards.Where(x => !x.IsDeleted).ToList())
+            {
+                if (soft) { n.IsDeleted = true; n.DeletedAt = now; }
+                if (Services.StickySync.Contains(n.Id.ToString())) Services.StickySync.RemoveNote(n.Id.ToString());
+            }
+            if (!soft) { db.TodoCards.RemoveAll(x => true); db.NoteCards.RemoveAll(x => true); }
+        }
+        else
+        {
+            foreach (var x in db.DiaryItems.Where(x => !x.IsDeleted)) { if (soft) { x.IsDeleted = true; x.DeletedAt = now; } }
+            if (!soft) db.DiaryItems.RemoveAll(x => true);
+        }
+        _ = store.SaveAsync();
+        App.MainWindow?.ReloadPages();
+        App.ShowToast(App.GetString(soft ? "Common_Toast_Deleted" : "DataWipe_Done_Hard"));
+    }
+
+    private void ShowResetConfirmDialog()
+    {
+        ResetConfirmDialogTransform.ScaleX = 0.94; ResetConfirmDialogTransform.ScaleY = 0.94; ResetConfirmDialogTransform.TranslateY = 24;
         ResetConfirmDialog.Opacity = 0;
         ResetConfirmScrim.Opacity = 0;
         ResetConfirmOverlay.Visibility = Visibility.Visible;
@@ -1317,11 +1994,7 @@ private void ShowPrivacyLockWarningDialog()
         Storyboard.SetTarget(si, ResetConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ResetConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ResetConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ResetConfirmDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -1336,16 +2009,15 @@ private void ShowPrivacyLockWarningDialog()
     {
         if (_animResetConfirm) return; // D3 (Round 5): M2 hide re-entry guard
         _animResetConfirm = true;
+        ResetConfirmCd.Reset(); // 9.3: stop the cooldown frame - reopening starts a fresh 30s
+        ResetConfirmButton.IsEnabled = true;
+        ResetConfirmButton.Opacity = 1;
         var sb = new Storyboard();
         var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(so, ResetConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ResetConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ResetConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ResetConfirmDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ResetConfirmOverlay.Visibility = Visibility.Collapsed; _animResetConfirm = false; };
         sb.Begin();
     }
@@ -1367,11 +2039,11 @@ private void ShowPrivacyLockWarningDialog()
         _resetConfirmBusy = true;
 
         HideResetConfirmDialog();
-        if (App.Store is { IsEncrypted: true })
-            ShowResetPasswordDialog(); // password path re-arms via its own cancel/failure flow
-        else
-            PerformReset();
-        _resetConfirmBusy = false;
+        
+        // extra IsEncrypted check made users type it twice (page wipe verifies once via the same gate).
+        // N4-35: the busy flag is NOT reset here - a second click inside the 200-250ms hide window
+        // must stay blocked; ShowResetConfirmDialogFlow re-arms it on entry.
+        PerformReset();
     }
 
     private void PerformReset()
@@ -1402,9 +2074,7 @@ Logic Range: Below methods in this region
 private void ShowResetPasswordDialog()
     {
         ResetPasswordBox.Text = "";
-        ResetPasswordDialogTransform.ScaleX = 0.92;
-        ResetPasswordDialogTransform.ScaleY = 0.92;
-        ResetPasswordDialogTransform.TranslateY = 20;
+        ResetPasswordDialogTransform.ScaleX = 0.94; ResetPasswordDialogTransform.ScaleY = 0.94; ResetPasswordDialogTransform.TranslateY = 24;
         ResetPasswordDialog.Opacity = 0;
         ResetPasswordScrim.Opacity = 0;
         ResetPasswordOverlay.Visibility = Visibility.Visible;
@@ -1413,11 +2083,7 @@ private void ShowResetPasswordDialog()
         Storyboard.SetTarget(si, ResetPasswordScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ResetPasswordDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ResetPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ResetPasswordDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -1430,11 +2096,7 @@ private void ShowResetPasswordDialog()
         Storyboard.SetTarget(so, ResetPasswordScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ResetPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ResetPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ResetPasswordDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ResetPasswordOverlay.Visibility = Visibility.Collapsed; _animResetPwd = false; };
         sb.Begin();
     }
@@ -1552,6 +2214,7 @@ private void ShowResetPasswordDialog()
         tb.Background = orig;
         _flashOriginalBgs.Remove(tb);
         _flashCtsMap.Remove(tb);
+        cts.Dispose(); 
     }
 
 
@@ -1613,12 +2276,12 @@ private void ShowResetPasswordDialog()
         var csvExportItem = MakeItem(App.GetString("Setting_CsvExport"));
         var htmlExportItem = MakeItem(App.GetString("Setting_ExportHtml"));
         var pdfExportItem = MakeItem(App.GetString("Setting_ExportPdf"));
-        mdItem.Click += (_, _) => RunPrivacyGated(ShowExportMdNoticeDialog); // N4T-07(A)
+        mdItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(ShowExportMdNoticeDialog)); // N4T-07(A) + N2-13
         nativeExportItem.Click += (_, _) => ExportNativeFlow();
         encExportItem.Click += (_, _) => RunPrivacyGated(ShowEncExportDialog); // N4T-07(A): verify the lock password every time (4.6 - no session exemption)
-        csvExportItem.Click += (_, _) => RunPrivacyGated(ShowCsvExportNoticeDialog); // N4T-07(A)
-        htmlExportItem.Click += (_, _) => RunPrivacyGated(() => _ = ExportHtmlFlowAsync()); // N4T-07(A)
-        pdfExportItem.Click += (_, _) => RunPrivacyGated(() => _ = ExportPdfFlowAsync()); // N4T-07(A)
+        csvExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(ShowCsvExportNoticeDialog)); // N4T-07(A) + N2-13
+        htmlExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(() => _ = ExportHtmlFlowAsync())); // N4T-07(A) + N2-13
+        pdfExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(() => _ = ExportPdfFlowAsync())); // N4T-07(A) + N2-13
         exportSub.Items.Add(mdItem);
         exportSub.Items.Add(nativeExportItem);
         exportSub.Items.Add(encExportItem);
@@ -1631,6 +2294,47 @@ private void ShowResetPasswordDialog()
         menu.ShowAt(ImportExportButton, new Windows.Foundation.Point(0, ImportExportButton.ActualHeight + 4));
     }
 
+    private bool _animExportPlainWarn; // N2-13: plaintext-export warning dialog hide guard
+    private Action? _pendingPlainExportContinue; // N2-13: the export flow to run after the user acknowledges the warning
+
+    /// <summary>N2-13 (9.2#6 spec): every PLAINTEXT export path (native/CSV/MD/HTML/PDF) must pass
+    /// this warning first - the exported file carries all sensitive data unencrypted. The encrypted
+    /// .novaenc export does NOT warn (ciphertext). The confirmed action runs in the confirm click,
+    /// after the hide animation is merely started (per-overlay generation keeps the two overlays
+    /// independent - ImportConfirmContinue_Click is the same-shape precedent).</summary>
+    private void ShowPlainExportWarn(Action continueAction)
+    {
+        _animExportPlainWarn = false; // show re-arms the hide guard (N2-11 parity)
+        _pendingPlainExportContinue = continueAction;
+        ExportPlainWarnIcon.Data = App.CreateGeometry(IconData.Danger); // N2-13: warning triangle (red, matches title)
+        ExportPlainWarnTitle.Text = App.GetString("ExportPlain_WarnTitle");
+        ExportPlainWarnBody.Text = App.GetString("ExportPlain_WarnBody");
+        ExportPlainWarnCancelText.Text = App.GetString("Common_Button_Cancel");
+        ExportPlainWarnConfirmText.Text = App.GetString("ExportPlain_WarnConfirm");
+        ShowOverlay(ExportPlainWarnOverlay, ExportPlainWarnDialog, ExportPlainWarnDialogTransform);
+    }
+
+    private void HidePlainExportWarnDialog()
+    {
+        if (_animExportPlainWarn) return;
+        _animExportPlainWarn = true;
+        HideOverlay(ExportPlainWarnOverlay, ExportPlainWarnDialog, ExportPlainWarnDialogTransform, () => _animExportPlainWarn = false);
+    }
+
+    private void ExportPlainWarnConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        HidePlainExportWarnDialog();
+        _pendingPlainExportContinue?.Invoke();
+        _pendingPlainExportContinue = null;
+    }
+
+    private void ExportPlainWarnCancel_Click(object sender, RoutedEventArgs e) { _pendingPlainExportContinue = null; HidePlainExportWarnDialog(); }
+    private void ExportPlainWarnClose_Click(object sender, RoutedEventArgs e) { _pendingPlainExportContinue = null; HidePlainExportWarnDialog(); }
+    private void ExportPlainWarnScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, ExportPlainWarnScrim)) { _pendingPlainExportContinue = null; HidePlainExportWarnDialog(); }
+    }
+
     
     private void ExportNativeFlow()
     {
@@ -1641,7 +2345,7 @@ private void ShowResetPasswordDialog()
         }
         else
         {
-            ShowExportOptionsDialog();
+            ShowPlainExportWarn(ShowExportOptionsDialog); // N2-13: plaintext native export warns first
         }
     }
 
@@ -1669,6 +2373,7 @@ private void ShowResetPasswordDialog()
         var picker = new FileOpenPicker();
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
         picker.FileTypeFilter.Add(".novabak");
+        picker.FileTypeFilter.Add(".novaenc"); 
         var file = await picker.PickSingleFileAsync();
         return file?.Path;
     }
@@ -1750,6 +2455,16 @@ private void ShowResetPasswordDialog()
             _contextMenu = imported.ContextMenu ? "开启" : "关闭";
             UpdateAutoStartButton();
             UpdateContextMenuButton();
+            
+            
+            _isPrivacyLockEnabled = imported.PrivacyLockEnabled;
+            _backupEnabled = imported.BackupEnabled;
+            _statsEnabled = imported.StatsEnabled;
+            _welcomeOnLaunch = imported.WelcomeOnLaunch;
+            _currentTheme = string.IsNullOrEmpty(imported.Theme) ? "跟随系统" : imported.Theme;
+            _currentLanguage = imported.AppLanguage ?? "";
+            UpdatePrivacyLockUI();
+            AutoBackupService.SyncAutoBackupTimer(DispatcherQueue); // N2-12: the imported backup setting must take over the timer NOW - "on" without sync = silently dead, "off" without sync = the old timer keeps snapshotting until the next sync point
         }
         var theme = App.Store?.Database.AppSettings.Theme;
         var lang = App.Store?.Database.AppSettings.AppLanguage; // #37: sync CurrentLanguage on import
@@ -1783,9 +2498,7 @@ Logic Range: Below methods in this region
         _pendingVerifiedAction = null; // N5T1-02: a fresh dialog always starts clean - stale gated flows die here too
         ImportExportPasswordTitle.Text = title;
         ImportExportPasswordBox.Text = "";
-        ImportExportPasswordDialogTransform.ScaleX = 0.92;
-        ImportExportPasswordDialogTransform.ScaleY = 0.92;
-        ImportExportPasswordDialogTransform.TranslateY = 20;
+        ImportExportPasswordDialogTransform.ScaleX = 0.94; ImportExportPasswordDialogTransform.ScaleY = 0.94; ImportExportPasswordDialogTransform.TranslateY = 24;
         ImportExportPasswordDialog.Opacity = 0;
         ImportExportPasswordScrim.Opacity = 0;
         ImportExportPasswordOverlay.Visibility = Visibility.Visible;
@@ -1794,11 +2507,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(si, ImportExportPasswordScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ImportExportPasswordDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportExportPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ImportExportPasswordDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -1812,11 +2521,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(so, ImportExportPasswordScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ImportExportPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportExportPasswordDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ImportExportPasswordDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ImportExportPasswordOverlay.Visibility = Visibility.Collapsed; _animImportPwd = false; };
         sb.Begin();
     }
@@ -1831,9 +2536,7 @@ Logic Range: Below methods in this region
     private void ShowExportOptionsDialog()
     {
         ExportIncludePathsCheckBox.IsChecked = false;
-        ExportOptionsDialogTransform.ScaleX = 0.92;
-        ExportOptionsDialogTransform.ScaleY = 0.92;
-        ExportOptionsDialogTransform.TranslateY = 20;
+        ExportOptionsDialogTransform.ScaleX = 0.94; ExportOptionsDialogTransform.ScaleY = 0.94; ExportOptionsDialogTransform.TranslateY = 24;
         ExportOptionsDialog.Opacity = 0;
         ExportOptionsScrim.Opacity = 0;
         ExportOptionsOverlay.Visibility = Visibility.Visible;
@@ -1842,11 +2545,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(si, ExportOptionsScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ExportOptionsDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ExportOptionsDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ExportOptionsDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -1859,11 +2558,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(so, ExportOptionsScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ExportOptionsDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ExportOptionsDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ExportOptionsDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ExportOptionsOverlay.Visibility = Visibility.Collapsed; _animExportOptions = false; };
         sb.Begin();
     }
@@ -1891,6 +2586,10 @@ Logic Range: Below methods in this region
     }
 
     
+
+
+
+
 
     private void ShowEncExportDialog()
     {
@@ -2081,7 +2780,13 @@ Logic Range: Below methods in this region
 
     
 
-    private void ShowExportMdNoticeDialog() => ShowOverlay(ExportMdNoticeOverlay, ExportMdNoticeDialog, ExportMdNoticeDialogTransform);
+
+
+    private void ShowExportMdNoticeDialog()
+    {
+        _animExportMdNotice = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(ExportMdNoticeOverlay, ExportMdNoticeDialog, ExportMdNoticeDialogTransform);
+    }
     private void HideExportMdNoticeDialog()
     {
         if (_animExportMdNotice) return;
@@ -2112,7 +2817,7 @@ Logic Range: Below methods in this region
             var picker = new FileSavePicker();
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
             picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
-            picker.SuggestedFileName = $"Novara_汇总_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameSummary")}_{DateTime.Now:yyyyMMdd_HHmmss}"; // N3-45
             var file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
@@ -2124,6 +2829,9 @@ Logic Range: Below methods in this region
     }
 
     
+
+
+
     private async System.Threading.Tasks.Task ExportHtmlFlowAsync()
     {
         try
@@ -2131,7 +2839,7 @@ Logic Range: Below methods in this region
             var picker = new FileSavePicker();
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
             picker.FileTypeChoices.Add("HTML", new List<string> { ".html" });
-            picker.SuggestedFileName = $"Novara_记录合集_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}"; // N3-45
             var file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
@@ -2170,7 +2878,7 @@ Logic Range: Below methods in this region
         sb.AppendLine("<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src * data:;\">");
         sb.AppendLine("<meta charset=\"UTF-8\">");
         sb.AppendLine("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-        sb.AppendLine("<title>Novara 记录合集</title>");
+        sb.AppendLine($"<title>Novara {App.GetString("Setting_Export_FileNameCollection")}</title>"); // N3-45: localized collection title
         sb.AppendLine("<style>");
         sb.AppendLine("body{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.7;}");
         sb.AppendLine(".header{display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:2px solid #7276ff;margin-bottom:16px;}");
@@ -2192,12 +2900,12 @@ Logic Range: Below methods in this region
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
         var logoHtml = string.IsNullOrEmpty(logo) ? "<span class=\"logo\">N</span>" : logo;
-        sb.AppendLine("<div class=\"header\">" + logoHtml + "<div><div class=\"brand\">Novara</div><div class=\"tagline\">本地优先的个人知识管家</div></div></div>");
-        sb.AppendLine($"<p class=\"meta\">导出时间：{DateTime.Now:yyyy-MM-dd HH:mm}</p>");
+        sb.AppendLine("<div class=\"header\">" + logoHtml + "<div><div class=\"brand\">Novara</div><div class=\"tagline\">" + App.GetString("Export_Html_Tagline") + "</div></div></div>"); // N3-45: tagline localized
+        sb.AppendLine($"<p class=\"meta\">{string.Format(App.GetString("Export_ExportedAt"), DateTime.Now.ToString("yyyy-MM-dd HH:mm"))}</p>"); // N3-45
 
         foreach (var d in diaries)
         {
-            string title = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(d.Title) ? "（无标题）" : d.Title);
+            string title = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(d.Title) ? App.GetString("Export_Untitled") : d.Title); // N3-45: (Untitled) localized
             string meta = $"{App.GetString("Search_Created")} {d.CreatedAt:yyyy-MM-dd HH:mm} · {App.GetString("Search_Modified")} {d.ModifiedAt:yyyy-MM-dd HH:mm}";
             sb.AppendLine("<div class=\"entry\">");
             sb.AppendLine($"<div class=\"entry-title\">{title}</div>");
@@ -2213,13 +2921,15 @@ Logic Range: Below methods in this region
             sb.AppendLine("</div>");
         }
 
-        sb.AppendLine("<div class=\"footer\"><div class=\"slogan\">Novara · 本地优先 · 私密安心</div><div>官网：<a href=\"https://novara.xin\">novara.xin</a></div></div>");
+        sb.AppendLine($"<div class=\"footer\"><div class=\"slogan\">{App.GetString("Export_Html_Slogan")}</div><div>{App.GetString("Export_Website")}<a href=\"https://novara.xin\">novara.xin</a></div></div>"); // N3-45: slogan/website label localized
         sb.AppendLine("</body>");
         sb.AppendLine("</html>");
         return sb.ToString();
     }
 
     
+
+
     private async System.Threading.Tasks.Task ExportPdfFlowAsync()
     {
         try
@@ -2227,7 +2937,7 @@ Logic Range: Below methods in this region
             var picker = new FileSavePicker();
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
             picker.FileTypeChoices.Add("PDF", new List<string> { ".pdf" });
-            picker.SuggestedFileName = $"Novara_记录合集_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}"; // N3-45
             var file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
@@ -2295,21 +3005,21 @@ Logic Range: Below methods in this region
         var db = App.Store?.Database;
         if (db == null) return "";
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("# Novara 数据汇总");
+        sb.AppendLine($"# {App.GetString("Export_Summary_Title")}"); // N3-45: summary heading localized (mixed policy - template text localized, body data untouched)
         sb.AppendLine();
-        sb.AppendLine($"> 导出时间：{DateTime.Now:yyyy-MM-dd HH:mm}");
+        sb.AppendLine($"> {string.Format(App.GetString("Export_ExportedAt"), DateTime.Now.ToString("yyyy-MM-dd HH:mm"))}"); // N3-45
         sb.AppendLine();
 
         
         var entries = db.MemoEntries.Where(x => !x.IsDeleted).ToList();
         var groups = db.MemoGroups.ToList();
-        sb.AppendLine("## 备忘");
+        sb.AppendLine($"## {App.GetString("Export_Section_Memo")}"); // N3-45
         sb.AppendLine();
         foreach (var g in groups)
         {
             sb.AppendLine($"### 📁 {g.Name}");
             var inGroup = entries.Where(e => e.GroupId == g.Id).ToList();
-            if (inGroup.Count == 0) { sb.AppendLine("（空）"); sb.AppendLine(); continue; }
+            if (inGroup.Count == 0) { sb.AppendLine(App.GetString("Export_Empty")); sb.AppendLine(); continue; } // N3-45
             foreach (var e in inGroup)
             {
                 sb.AppendLine($"- **{e.Name}**");
@@ -2322,7 +3032,7 @@ Logic Range: Below methods in this region
         var uncategorized = entries.Where(e => !e.GroupId.HasValue).ToList();
         if (uncategorized.Count > 0)
         {
-            sb.AppendLine("### 📁 未分类");
+            sb.AppendLine($"### 📁 {App.GetString("Export_Section_Uncategorized")}"); // N3-45
             foreach (var e in uncategorized)
             {
                 sb.AppendLine($"- **{e.Name}**");
@@ -2337,13 +3047,13 @@ Logic Range: Below methods in this region
         var paths = db.PathBackupItems.Where(x => !x.IsDeleted).ToList();
         if (paths.Count > 0)
         {
-            sb.AppendLine("## 路径备份");
+            sb.AppendLine($"## {App.GetString("Export_Section_Path")}"); // N3-45
             sb.AppendLine();
             foreach (var p in paths)
             {
                 sb.AppendLine($"- **{p.Name}**");
-                sb.AppendLine($"  - 路径：{p.Path}");
-                if (!string.IsNullOrWhiteSpace(p.Note)) sb.AppendLine($"  - 备注：{p.Note}");
+                sb.AppendLine($"  - {App.GetString("Export_Label_Path")}{p.Path}"); // N3-45
+                if (!string.IsNullOrWhiteSpace(p.Note)) sb.AppendLine($"  - {App.GetString("Export_Label_Note")}{p.Note}"); // N3-45
             }
             sb.AppendLine();
         }
@@ -2353,11 +3063,11 @@ Logic Range: Below methods in this region
         var notes = db.NoteCards.Where(x => !x.IsDeleted).ToList();
         if (todos.Count > 0 || notes.Count > 0)
         {
-            sb.AppendLine("## 计划");
+            sb.AppendLine($"## {App.GetString("Export_Section_Plan")}"); // N3-45
             sb.AppendLine();
             if (todos.Count > 0)
             {
-                sb.AppendLine("### 待办");
+                sb.AppendLine($"### {App.GetString("Export_Section_Todo")}"); // N3-45
                 foreach (var t in todos)
                 {
                     sb.AppendLine($"- **{t.Title}**");
@@ -2376,7 +3086,7 @@ Logic Range: Below methods in this region
             }
             if (notes.Count > 0)
             {
-                sb.AppendLine("### 便签");
+                sb.AppendLine($"### {App.GetString("Export_Section_Note")}"); // N3-45
                 foreach (var n in notes)
                 {
                     sb.AppendLine($"- **{n.Title}**");
@@ -2390,7 +3100,7 @@ Logic Range: Below methods in this region
         var diaries = db.DiaryItems.Where(x => !x.IsDeleted).ToList();
         if (diaries.Count > 0)
         {
-            sb.AppendLine("## 日记");
+            sb.AppendLine($"## {App.GetString("Export_Section_Diary")}"); // N3-45
             sb.AppendLine();
             foreach (var d in diaries)
             {
@@ -2454,15 +3164,13 @@ Logic Range: Below methods in this region
         bool export = _pendingExport;
         _pendingExport = false;
         HideImportExportPasswordDialog();
-        if (export) ShowExportOptionsDialog();
+        if (export) ShowPlainExportWarn(ShowExportOptionsDialog); // N4-33: the encrypted branch of ExportNativeFlow skipped the N2-13 warning - a .novabak file is plaintext regardless of the library's encryption state (same dialog the unencrypted branch shows)
         else _ = ImportAfterPasswordAsync(null); // E5-28: pre-picked-path flow removed - the file is picked after the password verify (ImportAfterPasswordAsync re-picks when null)
     }
 
     private void ShowImportConfirmDialog()
     {
-        ImportConfirmDialogTransform.ScaleX = 0.92;
-        ImportConfirmDialogTransform.ScaleY = 0.92;
-        ImportConfirmDialogTransform.TranslateY = 20;
+        ImportConfirmDialogTransform.ScaleX = 0.94; ImportConfirmDialogTransform.ScaleY = 0.94; ImportConfirmDialogTransform.TranslateY = 24;
         ImportConfirmDialog.Opacity = 0;
         ImportConfirmScrim.Opacity = 0;
         ImportConfirmOverlay.Visibility = Visibility.Visible;
@@ -2471,11 +3179,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(si, ImportConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ImportConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ImportConfirmDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -2488,11 +3192,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(so, ImportConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ImportConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportConfirmDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ImportConfirmDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ImportConfirmOverlay.Visibility = Visibility.Collapsed; _animImportConfirm = false; };
         sb.Begin();
     }
@@ -2508,9 +3208,7 @@ Logic Range: Below methods in this region
     {
         ImportResultTitle.Text = title;
         ImportResultMessage.Text = message;
-        ImportResultDialogTransform.ScaleX = 0.92;
-        ImportResultDialogTransform.ScaleY = 0.92;
-        ImportResultDialogTransform.TranslateY = 20;
+        ImportResultDialogTransform.ScaleX = 0.94; ImportResultDialogTransform.ScaleY = 0.94; ImportResultDialogTransform.TranslateY = 24;
         var scrim = FindOverlayScrim(ImportResultOverlay);
         if (scrim != null) scrim.Opacity = 0; // ND3
         ImportResultDialog.Opacity = 0;
@@ -2523,11 +3221,7 @@ Logic Range: Below methods in this region
         }
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ImportResultDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportResultDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, ImportResultDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -2544,11 +3238,7 @@ Logic Range: Below methods in this region
         }
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ImportResultDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, ImportResultDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, ImportResultDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { ImportResultOverlay.Visibility = Visibility.Collapsed; _animImportResult = false; };
         sb.Begin();
     }
@@ -2586,9 +3276,7 @@ Logic Range: Below methods in this region
             CsvImportPreviewConfirmBtn.HorizontalAlignment = HorizontalAlignment.Right;
         }
 
-        CsvImportPreviewDialogTransform.ScaleX = 0.92;
-        CsvImportPreviewDialogTransform.ScaleY = 0.92;
-        CsvImportPreviewDialogTransform.TranslateY = 20;
+        CsvImportPreviewDialogTransform.ScaleX = 0.94; CsvImportPreviewDialogTransform.ScaleY = 0.94; CsvImportPreviewDialogTransform.TranslateY = 24;
         CsvImportPreviewDialog.Opacity = 0;
         CsvImportPreviewScrim.Opacity = 0;
         CsvImportPreviewOverlay.Visibility = Visibility.Visible;
@@ -2597,11 +3285,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(si, CsvImportPreviewScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, CsvImportPreviewDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, CsvImportPreviewDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, CsvImportPreviewDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -2614,11 +3298,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(so, CsvImportPreviewScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, CsvImportPreviewDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, CsvImportPreviewDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, CsvImportPreviewDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { CsvImportPreviewOverlay.Visibility = Visibility.Collapsed; _animCsvPreview = false; };
         sb.Begin();
     }
@@ -2661,7 +3341,7 @@ Logic Range: Below methods in this region
         {
             CsvImportPreviewList.Children.Add(new TextBlock
             {
-                Text = $"  {entry.Type}  {entry.Name}",
+                Text = $"  {CsvTypeLabel(entry.Type)}  {entry.Name}",
                 FontSize = 13,
                 Foreground = App.GetBrush("AppTextSecondaryBrush"),
                 Margin = new Thickness(0, 0, 0, 6),
@@ -2670,7 +3350,7 @@ Logic Range: Below methods in this region
             });
         }
         if (result.Entries.Count == 0)
-            CsvImportPreviewList.Children.Add(new TextBlock { Text = "（无有效条目）", FontSize = 13, Foreground = App.GetBrush("AppTextTertiaryBrush") });
+            CsvImportPreviewList.Children.Add(new TextBlock { Text = App.GetString("Setting_CsvImport_EmptyPreview"), FontSize = 13, Foreground = App.GetBrush("AppTextTertiaryBrush") });
         var baseInfo = result.IsNovaraFormat
             ? string.Format(App.GetString("Setting_CsvImport_NovaraInfo"), result.Entries.Count)
             : App.GetString("Setting_CsvImport_UnknownInfo");
@@ -2735,6 +3415,7 @@ Logic Range: Below methods in this region
             if (entry.Type == "自定义" && string.IsNullOrEmpty(entry.IconKey))
                 entry.IconKey = GetRandomIconKey();
             entry.GroupId = ResolveGroupId(finalResult.GroupNames.Count > i ? finalResult.GroupNames[i] : null);
+            entry.WorkspaceId = App.CurrentWorkspaceId; 
             db.MemoEntries.Add(entry);
         }
         App.Store?.SaveAsync();
@@ -2822,9 +3503,7 @@ Logic Range: Below methods in this region
         CsvExportNoticeCancelText.Text = App.GetString("Common_Button_Cancel");
         CsvExportNoticeConfirmText.Text = App.GetString("Setting_Archive_Export");
 
-        CsvExportNoticeDialogTransform.ScaleX = 0.92;
-        CsvExportNoticeDialogTransform.ScaleY = 0.92;
-        CsvExportNoticeDialogTransform.TranslateY = 20;
+        CsvExportNoticeDialogTransform.ScaleX = 0.94; CsvExportNoticeDialogTransform.ScaleY = 0.94; CsvExportNoticeDialogTransform.TranslateY = 24;
         CsvExportNoticeDialog.Opacity = 0;
         CsvExportNoticeScrim.Opacity = 0;
         CsvExportNoticeOverlay.Visibility = Visibility.Visible;
@@ -2833,11 +3512,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(si, CsvExportNoticeScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, CsvExportNoticeDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, CsvExportNoticeDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, CsvExportNoticeDialogTransform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
@@ -2850,11 +3525,7 @@ Logic Range: Below methods in this region
         Storyboard.SetTarget(so, CsvExportNoticeScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, CsvExportNoticeDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, CsvExportNoticeDialogTransform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogHideTransform(sb, CsvExportNoticeDialogTransform); // M1: EmphasizedAccelerate (Motion)
         sb.Completed += (_, _) => { CsvExportNoticeOverlay.Visibility = Visibility.Collapsed; _animCsvExportNotice = false; };
         sb.Begin();
     }
@@ -2895,6 +3566,9 @@ Logic Range: Below methods in this region
     }
 
     
+
+
+
 
     private void InitBackupFreqCombo()
     {
@@ -3108,8 +3782,9 @@ Logic Range: Below methods in this region
 
     private void ShowOverlay(Grid overlay, Border dialog, CompositeTransform transform)
     {
+        _overlayAnimGens[overlay] = System.Collections.Generic.CollectionExtensions.GetValueOrDefault(_overlayAnimGens, overlay) + 1; 
         var scrim = FindOverlayScrim(overlay);
-        transform.ScaleX = 0.92; transform.ScaleY = 0.92; transform.TranslateY = 20;
+        transform.ScaleX = 0.94; transform.ScaleY = 0.94; transform.TranslateY = 24;
         if (scrim != null) scrim.Opacity = 0; // ND3: scrims are #2E000000 now - without a fade they hard-cut dark while ChromeScrim stays off
         dialog.Opacity = 0;
         overlay.Visibility = Visibility.Visible;
@@ -3121,16 +3796,13 @@ Logic Range: Below methods in this region
         }
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, dialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
-        {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, transform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
+        Motion.AddDialogShowTransform(sb, transform); // M1: EmphasizedDecelerate (Motion)
         sb.Begin();
     }
 
     private void HideOverlay(Grid overlay, Border dialog, CompositeTransform transform, Action onCompleted)
     {
+        var gen = System.Collections.Generic.CollectionExtensions.GetValueOrDefault(_overlayAnimGens, overlay); // N2-05: capture THIS overlay's generation - an in-flight re-Show of the SAME dialog invalidates it; sibling dialog Shows no longer do
         var scrim = FindOverlayScrim(overlay);
         var sb = new Storyboard();
         if (scrim != null)
@@ -3140,17 +3812,23 @@ Logic Range: Below methods in this region
         }
         var di = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(di, dialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        foreach (var (v, p) in new[] { (0.92, "ScaleX"), (0.92, "ScaleY"), (20.0, "TranslateY") })
+        Motion.AddDialogHideTransform(sb, transform); // M1: EmphasizedAccelerate (Motion)
+        sb.Completed += (_, _) =>
         {
-            var a = new DoubleAnimation { To = v, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            Storyboard.SetTarget(a, transform); Storyboard.SetTargetProperty(a, p); sb.Children.Add(a);
-        }
-        sb.Completed += (_, _) => { overlay.Visibility = Visibility.Collapsed; onCompleted(); };
+            
+            
+            if (gen == System.Collections.Generic.CollectionExtensions.GetValueOrDefault(_overlayAnimGens, overlay)) overlay.Visibility = Visibility.Collapsed;
+            onCompleted();
+        };
         sb.Begin();
     }
 
     
-    private void ShowBackupIntroDialog() => ShowOverlay(BackupIntroOverlay, BackupIntroDialog, BackupIntroDialogTransform);
+    private void ShowBackupIntroDialog()
+    {
+        _animBackupIntro = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(BackupIntroOverlay, BackupIntroDialog, BackupIntroDialogTransform);
+    }
     private void HideBackupIntroDialog()
     {
         if (_animBackupIntro) return;
@@ -3163,7 +3841,11 @@ Logic Range: Below methods in this region
     { if (ReferenceEquals(e.OriginalSource, BackupIntroScrim)) HideBackupIntroDialog(); }
 
     
-    private void ShowBackupNowDialog() => ShowOverlay(BackupNowOverlay, BackupNowDialog, BackupNowDialogTransform);
+    private void ShowBackupNowDialog()
+    {
+        _animBackupNow = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(BackupNowOverlay, BackupNowDialog, BackupNowDialogTransform);
+    }
     private void HideBackupNowDialog()
     {
         if (_animBackupNow) return;
@@ -3189,6 +3871,7 @@ Logic Range: Below methods in this region
 
     private void ShowBackupAutoDialog()
     {
+        _animBackupAuto = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         _draftAutoBackup = _autoBackupEnabled;
         _draftBackupFreq = _backupFreqIndex;
         UpdateBackupAutoModeButton();
@@ -3227,6 +3910,7 @@ Logic Range: Below methods in this region
     
     private void ShowBackupRestoreDialog()
     {
+        _animBackupRestore = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         BuildBackupList(BackupRestoreList, singleSelect: true);
         ShowOverlay(BackupRestoreOverlay, BackupRestoreDialog, BackupRestoreDialogTransform);
     }
@@ -3251,7 +3935,11 @@ Logic Range: Below methods in this region
     { if (ReferenceEquals(e.OriginalSource, BackupRestoreScrim)) HideBackupRestoreDialog(); }
 
     
-    private void ShowBackupRestoreConfirmDialog() => ShowOverlay(BackupRestoreConfirmOverlay, BackupRestoreConfirmDialog, BackupRestoreConfirmDialogTransform);
+    private void ShowBackupRestoreConfirmDialog()
+    {
+        _animBackupRestoreConfirm = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(BackupRestoreConfirmOverlay, BackupRestoreConfirmDialog, BackupRestoreConfirmDialogTransform);
+    }
     private void HideBackupRestoreConfirmDialog()
     {
         if (_animBackupRestoreConfirm) return;
@@ -3275,6 +3963,7 @@ Logic Range: Below methods in this region
         }
         else
         {
+            _pendingRestoreSnapshot = null; 
             App.ShowToast(App.GetString("Store_Err_IoFail"));
         }
     }
@@ -3286,6 +3975,7 @@ Logic Range: Below methods in this region
     
     private void ShowBackupDeleteDialog()
     {
+        _animBackupDelete = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         BuildBackupList(BackupDeleteList, singleSelect: false);
         ShowOverlay(BackupDeleteOverlay, BackupDeleteDialog, BackupDeleteDialogTransform);
     }
@@ -3317,6 +4007,7 @@ Logic Range: Below methods in this region
     
     private void ShowBackupDeleteConfirmDialog()
     {
+        _animBackupDeleteConfirm = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         BackupDeleteConfirmTipText.Text = _pendingDeleteIsClearAll
             ? App.GetString("Setting_Backup_ClearAllConfirm_Tip")
             : App.GetString("Setting_Backup_DeleteConfirm_Tip");
@@ -3350,7 +4041,7 @@ Logic Range: Below methods in this region
     { if (ReferenceEquals(e.OriginalSource, BackupDeleteConfirmScrim)) HideBackupDeleteConfirmDialog(); }
 
     
-    private void ShowBackupRestartDialog() => ShowOverlay(BackupRestartOverlay, BackupRestartDialog, BackupRestartDialogTransform);
+    private void ShowBackupRestartDialog() => ShowOverlay(BackupRestartOverlay, BackupRestartDialog, BackupRestartDialogTransform); // no hide guard - forced restart, single exit (Ok)
     private void BackupRestartOk_Click(object sender, RoutedEventArgs e)
     {
         RestartApp(rollbackOnFail: true);
@@ -3497,6 +4188,9 @@ Logic Range: Below methods in this region
     }
 
     
+
+
+
 
     private void StatsToggleButton_Click(object sender, RoutedEventArgs e)
     {
@@ -3658,7 +4352,8 @@ Logic Range: Below methods in this region
             : App.GetString("Setting_Stats_None");
         string integrityValue;
         bool integrityWarn;
-        switch (Services.DatabaseHealth.VerifyDataFile(Services.NovaraStore.DefaultFilePath))
+        var integrity = Services.DatabaseHealth.VerifyDataFile(Services.NovaraStore.DefaultFilePath); 
+        switch (integrity)
         {
             case Novara.Services.DataFileIntegrity.DigestVerified:
                 integrityValue = "✓"; integrityWarn = false; break;
@@ -3889,9 +4584,12 @@ Logic Range: Below methods in this region
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "NovaraMCP.exe");
         if (File.Exists(sideBySide)) return sideBySide;
         
+        
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
-            var candidate = Path.Combine(dir, "NovaraMCP", "bin", "Debug", "net8.0", "win-x64", "NovaraMCP.exe");
+            var candidate = Path.Combine(dir, "NovaraMCP", "bin", "x64", "Debug", "net8.0", "win-x64", "NovaraMCP.exe");
+            if (File.Exists(candidate)) return candidate;
+            candidate = Path.Combine(dir, "NovaraMCP", "bin", "Debug", "net8.0", "win-x64", "NovaraMCP.exe");
             if (File.Exists(candidate)) return candidate;
             var parent = Directory.GetParent(dir)?.FullName;
             if (string.IsNullOrEmpty(parent) || parent == dir) break;
@@ -3904,8 +4602,10 @@ Logic Range: Below methods in this region
     {
         var dp = new DataPackage();
         dp.SetText(text);
-        try { Clipboard.SetContent(dp); } catch { }
-        App.ShowToast(App.GetString("Common_Toast_Copied"));
+        // N4-12: report the real outcome (N3-14 pattern) - a locked clipboard must not toast "copied";
+        // both callers copy the MCP JSON config containing the 32B token
+        try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); }
+        catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); }
     }
 
     private void BuildMcpAuthorizedList()
@@ -3989,7 +4689,11 @@ Logic Range: Below methods in this region
     }
 
     
-    private void ShowMcpRevokeConfirmDialog() => ShowOverlay(McpRevokeConfirmOverlay, McpRevokeConfirmDialog, McpRevokeConfirmDialogTransform);
+    private void ShowMcpRevokeConfirmDialog()
+    {
+        _animMcpRevokeConfirm = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpRevokeConfirmOverlay, McpRevokeConfirmDialog, McpRevokeConfirmDialogTransform);
+    }
     private void HideMcpRevokeConfirmDialog()
     {
         if (_animMcpRevokeConfirm) return;
@@ -4043,9 +4747,8 @@ Logic Range: Below methods in this region
         McpPermSaveText.Text = App.GetString("Common_Button_Confirm");
         McpPermDeleteHint.Text = App.GetString("Setting_Mcp_Perm_DeleteLocked");
         _mcpPermDeleteGateOff = !(App.Store?.Database.AppSettings.McpDeleteEnabled ?? false); // gate state must precede SetMatrix (filter) and ApplyDeleteGate (UI)
-        var bits = (McpPerm)Convert.ToInt64(App.Store?.Database.AppSettings.McpClientPermissions
-            .FirstOrDefault(r => r.Path == clientPath)?.Permissions ?? 0L);
-        SetMatrix(bits);
+        var bits = McpService.ReadClientPermissions(clientPath); // N2-21: read under WhitelistGate
+        SetMatrix(bits, filterDelete: false); 
         ApplyDeleteGate(!_mcpPermDeleteGateOff);
         UpdateMcpPermToggleAll(); // left button label tracks the loaded state
         _animMcpPerm = false; // M2: show entry resets the hide guard
@@ -4062,13 +4765,15 @@ Logic Range: Below methods in this region
         McpPermDeleteHint.Visibility = masterOn ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void SetMatrix(McpPerm bits)
+    private void SetMatrix(McpPerm bits, bool filterDelete = true)
     {
         // 9.2#5 gate: with the delete master switch off, delete bits must never land in the matrix -
         // through ANY path. The owner caught it: IsEnabled=false only blocks clicks, but the
         // toggle-all button assigns IsChecked in code and would still flip the five disabled boxes,
         // letting delete grants be saved past the gate. Filter at the single write choke point.
-        if (_mcpPermDeleteGateOff) bits &= ~AllDeleteBits;
+        
+        
+        if (filterDelete && _mcpPermDeleteGateOff) bits &= ~AllDeleteBits;
         McpPermChkMemoRead.IsChecked = bits.HasFlag(McpPerm.MemoRead);
         McpPermChkMemoCreate.IsChecked = bits.HasFlag(McpPerm.MemoCreate);
         McpPermChkMemoUpdate.IsChecked = bits.HasFlag(McpPerm.MemoUpdate);
@@ -4127,7 +4832,8 @@ Logic Range: Below methods in this region
 
     private void McpPermToggleAll_Click(object sender, RoutedEventArgs e)
     {
-        SetMatrix(ReadMatrix() == McpPerm.None ? McpPermissions.LegacyFull : McpPerm.None);
+        
+        SetMatrix(ReadMatrix() == McpPerm.None ? McpPermissions.LegacyFull : McpPerm.None, filterDelete: false);
         UpdateMcpPermToggleAll();
     }
 
@@ -4138,9 +4844,7 @@ Logic Range: Below methods in this region
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) { HideMcpPermDialog(); return; }
         var bits = ReadMatrix();
-        var rec = settings.McpClientPermissions.FirstOrDefault(r => r.Path == path);
-        if (rec != null) rec.Permissions = (long)bits;
-        else settings.McpClientPermissions.Add(new Novara.Models.McpClientPermRecord { Path = path, Permissions = (long)bits });
+        McpService.SaveClientPermissions(path, bits); // N2-21: write under WhitelistGate
         PersistSetting(_ => { }); // empty mutate - the record above is already in place, this just persists
         BuildMcpAuthorizedList();
         HideMcpPermDialog();
@@ -4273,7 +4977,11 @@ Logic Range: Below methods in this region
         return row;
     }
 
-    private void ShowMcpAuditDialog() => ShowOverlay(McpAuditOverlay, McpAuditDialog, McpAuditDialogTransform);
+    private void ShowMcpAuditDialog()
+    {
+        _animMcpAudit = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpAuditOverlay, McpAuditDialog, McpAuditDialogTransform);
+    }
     private void HideMcpAuditDialog()
     {
         if (_animMcpAudit) return;
@@ -4288,7 +4996,11 @@ Logic Range: Below methods in this region
     private void McpAuditClear_Click(object sender, RoutedEventArgs e) => ShowMcpAuditClearConfirmDialog();
 
     
-    private void ShowMcpAuditClearConfirmDialog() => ShowOverlay(McpAuditClearConfirmOverlay, McpAuditClearConfirmDialog, McpAuditClearConfirmDialogTransform);
+    private void ShowMcpAuditClearConfirmDialog()
+    {
+        _animMcpAuditClear = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpAuditClearConfirmOverlay, McpAuditClearConfirmDialog, McpAuditClearConfirmDialogTransform);
+    }
     private void HideMcpAuditClearConfirmDialog()
     {
         if (_animMcpAuditClear) return;
@@ -4308,7 +5020,11 @@ Logic Range: Below methods in this region
 
     
 
-    private void ShowMcpConfigDialog() => ShowOverlay(McpConfigOverlay, McpConfigDialog, McpConfigDialogTransform);
+    private void ShowMcpConfigDialog()
+    {
+        _animMcpConfig = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpConfigOverlay, McpConfigDialog, McpConfigDialogTransform);
+    }
     private void HideMcpConfigDialog()
     {
         if (_animMcpConfig) return;
@@ -4322,7 +5038,11 @@ Logic Range: Below methods in this region
     private void McpResetButton_Click(object sender, RoutedEventArgs e) => ShowMcpResetConfirmDialog();
 
     
-    private void ShowMcpResetConfirmDialog() => ShowOverlay(McpResetConfirmOverlay, McpResetConfirmDialog, McpResetConfirmDialogTransform);
+    private void ShowMcpResetConfirmDialog()
+    {
+        _animMcpResetConfirm = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpResetConfirmOverlay, McpResetConfirmDialog, McpResetConfirmDialogTransform);
+    }
     private void HideMcpResetConfirmDialog()
     {
         if (_animMcpResetConfirm) return;
@@ -4347,7 +5067,11 @@ Logic Range: Below methods in this region
 
     
     private void McpCopyButton_Click(object sender, RoutedEventArgs e) => ShowMcpCopyDialog();
-    private void ShowMcpCopyDialog() => ShowOverlay(McpCopyOverlay, McpCopyDialog, McpCopyDialogTransform);
+    private void ShowMcpCopyDialog()
+    {
+        _animMcpCopy = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpCopyOverlay, McpCopyDialog, McpCopyDialogTransform);
+    }
     private void HideMcpCopyDialog()
     {
         if (_animMcpCopy) return;
@@ -4410,6 +5134,7 @@ Logic Range: Below methods in this region
     private void UpdateMcpDeletePermissionButton(bool on)
     {
         
+        
         McpDeletePermissionButton.Style = on
             ? (Style)Resources["McpDangerButtonStyle"]
             : (Style)Application.Current.Resources["NovaraOutlineButtonStyle"];
@@ -4422,7 +5147,11 @@ Logic Range: Below methods in this region
         McpDeletePermissionText.Text = App.GetString(on ? "Setting_Autostart_On" : "Setting_Autostart_Off");
     }
 
-    private void ShowMcpDeleteConfirmDialog() => ShowOverlay(McpDeleteConfirmOverlay, McpDeleteConfirmDialog, McpDeleteConfirmDialogTransform);
+    private void ShowMcpDeleteConfirmDialog()
+    {
+        _animMcpDeleteConfirm = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
+        ShowOverlay(McpDeleteConfirmOverlay, McpDeleteConfirmDialog, McpDeleteConfirmDialogTransform);
+    }
     private void HideMcpDeleteConfirmDialog()
     {
         if (_animMcpDeleteConfirm) return;

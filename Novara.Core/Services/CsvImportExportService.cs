@@ -1,4 +1,7 @@
 
+
+
+
 using System.Text;
 using Novara.Models;
 
@@ -117,7 +120,14 @@ public static class CsvImportExportService
         if (string.IsNullOrEmpty(value)) return "";
         // NC7 (OWASP CSV injection): a leading =+-@ would execute as a formula when the export is
         // opened in Excel/WPS. Prefix a single quote - spreadsheets treat it as text and hide it.
-        if (value[0] is '=' or '+' or '-' or '@')
+        // N4-48: probe past leading whitespace - Excel/WPS trims before evaluating, so " =SUM(A1)"
+        // used to slip through the first-char check.
+        // N5-S14-01: a leading ' must be escaped too - UnquoteFormulaPrefix strips one quote from
+        // quote-prefixed values on import, so an unescaped '=secret used to round-trip as =secret.
+        // Escaping here gives the strip rule its producer (N5-RC-04): '=secret exports as ''=secret
+        // and imports back intact.
+        var probe = value.TrimStart();
+        if (probe.Length > 0 && probe[0] is '=' or '+' or '-' or '@' or '\'')
             value = "'" + value;
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
@@ -126,10 +136,18 @@ public static class CsvImportExportService
 
     // N2C-2: undo the formula-injection guard on import - a leading ' added before =+-@ by
     // CsvEscape must be stripped back, otherwise the value round-trips polluted.
+    // N5-S14-01: the strip must be the exact inverse of CsvEscape - only strip when what follows
+    // the quote (past the whitespace CsvEscape also probes) starts with an escape-worthy char.
+    // The old unconditional strip on '=/'+/'-/'@/'- second chars corrupted legitimate values:
+    // '=secret (exported verbatim by the old escape) came back as =secret, and ''=x lost a quote.
     private static string UnquoteFormulaPrefix(string value)
     {
-        if (value.Length >= 2 && value[0] == '\'' && (value[1] is '=' or '+' or '-' or '@'))
-            return value[1..];
+        if (value.Length >= 2 && value[0] == '\'')
+        {
+            var probe = value[1..].TrimStart();
+            if (probe.Length > 0 && probe[0] is '=' or '+' or '-' or '@' or '\'')
+                return value[1..];
+        }
         return value;
     }
 
@@ -140,6 +158,16 @@ public static class CsvImportExportService
         foreach (var v in values)
             if (!string.IsNullOrEmpty(v)) return v;
         return "";
+    }
+
+    // 9.3: Firefox exports carry no name column - derive a readable entry name from the url host.
+    private static string HostFromUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return "";
+        var s = url.Trim();
+        if (Uri.TryCreate(s.Contains("://") ? s : "https://" + s, UriKind.Absolute, out var u))
+            return u.Host;
+        return s;
     }
 
     // ==================== Import ====================
@@ -176,6 +204,8 @@ public static class CsvImportExportService
         for (int i = 0; i < header.Count && i < values.Count; i++)
             row[header[i].Trim()] = values[i];
 
+        bool plainNotes = false; // 9.3: browser/manager dialects carry free-form notes (no "label: value" encoding)
+
         var group = row.GetValueOrDefault("Group");
         groupName = string.IsNullOrWhiteSpace(group) ? null : group.Trim();
 
@@ -194,6 +224,7 @@ public static class CsvImportExportService
             password = FirstNonEmpty(row.GetValueOrDefault("Password"), row.GetValueOrDefault("Login Password"));
             url = row.GetValueOrDefault("Web Site") ?? "";
             notes = row.GetValueOrDefault("Comments") ?? "";
+            plainNotes = true; // N2-19: Comments is this dialect's only notes carrier - don't drop it
             if (string.IsNullOrEmpty(name)) name = row.GetValueOrDefault("Account") ?? username;
         }
         // Bitwarden mapping
@@ -203,8 +234,53 @@ public static class CsvImportExportService
             password = row.GetValueOrDefault("login_password") ?? "";
             url = row.GetValueOrDefault("login_uri") ?? "";
             notes = row.GetValueOrDefault("notes") ?? "";
+            plainNotes = true; // N2-19: same - free-form notes column
             if (string.IsNullOrEmpty(name)) name = row.GetValueOrDefault("name") ?? username;
             type = forcedType ?? row.GetValueOrDefault("type") ?? "";
+        }
+        // 9.3: browser / manager dialects. Bare "username"+"url" columns (all-lowercase) belong to
+        // Chrome or Firefox - Firefox additionally carries httpRealm / formActionOrigin and has no
+        // name column, so the entry name is derived from the url host. The Group exclusion keeps
+        // Novara's own CSV (which also lowercases to these keys through the ignore-case dictionary)
+        // on the Novara path - its Notes-encoded extra fields would otherwise be wiped.
+        // 1Password ("Title") and Proton ("Item Name") carry Title/Username/Url variants that would
+        // also match the browser probe, so they are tested FIRST (most specific wins).
+        if (row.ContainsKey("Item Name"))
+        {
+            // Proton Pass export: Item Name/Title/Url/Username/Password/TOTP/Note
+            plainNotes = true;
+            name = row.GetValueOrDefault("Item Name") ?? "";
+            username = FirstNonEmpty(row.GetValueOrDefault("Username"), row.GetValueOrDefault("Email"));
+            password = row.GetValueOrDefault("Password") ?? "";
+            url = row.GetValueOrDefault("Url") ?? "";
+            notes = row.GetValueOrDefault("Note") ?? "";
+        }
+        else if (row.ContainsKey("Title"))
+        {
+            // 1Password 8 export: Title/Url/Username/Password/Notes
+            plainNotes = true;
+            name = row.GetValueOrDefault("Title") ?? "";
+            username = row.GetValueOrDefault("Username") ?? "";
+            password = row.GetValueOrDefault("Password") ?? "";
+            url = row.GetValueOrDefault("Url") ?? "";
+            notes = row.GetValueOrDefault("Notes") ?? "";
+        }
+        else if (!row.ContainsKey("Group") && row.ContainsKey("username") && row.ContainsKey("url"))
+        {
+            plainNotes = true;
+            username = row["username"];
+            password = row.GetValueOrDefault("password") ?? "";
+            url = row["url"];
+            if (row.ContainsKey("httpRealm") || row.ContainsKey("formActionOrigin"))
+            {
+                name = HostFromUrl(url); // Firefox: no name column
+                notes = "";
+            }
+            else
+            {
+                name = row.GetValueOrDefault("name") ?? ""; // Chrome
+                notes = "";
+            }
         }
 
         if (string.IsNullOrEmpty(name)) name = username;
@@ -224,13 +300,18 @@ public static class CsvImportExportService
             CreatedAt = DateTime.Now,
         };
 
-        BuildFieldsForEntry(entry, type, url, username, password, notes);
+        BuildFieldsForEntry(entry, type, url, username, password, notes, plainNotes: plainNotes);
+        
+        // Generic on purpose: any dialect that ships a TOTP column benefits, others yield null here.
+        var totpColumn = row.GetValueOrDefault("TOTP");
+        if (!string.IsNullOrEmpty(totpColumn) && !entry.Fields.Any(f => f.Label == "TOTP"))
+            entry.Fields.Add(new EntryField { Label = "TOTP", Value = totpColumn.Trim(), CanCopy = false });
         if (!HasRequiredField(entry)) return null;
 
         return entry;
     }
 
-    private static void BuildFieldsForEntry(MemoEntry entry, string type, string url, string username, string password, string notes)
+    private static void BuildFieldsForEntry(MemoEntry entry, string type, string url, string username, string password, string notes, bool plainNotes = false)
     {
         if (!TypeFieldTemplates.TryGetValue(type, out var template))
         {
@@ -254,7 +335,9 @@ public static class CsvImportExportService
         }).ToList();
 
         
-        var notesFields = ParseNotesToFields(notes, template);
+        // N2-18: "TOTP" is in the label set so the exported "TOTP: <secret>" line parses as its own
+        // field instead of being glued onto the previous field as a continuation line.
+        var notesFields = ParseNotesToFields(notes, template.Concat(new[] { "TOTP" }));
         foreach (var f in entry.Fields)
         {
             if (!notesFields.TryGetValue(f.Label, out var v) || string.IsNullOrEmpty(v)) continue;
@@ -262,6 +345,26 @@ public static class CsvImportExportService
             
             // overwrite what the column carried.
             if (string.IsNullOrEmpty(f.Value)) f.Value = v;
+        }
+        // N2-18: restore the TOTP secret as its own field (round-trips through Notes; the app renders
+        // it as the live code row). CanCopy=false keeps the raw secret off the copy-button row.
+        if (notesFields.TryGetValue("TOTP", out var totpSecret) && !string.IsNullOrEmpty(totpSecret)
+            && !entry.Fields.Any(f => f.Label == "TOTP"))
+            entry.Fields.Add(new EntryField { Label = "TOTP", Value = totpSecret, CanCopy = false });
+
+        // N4-15: a generic (unrecognized-dialect) CSV may carry pure free-form notes - when parsing
+        
+        // (it used to be silently dropped, preview and result alike).
+        if (!plainNotes && notesFields.Count == 0 && !string.IsNullOrWhiteSpace(notes)) plainNotes = true;
+
+        // 9.3: browser/manager dialects carry free-form notes (no "label: value" encoding) - land the
+        
+        if (plainNotes && notes.Length > 0)
+        {
+            foreach (var f in entry.Fields)
+            {
+                if (f.Label == "备注" && string.IsNullOrEmpty(f.Value)) { f.Value = notes; break; }
+            }
         }
 
         entry.KeyInfo = KeyInfoLabel.TryGetValue(type, out var kiLabel)
@@ -319,14 +422,14 @@ public static class CsvImportExportService
 
     private static string MatchFieldValue(string fieldLabel, string url, string username, string password)
     {
-        if (fieldLabel.Contains("网址") || fieldLabel.Equals("URL", StringComparison.OrdinalIgnoreCase) || fieldLabel.Contains("URL"))
-            return url;
-        if (fieldLabel.Contains("账号") || fieldLabel.Contains("地址") || fieldLabel.Contains("卡号") ||
-            fieldLabel.Contains("网络名") || fieldLabel.Contains("证件号") || fieldLabel.Contains("姓名") ||
-            fieldLabel.Contains("持卡人"))
-            return username;
-        if (fieldLabel.Contains("密码") || fieldLabel.Contains("Key") || fieldLabel.Contains("CVV"))
-            return password;
+        
+        
+        
+        
+        if (fieldLabel == "网址" || fieldLabel == "URL") return url;
+        if (fieldLabel == "邮箱地址" || fieldLabel == "账号" || fieldLabel == "卡号" ||
+            fieldLabel == "网络名" || fieldLabel == "证件号") return username;
+        if (fieldLabel == "密码" || fieldLabel == "邮箱密码" || fieldLabel == "API Key") return password;
         return "";
     }
 

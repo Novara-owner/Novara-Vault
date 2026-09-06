@@ -68,9 +68,14 @@ public static class ReminderEditRequest
             if (File.Exists(PendingPath))
             {
                 var json = File.ReadAllText(PendingPath);
-                File.Delete(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingReminderEdit>(json);
-                if (j != null && !string.IsNullOrWhiteSpace(j.Id)) return j;
+                // N2-07 (N1-60 parity): delete only after a successful deserialize - a torn/half-written
+                // JSON keeps the file for the next read instead of silently dropping the request
+                if (j != null && !string.IsNullOrWhiteSpace(j.Id))
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return j;
+                }
             }
         }
         catch { }

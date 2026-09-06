@@ -68,9 +68,13 @@ public static class EditRequest
             if (File.Exists(PendingPath))
             {
                 var json = File.ReadAllText(PendingPath);
-                File.Delete(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingEdit>(json);
-                if (j != null && Guid.TryParse(j.Id, out var g)) return g;
+                
+                if (j != null && Guid.TryParse(j.Id, out var g))
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return g;
+                }
             }
         }
         catch { }

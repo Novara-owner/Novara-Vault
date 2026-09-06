@@ -45,9 +45,18 @@ public static class NovaraBridge
                 {
                     foreach (var platform in new[] { System.IO.Path.Combine("bin", "x64"), "bin" })
                     {
-                        var dev = System.IO.Path.Combine(dir, platform, cfg,
-                            "net8.0-windows10.0.26100.0", "win-x64", "Novara.exe");
-                        if (System.IO.File.Exists(dev)) return dev;
+                        // N4-37: don't hard-code the TFM folder name - enumerate it so a future TFM
+                        // bump doesn't silently kill the Dev edit-jump probe. The no-TFM win-x64
+                        // layout is probed too (older/binary-less outputs).
+                        var cfgDir = System.IO.Path.Combine(dir, platform, cfg);
+                        if (!System.IO.Directory.Exists(cfgDir)) continue;
+                        var noTfm = System.IO.Path.Combine(cfgDir, "win-x64", "Novara.exe");
+                        if (System.IO.File.Exists(noTfm)) return noTfm;
+                        foreach (var tfmDir in System.IO.Directory.GetDirectories(cfgDir, "net8.0-windows*"))
+                        {
+                            var dev = System.IO.Path.Combine(tfmDir, "win-x64", "Novara.exe");
+                            if (System.IO.File.Exists(dev)) return dev;
+                        }
                     }
                 }
             }
@@ -66,7 +75,7 @@ public static class NovaraBridge
         {
             var dir = System.IO.Path.GetDirectoryName(PendingPath);
             if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-            System.IO.File.WriteAllText(PendingPath, JsonSerializer.Serialize(new { Id = noteId }));
+            N5S12AtomicWrite(PendingPath, JsonSerializer.Serialize(new { Id = noteId })); 
             try
             {
                 using var evt = System.Threading.EventWaitHandle.OpenExisting(EventName);
@@ -98,6 +107,15 @@ public static class NovaraBridge
         catch (Exception ex) { App.Log($"EditNote 启动失败: {ex.Message}"); }
     }
 
+    
+    
+    private static void N5S12AtomicWrite(string path, string content)
+    {
+        var tmp = path + ".tmp";
+        System.IO.File.WriteAllText(tmp, content);
+        System.IO.File.Move(tmp, path, true);
+    }
+
     public const string ReminderEventName =
 #if DEBUG
         @"Local\Novara.ReminderEditRequest.Dev";
@@ -115,22 +133,38 @@ public static class NovaraBridge
         string content = "", due = "";
         try
         {
-            var data = JsonSerializer.Deserialize<StickyData>(System.IO.File.ReadAllText(App.JsonPath));
-            var card = data?.Notes?.FirstOrDefault(n => n.Id == id); 
-            if (card != null)
+            
+            using (StickiesLock.Enter())
             {
+                var data = JsonSerializer.Deserialize<StickyData>(System.IO.File.ReadAllText(App.JsonPath));
+                var card = data?.Notes?.FirstOrDefault(n => n.Id == id); 
+                if (card == null)
+                {
+                    
+                    
+                    App.Log("EditReminder: 卡已不存在，放弃本次编辑跳转");
+                    return;
+                }
                 content = card.Content ?? "";
-                due = card.DueTime?.ToString("O") ?? "";
+                if (card.DueTime == null)
+                {
+                    // N4-38: N2-20 only covered card==null - a reminder card whose DueTime is null
+                    // (hand-edited stickies.json) would open the edit dialog on default pickers and
+                    // let a confirm overwrite the "no reminder" state. Abort, same as N2-20.
+                    App.Log("EditReminder: 卡 DueTime 为空（损坏数据），放弃本次编辑跳转");
+                    return;
+                }
+                due = card.DueTime.Value.ToString("O");
             }
         }
-        catch (Exception ex) { App.Log($"EditReminder 读卡失败: {ex.Message}"); }
+        catch (Exception ex) { App.Log($"EditReminder 读卡失败: {ex.Message}"); return; } 
 
         bool hasListener = false;
         try
         {
             var dir = System.IO.Path.GetDirectoryName(ReminderPendingPath);
             if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-            System.IO.File.WriteAllText(ReminderPendingPath, JsonSerializer.Serialize(new { Id = id, Content = content, DueTime = due }));
+            N5S12AtomicWrite(ReminderPendingPath, JsonSerializer.Serialize(new { Id = id, Content = content, DueTime = due })); // N5-S12-01
             try
             {
                 using var evt = System.Threading.EventWaitHandle.OpenExisting(ReminderEventName);

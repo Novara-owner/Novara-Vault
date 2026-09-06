@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.TrashPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:app="using:Novara"
+    xmlns:services="using:Novara.Services"
     mc:Ignorable="d"
     Background="{ThemeResource AppSurfaceBrush}">
 
@@ -129,7 +130,12 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Trash_DeleteForever\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="DeleteForeverDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_DeleteForever\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="DeleteForeverClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -139,7 +145,8 @@
                         <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteForeverCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" Click="DeleteForeverConfirm_Click">
+                        <services:CountdownBorder x:Name="DeleteForeverCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="DeleteForeverConfirmButton" Click="DeleteForeverConfirm_Click">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
@@ -169,6 +176,7 @@
                             </Button.Template>
                             <TextBlock Text="{x:Bind app:App.GetString(\'Trash_DeleteForever\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
+                        </services:CountdownBorder>
                     </Grid>
                 </Grid>
             </Border>
@@ -188,7 +196,12 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTitle\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="ClearAllDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ClearAllClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
@@ -198,7 +211,8 @@
                         <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="ClearAllCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" Click="ClearAllConfirm_Click">
+                        <services:CountdownBorder x:Name="ClearAllCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="ClearAllConfirmButton" Click="ClearAllConfirm_Click">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
@@ -228,6 +242,7 @@
                             </Button.Template>
                             <TextBlock Text="{x:Bind app:App.GetString(\'Trash_ClearAll\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
+                        </services:CountdownBorder>
                     </Grid>
                 </Grid>
             </Border>
