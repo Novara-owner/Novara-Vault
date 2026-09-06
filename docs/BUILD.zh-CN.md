@@ -62,14 +62,16 @@ dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-c
 dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 ```
 
-把 `StickNoteHost.exe` 与 `NovaraMCP.exe` 部署到 `Novara.exe` 同目录。
+`NovaraMCP.exe` 是单文件自包含 exe——直接复制到 `Novara.exe` 同目录。桌面便签宿主则要把 **publish 全部产物**（exe、DLL、`deps.json`、`runtimeconfig.json`、原生库）复制进发布目录的 `Host\` 子目录。只带裸 `StickNoteHost.exe`（apphost）在全新机器上即死（事件 1023）。`resources.pri` 位于 `Host\` 内无害，出现在发布目录根则致命。
+
+同时核验 `Microsoft.Graphics.Canvas.dll` 与 `Microsoft.Graphics.Canvas.Interop.dll` 在发布目录中——模糊特效依赖它们，缺失时静默降级。
 
 ### 6. 用 Inno Setup 打包
 
-用 Inno Setup 编译器编译 `Installer/setup.iss`。最终安装包包含：
+先清空发布目录：`dotnet publish` 从不删除残留文件，旧版本残留的 `Novara.pri` 混合新 DLL 会让所有改过页面的启动即崩。然后编译 `Installer/setup.iss`。最终安装包包含：
 
-- `Novara.exe` + `Novara.pri`
-- `StickNoteHost.exe`
+- `Novara.exe` + `Novara.pri`（publish 产物不含 pri，需手动补齐）
+- `Host\` 子目录（StickNoteHost 完整自包含包）
 - `NovaraMCP.exe`
 - `Assets\128.ico`
 
@@ -86,4 +88,4 @@ dotnet test Novara.Tests/Novara.Tests.csproj
 | 产物 | 位置 |
 |------|------|
 | 安装包 | `Novara_Setup_x.x.x.exe`（来自 `setup.iss`） |
-| 发布目录 | `Novara.exe`、`Novara.pri`、`StickNoteHost.exe`、`NovaraMCP.exe`、`Assets\` |
+| 发布目录 | `Novara.exe`、`Novara.pri`、`NovaraMCP.exe`、`Host\StickNoteHost.exe`、`Assets\` |

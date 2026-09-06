@@ -62,14 +62,16 @@ dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-c
 dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 ```
 
-Deploy `StickNoteHost.exe` and `NovaraMCP.exe` alongside `Novara.exe`.
+`NovaraMCP.exe` is a single self-contained file — copy it next to `Novara.exe`. For the sticky-note host, copy its **entire publish output** into a `Host\` subfolder of the publish directory (exe, DLLs, `deps.json`, `runtimeconfig.json`, native libraries). Shipping the bare `StickNoteHost.exe` apphost alone crashes instantly on clean machines (Event 1023). A `resources.pri` inside `Host\` is harmless; one at the publish root is not.
+
+Also verify `Microsoft.Graphics.Canvas.dll` and `Microsoft.Graphics.Canvas.Interop.dll` are present — the blur effects need them and degrade silently if they are missing.
 
 ### 6. Package with Inno Setup
 
-Compile `Installer/setup.iss` with the Inno Setup compiler. The final installer bundles:
+Empty the publish folder first: `dotnet publish` never deletes leftovers, and a stale `Novara.pri` from a previous build combined with new DLLs crashes every modified page. Then compile `Installer/setup.iss` with the Inno Setup compiler. The final installer bundles:
 
-- `Novara.exe` + `Novara.pri`
-- `StickNoteHost.exe`
+- `Novara.exe` + `Novara.pri` (add the `.pri` manually — the publish output does not include it)
+- the `Host\` subfolder (complete StickNoteHost bundle)
 - `NovaraMCP.exe`
 - `Assets\128.ico`
 
@@ -86,4 +88,4 @@ The test project covers the pure-logic core (`Novara.Core`): storage, crypto, MC
 | Artifact | Location |
 |----------|----------|
 | Installer | `Novara_Setup_x.x.x.exe` (from `setup.iss`) |
-| Publish folder | `Novara.exe`, `Novara.pri`, `StickNoteHost.exe`, `NovaraMCP.exe`, `Assets\` |
+| Publish folder | `Novara.exe`, `Novara.pri`, `NovaraMCP.exe`, `Host\StickNoteHost.exe`, `Assets\` |
