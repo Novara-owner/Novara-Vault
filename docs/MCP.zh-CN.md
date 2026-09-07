@@ -82,7 +82,7 @@ MCP 服务器是**零逻辑的 stdio 前端**。每个工具调用都会通过�
 | `update_diary` | `id` | `title`、`content` |
 | `update_path` | `id` | `name`、`path`、`note` |
 
-注意：`update_diary` 不能修改 `format`。向 `update_todo` 传 `subTexts` 会按新列表整体重建，勾选状态重置为未勾选。
+注意：`update_diary` 不能修改 `format`。向 `update_todo` 传 `subTexts` 会按新列表整体重建，勾选状态重置为未勾选。对 `update_memo`，变更或清除 `groupId` 会使条目跨区移动，因此会剥除其个人标记（星标与置顶）——修改其他字段则保持不变。
 
 ### 删除 / 列出 / 读取 / 搜索
 
