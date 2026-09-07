@@ -294,7 +294,7 @@ Novara/
 ### 8.3 核心数据结构
 
 - `_groupIds` / `_entryIds`：Border → Guid 映射（内存 key 稳定，持久化用 GUID）。
-- `_starredCards` / `_pinnedGroupCard` / `_pinnedEntryCard`：星标 / 置顶状态。
+- `_starredCards` / `_pinnedGroupCard` / `_pinnedEntryCards`（HashSet）：星标 / 置顶状态。置顶为区域化模型：条目置顶位于自己所在区域的栈顶（所在分组的条目栈或未分类栈，经 `RegionPinnedEntryCard(container)` 查询），永不越区；分组置顶全局唯一，携整组升至列表最上方。
 - `_standaloneEntries` / `_entriesInGroup`：未分类条目 / 组内条目列表。
 - `_targetGroupCard` / `_pendingMoveEntry` / `_editingEntryCard`：弹窗操作标记（Hide 完成 + Unloaded 双重清理）。
 
@@ -807,6 +807,7 @@ Novara/
 | 5.3 | 2026-08-31 | KDF 强化（格式 v3、3,000,000 次迭代）、Agent 权限中心、TOTP、随机生成器、命令面板、数据库健康检查、Host 整包部署 |
 | 6.0 | 2026-09-06 | 动效设计系统、工作区、快速捕获、网络活动指示器、首启导览；五轮全域核验（约 250 项修复）与 MCP 安全加固 |
 | 6.1 | 2026-09-06 | 修复：无过滤视图下新建空分组不再消失；工作区激活时 Toast 明确说明可见条件 |
+| 6.2 | 2026-09-07 | 全页面弹窗小窗自适应；便签弹窗整页滚动；图标双向无限环选择器；编辑器正文占位符；备忘页区域化置顶与归属变化剥除；增量核验（4 项修复） |
 
 ---
 
