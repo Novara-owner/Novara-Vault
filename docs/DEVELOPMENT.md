@@ -294,7 +294,7 @@ Tab 1, manages memo groups and entries.
 ### 8.3 Core data structures
 
 - `_groupIds` / `_entryIds`: Border → Guid mapping (stable in-memory keys; GUID for persistence).
-- `_starredCards` / `_pinnedGroupCard` / `_pinnedEntryCard`: star / pin state.
+- `_starredCards` / `_pinnedGroupCard` / `_pinnedEntryCards` (HashSet): star / pin state. Pinning is region-based: a pinned entry sits at the top of its own region (its group's entry stack, or the ungrouped stack — queried via `RegionPinnedEntryCard(container)`) and never escapes it; the pinned group is globally unique and lifts the whole group to the top of the list.
 - `_standaloneEntries` / `_entriesInGroup`: ungrouped entries / entries in group lists.
 - `_targetGroupCard` / `_pendingMoveEntry` / `_editingEntryCard`: dialog operation markers (Hide completion + Unloaded double cleanup).
 
@@ -807,6 +807,7 @@ Novara/
 | 5.3 | 2026-08-31 | KDF hardening (format v3, 3,000,000 iterations), Agent Permission Center, TOTP, secret generator, command palette, database health check, Host full-bundle deployment |
 | 6.0 | 2026-09-06 | Motion design system, Workspaces, Quick Capture, network activity indicator, welcome tour; five full verification rounds (~250 fixes) and MCP security hardening |
 | 6.1 | 2026-09-06 | Fix: new empty memo groups no longer disappear under the no-filter view; explicit toast while a workspace is active |
+| 6.2 | 2026-09-07 | Small-window dialog adaptation across all pages; full-page scrolling note dialog; infinite icon-ring pickers; editor body placeholder; region-based memo pinning with ownership-change mark stripping; incremental verification round (4 fixes) |
 
 ---
 

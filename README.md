@@ -14,14 +14,11 @@ Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, 
 
 ---
 
-## What's New in 6.0
+## What's New in 6.2
 
-- **Motion design system** — a hidden-light navigation glow, page transitions, dialog depth and staggered entrances: every animation now draws from one token-based layer, so the app moves consistently instead of in one-off effects
-- **Workspaces** — virtual groups that span all five data types; switch spaces and every list reshapes at once
-- **Quick Capture** — a global hotkey to jot a memo, todo, or note from any app
-- **Network activity indicator** — Novara's only outbound calls (API detection) are never silent; the title bar names the endpoint
-- **Welcome tour** — a four-page walkthrough of the real UI on first launch
-- **Hardened in depth** — five exhaustive verification rounds across the whole codebase; encrypted state changes are now fully transactional
+- **Small-window friendly dialogs** — dialogs across the whole app now adapt to split-screen and short windows: confirm buttons stay visible at the card bottom, long content scrolls instead of being clipped, and open dialogs re-fit live while you resize the window
+- **Full-page scrolling note editor** — the note dialog keeps its title and confirm button pinned while the content area scrolls as one page, so long notes stay editable on any window size
+- **Predictable pinning** — a pinned memo entry rises to the top of its own group or the ungrouped stack and never escapes it; a pinned group lifts itself with everything inside to the top of the list. Moving entries between groups starts them clean — stars and pins stay behind
 
 ## Security & Privacy Lock
 

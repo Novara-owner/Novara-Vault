@@ -6,6 +6,25 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2026-09-07
+
+### Added
+
+- **Small-window dialog adaptation** — a unified pass across all pages: confirm buttons are pinned to the card bottom instead of floating inside scroll areas, scroll regions get bounded heights, dialogs are clamped to the viewport and re-clamped live while the window resizes, and the welcome-tour carousel scales down centrally. Twelve dialogs that could overflow on split-screen or short windows now keep their buttons visible and their content scrollable.
+- **Note dialog full-page scrolling** — the new/edit note dialog (now a fixed 600 px wide) pins its title and confirm button and scrolls the icon, name, and auto-growing content area as one page, so long notes stay editable on short windows instead of the input being squeezed into two clipped lines.
+- **Infinite icon ring** — the icon pickers in the group / entry / workspace dialogs now scroll seamlessly in both directions (a three-fold mirrored carousel), map the mouse wheel to horizontal scrolling, and animate-center the selection; reopening a picker no longer keeps a stale highlight, and edit dialogs restore the saved icon correctly.
+- **Editor body placeholder** — rich-text and markdown editors show a "start writing" placeholder when the body is empty, implemented with the Tiptap official CSS recipe; the markdown input font now matches the preview (Segoe UI).
+
+### Changed
+
+- **Region-based pinning (memo page)** — pinning now has one well-defined meaning: a pinned entry rises to the top of its own region (inside its group, or within the ungrouped stack) and never escapes it; a pinned group — globally unique — rises to the top of the list together with all its entries. Re-pinning within the same region displaces the old pin, unpinning keeps the card in place, and pinned cards cannot be dragged.
+- **Ownership changes strip personal marks** — moving an entry into or out of a group (and group-deletion rescue, soft-delete to the recycle bin, or MCP group changes) now clears its star and pin, since those belong to the region rather than the entry; editing an entry keeps them.
+- **Editor toolbar icons reworked** — undo, redo, and clear-formatting each get a distinct, conventional icon (clear-formatting previously borrowed the redo glyph).
+
+### Fixed
+
+- An incremental verification round (three parallel reviewers over all post-6.1.0 changes; no critical findings) led to four fixes: pinning the only standalone entry no longer desyncs the ungrouped stack when a group is created later; reopening the group icon ring no longer keeps a stale highlight; edit-dialog backfill centering on the icon ring is no longer overridden by the initial position jump; and dialogs that are already open while the window resizes are re-clamped (Plan / Settings / File-path pages).
+
 ## [6.1.0] - 2026-09-06
 
 ### Fixed
