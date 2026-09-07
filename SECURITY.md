@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-06 · **Applies to:** Novara 6.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-07 · **Applies to:** Novara 6.2 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,9 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 6.0 | ✅ Supported | Current release |
+| 6.2 | ✅ Supported | Current release |
+| 6.1 | ✅ Supported | Receives critical fixes where feasible |
+| 6.0 | ✅ Supported | Receives critical fixes where feasible |
 | 5.x | ✅ Supported | Receives critical fixes where feasible |
 | 4.0 | ✅ Supported | Receives critical fixes where feasible |
 | 3.0 | ⚠️ Legacy | Receives critical fixes where feasible |

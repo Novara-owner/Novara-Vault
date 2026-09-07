@@ -5,8 +5,8 @@
 ---
 
 **Effective date:** 2026-08-14
-**Last updated:** 2026-08-25
-**Applies to:** Novara 5.0 (and, where the behavior described below already existed, earlier versions)
+**Last updated:** 2026-09-07
+**Applies to:** Novara 6.2 (and, where the behavior described below already existed, earlier versions)
 
 > This policy describes the Novara **desktop application** for Windows. The official website (novara.xin) and the GitHub repository are separate properties; this document focuses on the software you install and run on your machine.
 
@@ -97,7 +97,7 @@ Some memo entries are of type "API Key". If you right-click such an entry, Novar
 
 All three send data **only to the third-party endpoint you configured** — never to the Novara project. Any tier that consumes tokens requires a **separate confirmation** from you before it runs, and Novara shows the actual token total in the report. Your key is masked in the UI and never written to logs or reports.
 
-This is the **only** way any of your data is sent over the network. If you do not use this feature, Novara makes **zero** network requests.
+This is the **only** way any of your data is sent over the network. If you do not use this feature, Novara makes **zero** network requests. Since 6.0, the title bar shows a local-only state and briefly names the endpoint whenever a detection goes out — display only, it adds no new network behavior.
 
 ## 6. MCP Agent interface — read this carefully
 
@@ -106,6 +106,7 @@ Since 5.0, Novara can expose a **local MCP server** so that an AI agent can read
 - **Novara itself stays offline.** The MCP server is a local process that talks to the running Novara app over a local named pipe. It makes no network requests and sends nothing anywhere by itself.
 - **Access control.** The interface is gated by a token you set, per-client approval (a first connection from any process requires your approval, and each approved client holds its own read / create / update / delete permission matrix), and the database-unlock state — a locked or encrypted database refuses every request. Deletion requires both the client's own permission bit and a global master switch.
 - **Sensitive-field redaction.** Password, key, and token fields are read back as `****` and are excluded from search results, so an agent cannot casually extract your secrets.
+- **Local audit log.** Since 5.1, every agent activity — connections, approvals, denied attempts, and tool calls with redacted target summaries — is recorded in a local audit log you can view and clear from Settings.
 
 **The one thing to understand about cloud AI.** The MCP server never transmits your data. However, if you connect a **cloud-hosted** AI assistant (for example, an AI app that calls a remote model), then whatever that assistant reads from Novara may be sent by *that AI client* to the AI provider you chose — this is controlled by the AI app and its provider, not by Novara. If you use a **local** model, nothing leaves your machine. Please check the privacy policy of any AI client you connect before granting it access.
 
@@ -129,6 +130,7 @@ Novara does **not** request or use: camera, microphone, location, contacts, or a
 - Logs are **local only**. They are never sent to the developer or any third party.
 - Crash logs may be written to local files under `%LocalAppData%\Novara\logs\` (e.g. `crash-*.txt`) so that problems can be diagnosed later if you choose to share them. Sensitive values (e.g. API keys) are redacted from these logs.
 - The desktop-sticky-note helper process writes its own log file under `%LocalAppData%\Novara\logs\` (`sticknotehost_debug.txt`).
+- API detections append a diagnostic log to `%LocalAppData%\Novara\relay-probe.log` (endpoint URL, status, token usage, truncated response bodies; the API key itself is never written). Local only.
 - There is **no automatic diagnostic reporting**. If you contact support, you can choose to attach a log file yourself — nothing is transmitted without your action.
 
 ## 9. Third-party components
@@ -144,6 +146,7 @@ Novara is built on standard Microsoft technologies and a few open-source librari
 | Tiptap | Rich-text editor engine | Bundled as a local script (`tiptap.bundle.js`) and runs entirely offline |
 | markdown-it | Markdown rendering in the records editor | Bundled as a local script and runs entirely offline |
 | AngleSharp | HTML sanitization for the editor | Local; used to strip unsafe content from pasted HTML |
+| Win2D (Microsoft.Graphics.Canvas) | Local blur rendering for dialog backdrops (6.0+) | Local |
 
 Novara does not embed advertising SDKs, analytics SDKs, or any third-party tracking code.
 
@@ -161,7 +164,8 @@ The only data that can ever leave your machine is data you send yourself:
 
 You are in full control at all times:
 
-- **Export (native)** — export a complete plaintext backup (`.novabak`) with an integrity (MD5) header. *Note: exported files are NOT encrypted* — keep them safe. File-path entries are excluded by default (with an option to include them) for moving to a new machine.
+- **Export (native)** — export a complete plaintext backup (`.novabak`) with a SHA-256 integrity header (older MD5-headered files still import via dual-header detection). *Note: exported files are NOT encrypted* — keep them safe. File-path entries are excluded by default (with an option to include them) for moving to a new machine.
+- **Encrypted backup (since 5.2)** — export a `.novaenc` container instead: AES-256-GCM authenticated encryption with a separate backup password that is never stored anywhere and can be set fresh on every export. If that password is lost, the backup cannot be decrypted — there is no recovery.
 - **CSV export/import** — export memos as CSV, or import CSV from Novara, KeePass, or Bitwarden formats.
 - **PDF / HTML collection** — export all records as a printable HTML or PDF collection.
 - **Markdown export** — export records as Markdown, with or without images.
