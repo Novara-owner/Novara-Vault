@@ -87,6 +87,7 @@ public sealed partial class PlanPage : Page
         SetReminderDatePicker.DateChanged += (_, _) => UpdateSetReminderConfirmState();
         SetReminderTimePicker.TimeChanged += (_, _) => UpdateSetReminderConfirmState();
         Loaded += (_, _) => { LoadFromStore(); RefreshAllReminderBorders(); }; // E4-16 + N4P-02: reload is idempotent (_storeLoaded); the explicit refresh restarts the 30s timer Unloaded stopped and surfaces reminders that came due while the page was hidden
+        RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs(); 
         Unloaded += (_, _) => { NewTodoOverlay.Visibility = Visibility.Collapsed; NewNoteOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; ReminderOverlay.Visibility = Visibility.Collapsed; // E3-19: reminder dialog was the only overlay not cleaned on tab switch (M4)
         // ND6: fold the remaining three overlays too - an open scrim left behind desynced from the chrome veil after a tab switch.
         SetReminderScrim.Opacity = 0; CancelReminderScrim.Opacity = 0; ReminderDueScrim.Opacity = 0;
@@ -371,6 +372,18 @@ public sealed partial class PlanPage : Page
 
     private string? _editingReminderId;
 
+    
+    private void ClampDialogHeight(Border dialog)
+        => dialog.MaxHeight = Math.Max(360, RootGrid.ActualHeight - 60);
+
+    
+    private void ReclampVisibleDialogs()
+    {
+        if (NewTodoOverlay.Visibility == Visibility.Visible) ClampDialogHeight(NewTodoDialog);
+        if (NewNoteOverlay.Visibility == Visibility.Visible) ClampDialogHeight(NewNoteDialog);
+        if (ReminderDueOverlay.Visibility == Visibility.Visible) ClampDialogHeight(ReminderDueDialog);
+    }
+
     private void ShowNewReminderDialog()
     {
         _editingReminderId = null;
@@ -448,7 +461,7 @@ public sealed partial class PlanPage : Page
         HideReminderDialog();
     }
 
-    public void ShowNewItemDialog(string title) { _confirming = false; _editingTodoCard = null; NewTodoDialogTitle.Text = title; TodoNameBox.Text = ""; MainTodoBox.Text = ""; UpdateTodoConfirmState(); SubTodoPanel.Children.Clear(); SubTodoPanel.Children.Add(new TextBlock{Text=App.GetString("Plan_Todo_SubLabel"),FontSize=12,FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=App.GetBrush("AppTextSecondaryBrush"),Margin=new Thickness(0,0,0,8)}); SubTodoPanel.Children.Add(CreateSubTodoBox()); LoadIconSelector(); NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin(); }
+    public void ShowNewItemDialog(string title) { _confirming = false; _editingTodoCard = null; NewTodoDialogTitle.Text = title; TodoNameBox.Text = ""; MainTodoBox.Text = ""; UpdateTodoConfirmState(); SubTodoPanel.Children.Clear(); SubTodoPanel.Children.Add(new TextBlock{Text=App.GetString("Plan_Todo_SubLabel"),FontSize=12,FontWeight=Microsoft.UI.Text.FontWeights.Medium,Foreground=App.GetBrush("AppTextSecondaryBrush"),Margin=new Thickness(0,0,0,8)}); SubTodoPanel.Children.Add(CreateSubTodoBox()); LoadIconSelector(); NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewTodoDialog); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin(); }
 
     private void HideNewTodoDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewTodoScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewTodoDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, NewTodoDialogTransform); sb.Completed -= OnNewTodoHideCompleted; sb.Completed += OnNewTodoHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnNewTodoHideCompleted(object? sender, object e) { NewTodoOverlay.Visibility = Visibility.Collapsed; _editingTodoCard = null; }
@@ -1397,7 +1410,7 @@ PersistOrderAndSave(); };
         Services.ToastService.Show(App.GetString("Reminder_Due_Title"), toast); 
         ReminderDueDialogTransform.ScaleX = 0.94; ReminderDueDialogTransform.ScaleY = 0.94; ReminderDueDialogTransform.TranslateY = 24;
         ReminderDueDialog.Opacity = 0; ReminderDueScrim.Opacity = 0;
-        ReminderDueOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
+        ReminderDueOverlay.Visibility = Visibility.Visible; ClampDialogHeight(ReminderDueDialog); DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, ReminderDueScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, ReminderDueDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
@@ -1642,7 +1655,7 @@ PersistOrderAndSave(); };
         LoadIconSelector();
         SelectIcon(d.iconKey);
         UpdateTodoConfirmState(); // UI-2: edit-fill -> recompute validity
-        NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
+        NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewTodoDialog);
         var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin();
     }
     private void ShowEditNoteDialog(Border card)
@@ -1659,10 +1672,11 @@ PersistOrderAndSave(); };
         LoadNoteIconSelector();
         SelectNoteIcon(d.iconKey);
         UpdateNoteConfirmState(); // UI-2: edit-fill -> recompute validity
-        NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
+        NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewNoteDialog);
         var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin();
     }
-    public void ShowNewNoteDialog() { _confirming = false; _editingNoteCard = null; NoteNameBox.Text = ""; NoteContentBox.Text = ""; UpdateNoteConfirmState(); LoadNoteIconSelector(); NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin(); }
+    public void ShowNewNoteDialog() { _confirming = false; _editingNoteCard = null; NoteNameBox.Text = ""; NoteContentBox.Text = ""; UpdateNoteConfirmState(); LoadNoteIconSelector(); NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewNoteDialog);
+            var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin(); }
     private void HideNewNoteDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewNoteScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewNoteDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, NewNoteDialogTransform); sb.Completed -= OnNewNoteHideCompleted; sb.Completed += OnNewNoteHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnNewNoteHideCompleted(object? sender, object e) { NewNoteOverlay.Visibility = Visibility.Collapsed; _editingNoteCard = null; }
     private void CloseNewNote_Click(object s, RoutedEventArgs e) => HideNewNoteDialog();

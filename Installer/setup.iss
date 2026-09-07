@@ -6,7 +6,7 @@
 ; ============================================================
 
 #define MyAppName "Novara"
-#define MyAppVersion "6.1.0"
+#define MyAppVersion "6.2.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 ; E4-39: relative to this script (Installer\..\.. = the Desktop folder where Novara_Publish lives),

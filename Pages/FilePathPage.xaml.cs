@@ -72,6 +72,7 @@ public sealed partial class FilePathPage : Page
         PickFolderIcon.PointerEntered += (_, _) => PickFolderIcon.Opacity = 1.0;
         PickFolderIcon.PointerExited += (_, _) => PickFolderIcon.Opacity = 0.6;
         KeyDown += Page_KeyDown;
+        ContentRoot.SizeChanged += (_, _) => { if (NewPathOverlay.Visibility == Visibility.Visible) NewPathDialog.MaxHeight = Math.Max(360, ContentRoot.ActualHeight - 60); }; 
         Loaded += (_, _) => { LoadFromStore(); // E4-16: entrance animation now fires inside LoadFromStore after chunked render completes
         CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => CheckAllPaths(); _autoCheckTimer.Start(); } };
         Unloaded += (_, _) => { _pathCheckCts?.Cancel(); 
@@ -274,6 +275,8 @@ public sealed partial class FilePathPage : Page
         NewPathDialog.Opacity = 0;
         NewPathScrim.Opacity = 0;
         NewPathOverlay.Visibility = Visibility.Visible;
+        
+        NewPathDialog.MaxHeight = Math.Max(360, ContentRoot.ActualHeight - 60);
         DialogDepth.VeilShow(); 
         UpdateNewPathConfirmState(); // UI-2: initial validity after clear/edit-fill (explicit - empty assignment may not raise TextChanged)
 

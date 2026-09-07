@@ -43,6 +43,7 @@ public sealed partial class SettingsPage : Page
     private bool _animPageWipeFinal;
     private bool _animPageGroupLoss;
     private readonly System.Collections.Generic.Dictionary<Grid, int> _overlayAnimGens = new(); 
+    private readonly System.Collections.Generic.Dictionary<Grid, Border> _overlayDialogs = new(); 
     private bool _animNetActivity; // 9.3: network activity panel guard
     private bool _autoLockOnSystemLock; 
     private int _autoLockSeconds;       
@@ -52,7 +53,7 @@ public sealed partial class SettingsPage : Page
     private bool _animWorkspaceManage;
     private bool _animWorkspaceEdit;
     private bool _animWorkspaceDelete;
-    private readonly List<Border> _workspaceIconBorders = new();
+    private Services.IconRing? _workspaceIconRing; 
     private string _workspaceSelectedIcon = "";
     private string? _editingWorkspaceId; // null = create new
     private string? _pendingDeleteWorkspaceId;
@@ -80,6 +81,7 @@ public sealed partial class SettingsPage : Page
         })
             dangerIcon.Data = App.CreateGeometry(IconData.Danger);
         KeyDown += Page_KeyDown;
+        SettingsRoot.SizeChanged += (_, _) => ReclampVisibleDialogs(); 
         WorkspaceNameTextBox.TextChanged += (_, _) => UpdateWorkspaceEditConfirmState(); // N2-53: live confirm-button state
         BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
 
@@ -1244,6 +1246,7 @@ private void ShowPrivacyLockWarningDialog()
         NetActivityClearText.Text = App.GetString("NetActivity_Clear");
         RenderNetActivityList();
         ShowOverlay(NetActivityOverlay, NetActivityDialog, NetActivityDialogTransform);
+        FitDialogScroll(NetActivityScroll, 144); 
     }
 
     private void RenderNetActivityList()
@@ -1321,6 +1324,7 @@ private void ShowPrivacyLockWarningDialog()
         _animWorkspaceManage = false; // N2-11: show re-arms the hide guard
         RenderWorkspaceList();
         ShowOverlay(WorkspaceManageOverlay, WorkspaceManageDialog, WorkspaceManageDialogTransform);
+        FitDialogScroll(WorkspaceScroll, 100); 
     }
 
     private void WorkspaceManageButton_Click(object sender, RoutedEventArgs e) => OpenWorkspaceManagement();
@@ -1423,51 +1427,29 @@ private void ShowPrivacyLockWarningDialog()
 
     private void BuildWorkspaceIconSelector()
     {
-        if (WorkspaceIconPanel.Children.Count > 0) return; // already built
-        WorkspaceIconPanel.Children.Clear(); _workspaceIconBorders.Clear();
-        foreach (var key in IconData.GroupIconKeysInOrder())
+        
+        if (WorkspaceIconPanel.Children.Count > 0) return;
+        _workspaceIconRing ??= new Services.IconRing(WorkspaceIconScrollViewer, WorkspaceIconPanel);
+        _workspaceIconRing.Tapped -= WorkspaceIconRingTapped;
+        _workspaceIconRing.Tapped += WorkspaceIconRingTapped;
+        _workspaceIconRing.Build(IconData.GroupIconKeysInOrder(), key => new Border
         {
-            var b = new Border
-            {
-                Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
-                Background = App.GetBrush("AppSurfaceOverlayBrush"),
-                Tag = key,
-                Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
-            };
-            b.Tapped += WorkspaceIcon_Tapped;
-            WorkspaceIconPanel.Children.Add(b);
-            _workspaceIconBorders.Add(b);
-        }
+            Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
+            Background = App.GetBrush("AppSurfaceOverlayBrush"),
+            Tag = key,
+            Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
+        });
     }
 
-    private void WorkspaceIcon_Tapped(object sender, TappedRoutedEventArgs e)
+    private void WorkspaceIconRingTapped(Border b)
     {
-        if (sender is Border b)
-        {
-            _workspaceSelectedIcon = b.Tag?.ToString() ?? "";
-            HighlightWorkspaceIcon();
-            CenterWorkspaceIcon(b);
-        }
+        _workspaceSelectedIcon = b.Tag?.ToString() ?? "";
+        _workspaceIconRing?.Highlight(_workspaceSelectedIcon);
+        _workspaceIconRing?.CenterTo(b);
     }
 
     private void HighlightWorkspaceIcon()
-    {
-        foreach (var icon in _workspaceIconBorders)
-        {
-            bool sel = icon.Tag?.ToString() == _workspaceSelectedIcon;
-            icon.Background = sel ? App.GetBrush("AppSurfaceBrush") : App.GetBrush("AppSurfaceOverlayBrush");
-            icon.BorderBrush = sel ? App.GetBrush("AppTextTertiaryBrush") : null;
-            icon.BorderThickness = sel ? new Thickness(1) : new Thickness(0);
-        }
-    }
-
-    private void CenterWorkspaceIcon(Border targetIcon)
-    {
-        var position = targetIcon.TransformToVisual(WorkspaceIconPanel).TransformPoint(new Windows.Foundation.Point(0, 0));
-        double targetOffset = position.X - (WorkspaceIconScrollViewer.ViewportWidth / 2) + (targetIcon.ActualWidth / 2);
-        targetOffset = Math.Max(0, Math.Min(targetOffset, WorkspaceIconScrollViewer.ScrollableWidth));
-        WorkspaceIconScrollViewer.ChangeView(targetOffset, null, null, false);
-    }
+        => _workspaceIconRing?.Highlight(_workspaceSelectedIcon);
 
     private void WorkspaceEditClose_Click(object sender, RoutedEventArgs e) => HideWorkspaceEdit();
     private void WorkspaceEditScrim_Tapped(object sender, TappedRoutedEventArgs e)
@@ -3280,6 +3262,7 @@ Logic Range: Below methods in this region
         CsvImportPreviewDialog.Opacity = 0;
         CsvImportPreviewScrim.Opacity = 0;
         CsvImportPreviewOverlay.Visibility = Visibility.Visible;
+        FitDialogScroll(CsvImportPreviewScroll, 270); 
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
         Storyboard.SetTarget(si, CsvImportPreviewScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
@@ -3780,6 +3763,11 @@ Logic Range: Below methods in this region
     private static Grid? FindOverlayScrim(Grid overlay)
         => overlay.Children.OfType<Grid>().FirstOrDefault(g => g.Name.EndsWith("Scrim", StringComparison.Ordinal));
 
+    
+    
+    private void FitDialogScroll(ScrollViewer scroll, double chrome)
+        => scroll.MaxHeight = Math.Max(120, Math.Min(scroll.MaxHeight, SettingsRoot.ActualHeight - 60 - chrome));
+
     private void ShowOverlay(Grid overlay, Border dialog, CompositeTransform transform)
     {
         _overlayAnimGens[overlay] = System.Collections.Generic.CollectionExtensions.GetValueOrDefault(_overlayAnimGens, overlay) + 1; 
@@ -3797,7 +3785,19 @@ Logic Range: Below methods in this region
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, dialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
         Motion.AddDialogShowTransform(sb, transform); // M1: EmphasizedDecelerate (Motion)
+        
+        
+        dialog.MaxHeight = Math.Max(360, SettingsRoot.ActualHeight - 60);
+        _overlayDialogs[overlay] = dialog; 
         sb.Begin();
+    }
+
+    
+    private void ReclampVisibleDialogs()
+    {
+        foreach (var (overlay, dialog) in _overlayDialogs)
+            if (overlay.Visibility == Visibility.Visible)
+                dialog.MaxHeight = Math.Max(360, SettingsRoot.ActualHeight - 60);
     }
 
     private void HideOverlay(Grid overlay, Border dialog, CompositeTransform transform, Action onCompleted)
@@ -3913,6 +3913,7 @@ Logic Range: Below methods in this region
         _animBackupRestore = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         BuildBackupList(BackupRestoreList, singleSelect: true);
         ShowOverlay(BackupRestoreOverlay, BackupRestoreDialog, BackupRestoreDialogTransform);
+        FitDialogScroll(BackupRestoreScroll, 200); 
     }
     private void HideBackupRestoreDialog()
     {
@@ -3978,6 +3979,7 @@ Logic Range: Below methods in this region
         _animBackupDelete = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         BuildBackupList(BackupDeleteList, singleSelect: false);
         ShowOverlay(BackupDeleteOverlay, BackupDeleteDialog, BackupDeleteDialogTransform);
+        FitDialogScroll(BackupDeleteScroll, 210); 
     }
     private void HideBackupDeleteDialog()
     {
@@ -4981,6 +4983,7 @@ Logic Range: Below methods in this region
     {
         _animMcpAudit = false; // N3-16: show re-arms the hide guard (M2/N2-11 parity)
         ShowOverlay(McpAuditOverlay, McpAuditDialog, McpAuditDialogTransform);
+        FitDialogScroll(McpAuditScroll, 148); 
     }
     private void HideMcpAuditDialog()
     {

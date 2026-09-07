@@ -1495,6 +1495,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselBlurHost.Visibility = Visibility.Visible;
         WelcomeCarousel.Visibility = Visibility.Visible;
         WelcomeCarousel.Opacity = 0;
+        
+        
+        var contentH = (Content as FrameworkElement)?.ActualHeight ?? 0;
+        var s = contentH > 120 ? Math.Max(0.5, Math.Min(1.0, (contentH - 80) / 465.0)) : 1.0;
+        CarouselHost.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+        CarouselHost.RenderTransform = new Microsoft.UI.Xaml.Media.ScaleTransform { ScaleX = s, ScaleY = s };
         var sb = new Storyboard();
         var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(oi, WelcomeCarousel); Storyboard.SetTargetProperty(oi, "Opacity"); sb.Children.Add(oi);
