@@ -5,7 +5,7 @@
     <RootNamespace>Novara.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>6.1.0</Version> <!-- N4-53: keep the solution-wide version aligned (main/Host/MCP are 6.0.0) -->
+    <Version>6.2.0</Version> <!-- N4-53: keep the solution-wide version aligned (main/Host/MCP are 6.0.0) -->
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>

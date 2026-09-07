@@ -60,6 +60,9 @@ body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:tr
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title b,#title strong,#title span[style*=bold]{{font-weight:700!important}}
 #title:empty::before{{content:'{6}';color:{2};font-weight:normal;letter-spacing:0.18em}}
+/* 6.1-X-09: Tiptap 官方 Placeholder 配方——float+height:0+pointer-events:none 让占位符成为纯背景：
+   不可点击/不占布局/不影响光标（修复自拼版 50% 概率光标被困在占位符后的问题） */
+#body.ph .ProseMirror p:first-child::before{{content:'{7}';color:{2};float:left;height:0;pointer-events:none;}}
 .sep{{height:1px;background:{3};margin:0 0 16px 0;opacity:0.45}}
 #body{{min-height:calc(100vh - 150px)}}
 #body .ProseMirror{{font-size:14px;font-weight:normal;letter-spacing:0.04em;line-height:20px;outline:none;min-height:calc(100vh - 150px);word-wrap:break-word;color:{1};padding:0}}
@@ -100,6 +103,8 @@ var editor=new T.Editor({{
   onSelectionUpdate:function(){{notifyFormatState()}}
 }});
 function notifyFormatState(){{window.chrome.webview.postMessage(JSON.stringify({{action:'formatState',bold:editor.isActive('bold'),italic:editor.isActive('italic'),underline:editor.isActive('underline')}}))}}
+function updPh(){{var b=document.getElementById('body');if(editor.isEmpty)b.classList.add('ph');else b.classList.remove('ph')}}
+editor.on('update',function(){{updPh()}});editor.on('create',function(){{updPh()}});
 function execBold(){{editor.chain().focus().toggleBold().run();notifyFormatState()}}
 function execItalic(){{editor.chain().focus().toggleItalic().run();notifyFormatState()}}
 function execUnderline(){{editor.chain().focus().toggleUnderline().run();notifyFormatState()}}
@@ -111,7 +116,7 @@ function execAlign(a){{editor.chain().focus().setTextAlign(a).run()}}
 function execCodeBlock(){{editor.chain().focus().toggleCodeBlock().run()}}
 function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}}
 function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
-function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing()}} // N5-S7-01: 载入 setContent 触发的 onUpdate 不算用户编辑
+function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh()}} // N5-S7-01: 载入 setContent 触发的 onUpdate 不算用户编辑
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
 tel.addEventListener('input',function(){{updateTitleSpacing()}});
 function getTitle(){{return tel.innerHTML}}
@@ -173,8 +178,9 @@ body{{overflow-y:auto;color:{1};padding-bottom:80px}}
 body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{4};border-radius:3px}}
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title:empty::before{{content:'{2}';color:{3};font-weight:normal;letter-spacing:0.18em}}
+#md-editor::placeholder{{color:{3}}}
 .sep{{height:1px;background:{5};margin:0 0 16px 0;opacity:0.45}}
-#md-editor{{width:100%;min-height:calc(100vh - 150px);background:transparent;border:none;outline:none;resize:none;overflow-y:hidden;color:{1};font-family:Consolas,Monaco,'Courier New',monospace;font-size:14px;line-height:22px;padding:0}}
+#md-editor{{width:100%;min-height:calc(100vh - 150px);background:transparent;border:none;outline:none;resize:none;overflow-y:hidden;color:{1};font-family:'Segoe UI',sans-serif;font-size:14px;line-height:22px;padding:0}}
 #md-preview{{display:none;min-height:calc(100vh - 150px);font-size:14px;line-height:22px;color:{1};word-wrap:break-word}}
 #md-preview h1{{font-size:24px;font-weight:600;margin:16px 0 8px}}
 #md-preview h2{{font-size:20px;font-weight:600;margin:14px 0 8px}}
@@ -190,7 +196,7 @@ body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:tr
 </style></head><body>
 <div id='title' contenteditable='true' spellcheck='false'></div>
 <div class='sep'></div>
-<textarea id='md-editor' spellcheck='false'></textarea>
+<textarea id='md-editor' spellcheck='false' placeholder='{7}'></textarea>
 <div id='md-preview'></div>
 <script>{6}</script>
 <script>
@@ -246,7 +252,8 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         string bundle;
         try { bundle = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "md.bundle.js")); }
         catch { bundle = "window.NovaraMd={render:function(t){return (t||'').replace(/</g,'&lt;')}};"; }
-        return string.Format(MarkdownHtmlTemplate, bg, text, App.GetString("DiaryEditor_DocumentTitlePlaceholder"), placeholder, scrollbar, sep, bundle);
+        return string.Format(MarkdownHtmlTemplate, bg, text, App.GetString("DiaryEditor_DocumentTitlePlaceholder"), placeholder, scrollbar, sep, bundle,
+            App.GetString("DiaryEditor_DocumentBodyPlaceholder"));
     }
 
     
@@ -1093,10 +1100,10 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void InitializeRestoreIcon()
     {
-        // The original Restore multi-path icon rendered oddly in the 28x28 swatch; reuse the
-        // redo glyph (single path, already verified) for the "clear format" reset button.
+        
+        // previously borrowed EditorRedo (semantic mismatch: reset is not a timeline operation).
         var cv = XamlBindingHelper.ConvertValue;
-        RestorePathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.EditorRedo);
+        RestorePathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.EditorColorReset);
     }
 
     // ================================================================

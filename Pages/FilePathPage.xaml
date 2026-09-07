@@ -66,9 +66,7 @@
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
@@ -92,7 +90,9 @@
                         </Button>
                     </Grid>
 
-                    <StackPanel Grid.Row="1" Spacing="6" Margin="0,20,0,0">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16">
+                    <StackPanel Spacing="6" Margin="0,20,0,0">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Common_Label_Name\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -103,7 +103,7 @@
                                  TextChanged="NewPathField_TextChanged" />
                     </StackPanel>
 
-                    <StackPanel Grid.Row="2" Spacing="6" Margin="0,16,0,0">
+                    <StackPanel Spacing="6" Margin="0,16,0,0">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Form_Label_Path\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -156,7 +156,7 @@
                                  TextChanged="NewPathField_TextChanged" />
                     </StackPanel>
 
-                    <StackPanel Grid.Row="3" Spacing="6" Margin="0,16,0,0">
+                    <StackPanel Spacing="6" Margin="0,16,0,0">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Common_Label_Note\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -166,8 +166,10 @@
                                  PlaceholderText="{x:Bind app:App.GetString(\'Path_New_NotePlaceholder\')}"
                                  TextChanged="NewPathField_TextChanged" />
                     </StackPanel>
+                    </StackPanel>
+                    </ScrollViewer>
 
-                    <Button x:Name="NewPathConfirmButton" Grid.Row="4" Margin="0,20,0,0" Height="44"
+                    <Button x:Name="NewPathConfirmButton" Grid.Row="2" Margin="0,20,0,0" Height="44"
                             Style="{StaticResource NovaraPrimaryButtonStyle}"
                             HorizontalAlignment="Stretch"
                             CornerRadius="12"

@@ -1721,7 +1721,7 @@
                                 <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                             </Button>
                         </Grid>
-                        <ScrollViewer Grid.Row="1" MaxHeight="400" Margin="0,16,0,0">
+                        <ScrollViewer x:Name="NetActivityScroll" Grid.Row="1" MaxHeight="400" Margin="0,16,0,0">
                             <StackPanel x:Name="NetActivityList" Spacing="8" />
                         </ScrollViewer>
                         <Button Grid.Row="2" HorizontalAlignment="Right" Margin="0,16,0,0" Width="160" Height="36"
@@ -1999,10 +1999,7 @@
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
@@ -2018,18 +2015,20 @@
                                   StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <TextBlock x:Name="EncExportDesc" Grid.Row="1"
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                    <TextBlock x:Name="EncExportDesc"
                                FontSize="13" LineHeight="20" TextWrapping="Wrap"
                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                Margin="0,14,0,0" />
-                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                    <StackPanel Margin="0,12,0,0">
                         <CheckBox x:Name="EncUseLockCheckBox" FontSize="13"
                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
                                   Checked="EncUseLockCheckBox_Changed" Unchecked="EncUseLockCheckBox_Changed" />
                         <TextBlock x:Name="EncUseLockWarn" FontSize="12" TextWrapping="Wrap"
                                    Foreground="#FF4545" Margin="0,6,0,0" Visibility="Collapsed" />
                     </StackPanel>
-                    <StackPanel Grid.Row="3" Margin="0,12,0,0" Spacing="8">
+                    <StackPanel Margin="0,12,0,0" Spacing="8">
                         <TextBox x:Name="EncPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
                                  TextChanged="EncPasswordBox_TextChanged" />
                         <TextBox x:Name="EncConfirmBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
@@ -2038,9 +2037,11 @@
                         <TextBlock x:Name="EncStrengthHint" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{ThemeResource AppTextTertiaryBrush}" />
                     </StackPanel>
-                    <CheckBox x:Name="EncIncludePathsCheckBox" Grid.Row="4" Margin="0,12,0,0" FontSize="13"
+                    <CheckBox x:Name="EncIncludePathsCheckBox" Margin="0,12,0,0" FontSize="13"
                               Foreground="{ThemeResource AppTextSecondaryBrush}" />
-                    <Grid Grid.Row="5" Margin="0,20,0,0">
+                    </StackPanel>
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="36"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
@@ -2474,7 +2475,7 @@
                         </Button>
                     </Grid>
                     <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Setting_Backup_Restore_Tip\')}" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" Margin="0,20,0,0" />
-                    <ScrollViewer Grid.Row="2" MaxHeight="280" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
+                    <ScrollViewer x:Name="BackupRestoreScroll" Grid.Row="2" MaxHeight="280" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                         <StackPanel x:Name="BackupRestoreList" Spacing="8" />
                     </ScrollViewer>
                     <Grid Grid.Row="3" Margin="0,24,0,0">
@@ -2514,7 +2515,7 @@
                         </Button>
                     </Grid>
                     <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Setting_Backup_Delete_Tip\')}" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" Margin="0,20,0,0" />
-                    <ScrollViewer Grid.Row="2" MaxHeight="280" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
+                    <ScrollViewer x:Name="BackupDeleteScroll" Grid.Row="2" MaxHeight="280" VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
                         <StackPanel x:Name="BackupDeleteList" Spacing="8" />
                     </ScrollViewer>
                     <Grid Grid.Row="3" Margin="0,24,0,0">
@@ -3024,7 +3025,7 @@
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <ScrollViewer Grid.Row="1" Margin="0,16,4,0" MaxHeight="430" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="McpAuditScroll" Grid.Row="1" Margin="0,16,4,8" MaxHeight="430" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <StackPanel x:Name="McpAuditList" />
                             <TextBlock x:Name="McpAuditEmptyText" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,48,0,48" />
@@ -3187,7 +3188,7 @@
                         </Button>
                     </StackPanel>
                     <!-- Row 3: Preview list -->
-                    <ScrollViewer Grid.Row="3" MaxHeight="260" Margin="0,16,0,0">
+                    <ScrollViewer x:Name="CsvImportPreviewScroll" Grid.Row="3" MaxHeight="260" Margin="0,16,0,0">
                         <StackPanel x:Name="CsvImportPreviewList" />
                     </ScrollViewer>
                     <!-- Row 4: Buttons -->
@@ -3275,7 +3276,7 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                    <ScrollViewer Grid.Row="1" MaxHeight="320" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="WorkspaceScroll" Grid.Row="1" MaxHeight="320" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="WorkspaceListPanel" Spacing="8" />
                     </ScrollViewer>
                 </Grid>

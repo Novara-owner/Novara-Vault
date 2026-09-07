@@ -393,12 +393,15 @@ public static class McpLogic
         if (iconKey != null) e.IconKey = iconKey;
         // N2-68: an explicitly EMPTY groupId moves the entry to uncategorized - the old GetGuid
         // collapse made "not provided" and "explicitly empty" identical, so MCP could never un-group.
+        
+        bool ownershipChanged = clearGroupId || (groupId.HasValue && (!e.GroupId.HasValue || e.GroupId.Value != groupId.Value));
         if (clearGroupId) e.GroupId = null;
         else if (groupId.HasValue)
         {
             if (!db.MemoGroups.Any(g => g.Id == groupId.Value)) throw new McpError("分组不存在");
             e.GroupId = groupId;
         }
+        if (ownershipChanged) { e.IsPinned = false; e.IsStarred = false; }
         if (fields != null)
         {
             foreach (var f in fields)
@@ -479,11 +482,12 @@ public static class McpLogic
     {
         switch (type)
         {
-            case TypeMemo: { var e = FindMemo(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; break; }
-            case TypeTodo: { var e = FindTodo(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; break; }
-            case TypeNote: { var e = FindNote(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; break; }
-            case TypeDiary: { var e = FindDiary(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; break; }
-            case TypePath: { var e = FindPath(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; break; }
+            
+            case TypeMemo: { var e = FindMemo(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; e.IsPinned = false; e.IsStarred = false; break; }
+            case TypeTodo: { var e = FindTodo(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; e.IsPinned = false; e.IsStarred = false; break; }
+            case TypeNote: { var e = FindNote(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; e.IsPinned = false; e.IsStarred = false; break; }
+            case TypeDiary: { var e = FindDiary(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; e.IsPinned = false; e.IsStarred = false; break; }
+            case TypePath: { var e = FindPath(db, id); e.IsDeleted = true; e.DeletedAt = DateTime.Now; e.IsPinned = false; e.IsStarred = false; break; }
             default: throw new McpError($"未知类型: {type}");
         }
     }

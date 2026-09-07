@@ -62,7 +62,7 @@ public class CsvImportExportTests
         });
         var csv = CsvImportExportService.ExportMemoEntriesToCsv(new List<MemoEntry> { bank, idcard }, new List<MemoGroup>());
 
-        var result = CsvImportExportService.ParseCsv(csv, null);
+        var result = CsvImportExportService.ParseCsv(csv, null!);
         Assert.Equal(0, result.SkippedCount);
         Assert.Equal(2, result.Entries.Count);
 
