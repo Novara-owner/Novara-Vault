@@ -82,7 +82,7 @@ All tool arguments use camelCase. IDs are GUID strings (except `diary`, whose ID
 | `update_diary` | `id` | `title`, `content` |
 | `update_path` | `id` | `name`, `path`, `note` |
 
-Notes: `update_diary` cannot change `format`. Passing `subTexts` to `update_todo` rebuilds the list and resets checked states.
+Notes: `update_diary` cannot change `format`. Passing `subTexts` to `update_todo` rebuilds the list and resets checked states. For `update_memo`, changing or clearing `groupId` moves the entry between regions and therefore strips its personal marks (star and pin) — editing other fields keeps them.
 
 ### Delete / List / Read / Search
 
