@@ -689,7 +689,7 @@
 
             <Grid x:Name="CarouselBlurHost" IsHitTestVisible="False" Visibility="Collapsed" />
             <Border x:Name="CarouselTint" Background="{ThemeResource AppSurfaceBrush}" Opacity="0.3" IsHitTestVisible="False" />
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel x:Name="CarouselHost" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border x:Name="CarouselCard" Width="680" Height="430" CornerRadius="20"
                         Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
                         BorderThickness="2">

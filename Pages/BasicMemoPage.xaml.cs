@@ -26,9 +26,9 @@ public sealed partial class BasicMemoPage : Page
     private string _pendingMenuAction = null!;
 
     private string _selectedIcon = "";
-    private List<Border> _iconBorders = new List<Border>();
+    private Services.IconRing? _iconRing; 
     private string _entrySelectedIcon = "";           
-    private readonly List<Border> _entryIconBorders = new(); 
+    private Services.IconRing? _entryIconRing; 
     private readonly System.Random _iconRandom = new();
 
     private string _selectedEntryType = "";
@@ -54,7 +54,9 @@ public sealed partial class BasicMemoPage : Page
     private Border _uncategorizedCard = null!;
     private Border _targetGroupCard = null!;
     private Border _currentEntryCard = null!;
-    private Border _pinnedEntryCard = null!;
+    
+    
+    private readonly HashSet<Border> _pinnedEntryCards = new();
     private Border _editingEntryCard = null!;
     
     private string _editOrigName = "";
@@ -251,16 +253,40 @@ private MenuFlyout BuildContextMenu()
 
     /// <summary>N4M-02: B9 insert index for group stacks - a pinned entry stays first; the incoming card lands after it (or at top).</summary>
     private int PinnedFirstInsertIndex(Panel container, Border incoming)
-        => (_pinnedEntryCard != null && !ReferenceEquals(_pinnedEntryCard, incoming) && container.Children.Contains(_pinnedEntryCard))
-            ? container.Children.IndexOf(_pinnedEntryCard) + 1
+    {
+        var pinned = RegionPinnedEntryCard(container);
+        return (pinned != null && !ReferenceEquals(pinned, incoming))
+            ? container.Children.IndexOf(pinned) + 1
             : 0;
+    }
+
+    
+    
+    private Border? RegionPinnedEntryCard(Panel container)
+        => container.Children.OfType<Border>().FirstOrDefault(b => _pinnedEntryCards.Contains(b));
+
+    
+    
+    private void StripEntryPersonalMarks(Border card)
+    {
+        bool hadPin = _pinnedEntryCards.Remove(card);
+        bool hadStar = _starredEntries.Remove(card);
+        if (hadPin && _entryPinIcons.ContainsKey(card)) _entryPinIcons[card].Visibility = Visibility.Collapsed;
+        if (hadStar && _entryStarIcons.ContainsKey(card)) _entryStarIcons[card].Visibility = Visibility.Collapsed;
+        if ((hadPin || hadStar) && _entryIds.TryGetValue(card, out var id))
+        {
+            var me = FindEntry(id);
+            if (me != null) { me.IsPinned = false; me.IsStarred = false; }
+        }
+    }
 
     
     private void MoveEntryToGroup(Border card, Border gb)
     {
-        // E1-10: moving between group/standalone must NOT clear star/pin (design 4.2 only rescues on group delete)
+        
         var srcPanel = card.Parent as Panel;
         if (srcPanel != null) srcPanel.Children.Remove(card);
+        StripEntryPersonalMarks(card);
         
         if (srcPanel is StackPanel srcSp && srcSp.Parent is Grid srcGrid && srcGrid.Parent is Border srcGroup && !ReferenceEquals(srcGroup, gb))
         {
@@ -300,6 +326,7 @@ private MenuFlyout BuildContextMenu()
     {
         var p = card.Parent as Panel;
         if (p != null) p.Children.Remove(card);
+        StripEntryPersonalMarks(card); 
 
         if (p is StackPanel sp && sp.Parent is Grid g && g.Parent is Border srcGroup)
         {
@@ -314,9 +341,10 @@ private MenuFlyout BuildContextMenu()
         int insIdx = 0;
         if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
             insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-        if (_pinnedEntryCard != null && GroupsContainer.Children.Contains(_pinnedEntryCard))
+        
+        if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
         {
-            int pe = GroupsContainer.Children.IndexOf(_pinnedEntryCard) + 1;
+            int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
             if (pe > insIdx) insIdx = pe;
         }
         if (_uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard))
@@ -458,6 +486,13 @@ private MenuFlyout BuildContextMenu()
             GroupsContainer.Children.Add(card);
             if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
         }
+        
+        
+        if (_pinnedGroupCard != null && GroupsContainer.Children.Count > 0 && !ReferenceEquals(GroupsContainer.Children[0], _pinnedGroupCard))
+        {
+            GroupsContainer.Children.Remove(_pinnedGroupCard);
+            GroupsContainer.Children.Insert(0, _pinnedGroupCard);
+        }
 
         
         _renderInProgress = true; // N4M-01: PersistAll during the fill window would rebuild db from the partial UI
@@ -475,7 +510,8 @@ private MenuFlyout BuildContextMenu()
                 _entryCreatedAt[card] = en.CreatedAt;
                 if (!string.IsNullOrEmpty(en.Protocol)) _apiProtocols[card] = en.Protocol;
                 if (en.IsStarred) { _starredEntries.Add(card); if (_entryStarIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
-                if (en.IsPinned && _pinnedEntryCard == null) { _pinnedEntryCard = card; if (_entryPinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
+                
+                if (en.IsPinned) { _pinnedEntryCards.Add(card); if (_entryPinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
 
                 if (en.GroupId is Guid gid)
                 {
@@ -484,7 +520,7 @@ private MenuFlyout BuildContextMenu()
                         if (kv.Value == gid) { groupCard = kv.Key; break; }
                     if (groupCard != null && groupCard.Child is Grid gg && gg.Children.Count > 3 && gg.Children[2] is StackPanel sp)
                     {
-                        sp.Children.Add(card);
+                        if (en.IsPinned) sp.Children.Insert(0, card); else sp.Children.Add(card);
                         if (gg.Children[3] is Grid eh) eh.Visibility = Visibility.Collapsed;
                         _entriesInGroup.Add(card);
                         UpdateGroupCount(groupCard);
@@ -492,8 +528,8 @@ private MenuFlyout BuildContextMenu()
                     }
 
                 }
-                _standaloneEntries.Add(card);
-                GroupsContainer.Children.Add(card);
+                if (en.IsPinned) { GroupsContainer.Children.Insert(0, card); _standaloneEntries.Insert(0, card); } 
+                else { _standaloneEntries.Add(card); GroupsContainer.Children.Add(card); }
                 if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
             }
             });
@@ -711,56 +747,28 @@ private MenuFlyout BuildContextMenu()
             "鹰_eagle.png", "邮件.png", "圆形_round.png", "云端.png",
             "提醒_reminder.png"
         };
-        IconPanel.Children.Clear(); _iconBorders.Clear();
-        foreach (var file in iconFiles)
+        
+        _iconRing ??= new Services.IconRing(IconScrollViewer, IconPanel);
+        _iconRing.Tapped -= GroupIconRingTapped;
+        _iconRing.Tapped += GroupIconRingTapped;
+        _iconRing.Build(iconFiles.Select(f => System.IO.Path.GetFileNameWithoutExtension(f) ?? string.Empty), tag => new Border
         {
-            var tag = System.IO.Path.GetFileNameWithoutExtension(file);
-            var border = new Border
-            {
-                Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
-                Background = App.GetBrush("AppSurfaceOverlayBrush"),
-                Tag = tag,
-                Child = IconData.GroupIconMap.TryGetValue(tag, out var key)
-                    ? new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }
-                    : null
-            };
-            border.Tapped += Icon_Tapped;
-            IconPanel.Children.Add(border);
-            _iconBorders.Add(border);
-        }
-        if (_iconBorders.Count > 0) { _selectedIcon = ""; } 
+            Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
+            Background = App.GetBrush("AppSurfaceOverlayBrush"),
+            Tag = tag,
+            Child = IconData.GroupIconMap.TryGetValue(tag, out var key)
+                ? new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }
+                : null
+        });
+        _selectedIcon = ""; 
+        _iconRing?.Highlight(null); 
     }
 
-    private void Icon_Tapped(object sender, TappedRoutedEventArgs e)
+    private void GroupIconRingTapped(Border border)
     {
-        if (sender is Border border) { _selectedIcon = border.Tag.ToString() ?? ""; HighlightIcon(border); CenterIconInScrollViewer(border); }
-    }
-
-    private void HighlightIcon(Border selected)
-    {
-        foreach (var icon in _iconBorders)
-        {
-            if (icon == selected)
-            {
-                icon.Background = App.GetBrush("AppSurfaceBrush");
-                icon.BorderBrush = App.GetBrush("AppTextTertiaryBrush");
-                icon.BorderThickness = new Thickness(1);
-            }
-            else
-            {
-                icon.Background = App.GetBrush("AppSurfaceOverlayBrush");
-                icon.BorderBrush = null; icon.BorderThickness = new Thickness(0);
-            }
-        }
-    }
-
-    private void CenterIconInScrollViewer(Border targetIcon)
-    {
-        var transform = targetIcon.TransformToVisual(IconPanel);
-        var position = transform.TransformPoint(new Point(0, 0));
-        double targetOffset = position.X - (IconScrollViewer.ViewportWidth / 2) + (targetIcon.ActualWidth / 2);
-        targetOffset = Math.Max(0, Math.Min(targetOffset, IconScrollViewer.ScrollableWidth));
-        IconScrollViewer.ChangeView(targetOffset, null, null, false);
+        _selectedIcon = border.Tag?.ToString() ?? "";
+        _iconRing?.Highlight(_selectedIcon);
+        _iconRing?.CenterTo(border);
     }
 
     
@@ -769,72 +777,34 @@ private MenuFlyout BuildContextMenu()
     /// <summary>Populate the custom-entry icon selector (idempotent - built once, reuse across opens).</summary>
     private void LoadEntryIconSelector()
     {
-        if (EntryIconPanel.Children.Count > 0) return; // already built
-        EntryIconPanel.Children.Clear(); _entryIconBorders.Clear();
-        var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        foreach (var key in IconData.GroupIconKeysInOrder())
+        
+        if (EntryIconPanel.Children.Count > 0) return;
+        _entryIconRing ??= new Services.IconRing(EntryIconScrollViewer, EntryIconPanel);
+        _entryIconRing.Tapped -= EntryIconRingTapped;
+        _entryIconRing.Tapped += EntryIconRingTapped;
+        _entryIconRing.Build(IconData.GroupIconKeysInOrder(), key => new Border
         {
-            var b = new Border
-            {
-                Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
-                Background = App.GetBrush("AppSurfaceOverlayBrush"),
-                Tag = key,
-                Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
-            };
-            b.Tapped += EntryIcon_Tapped;
-            EntryIconPanel.Children.Add(b);
-            _entryIconBorders.Add(b);
-        }
+            Width = 48, Height = 48, CornerRadius = new CornerRadius(12),
+            Background = App.GetBrush("AppSurfaceOverlayBrush"),
+            Tag = key,
+            Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
+        });
         _entrySelectedIcon = ""; // no default selection: empty = legacy jigsaw
     }
 
-    private void EntryIcon_Tapped(object sender, TappedRoutedEventArgs e)
+    private void EntryIconRingTapped(Border border)
     {
-        if (sender is Border border)
-        {
-            _entrySelectedIcon = border.Tag?.ToString() ?? "";
-            HighlightEntryIcon(border);
-            CenterEntryIconInScrollViewer(border);
-            UpdateNewEntryConfirmState(); 
-        }
-    }
-
-    private void HighlightEntryIcon(Border selected)
-    {
-        foreach (var icon in _entryIconBorders)
-        {
-            if (icon == selected)
-            {
-                icon.Background = App.GetBrush("AppSurfaceBrush");
-                icon.BorderBrush = App.GetBrush("AppTextTertiaryBrush");
-                icon.BorderThickness = new Thickness(1);
-            }
-            else
-            {
-                icon.Background = App.GetBrush("AppSurfaceOverlayBrush");
-                icon.BorderBrush = null; icon.BorderThickness = new Thickness(0);
-            }
-        }
-    }
-
-    private void CenterEntryIconInScrollViewer(Border targetIcon)
-    {
-        var transform = targetIcon.TransformToVisual(EntryIconPanel);
-        var position = transform.TransformPoint(new Point(0, 0));
-        double targetOffset = position.X - (EntryIconScrollViewer.ViewportWidth / 2) + (targetIcon.ActualWidth / 2);
-        targetOffset = Math.Max(0, Math.Min(targetOffset, EntryIconScrollViewer.ScrollableWidth));
-        EntryIconScrollViewer.ChangeView(targetOffset, null, null, false);
+        _entrySelectedIcon = border.Tag?.ToString() ?? "";
+        _entryIconRing?.Highlight(_entrySelectedIcon);
+        _entryIconRing?.CenterTo(border);
+        UpdateNewEntryConfirmState(); 
     }
 
     /// <summary>Reset the custom-entry icon selection (empty = legacy jigsaw) and clear any highlight.</summary>
     private void ClearEntryIconSelection()
     {
         _entrySelectedIcon = "";
-        foreach (var icon in _entryIconBorders)
-        {
-            icon.Background = App.GetBrush("AppSurfaceOverlayBrush");
-            icon.BorderBrush = null; icon.BorderThickness = new Thickness(0);
-        }
+        _entryIconRing?.Highlight(null);
     }
 
     private void LoadUngroupedEntries()
@@ -1255,10 +1225,11 @@ private MenuFlyout BuildContextMenu()
                     
                     ClearEntryIconSelection(); 
                     _entrySelectedIcon = _entryIconKeys.TryGetValue(card, out var ik) ? ik : "";
-                    if (!string.IsNullOrEmpty(_entrySelectedIcon))
+                    if (!string.IsNullOrEmpty(_entrySelectedIcon) && _entryIconRing != null)
                     {
-                        var match = _entryIconBorders.FirstOrDefault(b => b.Tag?.ToString() == _entrySelectedIcon);
-                        if (match != null) HighlightEntryIcon(match);
+                        
+                        if (_entryIconRing.FindByTag(_entrySelectedIcon) is Border match) _entryIconRing.CenterTo(match);
+                        _entryIconRing.Highlight(_entrySelectedIcon);
                     }
 
                     CustomInfoDynamicPanel.Children.Clear();
@@ -1287,7 +1258,7 @@ private MenuFlyout BuildContextMenu()
                 UpdateNewEntryConfirmState();
             };
 
-            bool entryPinned = _pinnedEntryCard == card;
+            bool entryPinned = _pinnedEntryCards.Contains(card);
             var pinMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = entryPinned ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"), Icon = new PathIcon { Data = App.CreateGeometry(entryPinned ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") } };
             pinMi.Click += (s2, e2) => { if (entryPinned) UnpinEntryCard(card); else PinEntryCard(card); };
 
@@ -1541,12 +1512,12 @@ private MenuFlyout BuildContextMenu()
                     
                     
                     
-                    int insertPos = (_pinnedEntryCard != null && sp.Children.Contains(_pinnedEntryCard))
-                        ? sp.Children.IndexOf(_pinnedEntryCard) + 1 : 0;
+                    int insertPos = 0;
+                    if (RegionPinnedEntryCard(sp) is Border stackPinned)
+                        insertPos = sp.Children.IndexOf(stackPinned) + 1;
                     for (int i = _standaloneEntries.Count - 1; i >= 0; i--)
                     {
                         var entry = _standaloneEntries[i];
-                        if (_pinnedEntryCard != null && ReferenceEquals(entry, _pinnedEntryCard)) continue;
                         GroupsContainer.Children.Remove(entry);
                         entry.Margin = new Thickness(0, 0, 0, 8);
                         
@@ -1598,6 +1569,7 @@ private MenuFlyout BuildContextMenu()
                 usp.Children.Remove(entry);
             else
                 GroupsContainer.Children.Remove(entry);
+            StripEntryPersonalMarks(entry); 
             _standaloneEntries.Remove(entry);
             _entriesInGroup.Add(entry);
 
@@ -1629,7 +1601,8 @@ private MenuFlyout BuildContextMenu()
             if (_uncategorizedCard?.Child is Grid ugc2 && ugc2.Children.Count > 2 && ugc2.Children[2] is StackPanel usp2 && usp2.Children.Contains(_pendingMoveEntry))
                 usp2.Children.Remove(_pendingMoveEntry);
             else
-                GroupsContainer.Children.Remove(_pendingMoveEntry); // E5-08: keep pin/star state when moving into a new group (E1-10 was only fixed for direct move-in/out - this branch still cleared them)
+                GroupsContainer.Children.Remove(_pendingMoveEntry); 
+            StripEntryPersonalMarks(_pendingMoveEntry); 
             _standaloneEntries.Remove(_pendingMoveEntry);
             _entriesInGroup.Add(_pendingMoveEntry);
 
@@ -2220,7 +2193,7 @@ private MenuFlyout BuildContextMenu()
             }
             _entryIds.Remove(old);
             _entryCreatedAt.Remove(old);
-            if (_pinnedEntryCard == old) { _pinnedEntryCard = card; if (_entryPinIcons.TryGetValue(card, out var ep)) ep.Visibility = Visibility.Visible; }
+            if (_pinnedEntryCards.Remove(old)) { _pinnedEntryCards.Add(card); if (_entryPinIcons.TryGetValue(card, out var ep)) ep.Visibility = Visibility.Visible; }
             if (wasStarred) { _starredEntries.Add(card); if (_entryStarIcons.TryGetValue(card, out var es)) es.Visibility = Visibility.Visible; }
             if (wasInGroup) _entriesInGroup.Add(card);
             else if (!wasInUncategorized) _standaloneEntries.Insert(standaloneIdx < 0 ? 0 : System.Math.Min(standaloneIdx, _standaloneEntries.Count), card); 
@@ -2238,8 +2211,8 @@ private MenuFlyout BuildContextMenu()
             if (_targetGroupCard.Child is Grid tg && tg.Children.Count > 3 && tg.Children[2] is StackPanel entryStack)
             {
                 
-                int insIdx = (_pinnedEntryCard != null && entryStack.Children.Contains(_pinnedEntryCard))
-                    ? entryStack.Children.IndexOf(_pinnedEntryCard) + 1 : 0;
+                int insIdx = RegionPinnedEntryCard(entryStack) is Border rp
+                    ? entryStack.Children.IndexOf(rp) + 1 : 0;
                 entryStack.Children.Insert(insIdx, card);
                 if (tg.Children[3] is Grid emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
@@ -2253,9 +2226,10 @@ private MenuFlyout BuildContextMenu()
             int insIdx = 0;
             if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
                 insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-            if (_pinnedEntryCard != null && GroupsContainer.Children.Contains(_pinnedEntryCard))
+            
+            if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
             {
-                int pe = GroupsContainer.Children.IndexOf(_pinnedEntryCard) + 1;
+                int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
                 if (pe > insIdx) insIdx = pe;
             }
             if (_uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard))
@@ -2336,9 +2310,10 @@ private MenuFlyout BuildContextMenu()
         int insIdx = 0;
         if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
             insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-        if (_pinnedEntryCard != null && GroupsContainer.Children.Contains(_pinnedEntryCard))
+        
+        if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
         {
-            int pe = GroupsContainer.Children.IndexOf(_pinnedEntryCard) + 1;
+            int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
             if (pe > insIdx) insIdx = pe;
         }
         if (_uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard))
@@ -2423,45 +2398,57 @@ private MenuFlyout BuildContextMenu()
 
     private void PinEntryCard(Border card)
     {
-        if (_pinnedEntryCard != null && _pinnedEntryCard != card && _entryPinIcons.ContainsKey(_pinnedEntryCard))
-            _entryPinIcons[_pinnedEntryCard].Visibility = Visibility.Collapsed;
+        
+        
+        
+        var parent = card.Parent as Panel;
+        var oldPinned = parent != null ? RegionPinnedEntryCard(parent) : null;
+        if (oldPinned != null && !ReferenceEquals(oldPinned, card) && _entryPinIcons.ContainsKey(oldPinned))
+            _entryPinIcons[oldPinned].Visibility = Visibility.Collapsed;
         if (_entryPinIcons.ContainsKey(card)) _entryPinIcons[card].Visibility = Visibility.Visible;
 
-        var parent = card.Parent as Panel;
         if (parent != null)
         {
             parent.Children.Remove(card);
-            
-            
-            if (parent != GroupsContainer)
-            {
-                int ins = (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
-                    ? GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1 : 0;
-                GroupsContainer.Children.Insert(ins, card);
-                _standaloneEntries.Remove(card);
-                _standaloneEntries.Insert(0, card);
-            }
-            else parent.Children.Insert(0, card);
+            parent.Children.Insert(0, card);
+        }
+        
+        
+        
+        if (_standaloneEntries.Contains(card))
+        {
+            _standaloneEntries.Remove(card);
+            _standaloneEntries.Insert(0, card);
         }
 
-        _pinnedEntryCard = card;
-        SyncEntryPins();
-        PersistAll();
-    }
-
-    private void SyncEntryPins()
-    {
         var db = App.Store?.Database;
-        if (db == null) return;
-        Guid? pinnedId = _pinnedEntryCard != null && _entryIds.TryGetValue(_pinnedEntryCard, out var pid) ? pid : null;
-        foreach (var en in db.MemoEntries) en.IsPinned = en.Id == pinnedId;
+        if (db != null)
+        {
+            if (oldPinned != null && !ReferenceEquals(oldPinned, card) && _entryIds.TryGetValue(oldPinned, out var oldId))
+            {
+                var oe = db.MemoEntries.FirstOrDefault(x => x.Id == oldId);
+                if (oe != null) oe.IsPinned = false;
+                _pinnedEntryCards.Remove(oldPinned);
+            }
+            if (_entryIds.TryGetValue(card, out var newId))
+            {
+                var ne = db.MemoEntries.FirstOrDefault(x => x.Id == newId);
+                if (ne != null) ne.IsPinned = true;
+            }
+        }
+        _pinnedEntryCards.Add(card);
+        PersistAll();
     }
 
     private void UnpinEntryCard(Border card)
     {
         if (_entryPinIcons.ContainsKey(card)) _entryPinIcons[card].Visibility = Visibility.Collapsed;
-        if (_pinnedEntryCard == card) _pinnedEntryCard = null!;
-        SyncEntryPins();
+        _pinnedEntryCards.Remove(card);
+        if (_entryIds.TryGetValue(card, out var uid))
+        {
+            var me = App.Store?.Database.MemoEntries.FirstOrDefault(x => x.Id == uid);
+            if (me != null) me.IsPinned = false;
+        }
         PersistAll();
     }
 
@@ -2619,10 +2606,10 @@ private MenuFlyout BuildContextMenu()
                         if (_entryIds.Remove(delEntryCard, out var delEid))
                         {
                             var me = App.Store?.Database.MemoEntries.FirstOrDefault(x => x.Id == delEid);
-                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; }
+                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; } 
                         }
                         _entryCreatedAt.Remove(delEntryCard);
-                        if (_pinnedEntryCard == delEntryCard) _pinnedEntryCard = null!;
+                        _pinnedEntryCards.Remove(delEntryCard);
                         _currentEntryCard = null!;
                         if (GroupsContainer.Children.Count == 0) FloatInHint();
                         SyncUncategorizedCard();
@@ -2650,10 +2637,10 @@ private MenuFlyout BuildContextMenu()
                         if (_entryIds.Remove(delEntryCard, out var delEid))
                         {
                             var me = App.Store?.Database.MemoEntries.FirstOrDefault(x => x.Id == delEid);
-                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; }
+                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; } 
                         }
                         _entryCreatedAt.Remove(delEntryCard);
-                        if (_pinnedEntryCard == delEntryCard) _pinnedEntryCard = null!;
+                        _pinnedEntryCards.Remove(delEntryCard);
                         _currentEntryCard = null!;
                         if (GroupsContainer.Children.Count == 0) FloatInHint();
                         SyncUncategorizedCard();
@@ -2683,6 +2670,7 @@ private MenuFlyout BuildContextMenu()
                             _entriesInGroup.Remove(eb);
 
                             if (_entryIds.TryGetValue(eb, out var rid)) { var me = FindEntry(rid); if (me != null) me.GroupId = null; }
+                            StripEntryPersonalMarks(eb); 
                         }
                         GroupsContainer.Children.Insert(idx++, entry);
                     }
@@ -2699,7 +2687,7 @@ private MenuFlyout BuildContextMenu()
                         App.Store?.Database.MemoGroups.RemoveAll(x => x.Id == delGid);
                         
                         foreach (var me in App.Store?.Database.MemoEntries ?? new())
-                            if (me.IsDeleted && me.GroupId == delGid) me.GroupId = null;
+                            if (me.IsDeleted && me.GroupId == delGid) { me.GroupId = null; me.IsPinned = false; me.IsStarred = false; } 
                     }
                     _groupCreatedAt.Remove(delGroupCard);
                     _pinIcons.Remove(delGroupCard);
@@ -3651,7 +3639,8 @@ private void ShowApiCheckDialog(Border card)
         {
             if (_dragging) return;
             
-            if (ReferenceEquals(card, _pinnedGroupCard) || ReferenceEquals(card, _pinnedEntryCard)) return;
+            
+            if (ReferenceEquals(card, _pinnedGroupCard) || _pinnedEntryCards.Contains(card)) return;
             if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return; 
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
@@ -3786,14 +3775,16 @@ private void ShowApiCheckDialog(Border card)
         if (ReferenceEquals(_dragContainer, GroupsContainer))
         {
             
+            
             bool topPinned =
                 (_pinnedGroupCard != null && _dragContainer.Children.Contains(_pinnedGroupCard) && _pinnedGroupCard.Visibility == Visibility.Visible) ||
-                (_pinnedEntryCard != null && ReferenceEquals(_pinnedEntryCard.Parent, GroupsContainer) && _pinnedEntryCard.Visibility == Visibility.Visible);
+                (RegionPinnedEntryCard(_dragContainer) is Border tp && tp.Visibility == Visibility.Visible);
             if (topPinned) minIndex = 1;
         }
         else
         {
-            if (_pinnedEntryCard != null && ReferenceEquals(_pinnedEntryCard.Parent, _dragContainer) && _pinnedEntryCard.Visibility == Visibility.Visible) minIndex = 1;
+            
+            if (RegionPinnedEntryCard(_dragContainer) is Border rp && rp.Visibility == Visibility.Visible) minIndex = 1;
         }
         index = Math.Max(index, minIndex);
 
