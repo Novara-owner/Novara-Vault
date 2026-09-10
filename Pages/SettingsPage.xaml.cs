@@ -2185,7 +2185,7 @@ private void ShowPrivacyLockWarningDialog()
             var picker = new FileSavePicker();
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
             picker.FileTypeChoices.Add("Novara Snapshot", new List<string> { ".html" });
-            picker.SuggestedFileName = string.Format("NovaraSnapshot_{0:yyyyMMdd_HHmmss}", DateTime.Now);
+            picker.SuggestedFileName = "index"; 
             var file = await picker.PickSaveFileAsync();
             if (file == null) return;
 
