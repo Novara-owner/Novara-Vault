@@ -7,7 +7,7 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>6.2.0</Version>
+    <Version>7.0.0</Version>
     <Platforms>x64</Platforms>
     
 
@@ -91,6 +91,10 @@
     <Content Include="DiaryEditorJs\dist\md.bundle.js">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>md.bundle.js</Link>
+    </Content>
+    <Content Include="SnapshotViewer\index.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>snapshot-viewer.html</Link>
     </Content>
     
     <Content Include="ProbeDataSet.json">
