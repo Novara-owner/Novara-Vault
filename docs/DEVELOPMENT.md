@@ -808,7 +808,8 @@ Novara/
 | 6.0 | 2026-09-06 | Motion design system, Workspaces, Quick Capture, network activity indicator, welcome tour; five full verification rounds (~250 fixes) and MCP security hardening |
 | 6.1 | 2026-09-06 | Fix: new empty memo groups no longer disappear under the no-filter view; explicit toast while a workspace is active |
 | 6.2 | 2026-09-07 | Small-window dialog adaptation across all pages; full-page scrolling note dialog; infinite icon-ring pickers; editor body placeholder; region-based memo pinning with ownership-change mark stripping; incremental verification round (4 fixes) |
+| 7.0 | 2026-09-10 | **The connected era begins** — Novara Snapshot: encrypted self-contained HTML viewer export (`.novaenc` v4 container), read-only browser viewer with local TOTP, light/dark theme, mandatory encryption gate, deployment guide (novara.xin); sync and self-hosted deployment grow from this foundation |
 
 ---
 
-> Novara is designed around "local-first, simple, and private". All data belongs to the user and never leaves the machine.
+> Novara is designed around "local-first, simple, and private". All data belongs to the user and never leaves the machine — and since 7.0, whatever does leave (snapshots, future sync) is encrypted end-to-end, with servers handling ciphertext only.

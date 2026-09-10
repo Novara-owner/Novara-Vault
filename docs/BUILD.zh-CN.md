@@ -73,6 +73,7 @@ dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 - `Novara.exe` + `Novara.pri`（publish 产物不含 pri，需手动补齐）
 - `Host\` 子目录（StickNoteHost 完整自包含包）
 - `NovaraMCP.exe`
+- `snapshot-viewer.html` —— Novara Snapshot 查看器模板，导出流程加载（7.0 起）
 - `Assets\128.ico`
 
 ## 测试
@@ -88,4 +89,4 @@ dotnet test Novara.Tests/Novara.Tests.csproj
 | 产物 | 位置 |
 |------|------|
 | 安装包 | `Novara_Setup_x.x.x.exe`（来自 `setup.iss`） |
-| 发布目录 | `Novara.exe`、`Novara.pri`、`NovaraMCP.exe`、`Host\StickNoteHost.exe`、`Assets\` |
+| 发布目录 | `Novara.exe`、`Novara.pri`、`NovaraMCP.exe`、`snapshot-viewer.html`、`Host\StickNoteHost.exe`、`Assets\` |
