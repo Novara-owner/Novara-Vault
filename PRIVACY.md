@@ -5,8 +5,8 @@
 ---
 
 **Effective date:** 2026-08-14
-**Last updated:** 2026-09-07
-**Applies to:** Novara 6.2 (and, where the behavior described below already existed, earlier versions)
+**Last updated:** 2026-09-10
+**Applies to:** Novara 7.0 (and, where the behavior described below already existed, earlier versions)
 
 > This policy describes the Novara **desktop application** for Windows. The official website (novara.xin) and the GitHub repository are separate properties; this document focuses on the software you install and run on your machine.
 
@@ -14,18 +14,18 @@
 
 ## TL;DR
 
-- **Novara is 100% local.** Your data stays on your computer and never leaves it unless you explicitly make it leave.
+- **Novara keeps your data local.** Your data lives on your computer and never leaves it unless you explicitly make it leave.
 - **We collect nothing.** No account, no telemetry, no usage analytics, no ads, no device fingerprinting.
-- **It works fully offline.** The only network activity in the entire application is the API-key detection you trigger manually (Section 5), and the local MCP interface you opt into (Section 6).
-- **Encryption is optional and OFF by default.** Read Section 4 carefully so you know exactly what is and is not protected.
+- **It works fully offline.** The only network activity in the entire application is the API-key detection you trigger manually (Section 5), and the local MCP interface you opt into (Section 6). The exported Snapshot viewer file performs no network requests at all; where you host it and who may reach it is entirely up to you.
+- **Encryption is optional and OFF by default.** Read Section 4 carefully so you know exactly what is and is not protected. Snapshot exports (Section 11) are always encrypted — a plaintext vault refuses to export.
 
 ---
 
 ## 1. What Novara is
 
-Novara is a local-first personal knowledge manager for Windows, built with C# and WinUI 3. It combines memos, file-path bookmarks, to-do lists, sticky notes, and rich-text records into a single database that is stored entirely on your own device.
+Novara is a local-first **personal data control layer** — for you, and for your AI agents — for Windows, built with C# and WinUI 3. It combines memos, file-path bookmarks, to-do lists, sticky notes, and rich-text records into a single database that is stored entirely on your own device. Since 7.0, your data can also travel with you — as encrypted, read-only snapshots readable on any device — with sync and self-hosted options growing from the same foundation.
 
-There is **no cloud backend**, no account system, and no server operated by the Novara project that could receive your data. The application is designed to be fully functional with no internet connection at all.
+There is **no cloud backend**, no account system, and no server operated by the Novara project that could receive your data. In the connected era, any server component is one **you self-host** and is designed to handle ciphertext only — the plaintext never reaches it by construction. The application is designed to be fully functional with no internet connection at all.
 
 ## 2. What we collect: nothing
 
@@ -157,7 +157,8 @@ Novara **does not share, sell, rent, or transmit** your data to any third party.
 The only data that can ever leave your machine is data you send yourself:
 
 - the API-key detection (to the endpoint you configured, only on your explicit action),
-- data an AI agent reads and sends via **a cloud AI client you chose** (see Section 6), and
+- data an AI agent reads and sends via **a cloud AI client you chose** (see Section 6),
+- a **Novara Snapshot** you exported (Section 11): an always-encrypted file you place wherever you choose — and wherever you host it, the viewer file itself performs no network requests, and
 - files you explicitly export or back up to a location you choose.
 
 ## 11. Your control over your data
@@ -166,6 +167,7 @@ You are in full control at all times:
 
 - **Export (native)** — export a complete plaintext backup (`.novabak`) with a SHA-256 integrity header (older MD5-headered files still import via dual-header detection). *Note: exported files are NOT encrypted* — keep them safe. File-path entries are excluded by default (with an option to include them) for moving to a new machine.
 - **Encrypted backup (since 5.2)** — export a `.novaenc` container instead: AES-256-GCM authenticated encryption with a separate backup password that is never stored anywhere and can be set fresh on every export. If that password is lost, the backup cannot be decrypted — there is no recovery.
+- **Novara Snapshot (since 7.0)** — export a self-contained, always-encrypted HTML viewer of your chosen data sections. A plaintext vault refuses to export. The password is never stored and cannot be recovered; refresh the page and the plaintext is gone from memory. The viewer performs no network requests and nothing you view is persisted in the browser. MCP tokens and client-authorization data are stripped from the export before it is sealed.
 - **CSV export/import** — export memos as CSV, or import CSV from Novara, KeePass, or Bitwarden formats.
 - **PDF / HTML collection** — export all records as a printable HTML or PDF collection.
 - **Markdown export** — export records as Markdown, with or without images.
@@ -180,7 +182,7 @@ You are in full control at all times:
 
 The Novara project commits to the following, as a matter of design:
 
-- We will **never** operate a cloud server that collects your data.
+- We will **never** operate a cloud server that collects your data. Any server component the project ships in the connected era is self-hosted **by you** and handles ciphertext only — the plaintext never reaches it by construction.
 - We will **never** add telemetry, analytics, or ads.
 - We will **never** add a backdoor, a password-recovery bypass, or any remote mechanism to unlock or exfiltrate your data.
 - We will **never** auto-update, auto-upload, or otherwise move your data without an explicit action from you.
