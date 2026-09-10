@@ -194,6 +194,18 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ConnectCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.44">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ConnectCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.44">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
         </Storyboard>
         <Style x:Key="SettingsDropdownButtonStyle" TargetType="Button">
             <Setter Property="Template">
@@ -1041,6 +1053,26 @@
                 </Grid>
             </Border>
 
+            
+            <Border x:Name="ConnectCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" x:Name="ConnectCardTitle" FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" Margin="4,0,0,0" />
+                    <Button Grid.Column="2" MinWidth="160" Height="40" Style="{StaticResource SettingsDropdownButtonStyle}" Background="{ThemeResource AppSurfaceBrush}" Foreground="{ThemeResource AppTextSecondaryBrush}" BorderBrush="{ThemeResource AppBorderBrush}" CornerRadius="10" FontSize="14" VerticalAlignment="Center" Margin="-8,0,0,0" x:Name="ExportViewerButton" Click="ExportViewerButton_Click">
+                        <TextBlock x:Name="ExportViewerButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <Border x:Name="Card7" CornerRadius="12" Opacity="0"
                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                     BorderBrush="{ThemeResource AppBorderBrush}"
@@ -1107,8 +1139,156 @@
                     </Button>
                 </Grid>
             </Border>
+
         </StackPanel>
         </ScrollViewer>
+
+        
+        <Grid x:Name="ConnectIntroOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="ConnectIntroScrim" Background="#2E000000" Tapped="ConnectIntroScrim_Tapped" />
+            <Border x:Name="ConnectIntroDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform><CompositeTransform x:Name="ConnectIntroDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="ConnectIntroTitle" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ConnectIntroClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Grid.Row="1" x:Name="ConnectIntroDesc" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" LineHeight="22" Margin="0,16,0,0" />
+                    <Grid Grid.Row="2" Margin="0,20,0,0" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <CheckBox Grid.Row="0" Grid.Column="0" x:Name="ConnectChkMemo" IsChecked="True" Checked="ConnectChk_Changed" Unchecked="ConnectChk_Changed" VerticalAlignment="Center" />
+                        <CheckBox Grid.Row="0" Grid.Column="1" x:Name="ConnectChkFile" Checked="ConnectChk_Changed" Unchecked="ConnectChk_Changed" VerticalAlignment="Center" />
+                        <CheckBox Grid.Row="1" Grid.Column="0" x:Name="ConnectChkPlan" Checked="ConnectChk_Changed" Unchecked="ConnectChk_Changed" VerticalAlignment="Center" />
+                        <CheckBox Grid.Row="1" Grid.Column="1" x:Name="ConnectChkDiary" Checked="ConnectChk_Changed" Unchecked="ConnectChk_Changed" VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid Grid.Row="3" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" x:Name="DeployHelpButton" Click="DeployHelp_Click">
+                            <TextBlock x:Name="DeployHelpText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" x:Name="ConnectConfirmButton" Click="ConnectConfirm_Click">
+                            <TextBlock x:Name="ConnectConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="ConnectPwdOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="ConnectPwdScrim" Background="#2E000000" Tapped="ConnectPwdScrim_Tapped" />
+            <Border x:Name="ConnectPwdDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ConnectPwdDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="ConnectPwdTitle" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ConnectPwdClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,14,0,0">
+                        <TextBlock x:Name="ConnectPwdDesc" FontSize="13" LineHeight="20" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <CheckBox x:Name="ConnectPwdUseLock" Margin="0,12,0,0" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" Checked="ConnectPwdUseLock_Changed" Unchecked="ConnectPwdUseLock_Changed" />
+                        <StackPanel Margin="0,12,0,0" Spacing="8">
+                            <TextBox x:Name="ConnectPwdPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" TextChanged="ConnectPwdPasswordBox_TextChanged" />
+                            <TextBox x:Name="ConnectPwdConfirmBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" TextChanged="ConnectPwdConfirmBox_TextChanged" />
+                            <TextBlock x:Name="ConnectPwdStrengthText" FontSize="12" FontWeight="SemiBold" Visibility="Collapsed" />
+                            <TextBlock x:Name="ConnectPwdStrengthHint" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="ConnectPwdCancel_Click">
+                            <TextBlock x:Name="ConnectPwdCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="ConnectPwdConfirmButton" HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="ConnectPwdConfirm_Click" IsEnabled="False">
+                            <TextBlock x:Name="ConnectPwdConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        
+        <Grid x:Name="ConnectLockNoticeOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="ConnectLockNoticeScrim" Background="#2E000000" Tapped="ConnectLockNoticeScrim_Tapped" />
+            <Border x:Name="ConnectLockNoticeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ConnectLockNoticeDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="ConnectLockNoticeDangerIcon" Foreground="#FF4545" />
+                            </Viewbox>
+                            <TextBlock x:Name="ConnectLockNoticeTitle" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ConnectLockNoticeClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Grid.Row="1" x:Name="ConnectLockNoticeDesc" FontSize="14" LineHeight="22" TextWrapping="Wrap" Foreground="#FFFF4545" Margin="0,16,0,0" />
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" Click="ConnectLockNoticeCancel_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                                        <VisualStateManager.VisualStateGroups>
+                                            <VisualStateGroup x:Name="CommonStates">
+                                                <VisualState x:Name="Normal" />
+                                                <VisualState x:Name="PointerOver">
+                                                    <Storyboard>
+                                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                        </ObjectAnimationUsingKeyFrames>
+                                                    </Storyboard>
+                                                </VisualState>
+                                                <VisualState x:Name="Pressed">
+                                                    <Storyboard>
+                                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                        </ObjectAnimationUsingKeyFrames>
+                                                    </Storyboard>
+                                                </VisualState>
+                                                <VisualState x:Name="Disabled" />
+                                            </VisualStateGroup>
+                                        </VisualStateManager.VisualStateGroups>
+                                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Grid>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock x:Name="ConnectLockNoticeCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <Grid x:Name="ResetConfirmOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ResetConfirmScrim" Background="#2E000000" Tapped="ResetConfirmScrim_Tapped" />
