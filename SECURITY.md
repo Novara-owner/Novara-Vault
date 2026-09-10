@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-07 · **Applies to:** Novara 6.2 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-10 · **Applies to:** Novara 7.0 (and earlier versions where noted)
 
 ---
 
@@ -18,8 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 6.2 | ✅ Supported | Current release |
-| 6.1 | ✅ Supported | Receives critical fixes where feasible |
+| 7.0 | ✅ Supported | Current release — first release of the connected era |
+| 6.2 | ✅ Supported | Receives critical fixes where feasible |
 | 6.0 | ✅ Supported | Receives critical fixes where feasible |
 | 5.x | ✅ Supported | Receives critical fixes where feasible |
 | 4.0 | ✅ Supported | Receives critical fixes where feasible |
@@ -52,7 +52,7 @@ Please include:
 
 ## 3. Security model & threat model
 
-**What we protect.** Novara is a *local-first* application. Its security goal is to protect your data **at rest** — the single database file on disk — against:
+**What we protect.** Novara is a *local-first personal data control layer* — for you and for your AI agents. Its security goal is to protect your data **at rest** — the single database file on disk — and, since 7.0, wherever you choose to take it, against:
 
 - casual or unauthorized reading when the app is locked or closed (via optional encryption);
 - silent tampering of the encrypted file (via AES-GCM authentication);
@@ -84,6 +84,16 @@ When the privacy lock is enabled, Novara encrypts the entire database:
 | Migration | Legacy v1 (AES-CBC, Novara 2.0) auto-migrates to v2 (GCM) after one user confirmation; v2 migrates to v3 (hardened KDF) via a one-time opt-in prompt |
 
 **Important:** encryption is **off by default**. Without the privacy lock, the database is a plaintext JSON file (protected only by your Windows account permissions). This is a deliberate design choice so that casual users are never locked out of their own data.
+
+### Snapshot exports (7.0+)
+
+The connected era adds a new way for data to leave your machine — and the same bar applies: **everything that leaves is encrypted, or it does not leave.**
+
+- **Same container, same contract** — a snapshot embeds the database as a `.novaenc` v4 ciphertext block (44-byte self-describing header used as AES-GCM additional data, PBKDF2-SHA256 at 3,000,000 iterations, gzip-compressed payload), the identical versioned contract as encrypted backups.
+- **Mandatory gate** — a plaintext vault refuses to export a snapshot; the app guides you to set a privacy lock first. There is no plaintext path.
+- **Credentials never ride along** — MCP tokens and per-client authorization data are stripped from the exported settings before the snapshot is sealed.
+- **Zero network by construction** — the exported viewer file performs no network requests whatsoever: no CDN, no fonts, no telemetry. Decryption happens in your browser via the WebCrypto API; the file never "phones home" because there is no home to phone.
+- **Password is the only key** — the snapshot password is not stored anywhere by Novara and cannot be recovered. Hosting a snapshot publicly is safe only as far as the password is strong; the app and the deployment guide both say so plainly.
 
 ## 5. Data integrity & reliability
 
@@ -120,13 +130,13 @@ Novara includes several layers to prevent data loss and corruption:
 - **XSS protection in the diary editor** — rich-text HTML is sanitized on load, on save, and after navigation against a strict tag/attribute/URL whitelist, using a real HTML parser (AngleSharp). Script tags, `on*` event attributes (including entity-encoded variants such as `o&#110;load`), and dangerous protocols (`javascript:`, `vbscript:`, non-image `data:`) are stripped. Titles are rendered as plain text.
 - **No code evaluation of untrusted input** — imported HTML and JSON are parsed and normalized, never executed.
 - **Local-only helper process** — the desktop-sticky-note helper communicates with the main app via local files and named events on the same machine; it makes no network requests and opens no listening ports.
-- **Minimal surface** — no listening network ports, no HTTP server, no remote-procedure-call surface exposed to the network. The only outbound network calls are the user-triggered API-key detection tiers (see the Privacy Policy). The optional MCP server is a local named-pipe endpoint only, reachable from the same machine.
+- **Minimal surface** — no listening network ports, no HTTP server, no remote-procedure-call surface exposed to the network. The only outbound network calls are the user-triggered API-key detection tiers (see the Privacy Policy). The optional MCP server is a local named-pipe endpoint only, reachable from the same machine. The exported Snapshot viewer file performs no network requests at all.
 
 ## 9. Developer commitments
 
 As the project owner, I commit to:
 
-1. **Never** operating a cloud server that collects user data.
+1. **Never** operating a cloud server that collects user data. Any server-side component the project ships in the connected era is self-hosted **by you** and designed to handle ciphertext only — plaintext never reaches it by construction.
 2. **Never** adding a backdoor, a password-recovery bypass, or any remote unlock/exfiltration mechanism.
 3. **Never** adding telemetry, analytics, or ads.
 4. **Never** auto-updating or auto-uploading data without explicit user action.

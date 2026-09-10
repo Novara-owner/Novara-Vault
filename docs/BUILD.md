@@ -73,6 +73,7 @@ Empty the publish folder first: `dotnet publish` never deletes leftovers, and a 
 - `Novara.exe` + `Novara.pri` (add the `.pri` manually — the publish output does not include it)
 - the `Host\` subfolder (complete StickNoteHost bundle)
 - `NovaraMCP.exe`
+- `snapshot-viewer.html` — the Novara Snapshot viewer template, loaded by the export flow (7.0+)
 - `Assets\128.ico`
 
 ## Tests
@@ -88,4 +89,4 @@ The test project covers the pure-logic core (`Novara.Core`): storage, crypto, MC
 | Artifact | Location |
 |----------|----------|
 | Installer | `Novara_Setup_x.x.x.exe` (from `setup.iss`) |
-| Publish folder | `Novara.exe`, `Novara.pri`, `NovaraMCP.exe`, `Host\StickNoteHost.exe`, `Assets\` |
+| Publish folder | `Novara.exe`, `Novara.pri`, `NovaraMCP.exe`, `snapshot-viewer.html`, `Host\StickNoteHost.exe`, `Assets\` |

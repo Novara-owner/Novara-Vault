@@ -6,6 +6,18 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - 2026-09-10
+
+> 7.0 is not a feature release — it is a change of direction. Novara steps out of the single-machine era and begins the connected era: a cross-device, local-first personal data control layer for humans and AI agents, where both you and your AI can use the data — but only you hold the keys. The first step is read-only, encrypted, self-contained snapshots; sync and self-hosted deployment will grow from the same foundation under three fixed red lines: **the server never sees plaintext, there is no official cloud, and offline never degrades**.
+
+### Added
+
+- **Novara Snapshot** — export the whole database (or a chosen subset: memos / file paths / todos & notes / records, soft-deleted items always excluded) as a single self-contained encrypted HTML viewer. Double-click it or host it on your own NAS / server / static hosting; unlock with a password and browse read-only, completely offline. The embedded ciphertext reuses the `.novaenc` v4 container — 44-byte self-describing header as AES-GCM additional data, PBKDF2-SHA256 at 3,000,000 iterations, gzip-compressed payload — the same versioned contract as encrypted backups.
+- **Viewer feature set** — four read-only sections with per-tab search (Enter to run, aligned with the desktop app), masked fields with tap-to-reveal and one-tap copy, live RFC 6238 TOTP codes computed locally in the browser, a light/dark theme toggle in the title bar (light by default, not persisted), a sidebar with tabs and an official-site link, and an honest "data as of" timestamp in the drawer. Entry icons mirror the desktop app's full icon set.
+- **Mandatory encryption gate** — a plaintext vault refuses to export a snapshot and is guided to set a privacy lock first; every exported snapshot is encrypted, no exceptions. Two password paths: reuse the privacy-lock password, or set an independent one that Novara never stores (with a public-hosting strength warning).
+- **Honest degradation** — on plain HTTP the viewer explains that secure context features are limited instead of failing as a wrong password; unsupported browsers are told their limits up front.
+- **Deployment guide** — a hosted, mobile-first guide (novara.xin/snapshot-guide.html) covering local, LAN, and self-hosted public deployment, reachable from the export dialog's "Deployment Help" button.
+
 ## [6.2.0] - 2026-09-07
 
 ### Added
