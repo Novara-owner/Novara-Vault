@@ -64,6 +64,28 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent();
         SettingsTitleText.Text = App.GetString("Setting_Title_Page"); 
+        ConnectCardTitle.Text = App.GetString("Setting_Connect_Title"); 
+        ExportViewerButtonText.Text = App.GetString("Setting_Connect_ExportViewer");
+        ConnectIntroTitle.Text = App.GetString("Setting_Connect_ExportViewer"); 
+        ConnectIntroDesc.Text = App.GetString("Connect_IntroDesc");
+        ConnectChkMemo.Content = App.GetString("Connect_Data_Memo");
+        ConnectChkFile.Content = App.GetString("Connect_Data_File");
+        ConnectChkPlan.Content = App.GetString("Connect_Data_Plan");
+        ConnectChkDiary.Content = App.GetString("Connect_Data_Diary");
+        DeployHelpText.Text = App.GetString("Connect_DeployHelp");
+        ConnectConfirmText.Text = App.GetString("Common_Button_Confirm");
+        ConnectPwdTitle.Text = App.GetString("Connect_Pwd_Title");
+        ConnectPwdDesc.Text = App.GetString("Connect_Pwd_Desc");
+        ConnectPwdUseLock.Content = App.GetString("Setting_EncBackup_UseLock");
+        ConnectPwdPasswordBox.PlaceholderText = App.GetString("Connect_Pwd_PasswordHint");
+        ConnectPwdConfirmBox.PlaceholderText = App.GetString("Connect_Pwd_ConfirmHint");
+        ConnectPwdStrengthHint.Text = App.GetString("Setting_EncBackup_StrengthHint");
+        ConnectPwdCancelText.Text = App.GetString("Common_Button_Cancel");
+        ConnectPwdConfirmText.Text = App.GetString("Common_Button_Confirm");
+        ConnectLockNoticeTitle.Text = App.GetString("Connect_LockNotice_Title");
+        ConnectLockNoticeDangerIcon.Data = App.CreateGeometry(IconData.Danger);
+        ConnectLockNoticeDesc.Text = App.GetString("Connect_LockNotice_Desc");
+        ConnectLockNoticeCancelText.Text = App.GetString("Common_Button_Cancel");
         
         
         StatsExpandIcon.Data = App.CreateGeometry(IconData.CardCollapse);
@@ -1987,6 +2009,237 @@ private void ShowPrivacyLockWarningDialog()
         catch { }
     }
 
+    private void ExportViewerButton_Click(object sender, RoutedEventArgs e)
+    {
+        
+        UpdateConnectConfirmState(); 
+        _animConnectIntro = false; // M2: show entry resets the hide guard
+        ShowOverlay(ConnectIntroOverlay, ConnectIntroDialog, ConnectIntroDialogTransform);
+    }
+
+    private void ConnectChk_Changed(object sender, RoutedEventArgs e)
+    {
+        if (ConnectConfirmButton == null) return; 
+        UpdateConnectConfirmState();
+    }
+
+    private void UpdateConnectConfirmState()
+    {
+        
+        bool any = ConnectChkMemo.IsChecked == true || ConnectChkFile.IsChecked == true
+            || ConnectChkPlan.IsChecked == true || ConnectChkDiary.IsChecked == true;
+        ConnectConfirmButton.IsEnabled = any;
+    }
+
+    private void ConnectIntroClose_Click(object sender, RoutedEventArgs e)
+        => HideConnectIntroDialog();
+
+    private void ConnectIntroScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, ConnectIntroScrim))
+            HideConnectIntroDialog();
+    }
+
+    private void HideConnectIntroDialog(Action? after = null)
+    {
+        if (_animConnectIntro) return; // M2 hide re-entry guard
+        _animConnectIntro = true;
+        HideOverlay(ConnectIntroOverlay, ConnectIntroDialog, ConnectIntroDialogTransform, () => { _animConnectIntro = false; after?.Invoke(); });
+    }
+
+    private const string SnapshotGuideUrl = "https://novara.xin/snapshot-guide.html";
+
+    private void DeployHelp_Click(object sender, RoutedEventArgs e)
+    {
+        
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SnapshotGuideUrl) { UseShellExecute = true }); }
+        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail")); }
+    }
+
+    private void ConnectConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        
+        HideConnectIntroDialog(() =>
+        {
+            if (_isPrivacyLockEnabled) ShowConnectPwdDialog();
+            else ShowConnectLockNoticeDialog();
+        });
+    }
+
+    
+    private void ShowConnectPwdDialog()
+    {
+        ConnectPwdUseLock.IsChecked = false;
+        ConnectPwdPasswordBox.Text = "";
+        ConnectPwdConfirmBox.Text = "";
+        ConnectPwdStrengthText.Visibility = Visibility.Collapsed;
+        ConnectPwdConfirmButton.IsEnabled = false; // M5
+        _animConnectPwd = false; // M2: show entry resets the hide guard
+        ShowOverlay(ConnectPwdOverlay, ConnectPwdDialog, ConnectPwdDialogTransform);
+    }
+
+    private void HideConnectPwdDialog()
+    {
+        if (_animConnectPwd) return; // M2 hide re-entry guard
+        _animConnectPwd = true;
+        HideOverlay(ConnectPwdOverlay, ConnectPwdDialog, ConnectPwdDialogTransform, () => _animConnectPwd = false);
+    }
+
+    private void ConnectPwdClose_Click(object sender, RoutedEventArgs e) => HideConnectPwdDialog();
+    private void ConnectPwdCancel_Click(object sender, RoutedEventArgs e) => HideConnectPwdDialog();
+    private void ConnectPwdScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, ConnectPwdScrim)) HideConnectPwdDialog(); }
+
+    private void ConnectPwdUseLock_Changed(object sender, RoutedEventArgs e)
+    {
+        
+        bool useLock = ConnectPwdUseLock.IsChecked == true;
+        ConnectPwdPasswordBox.IsEnabled = !useLock;
+        ConnectPwdConfirmBox.IsEnabled = !useLock;
+        if (useLock) { ConnectPwdPasswordBox.Text = ""; ConnectPwdConfirmBox.Text = ""; ConnectPwdStrengthText.Visibility = Visibility.Collapsed; }
+        UpdateConnectPwdConfirmState();
+    }
+
+    private void ConnectPwdPasswordBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
+    private void ConnectPwdConfirmBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
+
+    private void UpdateConnectPwdStrengthAndConfirm()
+    {
+        var pw = ConnectPwdPasswordBox.Text;
+        if (pw.Length == 0) { ConnectPwdStrengthText.Visibility = Visibility.Collapsed; }
+        else
+        {
+            var rating = Novara.Services.PasswordStrength.Rate(pw);
+            ConnectPwdStrengthText.Visibility = Visibility.Visible;
+            switch (rating)
+            {
+                case Novara.Services.BackupPasswordStrength.Strong:
+                    ConnectPwdStrengthText.Text = App.GetString("Setting_EncBackup_StrengthStrong");
+                    ConnectPwdStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50));
+                    break;
+                case Novara.Services.BackupPasswordStrength.Medium:
+                    ConnectPwdStrengthText.Text = App.GetString("Setting_EncBackup_StrengthMedium");
+                    ConnectPwdStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00));
+                    break;
+                default:
+                    ConnectPwdStrengthText.Text = App.GetString("Setting_EncBackup_StrengthWeak");
+                    ConnectPwdStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+                    break;
+            }
+        }
+        UpdateConnectPwdConfirmState();
+    }
+
+    private void UpdateConnectPwdConfirmState()
+    {
+        
+        bool valid = ConnectPwdUseLock.IsChecked == true
+            || (ConnectPwdPasswordBox.Text.Length > 0 && ConnectPwdPasswordBox.Text == ConnectPwdConfirmBox.Text);
+        ConnectPwdConfirmButton.IsEnabled = valid;
+    }
+
+    private async void ConnectPwdConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        
+        if (_pickerFlowBusy) return; // N5T1-05: one FileSavePicker flow at a time - a second concurrent picker throws COM
+        _pickerFlowBusy = true;
+        try
+        {
+            HideConnectPwdDialog();
+            await ExportSnapshotFlowAsync();
+        }
+        finally { _pickerFlowBusy = false; }
+    }
+
+    private async System.Threading.Tasks.Task ExportSnapshotFlowAsync()
+    {
+        try 
+        {
+            
+            string? password = ConnectPwdUseLock.IsChecked == true ? App.Store?.Password : ConnectPwdPasswordBox.Text;
+            if (string.IsNullOrEmpty(password))
+            {
+                ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+                return;
+            }
+
+            bool includeMemo = ConnectChkMemo.IsChecked == true;
+            bool includePaths = ConnectChkFile.IsChecked == true;
+            bool includePlan = ConnectChkPlan.IsChecked == true;
+            bool includeDiary = ConnectChkDiary.IsChecked == true;
+
+            var cipher = App.Store?.ExportSnapshotCipher(password, includeMemo, includePaths, includePlan, includeDiary);
+            if (cipher == null)
+            {
+                ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+                return;
+            }
+
+            var template = LoadSnapshotTemplate();
+            if (template == null)
+            {
+                ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+                return;
+            }
+
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+            picker.FileTypeChoices.Add("Novara Snapshot", new List<string> { ".html" });
+            picker.SuggestedFileName = string.Format("NovaraSnapshot_{0:yyyyMMdd_HHmmss}", DateTime.Now);
+            var file = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            var exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "6.2.0";
+            var html = template
+                .Replace("__CIPHER_BASE64__", cipher)
+                .Replace("__EXPORTED_AT__", exportedAt)
+                .Replace("__VERSION__", version)
+                .Replace("__LANGUAGE__", App.CurrentLanguage);
+
+            await File.WriteAllTextAsync(file.Path, html, new System.Text.UTF8Encoding(false));
+            ShowImportResult(App.GetString("Setting_Export_Success"), App.GetString("Connect_Export_SuccessDesc"));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"导出离线查看器失败: {ex}");
+            ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+        }
+    }
+
+    private string? LoadSnapshotTemplate()
+    {
+        try
+        {
+            
+            var bundled = Path.Combine(AppContext.BaseDirectory, "snapshot-viewer.html");
+            if (File.Exists(bundled)) return File.ReadAllText(bundled);
+            var src = Path.Combine(AppContext.BaseDirectory, "SnapshotViewer", "index.html");
+            if (File.Exists(src)) return File.ReadAllText(src);
+            return null;
+        }
+        catch { return null; }
+    }
+
+    
+    private void ShowConnectLockNoticeDialog()
+    {
+        _animConnectLockNotice = false; // M2: show entry resets the hide guard
+        ShowOverlay(ConnectLockNoticeOverlay, ConnectLockNoticeDialog, ConnectLockNoticeDialogTransform);
+    }
+
+    private void HideConnectLockNoticeDialog()
+    {
+        if (_animConnectLockNotice) return; // M2 hide re-entry guard
+        _animConnectLockNotice = true;
+        HideOverlay(ConnectLockNoticeOverlay, ConnectLockNoticeDialog, ConnectLockNoticeDialogTransform, () => _animConnectLockNotice = false);
+    }
+
+    private void ConnectLockNoticeClose_Click(object sender, RoutedEventArgs e) => HideConnectLockNoticeDialog();
+    private void ConnectLockNoticeCancel_Click(object sender, RoutedEventArgs e) => HideConnectLockNoticeDialog();
+    private void ConnectLockNoticeScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, ConnectLockNoticeScrim)) HideConnectLockNoticeDialog(); }
+
     private void HideResetConfirmDialog()
     {
         if (_animResetConfirm) return; // D3 (Round 5): M2 hide re-entry guard
@@ -2155,6 +2408,9 @@ private void ShowResetPasswordDialog()
     private bool _animCsvExportNotice;
     private bool _animEncExport;      
     private bool _animEncImportPwd;   
+    private bool _animConnectPwd;     
+    private bool _animConnectIntro;   
+    private bool _animConnectLockNotice; 
     private string? _pendingEncImportPath; 
 
     

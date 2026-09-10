@@ -581,6 +581,76 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
         }
     }
 
+    
+
+
+
+
+
+    public string? ExportSnapshotCipher(string password, bool includeMemo, bool includePaths, bool includePlan, bool includeDiary)
+    {
+        try
+        {
+            if (_suppressSave) return null;   // N5S-07: same stale-memory guard as plaintext/encrypted export
+            if (!_loaded) return null;        // N6-16: never export a "valid header + empty db" clone
+            if (string.IsNullOrEmpty(password)) return null;
+            var export = CloneForSnapshot(includeMemo, includePaths, includePlan, includeDiary);
+            if (export == null) return null;
+            var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
+
+            // Per-snapshot random salt + 44B header, byte-for-byte identical to ExportBackupEncrypted (v4).
+            var salt = RandomNumberGenerator.GetBytes(32);
+            var header = new byte[HeaderSizeEncryptedBackup];
+            BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
+            header[4] = FileVersionEncryptedBackup;
+            header[5] = FlagEncrypted;
+            header[6] = AlgoIdAes256Gcm;
+            header[7] = KdfIdPbkdf2Sha256;
+            BitConverter.TryWriteBytes(header.AsSpan(8, 4), BackupKdfIterations);
+            salt.CopyTo(header, 12);
+            var cipher = CryptoService.EncryptGcm(json, password, salt, BackupKdfIterations, header);
+
+            var result = new byte[HeaderSizeEncryptedBackup + cipher.Length];
+            header.CopyTo(result, 0);
+            cipher.CopyTo(result, HeaderSizeEncryptedBackup);
+            return Convert.ToBase64String(result);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"NovaraStore 生成快照密文失败: {ex}");
+            return null;
+        }
+    }
+
+    
+    private NovaraDatabase? CloneForSnapshot(bool includeMemo, bool includePaths, bool includePlan, bool includeDiary)
+    {
+        try
+        {
+            var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions), JsonOptions);
+            if (copy == null) return null;
+            copy.MemoEntries?.RemoveAll(x => x.IsDeleted);
+            copy.PathBackupItems?.RemoveAll(x => x.IsDeleted);
+            copy.TodoCards?.RemoveAll(x => x.IsDeleted);
+            copy.NoteCards?.RemoveAll(x => x.IsDeleted);
+            copy.DiaryItems?.RemoveAll(x => x.IsDeleted);
+            if (!includeMemo) { copy.MemoGroups?.Clear(); copy.MemoEntries?.Clear(); }
+            if (!includePaths) copy.PathBackupItems?.Clear();
+            if (!includePlan) { copy.TodoCards?.Clear(); copy.NoteCards?.Clear(); }
+            if (!includeDiary) copy.DiaryItems?.Clear();
+            
+            if (copy.AppSettings != null)
+            {
+                copy.AppSettings.McpToken = "";
+                copy.AppSettings.McpTokenGeneratedAt = null;
+                copy.AppSettings.McpAllowedProcesses?.Clear();
+                copy.AppSettings.McpClientPermissions?.Clear();
+            }
+            return copy;
+        }
+        catch { return null; }
+    }
+
     /* ========== NovaraStore Import Backup ==========
 Function: Backup import: header/version/MD5 validation, plaintext only, in-memory rollback on failure (#1/#22), null-normalize & dedupe (#23/#24)
 Corresponding UI: NovaraStore.cs
