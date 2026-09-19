@@ -8,7 +8,7 @@
 
 ---
 
-Novara is a **local-first personal data control layer — for you, and for your AI agents**, built with C# and WinUI 3. Your data lives on your machine in a single encrypted database — **no cloud uploads, no telemetry, no account registration**. Your AI agents can use it through a permission-checked interface, and starting with 7.0, your data can travel with you: encrypted snapshots you can read anywhere, with sync and self-hosted options growing from the same foundation. When you choose to run a server, it only ever handles ciphertext — the plaintext never leaves your control.
+Novara is a **local-first personal data control layer — for you, and for your AI agents**, built with C# and WinUI 3. Your data lives on your machine in a single encrypted database — **no cloud uploads, no telemetry, no account registration**. Your AI agents can use it through a permission-checked interface, and since 7.0 your data can travel with you: encrypted snapshots you can read anywhere. Since 8.0 it also **synchronizes across your own devices** through a server you host yourself — no account, no official cloud, and the server still only ever handles ciphertext: the plaintext never leaves your control.
 
 Not a password manager. Not a notes app. A data control layer for the AI era — **both you and your AI can use the data, but only you hold the keys.**
 
@@ -16,13 +16,15 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 
 ---
 
-## 7.0 — The Connected Era Begins
+## 8.0 — Sync, on a Server You Own
 
-7.0 is not a feature release — it is a change of direction. Novara begins its journey from a single-machine tool to a cross-device data control layer. The first step is **Novara Snapshot**: export your entire database as one self-contained encrypted web page, open it anywhere — phone, PC, or your own server — unlock with a password, and read everything. No account, no upload, no server touching plaintext. Sync and self-hosted deployment will grow from the same foundation, and the red lines stay fixed: the server never sees plaintext, there is no official cloud, and offline never degrades.
+8.0 is where the connected era turns two-way. Novara now **synchronizes across your devices** through a server you run yourself — and that server still never sees your data: it holds versioned ciphertext blobs and knows nothing about their contents. Pairing a second device takes three values (server URL, space id, enrollment secret), and the space key is generated on your first device and never leaves your control. Your PC stays the authority — lose the server and one push from your PC rebuilds it. Offline never degrades: a dead server changes nothing about how Novara works.
 
-- **Novara Snapshot** — one encrypted, self-contained HTML file: your data, readable in any modern browser on any device, fully offline
-- **TOTP on the go** — verification codes computed locally in the browser; the highest-frequency moment for a vault is checking a code on your phone
-- **Light & dark theme in the viewer** — one tap in the title bar, light by default
+- **Cross-device sync** — one encrypted state, converged across every paired device
+- **A self-hosted server in the box** — the installer ships `NovaraSync.exe` (a single self-contained binary, so the server machine needs no .NET runtime) plus two one-click scripts that pin the data directory for you
+- **Web reader, and a limited editor** — the same self-contained viewer as 7.0, now able to load live ciphertext from your server and make limited edits (memos, to-dos, notes) that are re-encrypted before upload
+- **Honest conflict handling** — the later write wins and the earlier one is preserved as a conflict copy you can compare, keep or export
+- **Device center & sync audit** — see every paired device, revoke a lost phone's token, and read a local log of every upload, download and conflict
 
 ## Security & Privacy Lock
 
@@ -150,6 +152,18 @@ Host it for yourself, or send the file to someone you trust — file and passwor
   <img src="images/English-Mobile%20-%20Snapshot.png" alt="Snapshot viewer on mobile" width="300" />
 </p>
 
+## Cross-Device Sync
+
+Sync keeps one encrypted state converging across your devices — and it is built so the server can never read it.
+
+- **Your server, your rules** — run `NovaraSync` on your own PC, NAS or VPS; it stores versioned ciphertext with a space / device / version index, and holds no key, no user accounts and no telemetry
+- **Pairing** — the server prints a space id and an enrollment secret exactly once; you enter those plus its URL on each device. The space key is generated on the first device and never reaches the server
+- **The PC stays the authority** — your local database is always the source of truth; wipe the server and one push from your PC restores it
+- **HTTPS by design** — the browser side needs a secure context, so the deployment guide recommends a TLS-terminating reverse proxy (Caddy, with automatic certificates) or a private network link
+- **Conflicts, stated honestly** — when two devices change the same version the later write wins, and the earlier version is kept as a conflict copy so nothing disappears silently
+- **Devices and history** — the device center lists paired devices with trust state and last sync, revokes a device or resets its token, and every sync event lands in a local audit log
+- **Offline never degrades** — sync is an enhancement, not a dependency
+
 ## Workspaces
 
 Sometimes one flat list isn't enough, but folders are overkill. A **workspace** is a virtual filter that spans memos, paths, todos, notes, and records at once: create a space for a project, assign cards to it, and switching spaces reshapes every list. Cards never move between "folders" — the database stays flat — so a card can belong to your workflow without being locked into it.
@@ -227,17 +241,18 @@ Your data moves with you, freely and without vendor lock-in:
 
 ## Where Novara Is Going
 
-7.0 opened the connected era, and the roadmap grows from the same foundation — under the same three red lines: **the server never sees plaintext, there is no official cloud, and offline never degrades**.
+8.0 brought two-way sync, and the roadmap grows from the same foundation — under the same three red lines: **the server never sees plaintext, there is no official cloud, and offline never degrades**.
 
-- **Now — Novara Snapshot (7.0)**: one-way, encrypted, self-contained snapshots you can read anywhere
-- **Next — Sync**: end-to-end encrypted synchronization across your devices through a server you self-host, with conflict handling
-- **Later — Self-hosted deployment**: a Docker-ready server you run on your own NAS or VPS, deployable in minutes
+- **Now — Cross-device sync (8.0)**: end-to-end encrypted synchronization through a server you self-host, with a web reader and limited editor, and conflict handling
+- **Next — One-command deployment**: a Docker image and a compose file, with walkthroughs for NAS and VPS hosts
+- **Later — Native mobile apps**: the same data control layer, as first-class clients on phones
 
 ## Data & Privacy at a Glance
 
 - **Local-first**: everything stays on your machine — no cloud, no telemetry, no account
 - **Authenticated encryption**: AES-256-GCM with PBKDF2 key derivation (3,000,000 iterations since format v3)
-- **Ciphertext-only servers**: in the connected era, anything that leaves your machine is encrypted first — servers only ever relay ciphertext
+- **Ciphertext-only servers**: in the connected era, anything that leaves your machine is encrypted first — a server only ever stores or relays ciphertext
+- **Sync you host**: cross-device sync runs through your own server, which holds no keys and can be rebuilt from your PC at any time
 - **Portable single file**: `data.novadb` holds all seven partitions; optional password protects the whole database
 - **Health check**: encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone

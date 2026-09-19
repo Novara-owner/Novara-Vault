@@ -17,6 +17,8 @@ How to build, publish, and package Novara from source.
 
 > **Windows SDK path note:** `Novara.csproj` pins `AppxMSBuildToolsPath` to a machine-specific Visual Studio path. If you build on a different machine, update or remove that property to match your local Visual Studio / Windows SDK layout.
 
+> **Windows SDK path note:** `AppxMSBuildToolsPath` points at the Appx package MSBuild tasks used by the WinUI PRI generation step. This repository does **not** ship the property — it is a build-machine setting, not a project setting — so the build falls back to the .NET SDK's own path. If your SDK lacks `Microsoft.Build.Packaging.Pri.Tasks.dll` you will see `MSB4062 ... ExpandPriContent`; in that case pass the property on the command line (or set it in the environment) to point at your Visual Studio installation's `AppxPackage` folder.
+
 ## Project layout
 
 | Project | Output | Notes |
@@ -26,6 +28,8 @@ How to build, publish, and package Novara from source.
 | `NovaraMCP/NovaraMCP.csproj` | `NovaraMCP.exe` | MCP server (single-file) |
 | `Novara.Core/Novara.Core.csproj` | class library | Pure logic (referenced by the app and tests) |
 | `Novara.Tests/Novara.Tests.csproj` | xUnit tests | Unit tests |
+| `Novara.Server/Novara.Server.csproj` | `NovaraSync.exe` | Self-hosted sync server host (single-file, self-contained) |
+| `Novara.Sync.Server/Novara.Sync.Server.csproj` | class library | Sync server logic (referenced by `Novara.Server` and the tests) |
 
 ## Steps
 
@@ -66,6 +70,16 @@ dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 
 Also verify `Microsoft.Graphics.Canvas.dll` and `Microsoft.Graphics.Canvas.Interop.dll` are present — the blur effects need them and degrade silently if they are missing.
 
+The bundled sync server (8.0+) is published as a single compressed, self-extracting file, so the machine that runs it needs no .NET runtime:
+
+```powershell
+dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained `
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+Copy `NovaraSync.exe` plus the `Novara.Web\` folder it serves at `/web` into a `Sync\` subfolder of the publish directory.
+
 ### 6. Package with Inno Setup
 
 Empty the publish folder first: `dotnet publish` never deletes leftovers, and a stale `Novara.pri` from a previous build combined with new DLLs crashes every modified page. Then compile `Installer/setup.iss` with the Inno Setup compiler. The final installer bundles:
@@ -73,7 +87,8 @@ Empty the publish folder first: `dotnet publish` never deletes leftovers, and a 
 - `Novara.exe` + `Novara.pri` (add the `.pri` manually — the publish output does not include it)
 - the `Host\` subfolder (complete StickNoteHost bundle)
 - `NovaraMCP.exe`
-- `snapshot-viewer.html` — the Novara Snapshot viewer template, loaded by the export flow (7.0+)
+- `snapshot-viewer.html` — the Novara Snapshot viewer template, loaded by the export flow (7.0+); it must reference `viewer.js` and `viewer.css`, which are inlined on export
+- the `Sync\` subfolder — `NovaraSync.exe` and the `Novara.Web\` reader site (8.0+)
 - `Assets\128.ico`
 
 ## Tests
@@ -89,4 +104,4 @@ The test project covers the pure-logic core (`Novara.Core`): storage, crypto, MC
 | Artifact | Location |
 |----------|----------|
 | Installer | `Novara_Setup_x.x.x.exe` (from `setup.iss`) |
-| Publish folder | `Novara.exe`, `Novara.pri`, `NovaraMCP.exe`, `snapshot-viewer.html`, `Host\StickNoteHost.exe`, `Assets\` |
+| Publish folder | `Novara.exe`, `Novara.pri`, `NovaraMCP.exe`, `snapshot-viewer.html`, `Host\StickNoteHost.exe`, `Sync\NovaraSync.exe`, `Sync\Novara.Web\`, `Assets\` |

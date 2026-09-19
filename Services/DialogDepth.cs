@@ -1,10 +1,3 @@
-/* ========== DialogDepth - Dialog Floating Effect Infrastructure ==========
-Function: Auto-wire depth treatment for every modal dialog - real z-shadow (ThemeShadow,
-receiver = own scrim). Veil driving is now EXPLICIT: pages call VeilShow/VeilHide so the
-window-level fullscreen scrim (ChromeScrim) fades in/out in lockstep with the dialog.
-Zero intrusion: pages only call AttachContainer once in the constructor.
-Corresponding UI: all *Overlay grids across pages + MainWindow window-level dialogs
-Logic Range: Whole file - container scan, scrim/border pairing, explicit veil show/hide */
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,12 +8,12 @@ namespace Novara.Services;
 
 public static class DialogDepth
 {
-    /// <summary>
-    /// Scan a root container (page root grid or window root grid): for every overlay group that
-    /// contains a "*Scrim" grid + a Border dialog, attach a ThemeShadow to the dialog so the dialog
-    /// casts a real z-shadow onto its own scrim. (driveChrome is kept for signature compatibility;
-    /// the old value-coupled chrome veil was removed in 5.x and replaced by explicit VeilShow/VeilHide.)
-    /// </summary>
+
+
+
+
+
+
     public static void AttachContainer(Grid container, bool driveChrome = true, bool autoVeil = false)
     {
         var processed = new HashSet<Grid>();
@@ -38,7 +31,7 @@ public static class DialogDepth
             }
             if (scrim == null || dialog == null || !processed.Add(scrim)) continue;
 
-            ApplyBlurScrim(scrim); 
+            ApplyBlurScrim(scrim);
 
             if (dialog.Shadow == null)
             {
@@ -48,21 +41,21 @@ public static class DialogDepth
                 dialog.Translation = new System.Numerics.Vector3(0, 0, 32);
             }
 
-            
-            
+
+
             if (autoVeil) overlay.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, OnOverlayVisibilityChanged);
         }
     }
 
-    
-    
-    
+
+
+
     private static void ApplyBlurScrim(Grid scrim)
     {
         try
         {
-            
-            
+
+
             if (scrim.Background is Microsoft.UI.Xaml.Media.SolidColorBrush sb && sb.Color.A == 0) return;
             scrim.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
             var compositor = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(scrim).Compositor;
@@ -70,7 +63,7 @@ public static class DialogDepth
             {
                 Name = "Blur",
                 BlurAmount = 6f,
-                BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Soft, 
+                BorderMode = Microsoft.Graphics.Canvas.Effects.EffectBorderMode.Soft,
                 Optimization = Microsoft.Graphics.Canvas.Effects.EffectOptimization.Balanced,
                 Source = new Microsoft.UI.Composition.CompositionEffectSourceParameter("Backdrop"),
             };
@@ -82,7 +75,7 @@ public static class DialogDepth
             scrim.SizeChanged += (_, e) => visual.Size = new System.Numerics.Vector2((float)e.NewSize.Width, (float)e.NewSize.Height);
             Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetElementChildVisual(scrim, visual);
 
-            
+
             if (scrim.Parent is Grid overlay)
             {
                 int idx = overlay.Children.IndexOf(scrim);
@@ -96,7 +89,7 @@ public static class DialogDepth
         }
         catch
         {
-            // blur is decorative - fall back to a transparent scrim so the dialog still works
+
             scrim.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         }
     }
@@ -107,11 +100,11 @@ public static class DialogDepth
         else VeilHide();
     }
 
-    /// <summary>Explicit pairing for overlays the container scan cannot reach (nested deeper than
-    /// one level, e.g. LockScreen's ForgotOverlay). Shadow only.</summary>
+
+
     public static void AttachPair(Grid scrim, Border dialog, bool driveChrome = true)
     {
-        ApplyBlurScrim(scrim); // 9.3#5
+        ApplyBlurScrim(scrim);
         if (dialog.Shadow == null)
         {
             var shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
@@ -121,15 +114,15 @@ public static class DialogDepth
         }
     }
 
-    
+
     public static void VeilShow() => App.MainWindow?.VeilShow();
 
-    
+
     public static void VeilHide() => App.MainWindow?.VeilHide();
 
-    
+
     public static void VeilHideImmediate() => App.MainWindow?.VeilHideImmediate();
 
-    
+
     public static void VeilClear() => App.MainWindow?.VeilClear();
 }

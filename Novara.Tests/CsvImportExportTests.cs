@@ -4,12 +4,12 @@ using Xunit;
 
 namespace Novara.Tests;
 
-/// <summary>
-/// N4A-07: CSV import parse-chain regression coverage (previously zero tests).
-/// Covers: Novara dialect roundtrip, KeePass 1.x mapping, quoted-field space preservation (NC1),
-/// formula-prefix strip on import (N2C-2), multi-line note continuation (NC4) and the
-/// notes-fill-empty-only rule (N4A-03).
-/// </summary>
+
+
+
+
+
+
 public class CsvImportExportTests
 {
     private static MemoEntry MakeEntry(string name, string type, string keyInfo, List<EntryField> fields)
@@ -22,7 +22,7 @@ public class CsvImportExportTests
         {
             new() { Label = "网址", Value = "https://a.example.com", CanCopy = true },
             new() { Label = "账号", Value = "user", CanCopy = true },
-            new() { Label = "密码", Value = "p@ss word", CanCopy = true }, 
+            new() { Label = "密码", Value = "p@ss word", CanCopy = true },
             new() { Label = "备注", Value = "line1\nline2", CanCopy = false },
         });
         var csv = CsvImportExportService.ExportMemoEntriesToCsv(new List<MemoEntry> { entry }, new List<MemoGroup>());
@@ -33,17 +33,17 @@ public class CsvImportExportTests
         Assert.Single(parsed.Entries);
         var back = parsed.Entries[0];
         Assert.Equal("站点A", back.Name);
-        Assert.Equal("p@ss word", FirstValue(back, "密码")); // NC1
+        Assert.Equal("p@ss word", FirstValue(back, "密码"));
         Assert.Equal("user", FirstValue(back, "账号"));
-        
+
         Assert.Equal("line1\nline2", parsed.Notes0());
     }
 
     [Fact]
     public void RoundTrip_BankCardAndIdCard_SecondaryFieldsNotPolluted()
     {
-        
-        
+
+
         var bank = MakeEntry("我的银行卡", "银行卡", "622200001", new List<EntryField>
         {
             new() { Label = "卡号", Value = "622200001", CanCopy = true },
@@ -93,7 +93,7 @@ public class CsvImportExportTests
         Assert.False(parsed.IsNovaraFormat);
         Assert.Single(parsed.Entries);
         var e = parsed.Entries[0];
-        
+
         Assert.Equal("工作", e.Name);
         Assert.Contains("alice", AllText(e));
         Assert.Contains("s3cret", AllText(e));
@@ -103,12 +103,12 @@ public class CsvImportExportTests
     [Fact]
     public void ParseCsv_RealKeePassExport_IsRecognized()
     {
-        
+
         var csv = "\"Account\",\"Login Name\",\"Password\",\"Web Site\",\"Comments\"\n" +
                   "\"Sample Entry\",\"User Name\",\"Password\",\"https://keepass.info/\",\"Notes\"\n" +
                   "\"Sample Entry #2\",\"Michael321\",\"12345\",\"https://keepass.info/help/kb/testform.html\",\"\n";
         var parsed = CsvImportExportService.ParseCsv(csv, "账户");
-        Assert.Equal(2, parsed.Entries.Count); 
+        Assert.Equal(2, parsed.Entries.Count);
         Assert.Equal(0, parsed.SkippedCount);
         Assert.Equal("Sample Entry", parsed.Entries[0].Name);
         Assert.Contains("User Name", AllText(parsed.Entries[0]));
@@ -118,7 +118,7 @@ public class CsvImportExportTests
     [Fact]
     public void ParseCsv_FormulaPrefixIsStrippedOnImport()
     {
-        
+
         var entry = MakeEntry("calc", "网站", "https://c.example.com", new List<EntryField>
         {
             new() { Label = "网址", Value = "https://c.example.com", CanCopy = true },
@@ -135,12 +135,49 @@ public class CsvImportExportTests
     }
 
     [Fact]
+    public void ParseCsv_ExternalDialect_KeepsALeadingQuoteVerbatim()
+    {
+
+
+
+        var csv = "\"Account\",\"Login Name\",\"Password\",\"Web Site\",\"Comments\"\n" +
+                  "\"ext\",\"'-abc\",\"'@x\",\"https://x.example.com\",\"''q\"";
+        var parsed = CsvImportExportService.ParseCsv(csv, "账户");
+
+        Assert.False(parsed.IsNovaraFormat);
+        var e = parsed.Entries.Single();
+        Assert.Contains("'-abc", AllText(e));
+        Assert.Contains("'@x", AllText(e));
+        Assert.Contains("''q", AllText(e));
+    }
+
+    [Fact]
+    public void RoundTrip_NovaraFormat_StillStripsTheInjectedQuote()
+    {
+
+        var entry = MakeEntry("d", "网站", "https://d.example.com", new List<EntryField>
+        {
+            new() { Label = "网址", Value = "https://d.example.com", CanCopy = true },
+            new() { Label = "账号", Value = "-abc", CanCopy = true },
+            new() { Label = "密码", Value = "@x", CanCopy = true },
+            new() { Label = "备注", Value = "", CanCopy = false },
+        });
+        var csv = CsvImportExportService.ExportMemoEntriesToCsv(new List<MemoEntry> { entry }, new List<MemoGroup>());
+        var parsed = CsvImportExportService.ParseCsv(csv, "自定义");
+
+        Assert.True(parsed.IsNovaraFormat);
+        var back = parsed.Entries.Single();
+        Assert.Equal("-abc", FirstValue(back, "账号"));
+        Assert.Equal("@x", FirstValue(back, "密码"));
+    }
+
+    [Fact]
     public void RoundTrip_QuoteLeadingValues_NotCorrupted()
     {
-        // N5-S14-01/N5-RC-04: '-leading values must escape on export (CsvEscape adds one quote) and
-        // strip exactly one quote on import. The old pair was asymmetric - '=secret exported verbatim
-        // then imported as =secret (silent corruption), and ''=x lost a quote through the
-        // unconditional '\'' strip branch that had no export-side producer.
+
+
+
+
         var entry = MakeEntry("q", "网站", "https://q.example.com", new List<EntryField>
         {
             new() { Label = "网址", Value = "https://q.example.com", CanCopy = true },
@@ -149,7 +186,7 @@ public class CsvImportExportTests
             new() { Label = "备注", Value = "", CanCopy = false },
         });
         var csv = CsvImportExportService.ExportMemoEntriesToCsv(new List<MemoEntry> { entry }, new List<MemoGroup>());
-        Assert.Contains("''=secret", csv); // export escapes the leading quote
+        Assert.Contains("''=secret", csv);
 
         var parsed = CsvImportExportService.ParseCsv(csv, "自定义");
         Assert.Single(parsed.Entries);
@@ -160,8 +197,8 @@ public class CsvImportExportTests
     [Fact]
     public void RoundTrip_SpaceLeadingFormula_Symmetric()
     {
-        // N4-48 escapes past leading whitespace on export; the import strip must probe the same way
-        // (' followed by whitespace-then-'='), otherwise ' =SUM(A1) kept a stray leading quote.
+
+
         var entry = MakeEntry("ws", "网站", "https://w.example.com", new List<EntryField>
         {
             new() { Label = "网址", Value = "https://w.example.com", CanCopy = true },
@@ -179,8 +216,8 @@ public class CsvImportExportTests
     [Fact]
     public void Import_QuoteLeadingPlainText_Unchanged()
     {
-        // The strip rule must stay narrow: a value whose post-quote content is not escape-worthy
-        // (plain 'hello, a lone quote) never loses its quote.
+
+
         var entry = MakeEntry("n", "网站", "https://n.example.com", new List<EntryField>
         {
             new() { Label = "网址", Value = "https://n.example.com", CanCopy = true },
@@ -199,7 +236,7 @@ public class CsvImportExportTests
     [Fact]
     public void ParseCsv_NoteLineFillsEmptyButNeverOverwritesColumnValue()
     {
-        
+
         var csv = "Group,Type,Name,URL,Username,Password,Notes\n" +
                   ",网站,n1,https://n.example.com,u1,real-secret,\"密码: fake-from-note\"";
         var parsed = CsvImportExportService.ParseCsv(csv, "自定义");
@@ -214,7 +251,7 @@ public class CsvImportExportTests
     private static string AllText(MemoEntry e)
         => string.Join("\n", new[] { e.Name, e.KeyInfo }.Concat(e.Fields.Select(f => f.Label + ":" + f.Value)));
 
-    // ==================== 9.3: browser / manager dialects ====================
+
 
     [Fact]
     public void ParseCsv_ChromeDialect_MapsNameUrlUsernamePassword()
@@ -239,7 +276,7 @@ public class CsvImportExportTests
         var parsed = CsvImportExportService.ParseCsv(csv, "网站");
         Assert.Single(parsed.Entries);
         var e = parsed.Entries[0];
-        Assert.Equal("example.com", e.Name); // no name column - host is the name
+        Assert.Equal("example.com", e.Name);
         Assert.Equal("user1", FirstValue(e, "账号"));
         Assert.Equal("pw1", FirstValue(e, "密码"));
     }
@@ -273,8 +310,8 @@ public class CsvImportExportTests
     [Fact]
     public void ParseCsv_NovaraFormat_NotHijackedByBrowserDialects()
     {
-        // Novara's own CSV lowercases to username/url keys through the ignore-case dictionary -
-        // the browser branches must not strip its Notes-encoded extra fields.
+
+
         var csv = "\"Group\",\"Type\",\"Name\",\"URL\",\"Username\",\"Password\",\"Notes\"\n" +
                   "\"\",\"网站\",\"GH\",\"https://github.com\",\"octocat\",\"pass123\",\"备注: keep me\"";
         var parsed = CsvImportExportService.ParseCsv(csv, "网站");
@@ -282,11 +319,11 @@ public class CsvImportExportTests
         Assert.Single(parsed.Entries);
         var e = parsed.Entries[0];
         Assert.Equal("GH", e.Name);
-        Assert.Equal("keep me", FirstValue(e, "备注")); // notes-encoded field must survive
+        Assert.Equal("keep me", FirstValue(e, "备注"));
     }
 }
 
-// N4A-07: tiny accessor so tests can read the raw Notes column round-tripped through fields.
+
 file static class CsvTestExtensions
 {
     public static string Notes0(this CsvImportResult r)

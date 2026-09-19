@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Novara.Tests;
 
-// API upgrade Step 4: dataset loader validation + proving the data-driven refactor works.
+
 public class ProbeDataSetLoaderTests
 {
     [Fact]
@@ -29,7 +29,7 @@ public class ProbeDataSetLoaderTests
     public void Validate_BadRegex_Fails()
     {
         var ds = ProbeDataSetLoader.Default();
-        ds.PoisoningStrongPatterns.Add("("); // unbalanced group
+        ds.PoisoningStrongPatterns.Add("(");
         Assert.False(ProbeDataSetLoader.Validate(ds, out var error));
         Assert.StartsWith("bad-regex:", error);
     }
@@ -68,8 +68,8 @@ public class ProbeDataSetLoaderTests
     [Fact]
     public void Validate_EmptyPromptOrExpected_Fails()
     {
-        // N5V-03: regression for N3D-2 - a question with an empty Expected used to slip through and
-        // made CheckBenchmarkAnswer("", reply) trivially true (every answer "correct").
+
+
         var ds = ProbeDataSetLoader.Default();
         ds.BenchmarkQuestions[0].Expected = "";
         Assert.False(ProbeDataSetLoader.Validate(ds, out var e1));
@@ -84,25 +84,25 @@ public class ProbeDataSetLoaderTests
     [Fact]
     public void Validate_CapsPoisoningPatternCount()
     {
-        // N3-30: a hostile dataset must not stall the whole probe set - patterns are matched
-        // serially with a 1s ReDoS guard each, so an unbounded list would cost N seconds.
+
+
         var ds = ProbeDataSetLoader.Default();
-        for (int i = 0; i < 200; i++) ds.PoisoningStrongPatterns.Add("curl");   // 200 > 64 cap
-        for (int i = 0; i < 150; i++) ds.PoisoningWeakPatterns.Add("https?://"); // 150 > 64 cap
+        for (int i = 0; i < 200; i++) ds.PoisoningStrongPatterns.Add("curl");
+        for (int i = 0; i < 150; i++) ds.PoisoningWeakPatterns.Add("https?://");
         Assert.True(ProbeDataSetLoader.Validate(ds, out var error), error);
         Assert.Equal(64, ds.PoisoningStrongPatterns.Count);
         Assert.Equal(64, ds.PoisoningWeakPatterns.Count);
     }
 
-    // ---- Prove the refactor is data-driven (not hardcoded) ----
+
 
     [Fact]
     public void AnalyzePoisoning_CustomPatterns_ChangeBehavior()
     {
-        // A harmless reply is PASS under the default rules.
+
         Assert.Equal(ProbeVerdict.Pass, RelayProbeService.AnalyzePoisoning("144"));
 
-        // A custom strong pattern makes that same reply FAIL.
+
         var strong = new System.Collections.Generic.List<string> { "144" };
         var weak = new System.Collections.Generic.List<string>();
         Assert.Equal(ProbeVerdict.Fail, RelayProbeService.AnalyzePoisoning("144", strong, weak));

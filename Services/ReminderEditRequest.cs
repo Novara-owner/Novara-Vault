@@ -1,18 +1,10 @@
-/* ========== ReminderEditRequest - Reminder Modify IPC Bridge ==========
-Function: Single-instance reminder-edit bridge (stage-3 step 6): the host passes a reminder
-card (id + current content/due time) to the already-running main instance via a
-pending-reminder-edit.json file + a named event; if the app is closed, the launched
-process reads the same pending file at startup.
-Corresponding UI: PlanPage (reminder dialog in edit mode)
-Logic Range: Whole file business logic of this module
-*/
 using System.Text.Json;
 
 namespace Novara.Services;
 
 public static class ReminderEditRequest
 {
-    // E1-13: event name isolated per config (Debug=.Dev) - see EditRequest.cs
+
     public const string EventName =
 #if DEBUG
         @"Local\Novara.ReminderEditRequest.Dev";
@@ -27,7 +19,7 @@ public static class ReminderEditRequest
     private static Thread? _thread;
     private static volatile bool _running;
 
-    /// <summary>Listen for reminder-edit requests on a background thread; handler runs on that thread.</summary>
+
     public static void StartListening(Action<PendingReminderEdit> handler)
     {
         try
@@ -55,12 +47,12 @@ public static class ReminderEditRequest
             { IsBackground = true };
             _thread.Start();
         }
-        catch { /* event already held or failed - degrade to startup-only handling */ }
+        catch {  }
     }
 
-    // N4P-12: Stop() removed (zero callers) - same trap as ShowWindowRequest.Stop.
 
-    /// <summary>Consume a pending reminder-edit request if one exists (used at startup and by the listener).</summary>
+
+
     public static PendingReminderEdit? ReadPending()
     {
         try
@@ -69,8 +61,8 @@ public static class ReminderEditRequest
             {
                 var json = File.ReadAllText(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingReminderEdit>(json);
-                // N2-07 (N1-60 parity): delete only after a successful deserialize - a torn/half-written
-                // JSON keeps the file for the next read instead of silently dropping the request
+
+
                 if (j != null && !string.IsNullOrWhiteSpace(j.Id))
                 {
                     try { File.Delete(PendingPath); } catch { }
@@ -87,6 +79,6 @@ public class PendingReminderEdit
 {
     public string Id { get; set; } = "";
     public string Content { get; set; } = "";
-    /// <summary>ISO-8601 string; may be empty when absent.</summary>
+
     public string DueTime { get; set; } = "";
 }

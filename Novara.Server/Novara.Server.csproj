@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+
+
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Novara.Server</RootNamespace>
+    <AssemblyName>NovaraSync</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>8.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Novara.Sync.Server\Novara.Sync.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+
+
+
+    <Content Include="..\Novara.Web\**"
+             Link="Novara.Web\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\SnapshotViewer\viewer.css"
+             Link="Novara.Web\viewer.css"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\SnapshotViewer\viewer.js"
+             Link="Novara.Web\viewer.js"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

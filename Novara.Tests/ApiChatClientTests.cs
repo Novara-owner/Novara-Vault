@@ -4,10 +4,10 @@ using Xunit;
 
 namespace Novara.Tests;
 
-// API upgrade Step 1: shared chat client pure helpers + Xiaomi MiMo vendor-matrix recognition.
+
 public class ApiChatClientTests
 {
-    // ---- ValidateUrl (SSRF whitelist) ----
+
 
     [Theory]
     [InlineData("https://api.x.com/v1", true)]
@@ -23,7 +23,7 @@ public class ApiChatClientTests
         Assert.Equal(expected, ApiChatClient.ValidateUrl(url));
     }
 
-    // ---- DetectProtocol ----
+
 
     [Theory]
     [InlineData("Anthropic", null, ApiChatProtocol.Anthropic)]
@@ -51,18 +51,18 @@ public class ApiChatClientTests
     [Fact]
     public void DetectProtocol_ReverseProxyContainingAnthropic_NotMisclassified()
     {
-        // N3-31: a user reverse proxy whose URL merely CONTAINS "/anthropic" (relay name / path
-        // segment) must not flip a matrix-recognized OpenAI-compatible vendor to the Anthropic
-        // protocol - only Xiaomi MiMo / unknown / generic rely on the path signal.
+
+
+
         Assert.Equal(ApiChatProtocol.OpenAI, ApiChatClient.DetectProtocol("OpenAI", "https://my-relay.com/anthropic-compat/v1"));
         Assert.Equal(ApiChatProtocol.OpenAI, ApiChatClient.DetectProtocol("DeepSeek", "https://relay.example/anthropic/v1"));
-        // Xiaomi MiMo / unknown vendors keep the path heuristic.
+
         Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol("Xiaomi MiMo", "https://api.xiaomimimo.com/anthropic"));
         Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol(null, "https://relay.example/anthropic"));
         Assert.Equal(ApiChatProtocol.Anthropic, ApiChatClient.DetectProtocol("generic", "https://relay.example/anthropic"));
     }
 
-    // ---- DeriveChatFromModels / ResolveChatEndpoint ----
+
 
     [Theory]
     [InlineData("https://api.x.com/v1/models", "https://api.x.com/v1/chat/completions")]
@@ -93,7 +93,7 @@ public class ApiChatClientTests
     [Fact]
     public void ResolveChatEndpoint_Ollama_UsesV1Chat()
     {
-        // Ollama's model list is /api/tags, but its OpenAI-compatible chat is /v1/chat/completions.
+
         Assert.Equal("http://localhost:11434/v1/chat/completions",
             ApiChatClient.ResolveChatEndpoint("http://localhost:11434", "Ollama", "http://localhost:11434/api/tags", ApiChatProtocol.OpenAI, "llama3"));
     }
@@ -112,7 +112,7 @@ public class ApiChatClientTests
             ApiChatClient.ResolveChatEndpoint("https://open.bigmodel.cn/api/paas/v4", "Zhipu", "https://open.bigmodel.cn/api/paas/v4/models", ApiChatProtocol.OpenAI, "glm-4"));
     }
 
-    // ---- BuildChatRequestBody ----
+
 
     private static JsonElement Root(string body) => JsonDocument.Parse(body).RootElement;
 
@@ -175,7 +175,7 @@ public class ApiChatClientTests
         Assert.True(body.TryGetProperty("systemInstruction", out _));
     }
 
-    // ---- ParseUsage ----
+
 
     [Fact]
     public void ParseUsage_OpenAi_MapsPromptCompletionTotal()
@@ -221,7 +221,7 @@ public class ApiChatClientTests
         Assert.False(u.HasUsage);
     }
 
-    // ---- ExtractContent / ExtractModel ----
+
 
     [Theory]
     [InlineData("""{"choices":[{"message":{"content":"hi"}}]}""", ApiChatProtocol.OpenAI, "hi")]
@@ -238,7 +238,7 @@ public class ApiChatClientTests
         Assert.Equal("gpt-4o-2024-08-06", ApiChatClient.ExtractModel("""{"model":"gpt-4o-2024-08-06"}""", ApiChatProtocol.OpenAI));
     }
 
-    // ---- ParseOpenAiStreamChunk ----
+
 
     [Fact]
     public void ParseOpenAiStreamChunk_ExtractsDeltaModelUsage()
@@ -260,7 +260,7 @@ public class ApiChatClientTests
         Assert.False(usage.HasUsage);
     }
 
-    // ---- Xiaomi MiMo vendor recognition ----
+
 
     [Theory]
     [InlineData("https://api.xiaomimimo.com/v1")]
@@ -273,7 +273,7 @@ public class ApiChatClientTests
         Assert.False(string.IsNullOrEmpty(endpoint));
     }
 
-    
+
 
     [Theory]
     [InlineData("https://api.example.com/v1")]
@@ -283,7 +283,7 @@ public class ApiChatClientTests
     {
         var (vendor, _, modelsEndpoint, _) = ApiProbeService.RecognizeVendor(baseUrl);
         Assert.Equal("generic", vendor);
-        
+
         Assert.Equal("https://api.example.com/v1/models", modelsEndpoint);
         Assert.Equal("https://api.example.com/v1/chat/completions",
             ApiChatClient.ResolveChatEndpoint(baseUrl.TrimEnd('/'), vendor, modelsEndpoint, ApiChatProtocol.OpenAI, "gpt-4o"));

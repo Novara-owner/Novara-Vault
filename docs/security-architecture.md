@@ -1,6 +1,6 @@
 # Security Architecture
 
-Novara is a local-first personal data control layer — for you, and for your AI agents. Three independent trust chains protect it: your data at rest, your AI agent's access, and — since 7.0 — your data wherever you take it. This page gives a one-glance map of what protects what, and how to verify your download.
+Novara is a local-first personal data control layer — for you, and for your AI agents. Four independent trust chains protect it: your data at rest, your AI agent's access, your data wherever you take it (7.0), and your data moving between your own devices (8.0). This page gives a one-glance map of what protects what, and how to verify your download.
 
 ## 1. Data at rest — the privacy-lock chain
 
@@ -48,9 +48,26 @@ flowchart LR
 - **Zero network by construction.** The viewer file performs no network requests — decryption runs locally in the browser via WebCrypto. The snapshot password is never stored and cannot be recovered; refresh the page and the plaintext is gone from memory.
 - **Read-only is the security boundary.** The viewer cannot edit, cannot upload, and cannot persist anything — including to your browser's storage.
 
+## 4. Cross-device sync — the two-way chain (8.0+)
+
+```mermaid
+flowchart LR
+    P["Space key<br/>(generated on the device)"] --> K["KDF: PBKDF2-SHA256<br/>3,000,000 iterations"]
+    K --> A["AES-256-GCM<br/>AAD = 44B header"]
+    A --> E["Sync envelope<br/>(plaintext metadata + base64 payload)"]
+    E -- "HTTPS + Bearer token" --> S[("Your server<br/>versioned ciphertext only")]
+    S -- "HTTPS + Bearer token" --> W["Web reader / editor<br/>decrypts in memory"]
+```
+
+- **The server is a blind store.** It holds one ciphertext blob per version plus a small plaintext envelope: container / crypto / sync version numbers, the base version the payload was built on, a device id and a timestamp. It has no key, no user accounts, performs no decryption and writes no plaintext logs.
+- **Key separation is the whole design.** The space key is generated on the first device and never leaves the paired devices. The server prints a space id and an enrollment secret exactly once; afterwards each device authenticates with its own token, stored server-side only as a SHA-256, compared in constant time, with failure rate limiting. Revoking a device therefore costs nothing — whatever it downloaded stays unreadable to it.
+- **Same container, same contract.** Every payload is the `.novaenc` v4 container, re-sealed with a fresh random salt on each push. An upload declares the version it is based on; a mismatch becomes a conflict instead of a silent overwrite, and the superseded version stays on the server for rollback.
+- **Plaintext is memory-only on the web side.** The browser reader/editor keeps decrypted data in JS memory: nothing is persisted, the clipboard is cleared after 30 seconds, and memory is cleared after 5 minutes idle.
+- **Local audit.** Uploads, downloads, conflict detections and conflict resolutions are recorded locally, and the device center shows each paired device's trust state and last sync.
+
 ## Trust boundaries
 
-- All user data lives in `%LocalAppData%\Novara` — no cloud, no telemetry, no accounts. The only network activity is user-triggered API connectivity checks (memos) and MCP access on a local named pipe. The exported Snapshot viewer file performs no network requests at all.
+- All user data lives in `%LocalAppData%\Novara` — no cloud, no telemetry, no accounts. The only network activity is user-triggered API connectivity checks (memos), MCP access on a local named pipe, and — if you switch it on — sync to the server you configured yourself (8.0+). The exported Snapshot viewer file performs no network requests at all.
 - Plaintext `.novabak` exports carry integrity checksums (corruption detection, not tamper protection). `.novaenc` encrypted exports use AES-256-GCM with an independent password that is never stored and cannot be recovered — the same container protects Snapshot exports (7.0+).
 - The desktop sticky-note host (`StickNoteHost.exe`) is a separate process and holds no decryption keys; it only renders what you explicitly send to the desktop.
 - Known limits are documented honestly in [SECURITY.md](../SECURITY.md) — including that Windows Hello is a software gate, not a cryptographic binding.

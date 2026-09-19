@@ -2,17 +2,17 @@ using System.Text.Json;
 
 namespace Novara.Services;
 
-/// <summary>
-/// Single-instance edit-request bridge (stage-2 batch 4):
-/// The sticky-note host raises an edit request via a pending-edit.json file + a named
-/// event; the already-running main instance picks it up and opens the note editor.
-/// If the main app is not running, the host launches it and the startup path reads
-/// the same pending file.
-/// </summary>
+
+
+
+
+
+
+
 public static class EditRequest
 {
-    // E1-13: event name isolated per config (Debug=.Dev) so a dev build cannot wake the installed
-    // release's listener and vice versa (aligned with DataDirName / SingleInstanceMutexName).
+
+
     public const string EventName =
 #if DEBUG
         @"Local\Novara.EditRequest.Dev";
@@ -27,7 +27,7 @@ public static class EditRequest
     private static Thread? _thread;
     private static volatile bool _running;
 
-    /// <summary>Listen for edit requests on a background thread; handler runs on that thread.</summary>
+
     public static void StartListening(Action<Guid> handler)
     {
         try
@@ -55,12 +55,12 @@ public static class EditRequest
             { IsBackground = true };
             _thread.Start();
         }
-        catch { /* event already held or failed - degrade to startup-only handling */ }
+        catch {  }
     }
 
-    // N5W2-04: Stop() removed (zero callers) - same fake-wake-up trap as the other request bridges.
 
-    /// <summary>Consume a pending request if one exists (used at startup).</summary>
+
+
     public static Guid? ReadPending()
     {
         try
@@ -69,7 +69,7 @@ public static class EditRequest
             {
                 var json = File.ReadAllText(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingEdit>(json);
-                
+
                 if (j != null && Guid.TryParse(j.Id, out var g))
                 {
                     try { File.Delete(PendingPath); } catch { }
@@ -81,7 +81,7 @@ public static class EditRequest
         return null;
     }
 
-    /// <summary>Write the request file and signal the running instance (host side).</summary>
+
     public static void Raise(Guid id)
     {
         try
@@ -94,7 +94,7 @@ public static class EditRequest
                 using var evt = EventWaitHandle.OpenExisting(EventName);
                 evt.Set();
             }
-            catch { /* no running instance - the launched process handles it at startup */ }
+            catch {  }
         }
         catch { }
     }

@@ -1,8 +1,3 @@
-/* ========== CryptoService - Encryption Utility ==========
-Function: AES-GCM encryption/decryption with password-derived keys and salt
-Corresponding UI: CryptoService.cs
-Logic Range: Whole file business logic of this module
-*/
 using System.IO.Compression;
 using System.Security.Cryptography;
 
@@ -10,13 +5,13 @@ namespace Novara.Services;
 
 public static class CryptoService
 {
-    private const int KeySize = 32;   // AES-256
+    private const int KeySize = 32;
     private const int IvSize = 16;
     private const int GcmNonceSize = 12;
     private const int GcmTagSize = 16;
-    internal const int LegacyIterations = 100_000; // legacy: ver1/ver2 databases (pre-KDF-hardening, design 9.2#7)
-    /// <summary>Current PBKDF2 iteration count for ver3 databases and new security.dat files
-    /// (KDF calibration 2026-08-29: ~340ms on the dev machine, mid of the 250-500ms target band).</summary>
+    internal const int LegacyIterations = 100_000;
+
+
     public const int CurrentIterations = 3_000_000;
 
     public static byte[] Encrypt(byte[] plainData, string password, byte[] deriveSalt)
@@ -57,14 +52,14 @@ public static class CryptoService
     private static byte[] DeriveKey(string password, byte[] salt, int iterations = LegacyIterations)
         => Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
 
-    /// <summary>
-    /// AES-256-GCM (authenticated encryption, format v2, 2026-08-10, see 4.7):
-    /// PBKDF2 key + 12-byte nonce + 16-byte tag. Wrong password / tampered data throw
-    /// AuthenticationTagMismatchException (explicit corruption detection - replaces the CBC+MD5 combo).
-    /// Layout: nonce(12) + tag(16) + ciphertext.
-    /// Optional overrides (2026-08-29, encrypted export backup 9.2#6): a custom iteration count and
-    /// associated data. The main-database paths keep the defaults (const Iterations, no AAD).
-    /// </summary>
+
+
+
+
+
+
+
+
     public static byte[] EncryptGcm(byte[] plainData, string password, byte[] deriveSalt, int iterations = LegacyIterations, byte[]? associatedData = null)
     {
         var key = DeriveKey(password, deriveSalt, iterations);
@@ -85,9 +80,9 @@ public static class CryptoService
 
     public static byte[] DecryptGcm(byte[] data, string password, byte[] deriveSalt, int iterations = LegacyIterations, byte[]? associatedData = null)
     {
-        // N3-23: nonce(12)+tag(16) is the framing overhead - a cipher body must carry at least 1
-        // byte of real ciphertext, so the strict floor is 29, not 28 (28 = zero-length body that
-        // would otherwise slip past the guard and fail later inside AesGcm).
+
+
+
         if (data.Length < GcmNonceSize + GcmTagSize + 1) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
         var key = DeriveKey(password, deriveSalt, iterations);
         var nonce = data.AsSpan(0, GcmNonceSize);
@@ -96,7 +91,49 @@ public static class CryptoService
 
         var compressed = new byte[cipher.Length];
         using var gcm = new AesGcm(key, GcmTagSize);
-        gcm.Decrypt(nonce, cipher, tag, compressed, associatedData); // wrong password / tamper -> AuthenticationTagMismatchException
+        gcm.Decrypt(nonce, cipher, tag, compressed, associatedData);
+        return Decompress(compressed);
+    }
+
+
+
+
+
+
+
+
+    public static byte[] EncryptGcmWithKey(byte[] plainData, byte[] key, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+
+        var nonce = RandomNumberGenerator.GetBytes(GcmNonceSize);
+        var compressed = Compress(plainData);
+
+        var cipher = new byte[compressed.Length];
+        var tag = new byte[GcmTagSize];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Encrypt(nonce, compressed, cipher, tag, associatedData);
+
+        var result = new byte[GcmNonceSize + GcmTagSize + cipher.Length];
+        nonce.CopyTo(result, 0);
+        tag.CopyTo(result, GcmNonceSize);
+        cipher.CopyTo(result, GcmNonceSize + GcmTagSize);
+        return result;
+    }
+
+
+    public static byte[] DecryptGcmWithKey(byte[] data, byte[] key, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+        if (data.Length < GcmNonceSize + GcmTagSize + 1) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
+
+        var nonce = data.AsSpan(0, GcmNonceSize);
+        var tag = data.AsSpan(GcmNonceSize, GcmTagSize);
+        var cipher = data.AsSpan(GcmNonceSize + GcmTagSize);
+
+        var compressed = new byte[cipher.Length];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Decrypt(nonce, cipher, tag, compressed, associatedData);
         return Decompress(compressed);
     }
 
@@ -110,7 +147,7 @@ public static class CryptoService
 
     private static byte[] Decompress(byte[] data)
     {
-        
+
         const long MaxDecompressed = 256L * 1024 * 1024;
         using var input = new MemoryStream(data);
         using var gz = new GZipStream(input, CompressionMode.Decompress);

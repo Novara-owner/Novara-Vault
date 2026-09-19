@@ -30,7 +30,7 @@ public class DatabaseHealthTests : IDisposable
         return db;
     }
 
-    
+
 
     [Fact]
     public void Orphans_None_ReturnsZero()
@@ -48,7 +48,7 @@ public class DatabaseHealthTests : IDisposable
         db.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "悬挂", GroupId = Guid.NewGuid() });
         db.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "软删悬挂", GroupId = Guid.NewGuid(), IsDeleted = true });
         db.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "正常", GroupId = db.MemoGroups[0].Id });
-        Assert.Equal(2, DatabaseHealth.CountOrphanMemoEntries(db)); 
+        Assert.Equal(2, DatabaseHealth.CountOrphanMemoEntries(db));
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class DatabaseHealthTests : IDisposable
         Assert.Equal(0, DatabaseHealth.CountOrphanMemoEntries(null!));
     }
 
-    
+
 
     private string WriteDataFile(byte[] header, byte[] body)
     {
@@ -86,8 +86,8 @@ public class DatabaseHealthTests : IDisposable
     public void Verify_PlaintextV1_TamperedBody_Failed()
     {
         var body = JsonSerializer.SerializeToUtf8Bytes(NewDb(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        var header = PlainV1Header(body); 
-        body[^1] ^= 0xFF;                 
+        var header = PlainV1Header(body);
+        body[^1] ^= 0xFF;
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(header, body)));
     }
 
@@ -96,56 +96,56 @@ public class DatabaseHealthTests : IDisposable
     {
         var body = JsonSerializer.SerializeToUtf8Bytes(NewDb(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         var header = PlainV1Header(body);
-        header[0] = 0x58; // "X"
+        header[0] = 0x58;
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(header, body)));
-        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(header[..10], []))); // < 22B
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(header[..10], [])));
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(Path.Combine(_dir, "missing.novadb")));
     }
 
     [Fact]
     public void Verify_GcmV2_Structured_PlaintextV2Matrix_Rejected()
     {
-        var gcmBody = new byte[12 + 16 + 32]; 
+        var gcmBody = new byte[12 + 16 + 32];
         RandomNumberGenerator.Fill(gcmBody);
         var h2 = new byte[22];
         BitConverter.TryWriteBytes(h2.AsSpan(0, 4), 0x41564F4E);
-        h2[4] = 2; h2[5] = 1; 
+        h2[4] = 2; h2[5] = 1;
         Assert.Equal(DataFileIntegrity.EncryptedStructured, DatabaseHealth.VerifyDataFile(WriteDataFile(h2, gcmBody)));
 
-        var truncated = gcmBody[..20]; 
+        var truncated = gcmBody[..20];
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h2, truncated)));
 
-        var cbfBody = new byte[16 + 32]; 
+        var cbfBody = new byte[16 + 32];
         RandomNumberGenerator.Fill(cbfBody);
         var h1c = new byte[22];
         BitConverter.TryWriteBytes(h1c.AsSpan(0, 4), 0x41564F4E);
-        h1c[4] = 1; h1c[5] = 1; 
+        h1c[4] = 1; h1c[5] = 1;
         Assert.Equal(DataFileIntegrity.EncryptedStructured, DatabaseHealth.VerifyDataFile(WriteDataFile(h1c, cbfBody)));
 
         var h2p = new byte[22];
         BitConverter.TryWriteBytes(h2p.AsSpan(0, 4), 0x41564F4E);
-        h2p[4] = 2; h2p[5] = 0; 
+        h2p[4] = 2; h2p[5] = 0;
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h2p, gcmBody)));
     }
 
     [Fact]
     public void Verify_GcmV3_KdfHardened_Structured_And_ExplicitVersionGate()
     {
-        
-        
+
+
         var gcmBody = new byte[12 + 16 + 32];
         RandomNumberGenerator.Fill(gcmBody);
         var h3 = new byte[22];
         BitConverter.TryWriteBytes(h3.AsSpan(0, 4), 0x41564F4E);
-        h3[4] = 3; h3[5] = 1; // v3 + encrypted
+        h3[4] = 3; h3[5] = 1;
         Assert.Equal(DataFileIntegrity.EncryptedStructured, DatabaseHealth.VerifyDataFile(WriteDataFile(h3, gcmBody)));
 
-        var truncated = gcmBody[..20]; 
+        var truncated = gcmBody[..20];
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h3, truncated)));
 
         var h3p = new byte[22];
         BitConverter.TryWriteBytes(h3p.AsSpan(0, 4), 0x41564F4E);
-        h3p[4] = 3; h3p[5] = 0; 
+        h3p[4] = 3; h3p[5] = 0;
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h3p, gcmBody)));
     }
 }

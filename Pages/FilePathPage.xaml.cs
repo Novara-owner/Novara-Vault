@@ -1,8 +1,3 @@
-/* ========== FilePathPage - Path Tab ==========
-Function: Saved file/folder paths - path validity detection (green/red border), 30-min timer, open/copy actions, pin ordering
-Corresponding UI: FilePathPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -26,7 +21,7 @@ public sealed partial class FilePathPage : Page
     private readonly Dictionary<Border, Windows.UI.Color> _cardBaseBorderColor = new();
     private Border? _pendingDeleteCard;
     private Border? _editingPathCard;
-    
+
     private string _editPathOrigName = "";
     private string _editPathOrigPath = "";
     private string _editPathOrigNote = "";
@@ -36,19 +31,19 @@ public sealed partial class FilePathPage : Page
 
     private readonly Dictionary<Border, Guid> _cardIds = new();
     private bool _storeLoaded;
-    private Novara.Models.NovaraDatabase? _loadedDb; // N5M-04
-    private bool _confirming; // E3-10: one-shot guard for the create confirm button - double-click during the hide animation created duplicate paths
-    private bool _entrancePlayed; // E4-16: play the entrance animation only once (page instances are cached by MainWindow)
-    private bool _renderInProgress; // N4F-01: true while the chunked fill is still adding cards to the UI
-    private System.Threading.CancellationTokenSource? _renderCts; // N4-32: chunked-render cancel token (SearchPage parity)
-    private bool _persistAfterRender; // N4F-01: a persistence request arrived during the fill window - rerun it after the fill
+    private Novara.Models.NovaraDatabase? _loadedDb;
+    private bool _confirming;
+    private bool _entrancePlayed;
+    private bool _renderInProgress;
+    private System.Threading.CancellationTokenSource? _renderCts;
+    private bool _persistAfterRender;
     private DispatcherTimer? _autoCheckTimer;
-    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new(); // N4F-05: per-box CTS (E5-24 pattern) - a single shared CTS truncated the first flash when a second box flashed
+    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
-    private readonly Dictionary<Border, Button> _openButtons = new();   
-    private readonly Dictionary<Border, Button> _copyButtons = new();   
+    private readonly Dictionary<Border, Button> _openButtons = new();
+    private readonly Dictionary<Border, Button> _copyButtons = new();
 
-    
+
     private Border? _dragCard;
     private bool _dragging;
     private Point _grabOffset;
@@ -64,7 +59,7 @@ public sealed partial class FilePathPage : Page
     public FilePathPage()
     {
         InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content); // dialog depth: shadow + chrome veil auto-wiring
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         PickFilePathIcon.Data = App.CreateGeometry(IconData.PickFile);
         PickFolderPathIcon.Data = App.CreateGeometry(IconData.PickFolder);
         PickFileIcon.PointerEntered += (_, _) => PickFileIcon.Opacity = 1.0;
@@ -72,40 +67,57 @@ public sealed partial class FilePathPage : Page
         PickFolderIcon.PointerEntered += (_, _) => PickFolderIcon.Opacity = 1.0;
         PickFolderIcon.PointerExited += (_, _) => PickFolderIcon.Opacity = 0.6;
         KeyDown += Page_KeyDown;
-        ContentRoot.SizeChanged += (_, _) => { if (NewPathOverlay.Visibility == Visibility.Visible) NewPathDialog.MaxHeight = Math.Max(360, ContentRoot.ActualHeight - 60); }; 
-        Loaded += (_, _) => { LoadFromStore(); // E4-16: entrance animation now fires inside LoadFromStore after chunked render completes
+        ContentRoot.SizeChanged += (_, _) => { if (NewPathOverlay.Visibility == Visibility.Visible) DialogUi.ClampDialogHeight(NewPathDialog, ContentRoot); };
+        Loaded += (_, _) => { LoadFromStore();
         CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => CheckAllPaths(); _autoCheckTimer.Start(); } };
-        Unloaded += (_, _) => { _pathCheckCts?.Cancel(); 
-            
-            
-            _autoCheckTimer?.Stop(); _autoCheckTimer = null; NewPathOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _editingPathCard = null; _deleteConfirming = false; 
-         foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); // N4F-05: per-box map cleanup (was single _flashCts)
-            
+        Unloaded += (_, _) => { _pathCheckCts?.Cancel();
+
+
+
+
+
+            _renderCts?.Cancel();
+            _autoCheckTimer?.Stop(); _autoCheckTimer = null; NewPathOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _editingPathCard = null; _deleteConfirming = false;
+         foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear();
+
             if (_dragCard != null && _cardBaseBorderColor.TryGetValue(_dragCard, out var baseColor)) { _dragCard.BorderBrush = new SolidColorBrush(baseColor); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; _dragCard.RenderTransform = new TranslateTransform(); }
             _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll(); DialogDepth.VeilClear(); };
     }
 
-    
+
     public void StealFocus() => FocusSink.Focus(FocusState.Programmatic);
 
     private async void LoadFromStore()
     {
+
+
         if (_storeLoaded) return;
-        _loadedDb = App.Store?.Database; // N5M-04: capture the db this UI build belongs to (arms the stale-db persist guard below)
-        _storeLoaded = true;
-        EmptyHint.Visibility = Visibility.Collapsed; // P0-1: hide until chunked render decides the real empty state
+        _loadedDb = App.Store?.Database;
+        EmptyHint.Visibility = Visibility.Collapsed;
         var db = App.Store?.Database;
         if (db == null) return;
 
         var entries = db.PathBackupItems.Where(x => !x.IsDeleted).ToList();
 
-        bool playEntrance = !_entrancePlayed; // P0-1: only the first load plays the cascade
+
+
+
+        var pinnedRows = entries.Where(x => x.IsPinned).ToList();
+        if (pinnedRows.Count > 1)
+        {
+            for (int i = 1; i < pinnedRows.Count; i++) pinnedRows[i].IsPinned = false;
+            _ = App.Store?.SaveAsync();
+        }
+
+        bool playEntrance = !_entrancePlayed;
         int entIdx = 0;
 
-        
-        _renderInProgress = true; // N4F-01: PersistOrderAndSave during the fill window would rebuild db from the partial UI
-        // N4-32: SearchPage-parity cancellation - a page switch mid-render must stop the remaining
-        // low-priority batches from building cards into a detached PathList.
+
+        _renderInProgress = true;
+
+
+
+        ResetCardState();
         _renderCts?.Cancel();
         var renderCts = _renderCts = new System.Threading.CancellationTokenSource();
         try
@@ -125,38 +137,78 @@ public sealed partial class FilePathPage : Page
                 }
             }, renderCts.Token);
         }
-        catch (OperationCanceledException) { return; } // N4-32: page switched mid-render - stop quietly (SearchPage parity)
-        finally { _renderInProgress = false; }
-        _renderCts?.Dispose(); _renderCts = null; // N5-S8-08
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
 
-        _entrancePlayed = true; // P0-1: cascade already played per-card above
+
+
+
+            System.Diagnostics.Debug.WriteLine($"路径页列表渲染失败（页面将被重建）: {ex}");
+            App.MainWindow?.RetireTabPage(typeof(FilePathPage));
+            return;
+        }
+
+
+
+
+
+        finally
+        {
+            renderCts.Dispose();
+            if (ReferenceEquals(_renderCts, renderCts)) { _renderCts = null; _renderInProgress = false; }
+        }
+
+        _storeLoaded = true;
+        _entrancePlayed = true;
+        ReorderCards();
         ApplyCardFilters();
-        CheckAllPaths(); 
-        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); } // N4F-01: run the deferred rebuild now that every entry has a card
+        CheckAllPaths();
+        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
+    }
+
+
+
+
+
+    private void ResetCardState()
+    {
+        PathList.Children.Clear();
+        _cardIds.Clear();
+        _createdAt.Clear();
+        _pathCardData.Clear();
+        _cardBaseBorderColor.Clear();
+        _starIcons.Clear();
+        _pinIcons.Clear();
+        _openButtons.Clear();
+        _copyButtons.Clear();
+        _pathStatusGens.Clear();
+        _starredCards.Clear();
+        _pinnedCard = null;
     }
 
     private void PersistOrderAndSave()
     {
         if (_renderInProgress) { _persistAfterRender = true; return; }
-        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return; // N5M-04: stale page after import/reset - never rebuild the new db from old UI // N4F-01: defer - rebuilding db from a partially filled UI would permanently drop not-yet-rendered entries
+        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return;
         var db = App.Store?.Database;
         if (db == null) return;
-        var softDeleted = db.PathBackupItems.Where(x => x.IsDeleted).ToList(); // keep trash items across the rebuild
+        var softDeleted = db.PathBackupItems.Where(x => x.IsDeleted).ToList();
         var byId = db.PathBackupItems.ToDictionary(x => x.Id);
         var ordered = new List<FilePathEntry>();
         foreach (var child in PathList.Children)
             if (child is Border b && _cardIds.TryGetValue(b, out var id) && byId.TryGetValue(id, out var e))
                 ordered.Add(e);
-        // N2-01: MCP writes land directly in the db without UI cards - keep db entries that are
-        // neither on a card nor soft-deleted across the rebuild (P0, same as the memo page).
+
+
         var pathKnownIds = ordered.Select(x => x.Id).Concat(softDeleted.Select(x => x.Id)).ToHashSet();
         var pathOrphans = byId.Values.Where(x => !x.IsDeleted && !pathKnownIds.Contains(x.Id)).ToList();
-        // N2-16: an entry can be both on a card AND soft-deleted (MCP deleted it without a UI
-        // refresh) - it must land in the db exactly once.
+
+
         var pathSeen = ordered.Select(x => x.Id).ToHashSet();
         db.PathBackupItems.Clear();
         db.PathBackupItems.AddRange(ordered);
-        db.PathBackupItems.AddRange(softDeleted.Where(x => !pathSeen.Contains(x.Id))); // keep soft-deleted items (trash)
+        db.PathBackupItems.AddRange(softDeleted.Where(x => !pathSeen.Contains(x.Id)));
         db.PathBackupItems.AddRange(pathOrphans);
         App.Store?.SaveAsync();
     }
@@ -186,14 +238,14 @@ public sealed partial class FilePathPage : Page
         FloatInHint();
     }
 
-    
+
     public void ApplyCardFilters()
     {
         string wsId = App.CurrentWorkspaceId;
         bool wsActive = !string.IsNullOrEmpty(wsId);
         var db = App.Store?.Database;
-        // N3-38: pre-index WorkspaceId per card id once - the per-card FirstOrDefault over the whole
-        
+
+
         Dictionary<Guid, string>? wsById = null;
         if (wsActive && db != null)
         {
@@ -204,7 +256,7 @@ public sealed partial class FilePathPage : Page
         {
             if (child is not Border b) continue;
             bool wsMatch = true;
-            // Missing id => hidden under a workspace filter (mirrors the original e != null check).
+
             if (wsById != null && _cardIds.TryGetValue(b, out var id))
                 wsMatch = wsById.TryGetValue(id, out var cw) && cw == wsId;
             b.Visibility = wsMatch ? Visibility.Visible : Visibility.Collapsed;
@@ -231,11 +283,11 @@ public sealed partial class FilePathPage : Page
         sb.Begin();
     }
 
-    // ================================================================
 
-    // ================================================================
 
-    /// <summary>Open the path-edit dialog for a database path entry id (global search jump).</summary>
+
+
+
     public bool FlashPathById(Guid id)
     {
         foreach (var (card, cid) in _cardIds)
@@ -254,7 +306,7 @@ public sealed partial class FilePathPage : Page
         return false;
     }
 
-    /// <summary>Open the new-path dialog pre-filled with the given path (right-click menu entry).</summary>
+
     public void OpenNewPathDialogWith(string path)
     {
         ShowNewPathDialog();
@@ -262,10 +314,10 @@ public sealed partial class FilePathPage : Page
     }
 
     private void ShowNewPathDialog(bool isEdit = false)
-    {        _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
+    {        _confirming = false;
         if (!isEdit)
         {
-            _editingPathCard = null; // N5F-02: create-mode must never inherit a stale edit target (IPC AddPath during an open edit dialog silently overwrote the old entry)
+            _editingPathCard = null;
             NewPathNameBox.Text = "";
             NewPathInputBox.Text = "";
             NewPathNoteBox.Text = "";
@@ -275,10 +327,10 @@ public sealed partial class FilePathPage : Page
         NewPathDialog.Opacity = 0;
         NewPathScrim.Opacity = 0;
         NewPathOverlay.Visibility = Visibility.Visible;
-        
-        NewPathDialog.MaxHeight = Math.Max(360, ContentRoot.ActualHeight - 60);
-        DialogDepth.VeilShow(); 
-        UpdateNewPathConfirmState(); // UI-2: initial validity after clear/edit-fill (explicit - empty assignment may not raise TextChanged)
+
+        DialogUi.ClampDialogHeight(NewPathDialog, ContentRoot);
+        DialogDepth.VeilShow();
+        UpdateNewPathConfirmState();
 
         var sb = new Storyboard();
         var scrimIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -330,7 +382,7 @@ public sealed partial class FilePathPage : Page
         sb.Children.Add(sd);
         sb.Completed -= OnNewPathHideCompleted;
         sb.Completed += OnNewPathHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         sb.Begin();
     }
 
@@ -362,8 +414,8 @@ public sealed partial class FilePathPage : Page
         if (folder != null) NewPathInputBox.Text = folder.Path;
     }
 
-    // UI-2 (2026-08-11): live validation for the new-path dialog - confirm stays disabled until
-    // name is non-blank AND the path is non-blank and actually exists.
+
+
     private System.Threading.CancellationTokenSource? _npCheckCts;
 
     private async void UpdateNewPathConfirmState()
@@ -371,12 +423,17 @@ public sealed partial class FilePathPage : Page
         string name = NewPathNameBox.Text.Trim();
         string path = NewPathInputBox.Text.Trim().Trim('"');
         bool valid = !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(path);
-        
-        
-        
+
+
+
+
+
+
+        _npCheckCts?.Cancel();
+        _npCheckCts?.Dispose();
+        _npCheckCts = null;
         if (_editingPathCard == null && valid)
         {
-            _npCheckCts?.Cancel();
             var cts = _npCheckCts = new System.Threading.CancellationTokenSource();
             var exists = false;
             try
@@ -391,13 +448,13 @@ public sealed partial class FilePathPage : Page
             if (cts.IsCancellationRequested) return;
             valid = exists;
         }
-        
+
         if (valid && _editingPathCard != null && !PathContentChanged())
             valid = false;
         NewPathConfirmButton.IsEnabled = valid;
     }
 
-    
+
     private bool PathContentChanged()
     {
         if (NewPathNameBox.Text.Trim() != _editPathOrigName) return true;
@@ -413,7 +470,7 @@ public sealed partial class FilePathPage : Page
 
     private void NewPathConfirm_Click(object sender, RoutedEventArgs e)
     {
-        if (_confirming) return; _confirming = true; // E3-10
+        if (_confirming) return; _confirming = true;
         bool isEdit = _editingPathCard != null;
         var name = NewPathNameBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -425,7 +482,7 @@ public sealed partial class FilePathPage : Page
 
         var path = NewPathInputBox.Text.Trim().Trim('"');
 
-        
+
         if (string.IsNullOrWhiteSpace(path) || (!isEdit && !Directory.Exists(path) && !File.Exists(path)))
         {
             _confirming = false;
@@ -466,10 +523,11 @@ public sealed partial class FilePathPage : Page
             _pinIcons.Remove(old);
             _starIcons.Remove(old);
             _pathCardData.Remove(old);
+            _pathStatusGens.Remove(old);
             _cardBaseBorderColor.Remove(old);
-            _openButtons.Remove(old); 
+            _openButtons.Remove(old);
             _copyButtons.Remove(old);
-            _createdAt.Remove(old); // 3.0.3
+            _createdAt.Remove(old);
             _editingPathCard = null;
         }
         else
@@ -484,8 +542,8 @@ public sealed partial class FilePathPage : Page
             ReorderCards();
         }
         ApplyCardFilters();
-        
-        if (!string.IsNullOrWhiteSpace(path)) SetPathStatus(card, Directory.Exists(path) || File.Exists(path));
+
+        if (!string.IsNullOrWhiteSpace(path)) { ClaimPathStatusGen(card); SetPathStatus(card, Directory.Exists(path) || File.Exists(path)); }
         PersistOrderAndSave();
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
         HideNewPathDialog();
@@ -499,7 +557,7 @@ public sealed partial class FilePathPage : Page
         {
             CornerRadius = new CornerRadius(12),
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
-            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), // E5-20: per-card copy - never mutate the shared theme brush (E1-09 pattern); AttachCardHoverEffect replaces it with its own copy
+            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(20, 12, 20, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -656,8 +714,8 @@ public sealed partial class FilePathPage : Page
                 }
                 catch (System.ComponentModel.Win32Exception)
                 {
-                    // N2-42: no associated program (ERROR_NO_ASSOCIATION) - CrashLogger swallowed the
-                    // exception and the click did nothing at all; surface a toast instead.
+
+
                     App.ShowToast(App.GetString("OpenFile_Fail"));
                 }
             }
@@ -697,14 +755,14 @@ public sealed partial class FilePathPage : Page
         {
             var pkg = new Windows.ApplicationModel.DataTransfer.DataPackage();
             pkg.SetText(path);
-            
-            // a locked clipboard used to bubble into CrashLogger with zero user feedback
+
+
             try { Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg); App.ShowToast(App.GetString("Common_Toast_Copied")); }
             catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); }
         };
         rightPanel.Children.Add(copyBtn);
 
-        
+
         _openButtons[card] = openBtn;
         _copyButtons[card] = copyBtn;
         HookCardActionButtonHover(openBtn, card);
@@ -725,7 +783,7 @@ public sealed partial class FilePathPage : Page
 
     private async void FlashTextBox(TextBox tb)
     {
-        if (_flashCtsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); } // N4F-05: cancel only THIS box's flash - other boxes keep theirs
+        if (_flashCtsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); }
         var cts = new System.Threading.CancellationTokenSource();
         _flashCtsMap[tb] = cts;
 
@@ -735,8 +793,8 @@ public sealed partial class FilePathPage : Page
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {
-            // N5F-01: only unwind if THIS flash is still the registered one - a superseded cancel
-            // must not wipe the newer flash's red or its map entries.
+
+
             if (_flashCtsMap.TryGetValue(tb, out var cur) && !ReferenceEquals(cur, cts)) return;
             tb.Background = orig;
             _flashOriginalBgs.Remove(tb);
@@ -748,9 +806,9 @@ public sealed partial class FilePathPage : Page
         _flashCtsMap.Remove(tb);
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void ShowDeleteConfirmDialog()
     {
@@ -758,7 +816,7 @@ public sealed partial class FilePathPage : Page
         DeleteConfirmDialog.Opacity = 0;
         DeleteConfirmScrim.Opacity = 0;
         DeleteConfirmOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
 
         var sb = new Storyboard();
         var scrimIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -809,11 +867,11 @@ public sealed partial class FilePathPage : Page
         sb.Children.Add(sd);
         sb.Completed -= OnDeleteConfirmHideCompleted;
         sb.Completed += OnDeleteConfirmHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         sb.Begin();
     }
 
-    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; } // N4F-04: re-arm after the overlay is truly gone
+    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; }
 
     private void DeleteConfirmClose_Click(object sender, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteCancel_Click(object sender, RoutedEventArgs e) => HideDeleteConfirmDialog();
@@ -823,31 +881,32 @@ public sealed partial class FilePathPage : Page
         if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog();
     }
 
-    private bool _deleteConfirming; // N4F-04: one-shot guard - double-click during the 200ms hide animation ran the removal twice
+    private bool _deleteConfirming;
 
     private void DeleteConfirmButton_Click(object sender, RoutedEventArgs e)
     {
         if (_pendingDeleteCard == null) return;
-        if (_deleteConfirming) return; // N4F-04
+        if (_deleteConfirming) return;
         _deleteConfirming = true;
         {
             _starredCards.Remove(_pendingDeleteCard);
-            if (_pinnedCard == _pendingDeleteCard) { _pinnedCard = null; SyncPinEntity(); } 
+            if (_pinnedCard == _pendingDeleteCard) { _pinnedCard = null; SyncPinEntity(); }
             _pinIcons.Remove(_pendingDeleteCard);
             _starIcons.Remove(_pendingDeleteCard);
             _pathCardData.Remove(_pendingDeleteCard);
+            _pathStatusGens.Remove(_pendingDeleteCard);
             _cardBaseBorderColor.Remove(_pendingDeleteCard);
-            _openButtons.Remove(_pendingDeleteCard); 
+            _openButtons.Remove(_pendingDeleteCard);
             _copyButtons.Remove(_pendingDeleteCard);
-            _createdAt.Remove(_pendingDeleteCard); // 3.0.3
+            _createdAt.Remove(_pendingDeleteCard);
 
             if (_cardIds.Remove(_pendingDeleteCard, out var delId))
             {
                 var pe = App.Store?.Database.PathBackupItems.FirstOrDefault(x => x.Id == delId);
-                if (pe != null) { pe.IsDeleted = true; pe.DeletedAt = DateTime.Now; }
+                if (pe != null) { pe.IsDeleted = true; pe.DeletedAt = DateTime.Now; pe.IsPinned = false; pe.IsStarred = false; }
             }
             var delCard = _pendingDeleteCard;
-            // Smooth removal: fade the card out while lower cards slide up to fill the gap.
+
             App.PlayCardRemoval(PathList, delCard, _dragging, () =>
             {
                 PersistOrderAndSave();
@@ -870,9 +929,9 @@ public sealed partial class FilePathPage : Page
         foreach (var c in children) PathList.Children.Add(c);
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void AttachCardHoverEffect(Border card)
     {
@@ -883,8 +942,8 @@ public sealed partial class FilePathPage : Page
         card.BorderBrush = new SolidColorBrush(baseBorderColor);
         card.PointerEntered += (_, _) =>
         {
-            if (_dragging) return; 
-            // E2-05: manual color swap (was ColorAnimation - 0xc000027b-sensitive during page switches)
+            if (_dragging) return;
+
             var currentBase = _cardBaseBorderColor.TryGetValue(card, out var c) ? c : baseBorderColor;
             var hoverBorderColor = Windows.UI.Color.FromArgb(
                 (byte)Math.Min(currentBase.A + 0x30, 0xFF),
@@ -896,14 +955,14 @@ public sealed partial class FilePathPage : Page
         };
         card.PointerExited += (_, _) =>
         {
-            if (_dragging) return; 
+            if (_dragging) return;
             var currentBase = _cardBaseBorderColor.TryGetValue(card, out var c) ? c : baseBorderColor;
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = currentBase;
             if (card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
         };
     }
 
-    
+
 
     private void AttachCardDrag(Border card)
     {
@@ -914,8 +973,8 @@ public sealed partial class FilePathPage : Page
         card.PointerPressed += (s, e) =>
         {
             if (_dragging) return;
-            if (ReferenceEquals(_pinnedCard, card)) return; 
-            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return; 
+            if (ReferenceEquals(_pinnedCard, card)) return;
+            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
             grabOffset = pt.Position;
@@ -929,9 +988,9 @@ public sealed partial class FilePathPage : Page
             timer.Tick += async (_, _) =>
             {
                 timer.Stop(); timer = null;
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 try { await renderOp; } catch { }
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 BeginDrag(card, grabOffset, rtb);
                 try { card.CapturePointer(pointer); } catch { }
             };
@@ -975,13 +1034,13 @@ public sealed partial class FilePathPage : Page
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, PathList); // N2-06: origin in visible-slot space
+        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, PathList);
 
-        App.StopCardEntrance(card); 
+        App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
-        card.RenderTransform = new TranslateTransform(); 
+        card.RenderTransform = new TranslateTransform();
 
         try
         {
@@ -1022,7 +1081,7 @@ public sealed partial class FilePathPage : Page
         foreach (var child in PathList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            
+
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(PathList).TransformPoint(new Point(0, 0)).Y;
@@ -1035,14 +1094,14 @@ public sealed partial class FilePathPage : Page
 
     private void UpdateDropIndicator(int index)
     {
-        
-        
+
+
         index = Math.Max(index, _pinnedCard != null && _pinnedCard.Visibility == Visibility.Visible ? 1 : 0);
-        
+
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
             if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; }
-            _dropIndex = _dragOriginIndex; 
+            _dropIndex = _dragOriginIndex;
             return;
         }
         if (_dropIndicator != null) PathList.Children.Remove(_dropIndicator);
@@ -1118,7 +1177,7 @@ public sealed partial class FilePathPage : Page
         if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; }
         StopAutoScroll();
 
-        
+
         var baseColor = _cardBaseBorderColor.TryGetValue(card, out var bc)
             ? bc
             : (App.GetBrush("AppBorderBrush") is SolidColorBrush ab ? ab.Color : Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
@@ -1126,22 +1185,22 @@ public sealed partial class FilePathPage : Page
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
 
-        // N2-06: dropIndex is in "slot space including the dragged card" - convert to the
-        // without-self space, then translate back to a physical Children index (hidden cards stay put).
+
+
         int curVisible = CountVisibleBeforeIn(card, PathList);
         int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
         if (dst != curVisible)
         {
             PathList.Children.Remove(card);
             PathList.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, PathList), card);
-        }
 
-        PersistOrderAndSave(); 
+            PersistOrderAndSave();
+        }
     }
 
-    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> in
-    /// <paramref name="container"/> (visible-slot space matching ComputeDropIndex; the drop
-    /// indicator itself is excluded).</summary>
+
+
+
     private int CountVisibleBeforeIn(FrameworkElement card, Panel container)
     {
         int n = 0;
@@ -1154,8 +1213,8 @@ public sealed partial class FilePathPage : Page
         return n;
     }
 
-    /// <summary>N2-06: physical Children index where a card must land to become the
-    /// <paramref name="visibleSlot"/>-th visible card (call AFTER removing the dragged card).</summary>
+
+
     private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
     {
         int seen = 0;
@@ -1179,7 +1238,7 @@ public sealed partial class FilePathPage : Page
         _cardBaseBorderColor[card] = color;
         card.BorderBrush = new SolidColorBrush(color);
 
-        
+
         var btnColor = Windows.UI.Color.FromArgb(0x99, color.R, color.G, color.B);
         if (_openButtons.TryGetValue(card, out var ob))
         {
@@ -1190,7 +1249,7 @@ public sealed partial class FilePathPage : Page
             cb.BorderBrush = new SolidColorBrush(btnColor);
     }
 
-    
+
     private void HookCardActionButtonHover(Button btn, Border card)
     {
         btn.PointerEntered += (_, _) =>
@@ -1277,6 +1336,7 @@ public sealed partial class FilePathPage : Page
         {
             if (!_pathCardData.TryGetValue(card, out var data) || string.IsNullOrWhiteSpace(data.path)) return;
             var isValid = Directory.Exists(data.path) || File.Exists(data.path);
+            ClaimPathStatusGen(card);
             SetPathStatus(card, isValid);
             App.ShowToast(App.GetString("Common_Toast_Detected"));
         };
@@ -1299,8 +1359,8 @@ public sealed partial class FilePathPage : Page
             NewPathNameBox.Text = data.name;
             NewPathInputBox.Text = data.path;
             NewPathNoteBox.Text = data.note;
-            _editPathOrigName = data.name;   
-            _editPathOrigPath = data.path.Trim('"'); 
+            _editPathOrigName = data.name;
+            _editPathOrigPath = data.path.Trim('"');
             _editPathOrigNote = data.note;
             ShowNewPathDialog(true);
         };
@@ -1325,7 +1385,7 @@ public sealed partial class FilePathPage : Page
         };
 
         menu.Items.Add(pinItem);
-        menu.Items.Add(starItem); 
+        menu.Items.Add(starItem);
         menu.Items.Add(checkItem);
         menu.Items.Add(editItem);
         menu.Items.Add(sep);
@@ -1333,9 +1393,9 @@ public sealed partial class FilePathPage : Page
         return menu;
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private MenuFlyout BuildEmptyAreaMenu()
     {
@@ -1375,41 +1435,58 @@ public sealed partial class FilePathPage : Page
 
     private System.Threading.CancellationTokenSource? _pathCheckCts;
 
+
+
+
+    private long _pathStatusGenSeq;
+    private readonly Dictionary<Border, long> _pathStatusGens = new();
+
+    private long ClaimPathStatusGen(Border card)
+    {
+        var gen = ++_pathStatusGenSeq;
+        _pathStatusGens[card] = gen;
+        return gen;
+    }
+
+    private bool IsPathStatusCurrent(Border card, long gen)
+        => _pathStatusGens.TryGetValue(card, out var current) && current == gen;
+
     private async void CheckAllPaths()
     {
-        
-        
+
+
         _pathCheckCts?.Cancel();
         _pathCheckCts?.Dispose();
         var cts = _pathCheckCts = new System.Threading.CancellationTokenSource();
         var ct = cts.Token;
 
-        var targets = new List<(Border Card, string Path)>();
+        var targets = new List<(Border Card, string Path, long Gen)>();
         foreach (var child in PathList.Children)
             if (child is Border card && card.Visibility == Visibility.Visible
                 && _pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
-                targets.Add((card, data.path));
+                targets.Add((card, data.path, ClaimPathStatusGen(card)));
         if (targets.Count == 0) return;
 
-        var results = new List<(Border Card, bool IsValid)>();
+        var results = new List<(Border Card, bool IsValid, long Gen)>();
         try
         {
             await System.Threading.Tasks.Task.Run(() =>
             {
-                foreach (var (card, path) in targets)
+                foreach (var (card, path, gen) in targets)
                 {
                     if (ct.IsCancellationRequested) return;
                     bool isValid;
                     try { isValid = Directory.Exists(path) || File.Exists(path); }
-                    catch { isValid = false; } 
-                    results.Add((card, isValid));
+                    catch { isValid = false; }
+                    results.Add((card, isValid, gen));
                 }
             });
         }
         catch (System.OperationCanceledException) { return; }
         if (ct.IsCancellationRequested) return;
-        foreach (var (card, isValid) in results)
-            if (PathList.Children.Contains(card)) SetPathStatus(card, isValid); 
+        foreach (var (card, isValid, gen) in results)
+
+            if (PathList.Children.Contains(card) && IsPathStatusCurrent(card, gen)) SetPathStatus(card, isValid);
     }
 
     private GeometryGroup MakeGroup(string[] paths)
@@ -1431,7 +1508,7 @@ public sealed partial class FilePathPage : Page
     private void RootGrid_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
         var menu = BuildEmptyAreaMenu();
-        // N4F-06: keyboard Menu / Shift+F10 carries no position - without a fallback the menu never appeared (card menu already had this fallback).
+
         if (!args.TryGetPosition(sender, out var point)) point = new Windows.Foundation.Point(0, 0);
         menu.ShowAt(sender, point);
     }

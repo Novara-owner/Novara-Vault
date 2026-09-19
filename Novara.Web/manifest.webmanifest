@@ -1,0 +1,19 @@
+{
+  "name": "Novara Web",
+  "short_name": "Novara",
+  "description": "Read-only access to your Novara data, served by your own machine.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1eee7",
+  "theme_color": "#f1eee7",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

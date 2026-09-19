@@ -370,7 +370,7 @@
                 </ScrollViewer>
             </Grid>
 
-            
+
             <Canvas x:Name="DragLayer" IsHitTestVisible="False" Grid.RowSpan="3" />
 
                     <TextBlock x:Name="HintText"
@@ -487,11 +487,11 @@
                           Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <!-- N1-76 (10th fix): keep the whole dialog NON-scrolling (like every other
-                                 dialog - the title must never scroll away). The entries panel is capped
-                                 short (84px ~ 4 rows) so the dialog always fits the window and the
-                                 confirm button stays inside the card; the list itself scrolls for the
-                                 rest. Code shrinks the row further for few entries. -->
+
+
+
+
+
                             <RowDefinition Height="84"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0"
@@ -923,7 +923,7 @@
                                 </StackPanel>
                             </Button>
                             </Grid>
-                            
+
                             <StackPanel x:Name="TotpSection" Grid.Row="1" Margin="0,12,0,0" Spacing="6">
                                 <TextBlock x:Name="TotpLabel" FontSize="12" FontWeight="Medium"
                                            Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,2" />
@@ -1294,7 +1294,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="ApiDiagOverlay" Grid.RowSpan="3"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
@@ -1369,7 +1369,7 @@
                                Margin="0,20,0,0" />
                     <Grid Grid.Row="3" Margin="0,24,0,0">
                         <Button x:Name="ApiDiagCloseButton"
-                                HorizontalAlignment="Right"
+                                HorizontalAlignment="Center"
                                 Width="140" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"
@@ -1382,7 +1382,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="ApiConfirmOverlay" Grid.RowSpan="3"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
@@ -1461,7 +1461,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="RelayProbeOverlay" Grid.RowSpan="3"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
@@ -1543,11 +1543,11 @@
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 Click="RelayProbeLoadDatasetButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_LoadDataset\')}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_LoadDataset\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                         <Button x:Name="RelayProbeCloseButton"
                                 HorizontalAlignment="Right"
-                                Width="140" Height="36"
+                                Width="220" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1559,7 +1559,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="GenerateOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="GenerateScrim" Background="#2E000000" Tapped="GenerateScrim_Tapped" />
             <Border x:Name="GenerateDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -1588,13 +1588,13 @@
                                   StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="GenModePassword" Height="32" MinWidth="80" Padding="12,0"
-                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModePassword_Click" />
-                        <Button x:Name="GenModeUuid" Height="32" MinWidth="80" Padding="12,0"
-                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModeUuid_Click" />
-                        <Button x:Name="GenModeToken" Height="32" MinWidth="80" Padding="12,0"
-                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="13" Click="GenModeToken_Click" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                        <Button x:Name="GenModePassword" Height="36" MinWidth="96" Padding="14,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="18" FontSize="13" Click="GenModePassword_Click" />
+                        <Button x:Name="GenModeUuid" Height="36" MinWidth="96" Padding="14,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="18" FontSize="13" Click="GenModeUuid_Click" />
+                        <Button x:Name="GenModeToken" Height="36" MinWidth="96" Padding="14,0"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="18" FontSize="13" Click="GenModeToken_Click" />
                     </StackPanel>
                     <Border Grid.Row="2" Background="{ThemeResource AppSurfaceBrush}" CornerRadius="10" Padding="16,12">
                         <Grid>
@@ -1634,13 +1634,10 @@
                     </StackPanel>
                     <StackPanel Grid.Row="4" x:Name="GenTokenParams" Spacing="10" Margin="0,4,0,0" Visibility="Collapsed">
                         <TextBlock x:Name="GenTokenHint" FontSize="12" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Name="GenToken16" Height="30" MinWidth="72" Padding="10,0"
-                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="16" />
-                            <Button x:Name="GenToken32" Height="30" MinWidth="72" Padding="10,0"
-                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="32" />
-                            <Button x:Name="GenToken48" Height="30" MinWidth="72" Padding="10,0"
-                                    Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="8" FontSize="12" Click="GenTokenBytes_Click" Tag="48" />
+                        <StackPanel Orientation="Horizontal" Spacing="18">
+                            <CheckBox x:Name="GenTokenChk16" Tag="16" Click="GenTokenChk_Click" MinWidth="0" />
+                            <CheckBox x:Name="GenTokenChk32" Tag="32" Click="GenTokenChk_Click" MinWidth="0" />
+                            <CheckBox x:Name="GenTokenChk48" Tag="48" Click="GenTokenChk_Click" MinWidth="0" />
                         </StackPanel>
                     </StackPanel>
                     <Grid Grid.Row="5" Margin="0,8,0,0">
@@ -1661,7 +1658,7 @@
             </Border>
         </Grid>
 
-        <!-- FocusSink: steals focus (no focus border on an invisible 0x0 button), LockScreenPage/SearchPage fix -->
+
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
     </Grid>
 </Page>

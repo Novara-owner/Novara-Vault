@@ -7,12 +7,12 @@ using Microsoft.UI.Xaml.Input;
 
 namespace Novara.Services;
 
-/// <summary>
 
 
 
 
-/// </summary>
+
+
 public sealed class IconRing
 {
     private const double ItemWidth = 48;
@@ -22,12 +22,12 @@ public sealed class IconRing
     private readonly ScrollViewer _scroll;
     private readonly Panel _panel;
     private readonly List<Border> _borders = new();
-    private double _stride;          
-    private bool _initialPending;    
-    private bool _jumping;           
-    private Border? _pendingCenter;  
+    private double _stride;
+    private bool _initialPending;
+    private bool _jumping;
+    private Border? _pendingCenter;
 
-    
+
     public event Action<Border>? Tapped;
 
     public IconRing(ScrollViewer scroll, Panel panel)
@@ -40,7 +40,7 @@ public sealed class IconRing
 
     public IReadOnlyList<Border> Borders => _borders;
 
-    
+
     public void Build(IEnumerable<string> tags, Func<string, Border> makeBorder)
     {
         if (_panel.Children.Count > 0) return;
@@ -60,7 +60,7 @@ public sealed class IconRing
         _scroll.SizeChanged += (_, _) => EnsureInitialPosition();
     }
 
-    
+
     public void EnsureInitialPosition()
     {
         if (!_initialPending || _stride <= 0 || _scroll.ScrollableWidth < _stride) return;
@@ -69,7 +69,7 @@ public sealed class IconRing
         {
             var pc = _pendingCenter;
             _pendingCenter = null;
-            CenterToCore(pc); 
+            CenterToCore(pc);
         }
         else
         {
@@ -77,7 +77,7 @@ public sealed class IconRing
         }
     }
 
-    
+
     public void Highlight(string? tag)
     {
         foreach (var b in _borders)
@@ -92,13 +92,13 @@ public sealed class IconRing
     public Border? FindByTag(string tag)
         => _borders.FirstOrDefault(b => b.Tag?.ToString() == tag);
 
-    
+
     public void CenterTo(Border border)
     {
         if (_initialPending)
         {
-            
-            
+
+
             _pendingCenter = border;
             return;
         }
@@ -137,8 +137,8 @@ public sealed class IconRing
     {
         var delta = e.GetCurrentPoint(_scroll).Properties.MouseWheelDelta;
         if (delta == 0 || _stride <= 0) return;
-        e.Handled = true; 
-        double target = _scroll.HorizontalOffset - delta; 
+        e.Handled = true;
+        double target = _scroll.HorizontalOffset - delta;
         while (target < _stride) target += _stride;
         while (target >= 2 * _stride) target -= _stride;
         JumpTo(target);

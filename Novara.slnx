@@ -28,4 +28,14 @@
     <Platform Solution="Debug|Any CPU" Project="x64" />
     <Platform Solution="Release|Any CPU" Project="x64" />
   </Project>
+  <Project Path="Novara.Sync.Server\Novara.Sync.Server.csproj">
+    <Platform Solution="*|x64" Project="Any CPU" />
+    <Platform Solution="Debug|Any CPU" Project="Any CPU" />
+    <Platform Solution="Release|Any CPU" Project="Any CPU" />
+  </Project>
+  <Project Path="Novara.Server\Novara.Server.csproj">
+    <Platform Solution="*|x64" Project="Any CPU" />
+    <Platform Solution="Debug|Any CPU" Project="Any CPU" />
+    <Platform Solution="Release|Any CPU" Project="Any CPU" />
+  </Project>
 </Solution>

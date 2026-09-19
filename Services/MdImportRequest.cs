@@ -1,18 +1,10 @@
-/* ========== MdImportRequest - Right-Click "Import to Novara" Bridge ==========
-Function: Single-instance md-import bridge: a second instance (launched from the
-.md file right-click menu) passes a markdown file path to the already-running main
-instance via a pending-import-md.json file + a named event; if the app is closed,
-the launched process reads the same pending path at startup.
-Corresponding UI: DiaryPage (records list gains one markdown document)
-Logic Range: Whole file business logic of this module
-*/
 using System.Text.Json;
 
 namespace Novara.Services;
 
 public static class MdImportRequest
 {
-    // Version-isolated like AddPathRequest.EventName (Debug=.Dev)
+
     public const string EventName =
 #if DEBUG
         @"Local\Novara.MdImport.Dev";
@@ -27,7 +19,7 @@ public static class MdImportRequest
     private static Thread? _thread;
     private static volatile bool _running;
 
-    /// <summary>Listen for md-import requests on a background thread; handler runs on that thread.</summary>
+
     public static void StartListening(Action<string> handler)
     {
         try
@@ -55,10 +47,10 @@ public static class MdImportRequest
             { IsBackground = true };
             _thread.Start();
         }
-        catch { /* event already held or failed - degrade to startup-only handling */ }
+        catch {  }
     }
 
-    /// <summary>Consume a pending md path if one exists (used at startup and by the listener).</summary>
+
     public static string? ReadPending()
     {
         try
@@ -67,7 +59,7 @@ public static class MdImportRequest
             {
                 var json = File.ReadAllText(PendingMd);
                 var j = JsonSerializer.Deserialize<PendingMdFile>(json);
-                // N2-07 (N1-60 parity): delete only after a successful deserialize
+
                 if (j != null && !string.IsNullOrWhiteSpace(j.Path))
                 {
                     try { File.Delete(PendingMd); } catch { }
@@ -79,7 +71,7 @@ public static class MdImportRequest
         return null;
     }
 
-    /// <summary>Write the request file and signal the running instance (second-instance side).</summary>
+
     public static void Raise(string path)
     {
         try
@@ -92,7 +84,7 @@ public static class MdImportRequest
                 using var evt = EventWaitHandle.OpenExisting(EventName);
                 evt.Set();
             }
-            catch { /* no running instance - the launched process handles it at startup */ }
+            catch {  }
         }
         catch { }
     }

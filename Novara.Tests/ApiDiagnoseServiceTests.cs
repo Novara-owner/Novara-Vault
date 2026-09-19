@@ -6,19 +6,19 @@ using Xunit;
 
 namespace Novara.Tests;
 
-// API upgrade Step 2: interface status diagnosis pure helpers + short-circuit / balance-infer pipeline.
+
 public class ApiDiagnoseServiceTests
 {
-    // ---- Pure helpers ----
+
 
     [Theory]
     [InlineData(ApiProbeStatus.InvalidKey, null, true)]
-    [InlineData(ApiProbeStatus.InsufficientQuota, null, false)] 
+    [InlineData(ApiProbeStatus.InsufficientQuota, null, false)]
     [InlineData(ApiProbeStatus.RateLimited, null, true)]
     [InlineData(ApiProbeStatus.Permission, null, true)]
     [InlineData(ApiProbeStatus.NetworkError, "dns", true)]
     [InlineData(ApiProbeStatus.NetworkError, "connect", true)]
-    [InlineData(ApiProbeStatus.NetworkError, "timeout", false)] // timeout may be a single slow path - don't stop
+    [InlineData(ApiProbeStatus.NetworkError, "timeout", false)]
     [InlineData(ApiProbeStatus.NoModels, null, false)]
     [InlineData(ApiProbeStatus.ServerError, null, false)]
     [InlineData(ApiProbeStatus.Success, null, false)]
@@ -43,7 +43,7 @@ public class ApiDiagnoseServiceTests
         Assert.Null(ApiDiagnoseService.FirstModelOrNull(null));
     }
 
-    // ---- Stub transport ----
+
 
     private sealed class StubHandler : HttpMessageHandler
     {
@@ -71,7 +71,7 @@ public class ApiDiagnoseServiceTests
         return resp;
     }
 
-    // ---- Pipeline scenarios ----
+
 
     [Fact]
     public async Task Diagnose_ModelsOkAndChatOk_AllReachable()
@@ -90,7 +90,7 @@ public class ApiDiagnoseServiceTests
         Assert.Equal("ok", report.BalanceInfer);
         Assert.Equal("gpt-4o", report.ModelReturned);
         Assert.Equal("req-123", report.MetadataHeaders["x-request-id"]);
-        Assert.Equal(12, report.TokensConsumed); // 6 (non-stream) + 6 (stream)
+        Assert.Equal(12, report.TokensConsumed);
         Assert.Equal(4, report.Items.Count);
         Assert.All(report.Items, i => Assert.NotEqual(ApiDiagItemStatus.Fail, i.Status));
     }
@@ -106,7 +106,7 @@ public class ApiDiagnoseServiceTests
 
         var report = await ApiDiagnoseService.DiagnoseAsync("https://api.test.com", "sk-test", "gpt-4o", handler: handler);
 
-        Assert.True(report.Reachable); // endpoint answered - just out of money
+        Assert.True(report.Reachable);
         Assert.Equal("quota", report.BalanceInfer);
         var balance = report.Items.Single(i => i.Key == ApiDiagnoseService.ItemBalance);
         Assert.Equal(ApiDiagItemStatus.Warn, balance.Status);
@@ -129,7 +129,7 @@ public class ApiDiagnoseServiceTests
         Assert.Equal("ok", report.BalanceInfer);
         var reach = report.Items.Single(i => i.Key == ApiDiagnoseService.ItemReachability);
         Assert.Equal(ApiDiagItemStatus.Pass, reach.Status);
-        Assert.Equal("chat", reach.Evidence); // reachability satisfied via chat, not the model list
+        Assert.Equal("chat", reach.Evidence);
     }
 
     [Fact]

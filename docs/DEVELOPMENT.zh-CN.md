@@ -76,6 +76,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 | 存储 | 单文件 JSON（`NovaraStore`），可选 AES-GCM 加密 |
 | 桌面便签 | 独立进程 `StickNoteHost`（FileSystemWatcher 同步） |
 | MCP | `NovaraMCP.exe`（stdio 前端）+ 命名管道 |
+| 同步服务端 | ASP.NET Core 8 minimal API（`Novara.Server`，单文件自包含；SQLite + 文件系统存 blob） |
 | HTML 解析 / 净化 | AngleSharp |
 | 测试 | xUnit（`Novara.Tests`，引用纯逻辑库 `Novara.Core`） |
 | 构建 | MSBuild / `dotnet publish` 自包含；安装包 Inno Setup |
@@ -84,7 +85,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 
 ## 3. 解决方案结构
 
-解决方案 `Novara.slnx` 包含五个工程：
+解决方案 `Novara.slnx` 包含七个工程：
 
 ```
 Novara/
@@ -92,13 +93,16 @@ Novara/
 ├── Novara.Core/         纯逻辑库（net8.0 无 WinUI，可被 xUnit 引用）
 ├── Novara.Tests/        xUnit 单元测试
 ├── StickNoteHost/       桌面便签独立进程（无主窗口、托盘常驻）
-└── NovaraMCP/           MCP stdio 前端（纯 net8.0 控制台，单文件发布）
+├── NovaraMCP/           MCP stdio 前端（纯 net8.0 控制台，单文件发布）
+├── Novara.Server/       自托管同步服务端宿主（ASP.NET Core 8，单文件发布）
+└── Novara.Sync.Server/  同步服务端逻辑库（空间存储、token 鉴权、保留策略）
 ```
 
 **分层原则**：
 
 - `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
 - 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
+- `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者都面向 `net8.0`，无 WinUI 依赖。
 - `Pages/` 是九大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage。
 
 **核心解耦方式**：
@@ -808,8 +812,9 @@ Novara/
 | 6.0 | 2026-09-06 | 动效设计系统、工作区、快速捕获、网络活动指示器、首启导览；五轮全域核验（约 250 项修复）与 MCP 安全加固 |
 | 6.1 | 2026-09-06 | 修复：无过滤视图下新建空分组不再消失；工作区激活时 Toast 明确说明可见条件 |
 | 6.2 | 2026-09-07 | 全页面弹窗小窗自适应；便签弹窗整页滚动；图标双向无限环选择器；编辑器正文占位符；备忘页区域化置顶与归属变化剥除；增量核验（4 项修复） |
-| 7.0 | 2026-09-10 | **互联时代开启** —— Novara Snapshot：加密自包含 HTML 查看器导出（`.novaenc` v4 容器）、浏览器只读查看器（本地 TOTP、深浅主题）、强制加密门槛、部署指南（novara.xin）；同步与自托管部署将从这一地基生长 |
+| 7.0 | 2026-09-10 | **互联时代开启** —— Novara Snapshot：加密自包含 HTML 查看器导出（`.novaenc` v4 容器）、浏览器只读查看器（本地 TOTP、深浅主题）、强制加密门槛、部署指南（novara.xin） |
+| 8.0 | 2026-09-19 | **跨设备同步** —— 经由随安装包自带的自托管服务端做端到端加密同步（带版本号的密文存储、token 鉴权、设备注册与撤销）；网页阅读器支持受限编辑并重加密上传；库级冲突处理且保留被覆盖的那一版；设备中心与本地同步审计；全仓多轮发布前核验 |
 
 ---
 
-> Novara 以「本地优先、简洁私密」为设计核心。所有数据属于用户，不离开本机——而自 7.0 起，凡是离开的（快照、未来的同步）都经过端到端加密，服务器只经手密文。
+> Novara 以「本地优先、简洁私密」为设计核心。所有数据属于用户，不离开本机——而自 7.0 起，凡是离开的（快照，以及 8.0 起的跨设备同步）都经过端到端加密，服务器只经手密文。

@@ -8,7 +8,7 @@ namespace Novara.Tests;
 [Collection("CoreSequential")]
 public class TotpServiceTests
 {
-    // RFC 4226 App. D: secret = ASCII "12345678901234567890", 6 digits, HOTP counters 0..9
+
     private static readonly long[] HotpCounters = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     private static readonly string[] HotpExpected =
         { "755224", "287082", "359152", "969429", "338314", "254676", "287922", "162583", "399871", "520489" };
@@ -24,7 +24,7 @@ public class TotpServiceTests
         Assert.Equal(expected, TotpService.ComputeCode(key, "SHA1", counter, 6));
     }
 
-    // RFC 6238 App. B: secret = ASCII "12345678901234567890" (SHA1), 8 digits, T = unix time
+
     [Theory]
     [InlineData(59L, "94287082")]
     [InlineData(1111111109L, "07081804")]
@@ -38,8 +38,8 @@ public class TotpServiceTests
         Assert.Equal(expected, TotpService.ComputeCode(key, "SHA1", unixTime / 30, 8));
     }
 
-    // RFC 6238 App. B: SHA256 uses the 32-byte secret "12345678901234567890123456789012"
-    
+
+
     [Theory]
     [InlineData(59L, "46119246")]
     [InlineData(1111111109L, "68084774")]
@@ -53,7 +53,7 @@ public class TotpServiceTests
         Assert.Equal(expected, TotpService.ComputeCode(key, "SHA256", unixTime / 30, 8));
     }
 
-    // ---------- Base32 ----------
+
 
     [Fact]
     public void Base32_RoundTrip_And_Tolerance()
@@ -62,10 +62,10 @@ public class TotpServiceTests
         var b32 = ToBase32(data);
         Assert.True(TotpService.TryDecodeBase32(b32, out var decoded));
         Assert.Equal(data, decoded);
-        
+
         Assert.True(TotpService.TryDecodeBase32(b32.ToLowerInvariant().Replace("A", "a ").Insert(8, "-"), out var tolerated));
         Assert.Equal(data, tolerated);
-        Assert.False(TotpService.TryDecodeBase32("not!valid@base32", out _)); 
+        Assert.False(TotpService.TryDecodeBase32("not!valid@base32", out _));
         Assert.False(TotpService.TryDecodeBase32("", out _));
     }
 
@@ -80,7 +80,7 @@ public class TotpServiceTests
         return sb.ToString().PadRight(sb.Length + pad, '=');
     }
 
-    // ---------- otpauth URI ----------
+
 
     private const string TestSecret = "JBSWY3DPEHPK3PXP";
 
@@ -105,27 +105,27 @@ public class TotpServiceTests
         Assert.Equal(6, minimal.Digits);
         Assert.Equal(30, minimal.Period);
 
-        Assert.True(TotpService.TryParse(TestSecret, out var bare)); 
+        Assert.True(TotpService.TryParse(TestSecret, out var bare));
         TotpService.TryDecodeBase32(TestSecret, out var expectedKey);
         Assert.Equal(expectedKey, bare.Key);
     }
 
     [Theory]
-    [InlineData("otpauth://totp/x")]                       
-    [InlineData("otpauth://totp/x?secret=!!")]             
-    [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=MD5")] 
-    [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=4")]      
+    [InlineData("otpauth://totp/x")]
+    [InlineData("otpauth://totp/x?secret=!!")]
+    [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=MD5")]
+    [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=4")]
     public void ParseOtpAuthUri_Invalid_Rejected(string input)
         => Assert.False(TotpService.TryParse(input, out _));
 
-    
+
 
     [Fact]
     public void RemainingSeconds_RollsOver()
     {
-        Assert.Equal(30, TotpService.RemainingSeconds(30, 60)); 
-        Assert.Equal(1, TotpService.RemainingSeconds(30, 89));  
-        Assert.Equal(1, TotpService.RemainingSeconds(30, 59));  
-        Assert.Equal(30, TotpService.RemainingSeconds(30, 30)); 
+        Assert.Equal(30, TotpService.RemainingSeconds(30, 60));
+        Assert.Equal(1, TotpService.RemainingSeconds(30, 89));
+        Assert.Equal(1, TotpService.RemainingSeconds(30, 59));
+        Assert.Equal(30, TotpService.RemainingSeconds(30, 30));
     }
 }

@@ -40,7 +40,7 @@ public class KdfHardeningTests : IDisposable
         return b[4];
     }
 
-    
+
 
     [Fact]
     public void NewEncryption_StartsAtVer3_And_RoundTrips()
@@ -54,24 +54,24 @@ public class KdfHardeningTests : IDisposable
             store.Load();
             store.Database.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "kdf条目", Type = "自定义" });
             Assert.True(store.EnableEncryption("pw-123"));
-            Assert.Equal(3, VersionByte(dbPath)); // day-one ver3 (9.2#7)
+            Assert.Equal(3, VersionByte(dbPath));
 
             var reload = new NovaraStore(dbPath);
             Assert.Equal(LoadStatus.Encrypted, reload.Load().Status);
             Assert.Equal(LoadStatus.Ok, reload.LoadWithPassword("pw-123").Status);
             Assert.Single(reload.Database.MemoEntries);
-            Assert.False(reload.NeedsKdfMigration); // ver3 is the target state
+            Assert.False(reload.NeedsKdfMigration);
         }
         finally { PasswordService.SetBaseDir(null); }
     }
 
-    
+
 
     [Fact]
     public void V2_LegacyLibrary_NeedsKdfMigration_And_MigratesToVer3()
     {
-        
-        
+
+
         PasswordService.SetBaseDir(_dir);
         try
         {
@@ -81,26 +81,26 @@ public class KdfHardeningTests : IDisposable
             var db = new NovaraDatabase();
             db.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "旧库条目", Type = "自定义" });
             var json = JsonSerializer.SerializeToUtf8Bytes(db, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            var cipher = CryptoService.EncryptGcm(json, "old-pw", deriveSalt); 
+            var cipher = CryptoService.EncryptGcm(json, "old-pw", deriveSalt);
             using (var fs = File.Create(dbPath))
             {
                 var header = new byte[22];
                 BitConverter.TryWriteBytes(header.AsSpan(0, 4), 0x41564F4E);
-                header[4] = 2; header[5] = 1; // v2 + GCM
+                header[4] = 2; header[5] = 1;
                 fs.Write(header); fs.Write(cipher);
             }
 
             var store = new NovaraStore(dbPath);
             Assert.Equal(LoadStatus.Encrypted, store.Load().Status);
             Assert.Equal(LoadStatus.Ok, store.LoadWithPassword("old-pw").Status);
-            Assert.True(store.NeedsKdfMigration); 
+            Assert.True(store.NeedsKdfMigration);
 
             Assert.True(store.MigrateKdf());
-            Assert.Equal(3, VersionByte(dbPath)); 
+            Assert.Equal(3, VersionByte(dbPath));
             Assert.False(store.NeedsKdfMigration);
-            Assert.False(store.MigrateKdf()); 
+            Assert.False(store.MigrateKdf());
 
-            
+
             var reload = new NovaraStore(dbPath);
             Assert.Equal(LoadStatus.Ok, reload.LoadWithPassword("old-pw").Status);
             Assert.Single(reload.Database.MemoEntries);
@@ -116,20 +116,20 @@ public class KdfHardeningTests : IDisposable
         Assert.False(store.MigrateKdf());
     }
 
-    
+
 
     [Fact]
     public void SecurityHealth_WrongLengthDeriveSalt_Damaged()
     {
-        
-        
+
+
         PasswordService.SetBaseDir(_dir);
         try
         {
             var json = JsonSerializer.Serialize(new Dictionary<string, object>
             {
                 ["HashSalt"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-                ["DeriveSalt"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)), 
+                ["DeriveSalt"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)),
                 ["Hash"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                 ["Version"] = 2,
             });
@@ -151,12 +151,12 @@ public class KdfHardeningTests : IDisposable
         finally { PasswordService.SetBaseDir(null); }
     }
 
-    
+
 
     [Fact]
     public void SecurityFile_VerifyLegacyFormat_Then_AutoUpgrade()
     {
-        
+
         PasswordService.SetBaseDir(_dir);
         try
         {
@@ -175,17 +175,17 @@ public class KdfHardeningTests : IDisposable
                 ["HashSalt"] = Convert.ToBase64String(hashSalt),
                 ["DeriveSalt"] = Convert.ToBase64String(deriveSalt),
                 ["Hash"] = Convert.ToBase64String(LegacyHash("legacy-pw", hashSalt)),
-                
+
             });
             File.WriteAllText(Path.Combine(_dir, "security.dat"), legacyJson);
 
-            
+
             Assert.True(PasswordService.Verify("legacy-pw"));
             var upgraded = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(_dir, "security.dat")));
             Assert.Equal(2, upgraded.GetProperty("Version").GetInt32());
-            Assert.False(upgraded.TryGetProperty("Hash", out var h) && h.GetString() == Convert.ToBase64String(LegacyHash("legacy-pw", hashSalt))); 
+            Assert.False(upgraded.TryGetProperty("Hash", out var h) && h.GetString() == Convert.ToBase64String(LegacyHash("legacy-pw", hashSalt)));
 
-            
+
             Assert.True(PasswordService.Verify("legacy-pw"));
             Assert.False(PasswordService.Verify("wrong"));
         }

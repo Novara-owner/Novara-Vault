@@ -14,27 +14,27 @@ using Windows.UI.Text;
 
 namespace Novara.Pages;
 
-/// <summary>
-/// Global search page (3.0-4.5): Ctrl+K opens this page. The search box is an exact copy of
-/// the memo/path page one (capsule + magnifier + cancel-x + Enter-to-search). Results are
-/// matched entries from all four tabs rendered as uniform cards (kind icon on the right):
-/// memo shows name + first info (+ group name on the right), path shows name + path,
-/// todo shows name + main todo, note shows name + single-line content, diary shows
-/// name + created/modified times. Clicking a card jumps to its page and flashes the target card.
-/// </summary>
+
+
+
+
+
+
+
+
 public sealed partial class SearchPage : Page
 {
     private readonly List<SearchItem> _items = new();
-    private readonly List<SearchItem> _index = new(); 
-    private System.Threading.CancellationTokenSource? _renderCts; 
+    private readonly List<SearchItem> _index = new();
+    private System.Threading.CancellationTokenSource? _renderCts;
     private Border? _cancelSearchBtn;
     private Button? _filterButton;
     private PathIcon? _filterButtonIcon;
     private TextBlock? _filterButtonText;
-    private string _currentFilter = "all"; 
+    private string _currentFilter = "all";
     private string _currentKey = "";
 
-    
+
     private sealed record PaletteCmd(string Action, string LabelKey, string IconPath);
     private static readonly PaletteCmd[] PaletteCommands =
     {
@@ -43,35 +43,35 @@ public sealed partial class SearchPage : Page
         new("new_note", "Menu_New_Note", IconData.Note[0] + " " + IconData.Note[1]),
         new("new_diary", "Menu_New_Diary", IconData.NewDiary),
         new("new_document", "Diary_New_Document", IconData.Document),
-        new("open_settings", "Setting_Title_Page", string.Join(" ", IconData.Settings)), // N5-S15-02: full 4-path glyph, same as MainWindow (2 paths left the center hollow)
+        new("open_settings", "Setting_Title_Page", string.Join(" ", IconData.Settings)),
         new("open_trash", "Trash_Title", IconData.Delete),
-        new("lock_now", "Tray_LockNow", IconData.Lock), // 9.3: owner-provided padlock glyph (icon-bbox-check passed)
+        new("lock_now", "Tray_LockNow", IconData.Lock),
     };
-    private readonly List<PaletteCmd> _cmdMatched = new(); // currently filtered command rows (keyboard navigation source)
-    private int _cmdIndex; // highlighted row index within _cmdMatched
-    private bool _wasPaletteMode; // N2-48: last TextChanged pass rendered palette rows (stale-card cleanup on leave)
+    private readonly List<PaletteCmd> _cmdMatched = new();
+    private int _cmdIndex;
+    private bool _wasPaletteMode;
     private bool PaletteMode => SearchBox.Text?.StartsWith(">") == true;
 
-    private static readonly string SearchGlyphPath = IconData.Search[0] + " " + IconData.Search[1]; // full magnifier = circle + handle
+    private static readonly string SearchGlyphPath = IconData.Search[0] + " " + IconData.Search[1];
 
     public SearchPage()
     {
         InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true); 
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
         SearchGlyphIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), SearchGlyphPath);
         BackButton.Click += (_, _) => App.MainWindow?.CloseSearchPage();
 
-        // Same search-box behavior as the tab pages: TextChanged only toggles the x button and
-        // restores the blank hint when empty; Enter actually runs the search.
-        // 9.3: a leading ">" switches the box into command-palette mode (live filtered command list).
+
+
+
         SearchBox.TextChanged += (_, _) =>
         {
             UpdateCancelButtonVisibility();
             UpdateModeIcon();
             if (PaletteMode) { _wasPaletteMode = true; RenderCommands(); return; }
-            // N2-48: leaving palette mode (backspacing past ">") must clear the stale command cards -
-            // they lingered until the next Enter-run search otherwise.
+
+
             if (_wasPaletteMode)
             {
                 _wasPaletteMode = false;
@@ -81,7 +81,7 @@ public sealed partial class SearchPage : Page
             if (string.IsNullOrWhiteSpace(SearchBox.Text))
                 ShowBlankHint();
         };
-        // 9.3: Up/Down move the palette highlight; intercepted so the caret never wanders.
+
         SearchBox.KeyDown += (_, e) =>
         {
             if (!PaletteMode) return;
@@ -103,27 +103,27 @@ public sealed partial class SearchPage : Page
         SearchBox.KeyUp += (_, e) =>
         {
             if (e.Key != Windows.System.VirtualKey.Enter) return;
-            if (PaletteMode) { ExecuteHighlightedCommand(); return; } // 9.3: run the highlighted command
+            if (PaletteMode) { ExecuteHighlightedCommand(); return; }
             RunSearch(SearchBox.Text?.Trim() ?? "");
         };
 
         CreateCancelButton();
         CreateFilterButton();
 
-        KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden; // no ctrl/esc tooltips on this page
+        KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
         var esc = new KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
         esc.Invoked += (_, _) => App.MainWindow?.CloseSearchPage();
         KeyboardAccelerators.Add(esc);
         ApplyTexts();
         Loaded += (_, _) =>
         {
-            FocusSearch(); // focus after layout so the back button never gets it
-            ShowBlankHint(); // blank hint visible on entry, exactly like the four tab pages
+            FocusSearch();
+            ShowBlankHint();
         };
-        Unloaded += (_, _) => _renderCts?.Cancel(); 
+        Unloaded += (_, _) => _renderCts?.Cancel();
     }
 
-    /// <summary>Cancel (x) button, built in code exactly like BasicMemoPage/FilePathPage.</summary>
+
     private void CreateCancelButton()
     {
         _cancelSearchBtn = new Border
@@ -156,7 +156,7 @@ public sealed partial class SearchPage : Page
         SearchCapsuleGrid.Children.Add(_cancelSearchBtn);
     }
 
-    
+
     private void CreateFilterButton()
     {
         var white = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
@@ -210,18 +210,18 @@ public sealed partial class SearchPage : Page
         _ => App.GetString("Diary_Filter_All")
     };
 
-    
+
 
     private void UpdateModeIcon()
     {
-        // magnifier in search mode, "</>" prompt mark in palette mode
+
         SearchGlyphIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry),
             PaletteMode ? IconData.CmdPrompt : SearchGlyphPath);
     }
 
     private void RenderCommands()
     {
-        _renderCts?.Cancel(); _renderCts = null; // palette rows render synchronously - kill any in-flight search render
+        _renderCts?.Cancel(); _renderCts = null;
         _cmdMatched.Clear();
         var filter = SearchBox.Text.Length > 1 ? SearchBox.Text.Substring(1).Trim() : "";
         foreach (var c in PaletteCommands)
@@ -237,10 +237,10 @@ public sealed partial class SearchPage : Page
             _cmdIndex = 0;
             ShowNoResultHint();
             EmptyHintText.Text = App.GetString("Cmd_NoMatch");
-            EmptyHintIconBox.Visibility = Visibility.Collapsed; 
+            EmptyHintIconBox.Visibility = Visibility.Collapsed;
             return;
         }
-        if (_cmdIndex >= _cmdMatched.Count) _cmdIndex = _cmdMatched.Count - 1; // keep the highlight in range while filtering
+        if (_cmdIndex >= _cmdMatched.Count) _cmdIndex = _cmdMatched.Count - 1;
         if (_cmdIndex < 0) _cmdIndex = 0;
         EmptyHintPanel.Visibility = Visibility.Collapsed;
         for (int i = 0; i < _cmdMatched.Count; i++)
@@ -253,11 +253,11 @@ public sealed partial class SearchPage : Page
         var card = new Border
         {
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
-            BorderBrush = App.GetBrush("AppBorderBrush"), // same card border as the result cards
+            BorderBrush = App.GetBrush("AppBorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
             Padding = new Thickness(20, 14, 20, 14),
-            Tag = index, // row index for hover-synced highlight
+            Tag = index,
         };
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
         panel.Children.Add(new Viewbox
@@ -272,7 +272,7 @@ public sealed partial class SearchPage : Page
         });
         card.Child = panel;
         card.Tapped += (_, _) => ExecuteCommandAt(index);
-        card.PointerEntered += (_, _) => { _cmdIndex = index; RefreshCmdHighlights(); }; // mouse hover drives the same highlight
+        card.PointerEntered += (_, _) => { _cmdIndex = index; RefreshCmdHighlights(); };
         return card;
     }
 
@@ -283,7 +283,7 @@ public sealed partial class SearchPage : Page
             if (ResultPanel.Children[i] is Border b && b.Tag is int idx)
             {
                 bool hot = idx == _cmdIndex;
-                // assign fresh brush references, never mutate shared instances (E1-09)
+
                 b.BorderBrush = hot ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush");
             }
         }
@@ -298,7 +298,7 @@ public sealed partial class SearchPage : Page
     private void ExecuteCommandAt(int index)
     {
         if (index < 0 || index >= _cmdMatched.Count) return;
-        App.MainWindow?.RunPaletteCommand(_cmdMatched[index].Action); // RunPaletteCommand closes this page itself
+        App.MainWindow?.RunPaletteCommand(_cmdMatched[index].Action);
     }
 
     private bool MatchesFilter(SearchItem it) => _currentFilter switch
@@ -313,7 +313,7 @@ public sealed partial class SearchPage : Page
 
     private void FilterButton_Click(object sender, RoutedEventArgs e)
     {
-        if (PaletteMode) return; 
+        if (PaletteMode) return;
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var activeBrush = App.GetBrush("AppTextPrimaryBrush");
         var normalBrush = App.GetBrush("AppTextSecondaryBrush");
@@ -347,7 +347,7 @@ public sealed partial class SearchPage : Page
 
     private void RefreshResults()
     {
-        if (_items.Count == 0) return; 
+        if (_items.Count == 0) return;
         Render(_currentKey);
     }
 
@@ -362,26 +362,26 @@ public sealed partial class SearchPage : Page
 
     private void ClearSearch() => SearchBox.Text = "";
 
-    /// <summary>Reset the search state so a fresh entry starts blank (the page instance is cached).</summary>
+
     public void ResetSearch()
     {
         SearchBox.Text = "";
-        // TextChanged does NOT fire while the page is detached from the visual tree (ResetSearch runs
-        // before RootFrame.Content switches) - so hide the x / show the blank hint explicitly instead.
+
+
         UpdateCancelButtonVisibility();
         ResultPanel.Children.Clear();
-        _items.Clear(); // N4-10: RefreshResults treats a non-empty _items as "already searched" - stale cards
-        // from the previous session would render under a changed filter on the next visit (page instance is cached)
+        _items.Clear();
+
         _currentFilter = "all";
         _currentKey = "";
         _cmdIndex = 0;
         _cmdMatched.Clear();
-        _wasPaletteMode = false; // N3-55: leave palette mode on reset - otherwise the next TextChanged pass
-        // with a non-">" first char redundantly re-clears an already-empty panel (harmless, but stale state)
-        UpdateModeIcon(); // TextChanged may not fire while detached - restore the magnifier explicitly
+        _wasPaletteMode = false;
+
+        UpdateModeIcon();
         UpdateFilterButton();
         ShowBlankHint();
-        RebuildIndex(); 
+        RebuildIndex();
     }
 
     public void ApplyTexts()
@@ -393,14 +393,14 @@ public sealed partial class SearchPage : Page
 
     public void FocusSearch()
     {
-        FocusSink.Focus(FocusState.Programmatic); // steal focus first - no focus border on the invisible button (LockScreenPage fix)
-        SearchBox.Focus(FocusState.Programmatic); // then the search box takes input
+        FocusSink.Focus(FocusState.Programmatic);
+        SearchBox.Focus(FocusState.Programmatic);
     }
 
-    /// <summary>
-    
-    
-    /// </summary>
+
+
+
+
     private void RebuildIndex()
     {
         _index.Clear();
@@ -409,7 +409,13 @@ public sealed partial class SearchPage : Page
 
         foreach (var e in db.MemoEntries.Where(x => !x.IsDeleted))
         {
-            var sub = !string.IsNullOrWhiteSpace(e.KeyInfo) ? e.KeyInfo : (e.Fields.Count > 0 ? (e.Fields[0]?.Value ?? "") : ""); 
+
+
+
+
+
+
+            var sub = MemoFieldMask.MaskedKeyInfo(e.Type, e.KeyInfo, e.Fields.Select(f => (f.Label, f.Value ?? "")));
             var text = (e.Name + " " + e.KeyInfo + " " + string.Join(" ", e.Fields.Where(f => f != null).Select(f => f.Label + " " + f.Value))).ToLowerInvariant();
             _index.Add(new SearchItem("memo", e.Id.ToString(), e.Name, sub, e.CreatedAt, "", text));
         }
@@ -442,11 +448,11 @@ public sealed partial class SearchPage : Page
             if (SearchFuzzy.MatchesQuery(it.SearchText, key))
                 _items.Add(it);
 
-        
-        var sortWords = key.Split(' ', StringSplitOptions.RemoveEmptyEntries); 
+
+        var sortWords = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         _items.Sort((a, b) =>
         {
-            
+
             var titleA = a.Title ?? "";
             var titleB = b.Title ?? "";
             bool ta = sortWords.Any(w => titleA.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
@@ -478,28 +484,38 @@ public sealed partial class SearchPage : Page
                     if (token.IsCancellationRequested) return;
                     var card = BuildResultCard(filtered[i], key);
                     ResultPanel.Children.Add(card);
-                    if (i < 10) App.PlayCardEntrance(card, i); // staggered entrance (N5F-04: capped like the four tab pages)
+                    if (i < 10) App.PlayCardEntrance(card, i);
                 }
             }, token);
         }
         catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+
+
+
+
+            System.Diagnostics.Debug.WriteLine($"搜索结果渲染失败（下次搜索将重建）: {ex}");
+            _renderCts = null;
+            return;
+        }
 
         if (token.IsCancellationRequested) return;
         _renderCts = null;
     }
 
-    /// <summary>Blank hint: single line of text, no icon (same as the four tab pages).</summary>
+
     private void ShowBlankHint()
     {
         ResultPanel.Children.Clear();
         EmptyHintText.Text = App.GetString("Search_Empty");
         EmptyHintIconBox.Visibility = Visibility.Collapsed;
-        CmdHintText.Visibility = Visibility.Visible; // 9.3: palette entry hint under the blank text
+        CmdHintText.Visibility = Visibility.Visible;
         EmptyHintPanel.Visibility = Visibility.Visible;
         FloatInHint();
     }
 
-    /// <summary>No-result hint: icon + text (icon only on the no-result state).</summary>
+
     private void ShowNoResultHint()
     {
         ResultPanel.Children.Clear();
@@ -530,20 +546,20 @@ public sealed partial class SearchPage : Page
         sb.Begin();
     }
 
-    /// <summary>
-    /// Uniform result card: row1 = kind icon (right, AppPrimaryButtonBrush) + name (highlighted),
-    /// row2 = kind-specific info (memo first info, path, main todo,
-    /// single-line note content, diary created+modified times); right side = memo group name + star/pin badges.
-    /// </summary>
+
+
+
+
+
     private Border BuildResultCard(SearchItem it, string key)
     {
         var card = new Border
         {
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
-            BorderBrush = App.GetBrush("AppBorderBrush"), // same card border as the tab pages
+            BorderBrush = App.GetBrush("AppBorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(20, 18, 20, 18), // same padding as the tab pages
+            Padding = new Thickness(20, 18, 20, 18),
         };
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -552,7 +568,8 @@ public sealed partial class SearchPage : Page
         var titleRow = new Grid { ColumnSpacing = 6 };
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.Children.Add(BuildHighlightText(it.Title, key, 14, Microsoft.UI.Text.FontWeights.SemiBold, App.GetBrush("AppTextPrimaryBrush")));
+
+        titleRow.Children.Add(BuildHighlightText(it.Kind == "diary" ? App.DiaryTitleText(it.Title) : it.Title, key, 14, Microsoft.UI.Text.FontWeights.SemiBold, App.GetBrush("AppTextPrimaryBrush")));
         var tagIcon = new Viewbox { Width = 16, Height = 16, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Top, Child = new PathIcon { Data = SafeGeometry(IconData.GetTagIcon(it.Kind, it.Format)), Foreground = App.GetBrush("AppPrimaryButtonBrush") } };
         Grid.SetColumn(tagIcon, 1);
         titleRow.Children.Add(tagIcon);
@@ -560,7 +577,7 @@ public sealed partial class SearchPage : Page
         if (!string.IsNullOrEmpty(it.SubText))
         {
             var sub = BuildHighlightText(it.SubText, key, 12, Microsoft.UI.Text.FontWeights.Normal, App.GetBrush("AppTextSecondaryBrush"));
-            if (it.Kind == "note") // single-line content with ellipsis for notes
+            if (it.Kind == "note")
             {
                 sub.TextTrimming = TextTrimming.CharacterEllipsis;
                 sub.TextWrapping = TextWrapping.NoWrap;
@@ -576,18 +593,18 @@ public sealed partial class SearchPage : Page
         return card;
     }
 
-    /// <summary>Build a TextBlock whose matching segment is emphasized (theme-aware).</summary>
+
     private static TextBlock BuildHighlightText(string text, string key, double size, Windows.UI.Text.FontWeight weight, Brush baseBrush)
     {
         var tb = new TextBlock { FontSize = size, TextWrapping = TextWrapping.Wrap };
-        text ??= ""; // N4-11: explicit "Name":null in a hand-edited/import file deserializes to null (store normalization does not cover Name/Title) - IndexOf would NRE mid-render
+        text ??= "";
         if (string.IsNullOrEmpty(key))
         {
             tb.Text = text;
             tb.Foreground = baseBrush;
             return tb;
         }
-        
+
         var words = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var hits = new List<(int Start, int Len)>();
         foreach (var w in words)
@@ -605,12 +622,12 @@ public sealed partial class SearchPage : Page
             tb.Foreground = baseBrush;
             return tb;
         }
-        hits.Sort((x, y) => x.Start != y.Start ? x.Start.CompareTo(y.Start) : y.Len.CompareTo(x.Len)); 
+        hits.Sort((x, y) => x.Start != y.Start ? x.Start.CompareTo(y.Start) : y.Len.CompareTo(x.Len));
         var brand = App.GetBrush("AppTextPrimaryBrush");
         int cur = 0;
         foreach (var h in hits)
         {
-            if (h.Start < cur) continue; 
+            if (h.Start < cur) continue;
             if (h.Start > cur)
                 tb.Inlines.Add(new Run { Text = text.Substring(cur, h.Start - cur), Foreground = baseBrush });
             tb.Inlines.Add(new Run { Text = text.Substring(h.Start, Math.Min(h.Len, text.Length - h.Start)), Foreground = brand, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });

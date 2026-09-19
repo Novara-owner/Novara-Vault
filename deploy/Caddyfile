@@ -1,0 +1,42 @@
+novara.example.com {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:5180 {
+
+
+
+
+		header_up X-Forwarded-Proto {http.request.scheme}
+		header_up X-Forwarded-Host {http.request.host}
+	}
+
+	header {
+
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+
+
+
+
+		X-Robots-Tag "noindex, nofollow, noarchive"
+
+
+
+
+
+
+
+
+
+
+
+
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
+
+
+
+
+
+	}
+}

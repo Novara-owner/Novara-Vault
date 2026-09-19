@@ -1,8 +1,3 @@
-/* ========== PasswordService - Security Credentials ==========
-Function: security.dat management - dual-salt SHA256 hashing, constant-time verify, lockout.dat fail-count persistence
-Corresponding UI: PasswordService.cs
-Logic Range: Whole file business logic of this module
-*/
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -12,9 +7,9 @@ namespace Novara.Services;
 public static class PasswordService
 {
     private const int SaltSize = 32;
-    private const int HashSize = 32; // SHA256
+    private const int HashSize = 32;
 
-    
+
     private static string? _baseDirOverride;
     public static void SetBaseDir(string? dir) => _baseDirOverride = dir;
 
@@ -28,9 +23,9 @@ public static class PasswordService
         public string HashSalt { get; set; } = "";
         public string DeriveSalt { get; set; } = "";
         public string Hash { get; set; } = "";
-        /// <summary>9.2#7 (2026-08-29): 1 = legacy salted-SHA256 (pre-KDF-hardening, field missing on
-        /// old files), 2 = PBKDF2-SHA256 with CryptoService.CurrentIterations. Old files verify via
-        /// the legacy algorithm and are rewritten to v2 transparently on the first successful verify.</summary>
+
+
+
         public int Version { get; set; } = 1;
     }
 
@@ -39,9 +34,9 @@ public static class PasswordService
 
         public bool Enabled { get; set; } = true;
         public DateTime Until { get; set; }
-        public int FailCount { get; set; } // 2026-08-06: persist fail count so restart cannot bypass the 5-strike lockout (Bug 15)
-        
-        
+        public int FailCount { get; set; }
+
+
         public long RemainingMs { get; set; }
         public long TickAtLock { get; set; }
         public DateTime WallAtLockUtc { get; set; }
@@ -49,7 +44,7 @@ public static class PasswordService
 
     public static bool Exists() => File.Exists(SecurityPath);
 
-    
+
     public static string SecurityFilePath => SecurityPath;
 
     public static bool Create(string password)
@@ -58,7 +53,7 @@ public static class PasswordService
         {
             var hashSalt = RandomNumberGenerator.GetBytes(SaltSize);
             var deriveSalt = RandomNumberGenerator.GetBytes(SaltSize);
-            var hash = HashPasswordV2(password, hashSalt); // 9.2#7: hardened hash from day one
+            var hash = HashPasswordV2(password, hashSalt);
             Directory.CreateDirectory(BaseDir);
             AtomicWrite(SecurityPath, JsonSerializer.Serialize(new SecurityFile
             {
@@ -67,6 +62,11 @@ public static class PasswordService
                 Hash = Convert.ToBase64String(hash),
                 Version = 2
             }));
+
+
+
+
+            DiscardStaged();
             return true;
         }
         catch
@@ -83,8 +83,8 @@ public static class PasswordService
             if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.Hash)) return false;
             var hashSalt = Convert.FromBase64String(sf.HashSalt);
             var expected = Convert.FromBase64String(sf.Hash);
-            // 9.2#7: verify by the file's own version. Legacy files verify via salted SHA-256 and are
-            // transparently rewritten to the hardened PBKDF2 format on their first successful verify.
+
+
             var actual = sf.Version >= 2 ? HashPasswordV2(password, hashSalt) : HashPassword(password, hashSalt);
             var ok = CryptographicOperations.FixedTimeEquals(expected, actual);
             if (ok && sf.Version < 2) UpgradeSecurityFile(sf, password, hashSalt);
@@ -96,9 +96,9 @@ public static class PasswordService
         }
     }
 
-    /// <summary>9.2#7: silent in-place hardening - keep hashSalt + deriveSalt, rewrite only the
-    /// password hash in the V2 format. Failure is swallowed on purpose: the verify result stands and
-    /// the next successful verify retries the upgrade.</summary>
+
+
+
     private static void UpgradeSecurityFile(SecurityFile sf, string password, byte[] hashSalt)
     {
         try
@@ -115,15 +115,15 @@ public static class PasswordService
         catch { }
     }
 
-    /// <summary>Health of security.dat, independent of any password (N4S-04).</summary>
+
     public enum SecurityHealth { Ok, NotExists, Damaged, TransientError }
 
-    /// <summary>
-    /// N4S-04: classify WHY a Verify would fail before counting it as a wrong password. A damaged
-    /// security.dat (half-written JSON / broken base64 - stable corruption) must surface as Corrupted
-    /// so the rebuild dialog appears; a transient read failure (AV lock etc.) must stay retryable and
-    /// never offer the destructive path; only an intact file with a mismatching hash counts strikes.
-    /// </summary>
+
+
+
+
+
+
     public static SecurityHealth CheckSecurityHealth()
     {
         try
@@ -134,10 +134,10 @@ public static class PasswordService
             using (var sr = new StreamReader(fs))
                 text = sr.ReadToEnd();
             var sf = JsonSerializer.Deserialize<SecurityFile>(text);
-            
-            
+
+
             if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.DeriveSalt) || string.IsNullOrEmpty(sf.Hash)) return SecurityHealth.Damaged;
-            
+
             if (Convert.FromBase64String(sf.HashSalt).Length != SaltSize) return SecurityHealth.Damaged;
             if (Convert.FromBase64String(sf.DeriveSalt).Length != SaltSize) return SecurityHealth.Damaged;
             if (Convert.FromBase64String(sf.Hash).Length != HashSize) return SecurityHealth.Damaged;
@@ -153,39 +153,90 @@ public static class PasswordService
         }
     }
 
-    public static bool ChangePassword(string oldPassword, string newPassword)
+    public static void Delete()
     {
-        if (!Verify(oldPassword)) return false;
+        try { if (File.Exists(SecurityPath)) File.Delete(SecurityPath); } catch { }
+        DiscardStaged();
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private static string StagedPath => Path.Combine(BaseDir, "security.dat.new");
+
+
+
+    public static bool StageChange(string newPassword)
+    {
         try
         {
-            // E4-01: keep hashSalt + deriveSalt, rewrite only the password hash. Reencrypt(newPw)
-            // (SettingsPage) encrypts data.novadb with the current deriveSalt; regenerating it here
-            // would leave security.dat and data.novadb inconsistent until the next write, and a
-            // crash in that window makes the DB undecryptable ("corrupted" -> guided full wipe).
             var sf = LoadSecurity();
             if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.DeriveSalt)) return false;
             var hashSalt = Convert.FromBase64String(sf.HashSalt);
-            var deriveSalt = Convert.FromBase64String(sf.DeriveSalt);
-            var hash = HashPasswordV2(newPassword, hashSalt); // 9.2#7: hardened hash from day one
             Directory.CreateDirectory(BaseDir);
-            AtomicWrite(SecurityPath, JsonSerializer.Serialize(new SecurityFile
+            AtomicWrite(StagedPath, JsonSerializer.Serialize(new SecurityFile
             {
-                HashSalt = Convert.ToBase64String(hashSalt),
-                DeriveSalt = Convert.ToBase64String(deriveSalt),
-                Hash = Convert.ToBase64String(hash),
+                HashSalt = sf.HashSalt,
+                DeriveSalt = sf.DeriveSalt,
+                Hash = Convert.ToBase64String(HashPasswordV2(newPassword, hashSalt)),
                 Version = 2
             }));
             return true;
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
     }
 
-    public static void Delete()
+    public static bool HasStagedChange()
     {
-        try { if (File.Exists(SecurityPath)) File.Delete(SecurityPath); } catch { }
+        try { return File.Exists(StagedPath); }
+        catch { return false; }
+    }
+
+
+    public static bool VerifyStaged(string password)
+    {
+        try
+        {
+            if (!File.Exists(StagedPath)) return false;
+            var sf = JsonSerializer.Deserialize<SecurityFile>(File.ReadAllText(StagedPath));
+            if (sf == null || string.IsNullOrEmpty(sf.HashSalt) || string.IsNullOrEmpty(sf.Hash) || sf.Version < 2) return false;
+            var expected = Convert.FromBase64String(sf.Hash);
+            var actual = HashPasswordV2(password, Convert.FromBase64String(sf.HashSalt));
+            return CryptographicOperations.FixedTimeEquals(expected, actual);
+        }
+        catch { return false; }
+    }
+
+
+
+
+    public static bool PromoteStaged()
+    {
+        try
+        {
+            if (!File.Exists(StagedPath)) return false;
+            var content = File.ReadAllText(StagedPath);
+            AtomicWrite(SecurityPath, content);
+            File.Delete(StagedPath);
+            return true;
+        }
+        catch { return false; }
+    }
+
+
+
+    public static void DiscardStaged()
+    {
+        try { if (File.Exists(StagedPath)) File.Delete(StagedPath); } catch { }
     }
 
     public static byte[]? GetDeriveSalt()
@@ -197,9 +248,9 @@ public static class PasswordService
 
     private static SecurityFile? LoadSecurity()
     {
-        
-        
-        
+
+
+
         for (var attempt = 0; ; attempt++)
         {
             try
@@ -223,9 +274,9 @@ public static class PasswordService
         return sha.ComputeHash(input);
     }
 
-    /// <summary>9.2#7: PBKDF2-SHA256 verification hash (3M iterations, CryptoService.CurrentIterations)
-    /// - a fast salted SHA-256 lets a GPU-holder brute-force the password file itself; the hardened
-    /// hash makes security.dat as expensive to attack as the database it unlocks.</summary>
+
+
+
     private static byte[] HashPasswordV2(string password, byte[] salt)
         => Rfc2898DeriveBytes.Pbkdf2(password, salt, CryptoService.CurrentIterations, HashAlgorithmName.SHA256, 32);
 
@@ -244,8 +295,8 @@ public static class PasswordService
         try { Directory.CreateDirectory(BaseDir); AtomicWrite(LockoutPath, JsonSerializer.Serialize(lf)); } catch { }
     }
 
-    /// <summary>E1-15: atomic write (tmp + move) - a half-written security.dat would lock the user
-    /// out of an encrypted database with no way back.</summary>
+
+
     private static void AtomicWrite(string path, string content)
     {
         var tmp = path + ".tmp";
@@ -256,13 +307,13 @@ public static class PasswordService
                 using var w = new StreamWriter(fs);
                 w.Write(content);
                 w.Flush();
-                fs.Flush(true); // E3-13: flush to disk incl. cache - a half-written security.dat on power loss would lock the data
+                fs.Flush(true);
             }
             File.Move(tmp, path, true);
         }
         catch
         {
-            try { File.Delete(tmp); } catch { } // N4-24: N3-21 pattern - a failed write must not leave a stray *.tmp behind
+            try { File.Delete(tmp); } catch { }
             throw;
         }
     }
@@ -271,7 +322,7 @@ public static class PasswordService
     {
         var lf = LoadLockout() ?? new LockoutFile();
         lf.Until = until;
-        
+
         lf.RemainingMs = (long)Math.Max(0, (until - DateTime.Now).TotalMilliseconds);
         lf.TickAtLock = Environment.TickCount64;
         lf.WallAtLockUtc = DateTime.UtcNow;
@@ -299,13 +350,13 @@ public static class PasswordService
         var lf = LoadLockout();
         if (lf == null || lf.Until == default) { remaining = TimeSpan.Zero; return false; }
         remaining = CalcRemaining(lf);
-        // E3-04: the expiry branch must ALSO reset FailCount - ClearLockout alone keeps it, so a user
-        // who was locked, restarted and waited out the timer would get re-locked after ONE wrong try.
+
+
         if (remaining <= TimeSpan.Zero) { ClearLockout(); SetFailCount(0); remaining = TimeSpan.Zero; return false; }
         return true;
     }
 
-    
+
     public static TimeSpan GetRemainingLockout()
     {
         var lf = LoadLockout();
@@ -313,20 +364,20 @@ public static class PasswordService
         return CalcRemaining(lf);
     }
 
-    /// <summary>
-    
-    /// </summary>
+
+
+
     private static TimeSpan CalcRemaining(LockoutFile lf)
     {
         if (lf.RemainingMs > 0)
         {
             long elapsed = Environment.TickCount64 - lf.TickAtLock;
             if (elapsed >= 0)
-                return TimeSpan.FromMilliseconds(Math.Max(0, lf.RemainingMs - elapsed)); 
+                return TimeSpan.FromMilliseconds(Math.Max(0, lf.RemainingMs - elapsed));
             double wallElapsed = (DateTime.UtcNow - lf.WallAtLockUtc).TotalMilliseconds;
-            return TimeSpan.FromMilliseconds(Math.Max(0, lf.RemainingMs - wallElapsed)); 
+            return TimeSpan.FromMilliseconds(Math.Max(0, lf.RemainingMs - wallElapsed));
         }
-        
+
         var r = lf.Until - DateTime.Now;
         return r > TimeSpan.Zero ? r : TimeSpan.Zero;
     }
@@ -342,7 +393,7 @@ public static class PasswordService
         lf.Enabled = enabled;
         if (!enabled)
         {
-            
+
             lf.FailCount = 0;
             lf.Until = default;
             lf.RemainingMs = 0;

@@ -8,7 +8,7 @@ namespace Novara.Tests;
 [Collection("CoreSequential")]
 public class McpPermissionsTests
 {
-    
+
 
     [Theory]
     [InlineData("create_memo", McpPerm.MemoCreate)]
@@ -36,28 +36,28 @@ public class McpPermissionsTests
     [Fact]
     public void RequiredFor_AllType_RequiresEveryRead()
     {
-        // N2-67: an explicit "all" is NOT a valid type (execution layer rejects it) - the permission
-        
+
+
         Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("list_items", "all"));
-        Assert.Equal(McpPermissions.AllRead, McpPermissions.RequiredFor("list_items", null)); 
+        Assert.Equal(McpPermissions.AllRead, McpPermissions.RequiredFor("list_items", null));
         Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("search_items", "all"));
     }
 
     [Fact]
     public void RequiredFor_UnknownMethod_Or_InvalidType_MapsToNone()
     {
-        Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("hack_db", "memo")); 
+        Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("hack_db", "memo"));
         Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("create_bogus", null));
         Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("read_item", "bogus"));
         Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("delete_item", "bogus"));
     }
 
-    
+
 
     [Fact]
     public void DefaultSet_ReadsEverythingExceptMemo_CannotWrite()
     {
-        
+
         Assert.Equal(McpPerm.PathRead | McpPerm.TodoRead | McpPerm.NoteRead | McpPerm.DiaryRead,
             McpPermissions.DefaultForNewClient);
         Assert.Equal(McpPerm.None, McpPermissions.DefaultForNewClient & McpPerm.MemoRead);
@@ -67,14 +67,14 @@ public class McpPermissionsTests
     [Fact]
     public void LegacySet_IsFullTwentyBits()
     {
-        
+
         Assert.Equal(McpPermissions.LegacyFull, McpPermissions.DefaultForNewClient | ~McpPermissions.DefaultForNewClient & McpPermissions.LegacyFull);
         Assert.True(McpPermissions.LegacyFull.HasFlag(McpPerm.MemoRead));
         Assert.True(McpPermissions.LegacyFull.HasFlag(McpPerm.DiaryDelete));
         Assert.Equal(20, System.Numerics.BitOperations.PopCount((ulong)(long)McpPermissions.LegacyFull));
     }
 
-    
+
 
     private static AppSettings SettingsWithLegacy(List<string> paths)
         => new() { McpAllowedProcesses = paths };
@@ -86,7 +86,7 @@ public class McpPermissionsTests
         Assert.True(McpPermissions.EnsureMigrated(s));
         Assert.Equal(2, s.McpClientPermissions.Count);
         Assert.All(s.McpClientPermissions, r => Assert.Equal((long)McpPermissions.LegacyFull, r.Permissions));
-        Assert.False(McpPermissions.EnsureMigrated(s)); 
+        Assert.False(McpPermissions.EnsureMigrated(s));
         Assert.Equal(2, s.McpClientPermissions.Count);
     }
 
@@ -94,9 +94,9 @@ public class McpPermissionsTests
     public void Migrate_EmptyLists_NoGhostRevival()
     {
         var s = SettingsWithLegacy(new List<string>());
-        Assert.True(McpPermissions.EnsureMigrated(s)); 
+        Assert.True(McpPermissions.EnsureMigrated(s));
         Assert.Empty(s.McpClientPermissions);
-        
+
         Assert.False(McpPermissions.EnsureMigrated(s));
         Assert.Empty(s.McpClientPermissions);
     }
@@ -106,13 +106,13 @@ public class McpPermissionsTests
     {
         var s = SettingsWithLegacy(new List<string>());
         McpPermissions.EnsureDefaultRecord(s, @"C:\agent.exe");
-        McpPermissions.EnsureDefaultRecord(s, @"C:\agent.exe"); 
+        McpPermissions.EnsureDefaultRecord(s, @"C:\agent.exe");
         Assert.Single(s.McpClientPermissions);
         Assert.Equal(McpPermissions.DefaultForNewClient, McpPermissions.GetFor(s, @"C:\agent.exe"));
         Assert.Equal(McpPerm.None, McpPermissions.GetFor(s, @"C:\other.exe"));
     }
 
-    
+
 
     [Fact]
     public void Describe_AllRead_And_SingleBit()
@@ -120,5 +120,43 @@ public class McpPermissionsTests
         Assert.Equal("all:read", McpPermissions.Describe(McpPermissions.AllRead));
         Assert.Equal("memo:read", McpPermissions.Describe(McpPerm.MemoRead));
         Assert.Equal("none", McpPermissions.Describe(McpPerm.None));
+    }
+
+
+
+    [Fact]
+    public void ApplyDeleteGate_FreezesTheDeleteColumnWhileTheMasterSwitchIsOff()
+    {
+        var fromUi = McpPermissions.LegacyFull;
+
+
+
+        var gated = McpPermissions.ApplyDeleteGate(fromUi, onRecord: McpPerm.MemoRead, deleteGateOff: true);
+        Assert.Equal(McpPerm.None, gated & McpPermissions.AllDelete);
+        Assert.Equal(fromUi & ~McpPermissions.AllDelete, gated);
+
+
+        var preserved = McpPermissions.ApplyDeleteGate(fromUi & ~McpPermissions.AllDelete,
+            onRecord: McpPerm.MemoDelete, deleteGateOff: true);
+        Assert.Equal(McpPerm.MemoDelete, preserved & McpPermissions.AllDelete);
+
+
+        Assert.Equal(fromUi, McpPermissions.ApplyDeleteGate(fromUi, McpPerm.None, deleteGateOff: false));
+    }
+
+
+
+    [Fact]
+    public void PermissionLookup_AndRecordCreation_AreCaseInsensitive()
+    {
+
+
+
+        var s = SettingsWithLegacy(new List<string>());
+        McpPermissions.EnsureDefaultRecord(s, @"C:\Tools\Agent.exe");
+        McpPermissions.EnsureDefaultRecord(s, @"c:\tools\agent.EXE");
+
+        Assert.Single(s.McpClientPermissions);
+        Assert.Equal(McpPermissions.DefaultForNewClient, McpPermissions.GetFor(s, @"c:\TOOLS\AGENT.exe"));
     }
 }

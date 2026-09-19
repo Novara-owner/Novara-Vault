@@ -19,7 +19,7 @@ public class McpAuditLogTests : IDisposable
     public void Dispose()
     {
         try { foreach (var f in Directory.EnumerateFiles(_dir, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal); } catch { }
-        try { Directory.Delete(_dir, recursive: true); } catch { } 
+        try { Directory.Delete(_dir, recursive: true); } catch { }
         McpAuditLog.SetBaseDir(null);
     }
 
@@ -41,7 +41,7 @@ public class McpAuditLogTests : IDisposable
         var back = list[0];
         Assert.Equal("call", back.Ev);
         Assert.Equal(@"C:\Agents\node.exe", back.Path);
-        Assert.Equal("node.exe", back.Client);      
+        Assert.Equal("node.exe", back.Client);
         Assert.Equal("read_item", back.Tool);
         Assert.Equal("diary:abcd1234", back.Target);
         Assert.Equal("标题", back.Title);
@@ -92,7 +92,7 @@ public class McpAuditLogTests : IDisposable
         var longTitle = new string('字', 100);
         var cut = McpAuditLog.TruncateTitle(longTitle);
 
-        Assert.True(cut.Length <= 61); 
+        Assert.True(cut.Length <= 61);
         Assert.EndsWith("…", cut);
         Assert.StartsWith(new string('字', 60), cut);
         Assert.Equal("", McpAuditLog.TruncateTitle("   "));
@@ -105,8 +105,87 @@ public class McpAuditLogTests : IDisposable
         await System.Threading.Tasks.Task.WhenAll(
             Enumerable.Range(0, n).Select(_ => System.Threading.Tasks.Task.Run(() => McpAuditLog.Write(Evt()))));
 
-        
+
         var all = McpAuditLog.ReadLatest(n * 2);
         Assert.Equal(n, all.Count);
+    }
+
+
+
+
+
+
+    [Fact]
+    public void FailedAppend_IsReported_AndThrottled()
+    {
+        var blocked = Path.Combine(Path.GetTempPath(), "novara-audit-blocked-" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(blocked, "not a directory");
+        var seen = new List<string>();
+        AuditWriteHealth.ResetForTests();
+        AuditWriteHealth.OnFailure = m => seen.Add(m);
+        try
+        {
+            McpAuditLog.SetBaseDir(blocked);
+            McpAuditLog.Write(Evt());
+            Assert.Single(seen);
+            Assert.Contains("mcp-audit", seen[0]);
+
+
+
+            McpAuditLog.Write(Evt());
+            McpAuditLog.Write(Evt());
+            Assert.Single(seen);
+        }
+        finally
+        {
+            AuditWriteHealth.OnFailure = null;
+            McpAuditLog.SetBaseDir(_dir);
+            try { File.Delete(blocked); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ThrowingFailureHandler_DoesNotSurface()
+    {
+        AuditWriteHealth.ResetForTests();
+        var calls = 0;
+        AuditWriteHealth.OnFailure = _ => { calls++; throw new InvalidOperationException("handler blew up"); };
+        try
+        {
+            AuditWriteHealth.Report("test", new IOException("boom"));
+            Assert.Equal(1, calls);
+        }
+        finally { AuditWriteHealth.OnFailure = null; }
+    }
+
+
+
+    [Fact]
+    public void ClearAllWithMarker_LeavesExactlyTheAuditClearedTrace()
+    {
+
+
+        McpAuditLog.Write(Evt());
+        Assert.NotEmpty(McpAuditLog.ReadLatest(10));
+
+        McpAuditLog.ClearAllWithMarker();
+
+        var back = Assert.Single(McpAuditLog.ReadLatest(10));
+        Assert.Equal("audit_cleared", back.Ev);
+        Assert.Equal("-", back.Target);
+        Assert.True(back.Ok);
+        Assert.False(string.IsNullOrEmpty(back.Ts));
+    }
+
+    [Fact]
+    public void WriteOrdered_KeepsSubmissionOrder_AndIsNonBlocking()
+    {
+        const int n = 30;
+        for (var i = 0; i < n; i++) McpAuditLog.WriteOrdered(Evt(title: "t" + i));
+        McpAuditLog.WaitForPendingWrites();
+
+        var all = McpAuditLog.ReadLatest(n * 2);
+        Assert.Equal(n, all.Count);
+        for (var i = 0; i < n; i++) Assert.Equal("t" + (n - 1 - i), all[i].Title);
     }
 }

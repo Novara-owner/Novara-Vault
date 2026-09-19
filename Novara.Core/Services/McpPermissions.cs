@@ -1,12 +1,3 @@
-/* ========== McpPermissions - Per-Client Fine-Grained Permission Model ==========
-Function: 5 data zones x 4 operations = 20 permission bits per authorized client (design doc 9.2#5).
-          Tool -> permission mapping, default set for newly authorized clients (D1), legacy migration
-          set (D2), and the one-shot migration itself. Hard rule: explicit whitelist only - a client
-          without a record gets None, never pass-through. Unknown methods map to None (no requirement)
-          so they fall through to the "unknown tool" error instead of a misleading permission denial.
-Corresponding UI: SettingsPage MCP permission editor dialog (5x4 toggle matrix)
-Logic Range: Whole file
-*/
 using Novara.Models;
 
 namespace Novara.Services;
@@ -24,25 +15,42 @@ public enum McpPerm : long
 
 public static class McpPermissions
 {
-    /// <summary>Read bits of every zone - required by list/search with type "all" (a mixed result
-    /// must never leak a zone the client cannot read).</summary>
+
+
     public const McpPerm AllRead =
         McpPerm.MemoRead | McpPerm.PathRead | McpPerm.TodoRead | McpPerm.NoteRead | McpPerm.DiaryRead;
 
-    /// <summary>D1 default for NEWLY authorized clients: readable zones except the memo vault
-    /// (credentials are the prime exfiltration target - memo:read stays DENY until explicitly
-    /// granted); no write capability at all until explicitly granted.</summary>
+
+
+
     public const McpPerm DefaultForNewClient =
         McpPerm.PathRead | McpPerm.TodoRead | McpPerm.NoteRead | McpPerm.DiaryRead;
 
-    /// <summary>D2 migration set: clients authorized before this feature keep their pre-existing
-    /// full capability (all 20 bits) - upgrading must never silently shrink what an agent could do.</summary>
+
+
     public const McpPerm LegacyFull =
         McpPerm.MemoRead | McpPerm.MemoCreate | McpPerm.MemoUpdate | McpPerm.MemoDelete |
         McpPerm.PathRead | McpPerm.PathCreate | McpPerm.PathUpdate | McpPerm.PathDelete |
         McpPerm.TodoRead | McpPerm.TodoCreate | McpPerm.TodoUpdate | McpPerm.TodoDelete |
         McpPerm.NoteRead | McpPerm.NoteCreate | McpPerm.NoteUpdate | McpPerm.NoteDelete |
         McpPerm.DiaryRead | McpPerm.DiaryCreate | McpPerm.DiaryUpdate | McpPerm.DiaryDelete;
+
+
+    public const McpPerm AllDelete =
+        McpPerm.MemoDelete | McpPerm.PathDelete | McpPerm.TodoDelete | McpPerm.NoteDelete | McpPerm.DiaryDelete;
+
+
+
+
+
+
+
+
+
+
+
+    public static McpPerm ApplyDeleteGate(McpPerm fromUi, McpPerm onRecord, bool deleteGateOff)
+        => deleteGateOff ? (fromUi & ~AllDelete) | (onRecord & AllDelete) : fromUi;
 
     private static (McpPerm r, McpPerm c, McpPerm u, McpPerm d)? Zone(string? type) => type switch
     {
@@ -51,10 +59,10 @@ public static class McpPermissions
         "todo" => (McpPerm.TodoRead, McpPerm.TodoCreate, McpPerm.TodoUpdate, McpPerm.TodoDelete),
         "note" => (McpPerm.NoteRead, McpPerm.NoteCreate, McpPerm.NoteUpdate, McpPerm.NoteDelete),
         "diary" => (McpPerm.DiaryRead, McpPerm.DiaryCreate, McpPerm.DiaryUpdate, McpPerm.DiaryDelete),
-        _ => null, // invalid type: no requirement here - the existing type whitelist rejects it downstream
+        _ => null,
     };
 
-    
+
     public static McpPerm RequiredFor(string method, string? typeArg)
     {
         if (method == "delete_item")
@@ -70,10 +78,10 @@ public static class McpPermissions
         }
         if (method is "list_items" or "read_item" or "search_items")
         {
-            // N2-67: an OMITTED type (null/empty) is the normal mixed form and demands AllRead;
-            // an EXPLICIT "all" is not a valid type at all - fall through to None so the execution
-            
-            // (previously the two layers disagreed: permission pass, execution throw).
+
+
+
+
             if (string.IsNullOrEmpty(typeArg)) return AllRead;
             var z = Zone(typeArg);
             return z?.r ?? McpPerm.None;
@@ -81,7 +89,7 @@ public static class McpPermissions
         return McpPerm.None;
     }
 
-    /// <summary>Audit reason label, e.g. "memo:read" / "all:read" / "memo:create + memo:update".</summary>
+
     public static string Describe(McpPerm p)
     {
         if (p == McpPerm.None) return "none";
@@ -104,34 +112,41 @@ public static class McpPermissions
 
     public static McpPerm GetFor(AppSettings s, string clientPath)
     {
-        
-        
+
+
+
+
+
         try
         {
-            var rec = s.McpClientPermissions.ToList().FirstOrDefault(r => r.Path == clientPath);
+            var rec = s.McpClientPermissions.ToList()
+                .FirstOrDefault(r => string.Equals(r.Path, clientPath, StringComparison.OrdinalIgnoreCase));
             return rec?.Permissions != null ? (McpPerm)rec.Permissions : McpPerm.None;
         }
-        catch { return McpPerm.None; } 
+        catch { return McpPerm.None; }
     }
 
-    /// <summary>Idempotent: create the default-set record unless one already exists (the authorize
-    /// dialog may pre-create it before the server-side write lands).</summary>
+
+
+
+
+
     public static void EnsureDefaultRecord(AppSettings s, string clientPath)
     {
-        if (s.McpClientPermissions.Any(r => r.Path == clientPath)) return;
+        if (s.McpClientPermissions.Any(r => string.Equals(r.Path, clientPath, StringComparison.OrdinalIgnoreCase))) return;
         s.McpClientPermissions.Add(new McpClientPermRecord { Path = clientPath, Permissions = (long)DefaultForNewClient });
     }
 
-    /// <summary>D2 one-shot migration: legacy authorized paths get the full capability set so
-    /// upgrading never shrinks existing agents. Flag prevents ghost revival after the user revokes
-    /// everything (empty lists must stay empty). Returns true on the first call (so the caller
-    /// persists the McpPermMigrated flag), regardless of whether any path was actually migrated.</summary>
+
+
+
+
     public static bool EnsureMigrated(AppSettings s)
     {
         if (s.McpPermMigrated) return false;
         s.McpPermMigrated = true;
         foreach (var p in s.McpAllowedProcesses)
-            if (!s.McpClientPermissions.Any(r => r.Path == p))
+            if (!s.McpClientPermissions.Any(r => string.Equals(r.Path, p, StringComparison.OrdinalIgnoreCase)))
                 s.McpClientPermissions.Add(new McpClientPermRecord { Path = p, Permissions = (long)LegacyFull });
         return true;
     }

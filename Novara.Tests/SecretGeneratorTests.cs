@@ -41,7 +41,7 @@ public class SecretGeneratorTests
     [Fact]
     public void GeneratePassword_CoverageGuarantee_EverySelectedClassPresent()
     {
-        
+
         for (int i = 0; i < 10; i++)
         {
             var pw = SecretGenerator.GeneratePassword(Opt(16, exAmb: false));
@@ -59,7 +59,7 @@ public class SecretGeneratorTests
     [Fact]
     public void EntropyBits_Formula()
     {
-        
+
         var opt = Opt(16);
         int pool = SecretGenerator.UpperChars.Count(c => !SecretGenerator.AmbiguousChars.Contains(c))
                  + SecretGenerator.LowerChars.Count(c => !SecretGenerator.AmbiguousChars.Contains(c))
@@ -74,12 +74,12 @@ public class SecretGeneratorTests
     {
         var u = SecretGenerator.GenerateUuid();
         Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", u);
-        Assert.NotEqual(u, SecretGenerator.GenerateUuid()); 
+        Assert.NotEqual(u, SecretGenerator.GenerateUuid());
     }
 
     [Theory]
-    [InlineData(16, 22)] 
-    [InlineData(32, 43)] 
+    [InlineData(16, 22)]
+    [InlineData(32, 43)]
     [InlineData(48, 64)]
     public void GenerateToken_Base64Url_Length(int bytes, int expectedLen)
     {

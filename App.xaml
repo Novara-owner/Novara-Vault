@@ -29,7 +29,7 @@
                         <GradientStop Color="#FF34343C" Offset="0" />
                         <GradientStop Color="#FF27272E" Offset="1" />
                     </LinearGradientBrush>
-                    
+
                     <Color x:Key="CarouselFadeColor">#FF2E2E35</Color>
                 </ResourceDictionary>
 

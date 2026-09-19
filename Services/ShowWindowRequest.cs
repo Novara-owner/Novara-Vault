@@ -1,9 +1,3 @@
-
-
-
-
-
-
 namespace Novara.Services;
 
 public static class ShowWindowRequest
@@ -42,14 +36,14 @@ public static class ShowWindowRequest
             { IsBackground = true };
             _thread.Start();
         }
-        catch { /* event already held - degrade gracefully */ }
+        catch {  }
     }
 
-    // N4W-05: Stop() removed (zero callers). Its body also carried a trap: Set() would let the
-    // blocked WaitOne return true and run the handler once before the _running check - a fake
-    // wake-up if it were ever wired up. The listener lives for the process lifetime instead.
 
-    
+
+
+
+
     public static void Raise()
     {
         try

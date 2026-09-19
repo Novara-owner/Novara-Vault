@@ -16,7 +16,7 @@
                           CornerRadius="{TemplateBinding CornerRadius}"
                           RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            
+
                             <ScaleTransform x:Name="PressScale" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
@@ -55,8 +55,8 @@
         </Setter>
     </Style>
 
-    <!-- Card action icon button (4.0): smaller footprint + 1px outline; hover fills softly instead of
-         the old large translucent block (FilePathPage open/copy side buttons). -->
+
+
     <Style x:Key="NovaraCardActionButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{ThemeResource AppBorderBrush}" />
@@ -73,7 +73,7 @@
                           BorderThickness="{TemplateBinding BorderThickness}"
                           RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            
+
                             <ScaleTransform x:Name="PressScale" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
@@ -130,7 +130,7 @@
                           BorderThickness="{TemplateBinding BorderThickness}"
                           RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            
+
                             <ScaleTransform x:Name="PressScale" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
@@ -169,11 +169,11 @@
         </Setter>
     </Style>
 
-    <!-- N4R-10: NovaraStandardButtonStyle removed (zero references, E1-22-class dead style). -->
 
 
-    <!-- Primary (brand) button: solid brand blue + white text, hover lightens, pressed darkens.
-         Used for every "confirm" action in dialogs (brand-color unification, 2026-08-11). -->
+
+
+
     <Style x:Key="NovaraPrimaryButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{ThemeResource AppPrimaryButtonBrush}" />
         <Setter Property="Foreground" Value="#FFFFFFFF" />
@@ -186,7 +186,7 @@
                           BorderBrush="Transparent" BorderThickness="0"
                           RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
-                            
+
                             <ScaleTransform x:Name="PressScale" />
                         </Grid.RenderTransform>
                         <VisualStateManager.VisualStateGroups>
@@ -221,7 +221,7 @@
                                         <DoubleAnimation Storyboard.TargetName="PressScale" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="0:0:0.1" />
                                     </Storyboard>
                                 </VisualState>
-                                <!-- 2026-08-11: disabled (form-invalid) - flat grey, no hover/press interaction -->
+
                                 <VisualState x:Name="Disabled">
                                     <Storyboard>
                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
@@ -252,7 +252,7 @@
         <Setter Property="FontSize" Value="{StaticResource FontSizeMedium}" />
         <Setter Property="PlaceholderForeground" Value="{ThemeResource AppTextTertiaryBrush}" />
         <Setter Property="IsSpellCheckEnabled" Value="False" />
-        
+
 
 
         <Setter Property="Template">
@@ -290,7 +290,7 @@
         </Setter>
     </Style>
 
-    <!-- N4R-11: NovaraToolbarButtonStyle removed (zero references - the editor toolbar uses inline templates). -->
+
 
     <Style x:Key="NovaraNavButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
@@ -429,7 +429,7 @@
         </Setter>
     </Style>
 
-    
+
 
     <Style x:Key="GlassMenuFlyoutSubItemStyle" TargetType="MenuFlyoutSubItem">
         <Setter Property="Background" Value="Transparent" />
@@ -475,7 +475,7 @@
         </Setter>
     </Style>
 
-    
+
     <Style TargetType="CheckBox">
         <Setter Property="Foreground" Value="{ThemeResource AppTextSecondaryBrush}" />
         <Setter Property="FontSize" Value="13" />

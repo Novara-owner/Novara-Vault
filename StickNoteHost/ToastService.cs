@@ -1,7 +1,3 @@
-
-
-
-
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -13,9 +9,9 @@ namespace StickNoteHost;
 
 public static class ToastService
 {
-    // Shares the MAIN app's AUMID so toasts appear under the Novara brand (the shortcut targets
-    // Novara.exe, not this Host). N3-35: mirror the main app's Debug/Release split (.Dev) -
-    // otherwise a Debug Host registers under the Release AUMID and vice versa.
+
+
+
 #if DEBUG
     private const string AppId = "Novara.App.Dev";
     private const string ShortcutName = "Novara.Dev.lnk";
@@ -36,8 +32,8 @@ public static class ToastService
         }
         catch (Exception ex)
         {
-            // N3-49: Debug.WriteLine vanishes in Release - the tray process must log registration
-            // failures to sticknotehost_debug.txt (App.Log) so a silent toast failure is diagnosable.
+
+
             App.Log("ToastService 注册失败: " + ex.Message);
         }
     }
@@ -55,7 +51,7 @@ public static class ToastService
         }
         catch (Exception ex)
         {
-            App.Log("ToastService 发送失败: " + ex.Message); // N3-49: App.Log (Release writes to %LocalAppData%\Novara\logs\)
+            App.Log("ToastService 发送失败: " + ex.Message);
         }
     }
 
@@ -65,13 +61,13 @@ public static class ToastService
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Microsoft", "Windows", "Start Menu", "Programs");
         Directory.CreateDirectory(dir);
-        var lnk = Path.Combine(dir, ShortcutName); // N3-35: versioned shortcut name (.Dev in Debug)
-        // N4H-01: Environment.ProcessPath resolves to StickNoteHost.exe inside the Host process - the old
-        // code wrote a Start Menu "Novara" entry targeting the Host (clicking it never opened the main app,
-        // and toast activation launched the Host). Always target the MAIN app exe: release layout keeps
-        // Novara.exe side-by-side; dev layout is covered by NovaraBridge.FindNovaraExe.
+        var lnk = Path.Combine(dir, ShortcutName);
+
+
+
+
         var exe = NovaraBridge.NovaraExePath;
-        if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return; // never publish a shortcut that points at this Host
+        if (string.IsNullOrEmpty(exe) || !File.Exists(exe)) return;
         ShortcutHelper.CreateWithAppId(lnk, exe, AppId);
     }
 }
@@ -114,7 +110,7 @@ internal static class ShortcutHelper
         private readonly IntPtr _ptr;
         public PropVariant(string value)
         {
-            _vt = 31; // VT_LPWSTR
+            _vt = 31;
             _wReserved1 = _wReserved2 = _wReserved3 = 0;
             _ptr = Marshal.StringToCoTaskMemUni(value);
         }

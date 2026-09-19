@@ -1,8 +1,3 @@
-/* ========== RelayCommand - MVVM Command ==========
-Function: ICommand implementation for tray menu Command bindings
-Corresponding UI: RelayCommand.cs
-Logic Range: Whole file business logic of this module
-*/
 namespace Novara.Services;
 
 public sealed class RelayCommand : System.Windows.Input.ICommand

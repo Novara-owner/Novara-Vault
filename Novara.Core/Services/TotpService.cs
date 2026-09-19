@@ -1,13 +1,3 @@
-/* ========== TotpService - RFC 6238 Time-Based One-Time Passwords ==========
-Function: HOTP (RFC 4226) / TOTP (RFC 6238) code computation, Base32 decoding (RFC 4648,
-          tolerant of case/whitespace/missing padding), otpauth://totp URI parsing.
-          Defaults match mainstream authenticator apps: HMAC-SHA1, 6 digits, 30s step.
-          Pure functions, no state. Correctness is pinned by RFC test vectors in
-          KdfHardeningTests/TotpServiceTests (RFC 4226 App. D + RFC 6238 App. B).
-          Deliberately stateless: codes are computed on demand, never logged or persisted.
-Corresponding UI: BasicMemoPage entry-expansion dynamic code row
-Logic Range: Whole file
-*/
 using System.Security.Cryptography;
 using System.Text;
 
@@ -20,11 +10,11 @@ public static class TotpService
     public const int DefaultPeriod = 30;
     public const int DefaultDigits = 6;
 
-    // ---------- Base32 (RFC 4648) ----------
+
 
     private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-    /// <summary>Tolerant Base32 decode: case-insensitive, strips spaces/hyphens, padding optional.</summary>
+
     public static bool TryDecodeBase32(string input, out byte[] decoded)
     {
         decoded = Array.Empty<byte>();
@@ -47,10 +37,10 @@ public static class TotpService
 
     public static bool IsValidBase32Secret(string input) => TryDecodeBase32(input, out _);
 
-    // ---------- otpauth://totp URI ----------
 
-    /// <summary>Parses "otpauth://totp/<label>?secret=...&issuer=...&algorithm=SHA1&digits=6&period=30".
-    /// A bare Base32 secret (no otpauth prefix) is accepted with defaults and normalized to uppercase.</summary>
+
+
+
     public static bool TryParse(string input, out TotpConfig config)
     {
         config = new TotpConfig(Array.Empty<byte>(), "SHA1", DefaultDigits, DefaultPeriod, null, input?.Trim() ?? "");
@@ -61,7 +51,7 @@ public static class TotpService
         {
             try
             {
-                // Uri.ParseMinimal handles the custom scheme's host:port quirk; query parsing is manual.
+
                 var qIndex = trimmed.IndexOf('?');
                 if (qIndex < 0) return false;
                 var query = trimmed[(qIndex + 1)..];
@@ -88,7 +78,7 @@ public static class TotpService
             catch { return false; }
         }
 
-        // bare Base32 secret with defaults
+
         if (TryDecodeBase32(trimmed, out var bareKey))
         {
             var normalized = new StringBuilder();
@@ -99,7 +89,7 @@ public static class TotpService
         return false;
     }
 
-    // ---------- HOTP (RFC 4226) / TOTP (RFC 6238) ----------
+
 
     public static string ComputeCode(byte[] key, string algorithm, long counter, int digits)
     {
@@ -110,27 +100,27 @@ public static class TotpService
             "SHA256" => new HMACSHA256(key),
             "SHA512" => new HMACSHA512(key),
             _ => new HMACSHA1(key),
-        }; 
+        };
         var hs = hmac.ComputeHash(counterBytes);
         var offset = hs[^1] & 0x0f;
         var snum = ((hs[offset] & 0x7f) << 24) | (hs[offset + 1] << 16) | (hs[offset + 2] << 8) | hs[offset + 3];
-        // N2-30: defensive clamp - digits<1 makes Math.Pow(10,negative) truncate to 0 (divide by
-        // zero) and digits>=19 overflows the long cast; unreachable via TryParse (6..10) but cheap.
+
+
         if (digits is < 1 or > 10) digits = 6;
         var mod = (long)Math.Pow(10, digits);
         return (snum % mod).ToString().PadLeft(digits, '0');
     }
 
     public static string ComputeCode(TotpConfig config, long unixNow)
-        => ComputeCode(config.Key, config.Algorithm, unixNow / (config.Period > 0 ? config.Period : 30), config.Digits); 
+        => ComputeCode(config.Key, config.Algorithm, unixNow / (config.Period > 0 ? config.Period : 30), config.Digits);
 
     public static string ComputeCode(TotpConfig config)
         => ComputeCode(config, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
-    /// <summary>Seconds until the current window rolls over (1..period).</summary>
+
     public static int RemainingSeconds(int period, long unixNow)
     {
-        if (period <= 0) period = 30; // N2-31: direct-construction guard (parity with ComputeCode N1-53) - unixNow % 0 throws
+        if (period <= 0) period = 30;
         var rem = (int)(period - unixNow % period);
         return rem == 0 ? period : rem;
     }
