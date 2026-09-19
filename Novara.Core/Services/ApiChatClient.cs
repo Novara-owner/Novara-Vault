@@ -1,11 +1,3 @@
-/* ========== ApiChatClient - Shared Chat Request Client (API upgrade Step 1) ==========
-Function: Send a minimal chat request across three vendor-native protocols (OpenAI-compatible /
-Anthropic Messages / Google Gemini generateContent), collecting content + usage + latency/TTFT.
-Used by entry 2 (interface status diagnosis) and entry 3 (relay-station probe).
-Design: pure helpers (protocol mapping / endpoint / request body / usage / stream parsing) are
-public & unit-testable; the network path accepts an injectable HttpMessageHandler like ApiProbeService.
-Security: URL http/https whitelist only; key never leaves the request it authorizes; errors are masked.
-*/
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -24,7 +16,7 @@ public sealed class ApiChatRequest
     public string? SystemPrompt { get; set; }
     public int MaxTokens { get; set; } = 1;
     public bool Stream { get; set; }
-    /// <summary>OpenAI function-calling "tools" array (passed through verbatim; only serialized for OpenAI).</summary>
+
     public object? Tools { get; set; }
     public double? Temperature { get; set; }
 }
@@ -34,7 +26,7 @@ public sealed class ApiChatUsage
     public int PromptTokens { get; set; }
     public int CompletionTokens { get; set; }
     public int TotalTokens { get; set; }
-    /// <summary>Present on some providers; large values hint at a cached hidden system prompt (entry 3).</summary>
+
     public int? CacheReadInputTokens { get; set; }
     public bool HasUsage { get; set; }
 }
@@ -43,23 +35,23 @@ public sealed class ApiChatResult
 {
     public bool Ok { get; set; }
     public ApiProbeStatus Status { get; set; } = ApiProbeStatus.Unknown;
-    public string Detail { get; set; } = "";         // masked server reason or transport category
+    public string Detail { get; set; } = "";
     public string Content { get; set; } = "";
     public string ModelReturned { get; set; } = "";
     public long LatencyMs { get; set; }
-    public long? TtftMs { get; set; }                // streamed first-token latency (OpenAI only)
+    public long? TtftMs { get; set; }
     public double? TokensPerSecond { get; set; }
     public ApiChatUsage Usage { get; set; } = new();
-    /// <summary>Metadata response headers (x-request-id / x-ratelimit-* / server), lower-cased key.</summary>
+
     public System.Collections.Generic.Dictionary<string, string> Headers { get; set; } = new();
-    public string RawBody { get; set; } = "";        // evidence area (key already masked)
+    public string RawBody { get; set; } = "";
 }
 
 public static class ApiChatClient
 {
-    // ---- Pure helpers (unit-testable, no network) ----
 
-    /// <summary>SSRF guard: only plain http/https are ever dialed.</summary>
+
+
     public static bool ValidateUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return false;
@@ -67,17 +59,17 @@ public static class ApiChatClient
             || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Map a recognized vendor to the chat protocol used for minimal-chat requests.</summary>
+
     public static ApiChatProtocol DetectProtocol(string? vendor, string? baseUrl)
     {
         if (string.Equals(vendor, "Anthropic", StringComparison.OrdinalIgnoreCase)) return ApiChatProtocol.Anthropic;
         if (string.Equals(vendor, "Google Gemini", StringComparison.OrdinalIgnoreCase)) return ApiChatProtocol.Gemini;
-        // Xiaomi MiMo exposes an Anthropic-compatible base (https://api.xiaomimimo.com/anthropic);
-        // detect it by path so the vendor-matrix host match doesn't force OpenAI onto it.
-        // N3-31: the path heuristic must NOT override a vendor already recognized by the matrix -
-        // a user reverse-proxy URL that merely CONTAINS "/anthropic" (e.g. /anthropic-relay) would
-        // otherwise misclassify an OpenAI-compatible endpoint as Anthropic. Gate it to vendors that
-        // legitimately rely on the path signal: Xiaomi MiMo, unknown/generic relays and null vendor.
+
+
+
+
+
+
         if (string.Equals(vendor, "Xiaomi MiMo", StringComparison.OrdinalIgnoreCase)
             || string.IsNullOrEmpty(vendor) || string.Equals(vendor, "generic", StringComparison.OrdinalIgnoreCase))
         {
@@ -86,42 +78,42 @@ public static class ApiChatClient
         return ApiChatProtocol.OpenAI;
     }
 
-    /// <summary>N4A-01: drop any "?query" from a URL used as a PATH base. NormalizeEndpoint re-attaches
-    /// user queries (?key=...) to the endpoints it returns (N3A-3); appending /chat/completions after a
-    /// query corrupts the request target, and Anthropic/Gemini bases carrying a query embed it mid-path.</summary>
+
+
+
     public static string StripQuery(string url)
     {
         int i = url.IndexOf('?');
         return i >= 0 ? url.Substring(0, i) : url;
     }
 
-    /// <summary>Resolve the correct chat endpoint for a vendor. OpenAI-compatible vendors derive the
-    /// chat path from their model-list endpoint (parent dir + /chat/completions) - NOT a hardcoded
-    /// /v1 - because many providers use a different prefix (Zhipu /api/paas/v4, Qwen /compatible-mode/v1,
-    /// OpenRouter /api/v1, Groq /openai/v1, Qianfan /v2, etc). Ollama and Azure OpenAI are special-cased.</summary>
+
+
+
+
     public static string ResolveChatEndpoint(string baseUrl, string vendor, string modelsEndpoint, ApiChatProtocol protocol, string model)
     {
-        var u = StripQuery(baseUrl.Trim()).TrimEnd('/'); // N5A-01: strip the query FIRST, then trim trailing slash - the reverse order left ".../v1/" from ".../v1/?key=x" and broke JoinEndpoint's prefix match
+        var u = StripQuery(baseUrl.Trim()).TrimEnd('/');
         switch (protocol)
         {
             case ApiChatProtocol.Anthropic:
                 return JoinEndpoint(u, "/v1/messages", "/v1");
             case ApiChatProtocol.Gemini:
             {
-                // N4A-06: model ids copied from a /models listing may arrive as "models/gemini-1.5-flash" -
-                // EscapeDataString turned the slash into %2F and produced an invalid endpoint. Use the bare id.
+
+
                 var bareModel = model.Contains('/') ? model.Substring(model.LastIndexOf('/') + 1) : model;
                 return JoinEndpoint(u, "/v1beta/models/" + Uri.EscapeDataString(bareModel) + ":generateContent", "/v1beta");
             }
             default:
-                if (vendor == "Ollama") return u + "/v1/chat/completions"; // Ollama's model list is /api/tags, chat is OpenAI-compatible /v1
-                if (vendor == "Azure OpenAI") return AzureChatEndpoint(u, model, modelsEndpoint); // Azure reads api-version FROM the query - pass modelsEndpoint unstripped
-                return DeriveChatFromModels(StripQuery(modelsEndpoint)); // N4A-01
+                if (vendor == "Ollama") return u + "/v1/chat/completions";
+                if (vendor == "Azure OpenAI") return AzureChatEndpoint(u, model, modelsEndpoint);
+                return DeriveChatFromModels(StripQuery(modelsEndpoint));
         }
     }
 
-    /// <summary>OpenAI-compatible chat endpoint = the model-list endpoint's parent directory + /chat/completions.
-    /// e.g. "/api/paas/v4/models" -> "/api/paas/v4/chat/completions".</summary>
+
+
     public static string DeriveChatFromModels(string modelsEndpoint)
     {
         var m = modelsEndpoint.Trim();
@@ -141,16 +133,16 @@ public static class ApiChatClient
             var amp = rest.IndexOf('&');
             apiVersion = amp >= 0 ? rest.Substring(0, amp) : rest;
         }
-        // N2-36: a base already ending in /openai (e.g. https://xx.openai.azure.com/openai) would
-        // double up to /openai/openai/deployments/... and 404 - strip it before re-appending.
+
+
         var root = baseUrl.EndsWith("/openai", StringComparison.OrdinalIgnoreCase)
             ? baseUrl.Substring(0, baseUrl.Length - "/openai".Length)
             : baseUrl;
         return root + "/openai/deployments/" + Uri.EscapeDataString(model) + "/chat/completions?api-version=" + apiVersion;
     }
 
-    /// <summary>Append a path, avoiding a duplicated prefix when the base URL already ends with it
-    
+
+
     private static string JoinEndpoint(string baseUrl, string path, string prefix)
     {
         if (baseUrl.EndsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -158,7 +150,7 @@ public static class ApiChatClient
         return baseUrl + path;
     }
 
-    /// <summary>Serialize the minimal-chat body for the given protocol.</summary>
+
     public static string BuildChatRequestBody(ApiChatRequest r, ApiChatProtocol protocol)
     {
         var opts = new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
@@ -186,7 +178,7 @@ public static class ApiChatClient
                     body["systemInstruction"] = new { parts = new[] { new { text = r.SystemPrompt } } };
                 return JsonSerializer.Serialize(body, opts);
             }
-            default: // OpenAI-compatible
+            default:
             {
                 var messages = new System.Collections.Generic.List<object>();
                 if (!string.IsNullOrEmpty(r.SystemPrompt)) messages.Add(new { role = "system", content = r.SystemPrompt });
@@ -206,7 +198,7 @@ public static class ApiChatClient
         }
     }
 
-    /// <summary>Parse the usage block of a non-streaming chat response across the three protocols.</summary>
+
     public static ApiChatUsage ParseUsage(string jsonBody, ApiChatProtocol protocol)
     {
         var usage = new ApiChatUsage();
@@ -235,8 +227,8 @@ public static class ApiChatClient
             {
                 usage.PromptTokens = GetInt(gu, "promptTokenCount");
                 usage.CompletionTokens = GetInt(gu, "candidatesTokenCount");
-                // N3-29: Gemini sometimes omits totalTokenCount - fall back to prompt+completion instead
-                // of reporting a misleading 0 (display only; the completion-token budget is unaffected).
+
+
                 usage.TotalTokens = GetInt(gu, "totalTokenCount");
                 if (usage.TotalTokens == 0) usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens;
                 usage.HasUsage = true;
@@ -246,7 +238,7 @@ public static class ApiChatClient
         return usage;
     }
 
-    /// <summary>Extract the assistant text from a non-streaming chat response.</summary>
+
     public static string ExtractContent(string jsonBody, ApiChatProtocol protocol)
     {
         try
@@ -289,7 +281,7 @@ public static class ApiChatClient
         return "";
     }
 
-    /// <summary>Extract the concrete model id the server reported back (entry 2 metadata / entry 3 identity).</summary>
+
     public static string ExtractModel(string jsonBody, ApiChatProtocol protocol)
     {
         try
@@ -302,7 +294,7 @@ public static class ApiChatClient
         return "";
     }
 
-    /// <summary>Parse one OpenAI SSE "data:" payload into (delta text, model, usage). Pure.</summary>
+
     public static (string Delta, string Model, ApiChatUsage Usage) ParseOpenAiStreamChunk(string payload)
     {
         var delta = "";
@@ -337,12 +329,12 @@ public static class ApiChatClient
     private static int? GetNullableInt(JsonElement e, string name)
         => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : null;
 
-    // ---- Network pipeline ----
 
-    // ---- Diagnostic logging: every chat request is appended to %LOCALAPPDATA%\{DataDirName}\relay-probe.log ----
+
+
     private static readonly object LogLock = new();
-    // N3-34: honor CoreEnv.DataDirName (Novara vs Novara-Dev) - the hardcoded "Novara" path made
-    // Debug builds write into the Release data directory, polluting it with probe logs.
+
+
     private static readonly string LogPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), CoreEnv.DataDirName, "relay-probe.log");
 
@@ -352,7 +344,7 @@ public static class ApiChatClient
         {
             lock (LogLock)
             {
-                
+
                 try
                 {
                     var fi = new System.IO.FileInfo(LogPath);
@@ -375,17 +367,17 @@ public static class ApiChatClient
 
     private static HttpClient CreateHttpClient()
     {
-        // Connect phase bounded separately (5s) from the overall chat timeout (30s): chat can be slower
-        // than a model-list probe, but a blackholed host must still fail fast.
+
+
         var h = new SocketsHttpHandler
         {
-            AllowAutoRedirect = false, // security: never forward the key across hosts
+            AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(5),
         };
-        return new HttpClient(h) { Timeout = TimeSpan.FromSeconds(120) }; // N2-33: 30s capped the WHOLE chat (think chains alone exceed it) - 120s covers reasoning models + slow relays; the probe's own 600s budget still governs totals
+        return new HttpClient(h) { Timeout = TimeSpan.FromSeconds(120) };
     }
 
-    /// <summary>Send one minimal chat request and collect content + usage + latency (optionally streamed for OpenAI).</summary>
+
     public static async System.Threading.Tasks.Task<ApiChatResult> ChatAsync(
         string? baseUrl, string? key, ApiChatRequest request,
         System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
@@ -402,24 +394,24 @@ public static class ApiChatClient
             result.Status = ApiProbeStatus.Unknown; result.Detail = "missing-key"; result.LatencyMs = sw.ElapsedMilliseconds; return result;
         }
 
-        
+
         if (handler is SocketsHttpHandler ssh) ssh.AllowAutoRedirect = false;
         else if (handler is HttpClientHandler hch) hch.AllowAutoRedirect = false;
-        using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(120) } : null; // N2-33: 120s (see CreateHttpClient)
+        using var ownedClient = handler != null ? new HttpClient(handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(120) } : null;
         var client = ownedClient ?? Http;
         baseUrl = ApiProbeService.NormalizeBaseUrl(baseUrl!);
         var (vendor, authKind, modelsEndpoint, _) = ApiProbeService.RecognizeVendor(baseUrl);
         var protocol = DetectProtocol(vendor, baseUrl);
         var endpoint = ResolveChatEndpoint(baseUrl, vendor, modelsEndpoint, protocol, request.Model);
 
-        
-        
-        
+
+
+
         System.Threading.CancellationTokenSource? chatCts = null;
         try
         {
             chatCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
-            chatCts.CancelAfter(TimeSpan.FromSeconds(120)); // N2-33: 30s killed legit think-heavy chats mid-stream; 120s covers reasoning models, the probe's 600s budget still bounds totals
+            chatCts.CancelAfter(TimeSpan.FromSeconds(120));
             using var req = BuildChatHttpRequest(endpoint, key, authKind, protocol, request);
             if (request.Stream && protocol == ApiChatProtocol.OpenAI)
                 await RunOpenAiStreamAsync(client, req, chatCts.Token, sw, result, key);
@@ -472,7 +464,7 @@ public static class ApiChatClient
                 switch (authKind)
                 {
                     case "x-api-key": req.Headers.TryAddWithoutValidation("x-api-key", key); break;
-                    case "api-key": req.Headers.TryAddWithoutValidation("api-key", key); break; 
+                    case "api-key": req.Headers.TryAddWithoutValidation("api-key", key); break;
                     case "none": break;
                     case "raw": req.Headers.TryAddWithoutValidation("Authorization", key); break;
                     default: req.Headers.TryAddWithoutValidation("Authorization", "Bearer " + key); break;
@@ -488,7 +480,7 @@ public static class ApiChatClient
         using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         CollectHeaders(resp, result);
         var body = await ReadBodyCapped(resp, ct);
-        result.RawBody = MaskKeyInText(body, key); // N5A-03: the raw channel must honor the same masking as Detail
+        result.RawBody = MaskKeyInText(body, key);
 
         if (resp.StatusCode == HttpStatusCode.OK)
         {
@@ -514,7 +506,7 @@ public static class ApiChatClient
         if (resp.StatusCode != HttpStatusCode.OK)
         {
             var body = await ReadBodyCapped(resp, ct);
-            result.RawBody = MaskKeyInText(body, key); // N5A-03: the raw channel must honor the same masking as Detail
+            result.RawBody = MaskKeyInText(body, key);
             result.Status = ApiProbeService.MapStatus(resp.StatusCode);
             var (parsedStatus, parsedDetail) = ApiProbeService.ParseErrorBody(body);
             if (parsedStatus != ApiProbeStatus.Unknown) { result.Status = parsedStatus; result.Detail = MaskKeyInText(parsedDetail, key); }
@@ -533,7 +525,7 @@ public static class ApiChatClient
         {
             var line = await reader.ReadLineAsync(ct);
             if (line == null) break;
-            if (raw.Length > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit"); // N5-S14-04
+            if (raw.Length > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit");
             raw.AppendLine(line);
             if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
             var payload = line.Substring(5).Trim();
@@ -547,7 +539,7 @@ public static class ApiChatClient
                 sb.Append(delta);
             }
         }
-        result.RawBody = MaskKeyInText(raw.ToString(), key); // N5A-03
+        result.RawBody = MaskKeyInText(raw.ToString(), key);
         result.Content = sb.ToString();
         result.Usage = usage;
         if (result.TtftMs.HasValue)
@@ -559,8 +551,8 @@ public static class ApiChatClient
         result.Ok = true; result.Status = ApiProbeStatus.Success;
     }
 
-    
-    
+
+
     private const int MaxResponseBodyBytes = 32 * 1024 * 1024;
 
     private static async System.Threading.Tasks.Task<string> ReadBodyCapped(System.Net.Http.HttpResponseMessage resp, System.Threading.CancellationToken ct)

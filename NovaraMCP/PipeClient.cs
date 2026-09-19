@@ -1,7 +1,3 @@
-
-
-
-
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -18,12 +14,10 @@ public class McpForwardError : Exception
 
 public sealed class McpPipeClient
 {
-    private const string PipeName =
-#if DEBUG
-        "Novara.Mcp.Dev";
-#else
-        "Novara.Mcp";
-#endif
+
+
+    private static string PipeName => Novara.Ipc.McpIpcName.Current;
+    private static string LegacyPipeName => Novara.Ipc.McpIpcName.LegacyName;
 
     private readonly string? _token;
     private NamedPipeClientStream? _pipe;
@@ -33,14 +27,14 @@ public sealed class McpPipeClient
 
     public McpPipeClient(string? token) => _token = token;
 
-    /// <summary>M4: bounded read - a silent main process (e.g. authorization popup nobody answers)
-    /// used to leave the client pending forever. Re-throws IOException untouched so the existing
-    /// broken-pipe retry-once logic keeps working.</summary>
+
+
+
     private static string? ReadLineWithTimeout(System.IO.StreamReader reader, int seconds)
     {
-        
-        
-        
+
+
+
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         try
         {
@@ -48,16 +42,16 @@ public sealed class McpPipeClient
         }
         catch (OperationCanceledException)
         {
-            
+
             throw new TimeoutException($"主进程响应超时（{seconds} 秒无应答）");
         }
-        
+
     }
 
     public string Call(string method, JsonObject? args)
     {
-        
-        
+
+
         for (int attempt = 0; ; attempt++)
         {
             try
@@ -67,13 +61,13 @@ public sealed class McpPipeClient
                 {
                     ["id"] = ++_nextId,
                     ["method"] = method,
-                    
+
                     ["params"] = (args ?? new JsonObject()).DeepClone()
                 };
                 _writer!.WriteLine(req.ToJsonString());
-                // N2-32: an EOF right after a successful write sits in the same race window as a
-                // broken pipe (server closed between our write and its reply) - reset and retry
-                
+
+
+
                 var line = ReadLineWithTimeout(_reader!, 60);
                 if (line == null)
                 {
@@ -89,7 +83,7 @@ public sealed class McpPipeClient
             }
             catch (TimeoutException)
             {
-                
+
                 ResetConnection();
                 throw new McpForwardError("主进程响应超时");
             }
@@ -119,12 +113,26 @@ public sealed class McpPipeClient
 
     private void ConnectOnce()
     {
-        for (int attempt = 0; attempt < 40; attempt++)
+
+
+
+
+        if (TryConnectTo(PipeName, 40)) return;
+        if (TryConnectTo(LegacyPipeName, 1, launchIfMissing: false)) return;
+        throw new McpForwardError("无法连接到 Novara 主进程，请确认 Novara 已安装并启动");
+    }
+
+
+
+
+    private bool TryConnectTo(string name, int attempts, bool launchIfMissing = true)
+    {
+        for (int attempt = 0; attempt < attempts; attempt++)
         {
-            var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            var pipe = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
             try { pipe.Connect(500); }
-            catch (TimeoutException) { pipe.Dispose(); if (attempt == 0) LaunchNovara(); Thread.Sleep(250); continue; }
-            catch { pipe.Dispose(); if (attempt == 0) LaunchNovara(); Thread.Sleep(250); continue; }
+            catch (TimeoutException) { pipe.Dispose(); if (attempt == 0 && launchIfMissing) LaunchNovara(); Thread.Sleep(250); continue; }
+            catch { pipe.Dispose(); if (attempt == 0 && launchIfMissing) LaunchNovara(); Thread.Sleep(250); continue; }
 
             _pipe = pipe;
             _reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, leaveOpen: true);
@@ -137,21 +145,21 @@ public sealed class McpPipeClient
                 ["clientPath"] = GetParentProcessPath() ?? ""
             };
             _writer.WriteLine(hello.ToJsonString());
-            var line = ReadLineWithTimeout(_reader, 130); 
+            var line = ReadLineWithTimeout(_reader, 130);
             if (line != null)
             {
                 var resp = JsonNode.Parse(line) as JsonObject;
-                if (resp != null && (resp["ok"]?.GetValue<bool>() == true)) return;
+                if (resp != null && (resp["ok"]?.GetValue<bool>() == true)) return true;
                 var err = resp?["error"]?.GetValue<string>() ?? "握手失败";
-                // NM10: drop the half-open session before bailing, or the next Call would write
-                // into a connection the server already gave up on.
+
+
                 ResetConnection();
                 throw new McpForwardError(err);
             }
             ResetConnection();
             throw new McpForwardError("握手无响应：Novara 主进程未回应，请确认 Novara 已启动");
         }
-        throw new McpForwardError("无法连接到 Novara 主进程，请确认 Novara 已安装并启动");
+        return false;
     }
 
     private void LaunchNovara()
@@ -167,11 +175,11 @@ public sealed class McpPipeClient
 
     private static string? FindNovaraExe()
     {
-        // 1) Release layout: main exe next to NovaraMCP.exe.
+
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "Novara.exe");
         if (File.Exists(sideBySide)) return sideBySide;
 
-        // 2) Dev layout: walk up to the repo root (dir containing Novara.csproj), then probe bin[+\x64]\Debug|Release.
+
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
             if (File.Exists(Path.Combine(dir, "Novara.csproj")))
@@ -190,7 +198,7 @@ public sealed class McpPipeClient
         return null;
     }
 
-    
+
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct PROCESSENTRY32W

@@ -47,9 +47,9 @@ public class CryptoServiceTests
     [Fact]
     public void Gcm_ExactlyFramingOnly_NoCipherByte_ThrowsInvalidData()
     {
-        
-        
-        var framingOnly = new byte[12 + 16]; // 28B, zero ciphertext
+
+
+        var framingOnly = new byte[12 + 16];
         Assert.Throws<System.IO.InvalidDataException>(() =>
             CryptoService.DecryptGcm(framingOnly, "password", Salt));
     }
@@ -79,8 +79,8 @@ public class ApiProbeServiceTests
         Assert.Equal("https://example.com/custom/v1/models", ep);
     }
 
-    // Zhipu: the official base URL already carries /api/paas/v4, so the template endpoint must not
-    // duplicate that prefix (regression for the .../api/paas/v4/api/paas/v4/models 404).
+
+
     [Theory]
     [InlineData("https://open.bigmodel.cn/api/paas/v4", "https://open.bigmodel.cn/api/paas/v4/models")]
     [InlineData("https://open.bigmodel.cn/api/paas/v4/", "https://open.bigmodel.cn/api/paas/v4/models")]
@@ -93,7 +93,7 @@ public class ApiProbeServiceTests
         Assert.Equal(expected, ep);
     }
 
-    // Qwen: base may include /compatible-mode/v1 or stay bare - both must yield a valid endpoint.
+
     [Theory]
     [InlineData("https://dashscope.aliyuncs.com/compatible-mode/v1", "https://dashscope.aliyuncs.com/compatible-mode/v1/models")]
     [InlineData("https://dashscope.aliyuncs.com", "https://dashscope.aliyuncs.com/compatible-mode/v1/models")]
@@ -135,7 +135,7 @@ public class ApiProbeServiceTests
         Assert.NotEmpty(detail);
     }
 
-    
+
     [Theory]
     [InlineData("{\"error\":{\"code\":\"10004\",\"message\":\"账号余额不足\"}}", ApiProbeStatus.InsufficientQuota)]
     [InlineData("{\"error\":{\"message\":\"Your credit balance is too low to access the Anthropic API\"}}", ApiProbeStatus.InsufficientQuota)]
@@ -157,10 +157,10 @@ public class ApiProbeServiceTests
     }
 
     [Theory]
-    [InlineData("{\"data\":[]}", "data", true)]   
+    [InlineData("{\"data\":[]}", "data", true)]
     [InlineData("{\"data\":[{\"id\":\"gpt-4\"}]}", "data", true)]
     [InlineData("{\"models\":[]}", "models", true)]
-    [InlineData("{\"data\":{}}", "data", false)]  
+    [InlineData("{\"data\":{}}", "data", false)]
     [InlineData("{\"data\":null}", "data", false)]
     [InlineData("not json", "data", false)]
     public void IsValidModelsBody_ReturnsExpected(string body, string field, bool expected)
@@ -169,8 +169,8 @@ public class ApiProbeServiceTests
     }
 }
 
-// Global-search fuzzy matching (regression: searching "novara" must NOT hit an unrelated entry
-// whose API key merely contains the letters n,o,v,a,r,a scattered far apart).
+
+
 public class SearchFuzzyTests
 {
     [Theory]
@@ -204,27 +204,27 @@ public class SearchFuzzyTests
     [Fact]
     public void UltraLongQueryWord_DoesNotOverflowStack()
     {
-        
-        
+
+
         var text = new string('a', 1000) + "novara " + new string('b', 1000);
-        var ultraLong = new string('a', 3000) + new string('c', 3000); // 6000 chars > 512 & > text
+        var ultraLong = new string('a', 3000) + new string('c', 3000);
         Assert.False(SearchFuzzy.ContainsFuzzy(text, ultraLong));
 
         var wordLongerThanText = new string('x', 200);
-        Assert.False(SearchFuzzy.ContainsFuzzy("short-text-here", wordLongerThanText)); 
+        Assert.False(SearchFuzzy.ContainsFuzzy("short-text-here", wordLongerThanText));
 
-        
+
         Assert.True(SearchFuzzy.ContainsFuzzy("the quick brown fox", "brown fox"));
     }
 
     [Fact]
     public void SameCharRun_DoesNotExplodeBacktracking()
     {
-        
-        
-        
+
+
+
         var word = new string('a', 30);
-        Assert.False(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "b", word)); 
-        Assert.True(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "ca", word)); 
+        Assert.False(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "b", word));
+        Assert.True(SearchFuzzy.ContainsFuzzy(new string('a', 29) + "ca", word));
     }
 }

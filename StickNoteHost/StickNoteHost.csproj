@@ -5,9 +5,9 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>StickNoteHost</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>7.0.0</Version>
+    <Version>8.0.0</Version>
     <Platforms>x64</Platforms>
-    
+
 
     <Platform Condition="'$(Platform)' == '' or '$(Platform)' == 'AnyCPU'">x64</Platform>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -27,9 +27,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Assets\128.ico" />
-    <!-- N4-51: publish does not carry Content items - the tray icon path (exe\Assets\128.ico) then
-         threw DirectoryNotFoundException and killed the host (2026-08-31, sticky window gone in ~5s).
-         CopyToOutputDirectory makes Debug/Release output and publish carry it automatically. -->
+
+
+
     <Content Include="Assets\128.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -1,8 +1,3 @@
-/* ========== NovaraStore - Persistence Layer ==========
-Function: Single-file database (data.novadb) - magic/version/MD5 header validation, AES encryption, atomic write, async save merging, import/export, reset
-Corresponding UI: NovaraStore.cs
-Logic Range: Whole file business logic of this module
-*/
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -13,43 +8,43 @@ namespace Novara.Services;
 public class NovaraStore
 {
 
-    internal const uint Magic = 0x41564F4E; // "NOVA"
-    internal const byte FileVersionLegacy = 1;   // 2.0: plaintext or CBC-encrypted (see 4.7)
-    internal const byte FileVersionCurrent = 2;  // 3.0: AES-256-GCM encrypted
+    internal const uint Magic = 0x41564F4E;
+    internal const byte FileVersionLegacy = 1;
+    internal const byte FileVersionCurrent = 2;
     internal const byte FlagPlain = 0x00;
     internal const byte FlagEncrypted = 0x01;
     internal const int HeaderSize = 4 + 1 + 1 + 16;
-    // 2026-08-28 integrity upgrade (design doc 9.1#3): BACKUP FILES ONLY - version 3 carries a full
-    // SHA-256 digest in a 38B header. data.novadb never writes v3 (2.1 contract: its header matrix
-    // stays v1-plain/v1-CBC/v2-GCM, encrypted integrity via GCM tag).
+
+
+
     private const byte FileVersionSha256Backup = 3;
     private const int HeaderSizeSha256 = 4 + 1 + 1 + 32;
 
-    // 9.2#7 KDF calibration (2026-08-29): ver3 = GCM with PBKDF2 3,000,000 iterations (CryptoService
-    // CurrentIterations). Same 22B header (2.1 contract intact), parameters implied by the version
-    // byte; the value range is shared with backup files but the file types are disjoint (Load accepts
-    // library 1/2/3 only, ImportBackup accepts backup 1/3/4 only).
+
+
+
+
     internal const byte FileVersionKdfHardened = 3;
 
-    // 2026-08-29 encrypted export backup (design doc 9.2#6): version 4 - the header carries the
-    // algorithm/KDF ids, the iteration count and a per-backup random salt, so the file is fully
-    // self-contained and decryptable on any machine without security.dat. Layout: 44B header +
-    // CryptoService GCM block (nonce 12 + tag 16 + ciphertext). The 44 header bytes double as the
-    // GCM associated data (the tag itself cannot be part of it; the nonce is authenticated by the
-    // tag). Iterations live in the file so the 9.2#7 KDF upgrade can raise them per-export while
-    // old backups keep importing. data.novadb never writes v4 (2.1 contract untouched).
+
+
+
+
+
+
+
     private const byte FileVersionEncryptedBackup = 4;
-    private const int HeaderSizeEncryptedBackup = 4 + 1 + 1 + 1 + 1 + 4 + 32; // 44
-    private const int GcmBlockOverhead = 12 + 16; // nonce + tag prefix of the CryptoService GCM output
+    private const int HeaderSizeEncryptedBackup = 4 + 1 + 1 + 1 + 1 + 4 + 32;
+    private const int GcmBlockOverhead = 12 + 16;
     private const byte AlgoIdAes256Gcm = 0x00;
     private const byte KdfIdPbkdf2Sha256 = 0x00;
-    private const int BackupKdfIterations = 3_000_000; // synced with the main-database KDF calibration (9.2#7) - v4 headers carry the count, old backups parse by header
-    // Import-side sanity window for the header-declared iteration count: rejects attacker-crafted
-    // headers (DoS via a multi-second derivation on the UI thread) and zero/garbage values.
-    private const int BackupKdfIterationsMin = 1000;
-    private const int BackupKdfIterationsMax = 5_000_000; // covers the 3M export default with headroom for the 9.2#7 stage-two parameters
+    private const int BackupKdfIterations = 3_000_000;
 
-    
+
+    private const int BackupKdfIterationsMin = 1000;
+    private const int BackupKdfIterationsMax = 5_000_000;
+
+
     private const int SaveDebounceMs = 300;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -60,14 +55,14 @@ public class NovaraStore
 
     private readonly string _filePath;
     private readonly SemaphoreSlim _saveGate = new(1, 1);
-    private readonly object _saveLock = new(); 
+    private readonly object _saveLock = new();
     private volatile bool _savePending;
     private volatile bool _saveRunning;
     private volatile bool _loaded;
-    private volatile bool _suppressSave; // N4S-01: disk was overwritten by a snapshot restore - the in-memory DB is stale, every save path must no-op until the state is re-established
+    private volatile bool _suppressSave;
     private byte _encryptionFlag = FlagPlain;
-    private int _fileVersion = FileVersionLegacy; // read from the file header; plaintext stays v1 forever (2.0-compatible)
-    private bool _needsFormatMigration; // v1 CBC loaded -> offer the one-time GCM migration (4.7)
+    private int _fileVersion = FileVersionLegacy;
+    private bool _needsFormatMigration;
     private string? _password;
 
     public NovaraDatabase Database { get; private set; } = new();
@@ -76,60 +71,76 @@ public class NovaraStore
 
     public bool IsLoaded => _loaded;
 
-    /// <summary>
-    /// N4S-01: AutoBackupService flips this on after a successful restore (disk now holds the restored
-    /// snapshot while memory still holds the pre-restore DB) and off after a successful rollback.
-    /// While on, SaveAsync/SaveSync are success-no-ops: exit paths may proceed, but nothing may write
-    /// the stale in-memory state back over the restored file (which would silently roll back the
-    /// restore, or crash on a missing derive salt when the snapshot's encryption state differs).
-    /// Cleared by ResetDatabase/ImportBackup - those rebuild an authoritative memory state themselves.
-    /// </summary>
+
+
+
+
+
+
+
+
     public void SetSuppressSave(bool on) => _suppressSave = on;
 
-    /// <summary>N5S-02: true while a restored snapshot awaits the restart barrier - UI layers use this
-    /// to refuse navigation/write entries instead of relying on the overlay alone.</summary>
+
+
     public bool IsSaveSuppressed => _suppressSave;
+
+
+
+
+
+    internal const string RestorePendingMessage = "restore pending - restart first";
 
     public bool IsEncrypted => _encryptionFlag == FlagEncrypted;
 
-    
-    
+
+
     public void Invalidate()
     {
-        _suppressSave = true; 
+        _suppressSave = true;
         _loaded = false;
         _password = null;
-        Database = null!; 
+
+
+        Database = null!;
     }
 
-    /// <summary>Current in-memory password (null when plaintext/not loaded). 5.0 Windows Hello
-    /// enable flow reads it to store into PasswordVault.</summary>
+
+
     public string? Password => _password;
 
-    /// <summary>True when the loaded database is v1 CBC-encrypted and can be migrated to GCM (4.7).</summary>
+
     public bool NeedsFormatMigration => _needsFormatMigration;
 
-    /// <summary>9.2#7: a v2-GCM database still on the legacy 100k iterations - offered the one-time
-    /// KDF-hardening migration (v3). Computed live from the version byte, immune to stale flags.</summary>
+
+
     public bool NeedsKdfMigration
         => _loaded && _fileVersion == FileVersionCurrent && _encryptionFlag == FlagEncrypted;
 
-    /// <summary>9.2#7: same-password re-encryption to ver3 (PBKDF2 3M). The version byte flips BEFORE
-    /// SaveSync so WriteSnapshot picks the new parameters; any write failure rolls the byte back and
-    /// the legacy file stays untouched (symmetric with MigrateFormat).</summary>
+
+
+
     public bool MigrateKdf()
     {
-        if (_suppressSave) return false; 
+        if (_suppressSave) return false;
         if (!NeedsKdfMigration || string.IsNullOrEmpty(_password)) return false;
         var oldVersion = _fileVersion;
         _fileVersion = FileVersionKdfHardened;
         if (!SaveSync())
         {
-            _fileVersion = oldVersion; // roll back - keep the legacy file untouched
+            _fileVersion = oldVersion;
             return false;
         }
         return true;
     }
+
+
+
+
+
+
+
+    public event Action? Saved;
 
     public event Action<string>? SaveFailed;
 
@@ -141,13 +152,60 @@ public class NovaraStore
     public static string DefaultFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), CoreEnv.DataDirName, "data.novadb");
 
+
+
+
+
+
+
+
+
+    public static void DiscardOrphanedPasswordFiles(string dbFilePath)
+    {
+        try
+        {
+            if (File.Exists(dbFilePath) || !PasswordService.Exists()) return;
+            PasswordService.Delete();
+            PasswordService.DeleteLockout();
+        }
+        catch {  }
+    }
+
+
+
+
+
+
+
+
+
+
+
+    private static void NormalizeTodoStates(TodoCard td)
+    {
+        td.CheckedStates ??= new();
+        td.SubTexts ??= new();
+
+
+        for (int i = td.SubTexts.Count - 1; i >= 0; i--)
+        {
+            if (td.SubTexts[i] != null) continue;
+            td.SubTexts.RemoveAt(i);
+            if (i + 1 < td.CheckedStates.Count) td.CheckedStates.RemoveAt(i + 1);
+        }
+
+
+        int total = 1 + td.SubTexts.Count;
+        while (td.CheckedStates.Count < total) td.CheckedStates.Add(false);
+        if (td.CheckedStates.Count > total) td.CheckedStates.RemoveRange(total, td.CheckedStates.Count - total);
+    }
+
     public LoadResult Load()
     {
         try
         {
             if (!File.Exists(_filePath))
             {
-
                 Database = new NovaraDatabase();
                 _encryptionFlag = FlagPlain;
                 _loaded = true;
@@ -162,7 +220,7 @@ public class NovaraStore
             fs.ReadExactly(header);
             if (BitConverter.ToUInt32(header, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
             if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent && header[4] != FileVersionKdfHardened) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
-            _fileVersion = header[4]; // v1 (legacy CBC / plaintext) or v2 (GCM); see 4.7
+            _fileVersion = header[4];
             byte flag = header[5];
             var md5Stored = header.AsSpan(6, 16).ToArray();
 
@@ -177,8 +235,8 @@ public class NovaraStore
                 return new LoadResult(LoadStatus.Encrypted);
             }
             if (flag != FlagPlain) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), flag));
-            if (header[4] != FileVersionLegacy) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4])); // E1-26: a v2 plaintext file does not exist (4.7 matrix) - defensive corruption
-            _fileVersion = FileVersionLegacy; // plaintext is always v1 (2.0-compatible)
+            if (header[4] != FileVersionLegacy) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
+            _fileVersion = FileVersionLegacy;
 
             var md5Actual = MD5.HashData(body);
             if (!md5Stored.AsSpan().SequenceEqual(md5Actual))
@@ -187,16 +245,16 @@ public class NovaraStore
             var db = JsonSerializer.Deserialize<NovaraDatabase>(body, JsonOptions);
             if (db == null) return Corrupted(Loc.T("Store_Err_Deserialize"));
 
-            // N3-18 (extends D23/E4-10/E5-07): normalize a hand-crafted/external file in one block.
-            // Order matters: partition lists must be non-null BEFORE per-item work; NULL ELEMENTS
-            // inside a list ("todoCards":[null] / "memoEntries":[null] / "fields":[null]) are dropped
-            // BEFORE per-item normalization - otherwise the foreach below NREs and mislabels a
-            // healthy file as Corrupted/IoError. Null field props are normalized to "" so they never
-            // shadow the model's defaults.
+
+
+
+
+
+
             db.AppSettings ??= new AppSettings();
             db.AppSettings.McpAllowedProcesses ??= new();
-            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null); 
-            db.AppSettings.McpClientPermissions ??= new(); 
+            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions ??= new();
             db.AppSettings.Workspaces ??= new();
             db.MemoGroups ??= new();
             db.MemoEntries ??= new();
@@ -209,21 +267,16 @@ public class NovaraStore
             db.NoteCards.RemoveAll(x => x == null);
             db.PathBackupItems.RemoveAll(x => x == null);
             db.DiaryItems.RemoveAll(x => x == null);
-            db.MemoGroups.RemoveAll(x => x == null); // N4-03: "memoGroups":[null] NREs BasicMemoPage's g.Name on the default tab - same ImportBackup treatment, all three load paths
-            db.AppSettings.Workspaces.RemoveAll(x => x == null); // N4-03: null element would NRE DatabaseHealth / MainWindow workspace consumers
-            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null); // N4-03: symmetric with ImportBackup (663-668)
+            db.MemoGroups.RemoveAll(x => x == null);
+            db.AppSettings.Workspaces.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null);
             foreach (var en in db.MemoEntries)
             {
                 if (en.Fields == null) en.Fields = new();
                 else en.Fields.RemoveAll(f => f == null);
-                foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; } // {label:null} would shadow the default ""
+                foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
-            foreach (var td in db.TodoCards)
-            {
-                td.CheckedStates ??= new();
-                td.SubTexts ??= new();
-                td.SubTexts.RemoveAll(s => s == null); // "subTexts":[null] breaks string.Join consumers
-            }
+            foreach (var td in db.TodoCards) NormalizeTodoStates(td);
 
             Database = db;
             _encryptionFlag = FlagPlain;
@@ -232,7 +285,7 @@ public class NovaraStore
         }
         catch (Exception ex)
         {
-            // D8-1 (Round 5): MD5 ok but JSON deserialize failed -> corrupted (same as #38)
+
             return ex is System.Text.Json.JsonException
                 ? Corrupted(Loc.T("Store_Err_Deserialize"))
                 : new LoadResult(LoadStatus.IoError, ex.Message);
@@ -245,12 +298,11 @@ public class NovaraStore
         {
             if (!File.Exists(_filePath))
             {
-
                 Database = new NovaraDatabase();
                 _encryptionFlag = FlagPlain;
                 _password = null;
                 _loaded = true;
-                SaveSync(); 
+                SaveSync();
                 return new LoadResult(LoadStatus.EmptyCreated);
             }
             using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -262,22 +314,37 @@ public class NovaraStore
             _fileVersion = header[4];
             if (header[5] == FlagPlain)
                 return header[4] != FileVersionLegacy
-                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4])) // E5-16 + 9.2#7: v2/v3 plaintext files do not exist (format matrix) - defensive corruption, symmetric with Load() E1-26
+                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]))
                     : new LoadResult(LoadStatus.WrongPassword, Loc.T("Store_Err_NotEncrypted"));
-            if (header[5] != FlagEncrypted) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), header[5])); // D8-2 (Round 5): unknown encryption flag -> corrupted (aligned with Load())
+            if (header[5] != FlagEncrypted) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), header[5]));
             var md5Stored = header.AsSpan(6, 16).ToArray();
             var body = new byte[fs.Length - HeaderSize];
             fs.ReadExactly(body);
 
-            if (!PasswordService.Verify(password))
+
+
+
+
+
+
+
+
+
+            var verified = PasswordService.Verify(password);
+            var stagedAccepted = false;
+            if (!verified && PasswordService.HasStagedChange() && PasswordService.VerifyStaged(password))
             {
-                // N4S-04: classify the failure instead of always counting a strike. A damaged security.dat
-                // previously locked the user into the 5-strike loop with no path to the rebuild dialog.
+                stagedAccepted = true;
+            }
+            if (!verified && !stagedAccepted)
+            {
+
+
                 return PasswordService.CheckSecurityHealth() switch
                 {
-                    PasswordService.SecurityHealth.Ok => new LoadResult(LoadStatus.WrongPassword, Loc.T("Store_Err_WrongPassword")), // intact file, hash mismatch - genuine wrong password
-                    PasswordService.SecurityHealth.TransientError => new LoadResult(LoadStatus.IoError, "security.dat read failed"), // AV/lock transient - retry-only, never destructive
-                    _ => Corrupted(Loc.T("Store_Err_SecurityMissing")), // NotExists / Damaged - stable corruption
+                    PasswordService.SecurityHealth.Ok => new LoadResult(LoadStatus.WrongPassword, Loc.T("Store_Err_WrongPassword")),
+                    PasswordService.SecurityHealth.TransientError => new LoadResult(LoadStatus.IoError, "security.dat read failed"),
+                    _ => Corrupted(Loc.T("Store_Err_SecurityMissing")),
                 };
             }
             var salt = PasswordService.GetDeriveSalt();
@@ -286,37 +353,53 @@ public class NovaraStore
             byte[] plain;
             if (_fileVersion == FileVersionCurrent || _fileVersion == FileVersionKdfHardened)
             {
-                // v2/v3 GCM: authenticated by the 16-byte tag - no MD5; wrong password / tamper throw.
-                // E1-02: Verify() already passed above, so a decrypt failure is corruption/tampering,
-                // NOT a wrong password - report it as Corrupted (the lock screen shows the corrupt dialog
-                // instead of counting strikes and locking the user out of a damaged database).
-                // 9.2#7: iteration count is implied by the version byte (v2=100k legacy, v3=3M hardened).
+
+
+
+
+
                 try
                 {
                     plain = _fileVersion == FileVersionKdfHardened
                         ? CryptoService.DecryptGcm(body, password, salt, CryptoService.CurrentIterations)
                         : CryptoService.DecryptGcm(body, password, salt);
                 }
-                catch { return Corrupted(Loc.T("Store_Err_DecryptFail")); } 
+
+
+
+
+
+
+                catch { return DecryptFailedResult(); }
                 _needsFormatMigration = false;
             }
             else
             {
                 try { plain = CryptoService.Decrypt(body, password, salt); }
-                catch { return Corrupted(Loc.T("Store_Err_DecryptFail")); } // E2-02: generic corruption copy (the MD5 check below keeps Store_Err_Md5Fail)
+                catch { return DecryptFailedResult(); }
                 var md5Actual = MD5.HashData(plain);
                 if (!md5Stored.AsSpan().SequenceEqual(md5Actual)) return Corrupted(Loc.T("Store_Err_Md5Fail"));
-                _needsFormatMigration = true; // v1 CBC loaded - the one-time GCM migration is offered (4.7)
+                _needsFormatMigration = true;
             }
+
+
+
+
+
+
+            if (!verified)
+                PasswordService.PromoteStaged();
+            else
+                PasswordService.DiscardStaged();
 
             var db = JsonSerializer.Deserialize<NovaraDatabase>(plain, JsonOptions);
             if (db == null) return Corrupted(Loc.T("Store_Err_Deserialize"));
 
-            // N3-18: mirror the plaintext-load normalization (same ordering rationale - see above).
+
             db.AppSettings ??= new AppSettings();
             db.AppSettings.McpAllowedProcesses ??= new();
-            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null); 
-            db.AppSettings.McpClientPermissions ??= new(); 
+            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions ??= new();
             db.AppSettings.Workspaces ??= new();
             db.MemoGroups ??= new();
             db.MemoEntries ??= new();
@@ -329,21 +412,16 @@ public class NovaraStore
             db.NoteCards.RemoveAll(x => x == null);
             db.PathBackupItems.RemoveAll(x => x == null);
             db.DiaryItems.RemoveAll(x => x == null);
-            db.MemoGroups.RemoveAll(x => x == null); // N4-03: "memoGroups":[null] NREs BasicMemoPage's g.Name on the default tab - same ImportBackup treatment, all three load paths
-            db.AppSettings.Workspaces.RemoveAll(x => x == null); // N4-03: null element would NRE DatabaseHealth / MainWindow workspace consumers
-            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null); // N4-03: symmetric with ImportBackup (663-668)
+            db.MemoGroups.RemoveAll(x => x == null);
+            db.AppSettings.Workspaces.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null);
             foreach (var en in db.MemoEntries)
             {
                 if (en.Fields == null) en.Fields = new();
                 else en.Fields.RemoveAll(f => f == null);
                 foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
-            foreach (var td in db.TodoCards)
-            {
-                td.CheckedStates ??= new();
-                td.SubTexts ??= new();
-                td.SubTexts.RemoveAll(s => s == null);
-            }
+            foreach (var td in db.TodoCards) NormalizeTodoStates(td);
 
             Database = db;
             _encryptionFlag = FlagEncrypted;
@@ -353,7 +431,7 @@ public class NovaraStore
         }
         catch (Exception ex)
         {
-            // D8-1 (Round 5): decrypted but JSON deserialize failed -> corrupted (same as #38)
+
             return ex is System.Text.Json.JsonException
                 ? Corrupted(Loc.T("Store_Err_Deserialize"))
                 : new LoadResult(LoadStatus.IoError, ex.Message);
@@ -363,15 +441,15 @@ public class NovaraStore
     public bool EnableEncryption(string password)
     {
         if (string.IsNullOrEmpty(password)) return false;
-        if (_suppressSave) return false; // N5S-05: a suppressed session must not mint a security.dat the restored db can never pair with
-        if (!_loaded) return false; // N3-22: encrypting an unloaded store would mint a "v3 header + empty db" + orphan security.dat
-        
+        if (_suppressSave) return false;
+        if (!_loaded) return false;
+
         _saveGate.Wait();
         try
         {
             _password = password;
             _encryptionFlag = FlagEncrypted;
-            _fileVersion = FileVersionKdfHardened; // 9.2#7: new encryption starts at the latest format from day one
+            _fileVersion = FileVersionKdfHardened;
             if (!SaveSyncCore())
             {
 
@@ -385,17 +463,17 @@ public class NovaraStore
         finally { _saveGate.Release(); }
     }
 
-    /// <summary>
-    /// One-time v1 CBC -&gt; v2 GCM migration (4.7): re-encrypt the in-memory database with the same
-    /// password and write atomically. On ANY failure the old file stays intact and the app keeps
-    /// running on v1 (the migration is offered again on the next launch).
-    /// </summary>
+
+
+
+
+
     public bool MigrateFormat()
     {
-        if (_suppressSave) return false; 
+        if (_suppressSave) return false;
         if (!_needsFormatMigration || _fileVersion != FileVersionLegacy || string.IsNullOrEmpty(_password))
             return false;
-        
+
         _saveGate.Wait();
         try
         {
@@ -403,7 +481,7 @@ public class NovaraStore
             _fileVersion = FileVersionCurrent;
             if (!SaveSyncCore())
             {
-                _fileVersion = oldVersion; // roll back to v1 - keep the legacy file untouched
+                _fileVersion = oldVersion;
                 return false;
             }
             _needsFormatMigration = false;
@@ -414,22 +492,22 @@ public class NovaraStore
 
     public bool DisableEncryption()
     {
-        if (_suppressSave) return false; // N5S-03: refusing here keeps security.dat paired with the restored db - the SaveSync below would fake-succeed and the caller would delete the password file
-        
+        if (_suppressSave) return false;
+
         _saveGate.Wait();
         try
         {
-            var oldVersion = _fileVersion; 
+            var oldVersion = _fileVersion;
             _encryptionFlag = FlagPlain;
             if (!SaveSyncCore())
             {
 
                 _encryptionFlag = FlagEncrypted;
-                _fileVersion = oldVersion; 
+                _fileVersion = oldVersion;
                 return false;
             }
             _password = null;
-            _needsFormatMigration = false; // E5-15: the DB is now plaintext - a stale v1-CBC migration offer must not resurface (E4-18 only covered ResetDatabase)
+            _needsFormatMigration = false;
             return true;
         }
         finally { _saveGate.Release(); }
@@ -438,12 +516,12 @@ public class NovaraStore
     public bool Reencrypt(string newPassword)
     {
         if (string.IsNullOrEmpty(newPassword)) return false;
-        if (_suppressSave) return false; // N5S-04: a fake-success here desyncs security.dat (new hash) from data.novadb (old key) - the exact lock-out N4S-04 family exists to prevent
-        
+        if (_suppressSave) return false;
+
         _saveGate.Wait();
         try
         {
-            var oldPassword = _password; // #25: roll back old password on write failure
+            var oldPassword = _password;
             _password = newPassword;
             _encryptionFlag = FlagEncrypted;
             if (!SaveSyncCore()) { _password = oldPassword; return false; }
@@ -454,61 +532,61 @@ public class NovaraStore
 
     public bool ExportBackup(string backupPath, bool includeFilePathEntries)
     {
-        var tmpPath = backupPath + ".tmp"; // N3-21: scope outside try so the catch can clean it up
+        var tmpPath = backupPath + ".tmp";
         try
         {
-            if (_suppressSave) return false; // N5S-07: memory is stale vs the restored snapshot - exporting it would silently hand the user the wrong data
-            if (!_loaded) return false; 
+            if (_suppressSave) return false;
+            if (!_loaded) return false;
             var export = CloneForExport(includeFilePathEntries);
             if (export == null) return false;
             var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
-            // 2026-08-28 (design doc 9.1#3): backups leave the machine, so integrity moves MD5 -> SHA-256
-            // as backup format v3 (38B header). SHA-256 detects corruption only - it is NOT tamper
-            // protection on a plaintext file (that lands with the encrypted-backup format, doc 9.2#6).
+
+
+
             var sha = SHA256.HashData(json);
             var header = new byte[HeaderSizeSha256];
             BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
-            header[4] = FileVersionSha256Backup; // backup files only - data.novadb never writes v3
+            header[4] = FileVersionSha256Backup;
             header[5] = FlagPlain;
             sha.CopyTo(header, 6);
             var dir = Path.GetDirectoryName(backupPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            // E2-03: atomic write (tmp + move) - an interrupted export must never leave a half-written backup file
+
             using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 fs.Write(header);
                 fs.Write(json);
-                fs.Flush(true); // D8-3 (Round 5): flush to disk (incl. cache) against power loss
+                fs.Flush(true);
             }
             File.Move(tmpPath, backupPath, true);
             return true;
         }
         catch (Exception ex)
         {
-            // N3-21: mirror WriteSnapshot's cleanup - an interrupted export must not leave .tmp behind
+
             try { if (File.Exists(tmpPath)) { File.SetAttributes(tmpPath, FileAttributes.Normal); File.Delete(tmpPath); } } catch { }
             System.Diagnostics.Debug.WriteLine($"NovaraStore 导出备份失败: {ex}");
             return false;
         }
     }
 
-    /// <summary>
-    /// D21: trashed items (IsDeleted) must not leave the machine with a backup - deep-clone the
-    /// DB, drop them and return the clean copy; the live in-memory DB is never mutated.
-    /// 4.4: includeFilePathEntries=false excludes path backups entirely (device-migration use case).
-    /// Shared by ExportBackup (plaintext v3) and ExportBackupEncrypted (v4).
-    /// </summary>
+
+
+
+
+
+
     private NovaraDatabase? CloneForExport(bool includeFilePathEntries)
     {
         try
         {
-            
-            
-            
+
+
+
             var copy = JsonSerializer.Deserialize<NovaraDatabase>(JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions), JsonOptions);
-            // E4-20: a clone that fails to deserialize must NOT fall back to the live db (that
-            // would leak trashed items / excluded paths into the backup). Fail the export instead,
-            // consistent with the catch block below.
+
+
+
             if (copy == null) return null;
             copy.MemoEntries?.RemoveAll(x => x.IsDeleted);
             copy.PathBackupItems?.RemoveAll(x => x.IsDeleted);
@@ -520,33 +598,33 @@ public class NovaraStore
         }
         catch
         {
-            // E1-26: clone failure (concurrent UI mutation) must NOT leak trashed items / excluded
-            // paths, and must NOT mutate the live db - fail the export instead; the user retries.
+
+
             return null;
         }
     }
 
-    /* ========== NovaraStore Encrypted Export Backup ==========
-Function: Encrypted export backup (format v4, design doc 9.2#6, 2026-08-29): 44B self-contained
-    header (magic/version=4/flag=encrypted/algoId/kdfId/iterations/random per-backup salt) +
-    GCM block (nonce+tag+cipher of GZip'd JSON). Header bytes double as the GCM AAD.
-Corresponding UI: SettingsPage encrypted-backup dialogs
-Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
-*/
+
+
+
+
+
+
+
     public bool ExportBackupEncrypted(string backupPath, string password, bool includeFilePathEntries)
     {
-        var tmpPath = backupPath + ".tmp"; // N3-21: scope outside try so the catch can clean it up
+        var tmpPath = backupPath + ".tmp";
         try
         {
-            if (_suppressSave) return false; // N5S-07: same stale-memory guard as the plaintext export
-            if (!_loaded) return false; // N6-16: never export a "valid header + empty db" clone
+            if (_suppressSave) return false;
+            if (!_loaded) return false;
             if (string.IsNullOrEmpty(password)) return false;
             var export = CloneForExport(includeFilePathEntries);
             if (export == null) return false;
             var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
 
-            // Per-backup random salt: independent from security.dat on purpose - the backup
-            // password is a separate secret and must stay decryptable without this machine.
+
+
             var salt = RandomNumberGenerator.GetBytes(32);
             var header = new byte[HeaderSizeEncryptedBackup];
             BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
@@ -556,17 +634,17 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
             header[7] = KdfIdPbkdf2Sha256;
             BitConverter.TryWriteBytes(header.AsSpan(8, 4), BackupKdfIterations);
             salt.CopyTo(header, 12);
-            // The raw header bytes are the AAD - parsed and passed as-is, never reassembled
-            // field by field (a byte-order/padding mismatch would break every decryption).
+
+
             var cipher = CryptoService.EncryptGcm(json, password, salt, BackupKdfIterations, header);
 
             var dir = Path.GetDirectoryName(backupPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            // E2-03: atomic write (tmp + move) - same guarantee as the plaintext export
+
             using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 fs.Write(header);
-                fs.Write(cipher); // CryptoService layout: nonce(12) + tag(16) + ciphertext
+                fs.Write(cipher);
                 fs.Flush(true);
             }
             File.Move(tmpPath, backupPath, true);
@@ -574,14 +652,14 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
         }
         catch (Exception ex)
         {
-            // N3-21: mirror WriteSnapshot's cleanup - an interrupted export must not leave .tmp behind
+
             try { if (File.Exists(tmpPath)) { File.SetAttributes(tmpPath, FileAttributes.Normal); File.Delete(tmpPath); } } catch { }
             System.Diagnostics.Debug.WriteLine($"NovaraStore 加密导出失败: {ex}");
             return false;
         }
     }
 
-    
+
 
 
 
@@ -591,14 +669,14 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
     {
         try
         {
-            if (_suppressSave) return null;   // N5S-07: same stale-memory guard as plaintext/encrypted export
-            if (!_loaded) return null;        // N6-16: never export a "valid header + empty db" clone
+            if (_suppressSave) return null;
+            if (!_loaded) return null;
             if (string.IsNullOrEmpty(password)) return null;
             var export = CloneForSnapshot(includeMemo, includePaths, includePlan, includeDiary);
             if (export == null) return null;
             var json = JsonSerializer.SerializeToUtf8Bytes(export, JsonOptions);
 
-            // Per-snapshot random salt + 44B header, byte-for-byte identical to ExportBackupEncrypted (v4).
+
             var salt = RandomNumberGenerator.GetBytes(32);
             var header = new byte[HeaderSizeEncryptedBackup];
             BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
@@ -622,7 +700,7 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
         }
     }
 
-    
+
     private NovaraDatabase? CloneForSnapshot(bool includeMemo, bool includePaths, bool includePlan, bool includeDiary)
     {
         try
@@ -638,42 +716,50 @@ Logic Range: ExportBackupEncrypted + the v4 branch in ImportBackup
             if (!includePaths) copy.PathBackupItems?.Clear();
             if (!includePlan) { copy.TodoCards?.Clear(); copy.NoteCards?.Clear(); }
             if (!includeDiary) copy.DiaryItems?.Clear();
-            
+
+
+
+
+
             if (copy.AppSettings != null)
             {
                 copy.AppSettings.McpToken = "";
                 copy.AppSettings.McpTokenGeneratedAt = null;
                 copy.AppSettings.McpAllowedProcesses?.Clear();
                 copy.AppSettings.McpClientPermissions?.Clear();
+                copy.AppSettings.McpEnabled = false;
+                copy.AppSettings.McpDeleteEnabled = false;
+                copy.AppSettings.McpPermMigrated = false;
+                copy.AppSettings.McpDetailExpanded = true;
             }
             return copy;
         }
         catch { return null; }
     }
 
-    /* ========== NovaraStore Import Backup ==========
-Function: Backup import: header/version/MD5 validation, plaintext only, in-memory rollback on failure (#1/#22), null-normalize & dedupe (#23/#24)
-Corresponding UI: NovaraStore.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
     public LoadResult ImportBackup(string backupPath, string? backupPassword = null)
     {
-        // N5S-06: refuse while suppressed - the old code cleared suppression before validation, so a
-        // failed import silently un-protected the restored snapshot, and an "encrypted" success path
-        // re-encrypted imported data with the stale session password + snapshot derive salt.
-        if (_suppressSave) return new LoadResult(LoadStatus.IoError, "restore pending - restart first");
-        var oldDb = Database; // L31: rollback anchor - every failure path below restores this reference
+
+
+
+        if (_suppressSave) return new LoadResult(LoadStatus.IoError, RestorePendingMessage);
+        var oldDb = Database;
         try
         {
             if (!File.Exists(backupPath)) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupMissing"));
             byte[] body;
             using (var fs = new FileStream(backupPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                // 2026-08-28 dual-format import: v3 = SHA-256 over a 38B header (current exports);
-                // v1 = legacy MD5 over the 22B header - 2.0/3.0/4.x/5.0 exports stay importable forever.
-                // 2026-08-29: v4 = encrypted export backup (9.2#6). Format detection is header-only -
-                // the file extension is never consulted (audit 2026-08-29: renamed/stripped suffixes
-                // must still import).
+
+
+
+
+
                 if (fs.Length < HeaderSize) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
                 var prefix = new byte[6];
                 fs.ReadExactly(prefix);
@@ -684,15 +770,15 @@ Logic Range: Below methods in this region
 
                 if (ver == FileVersionEncryptedBackup)
                 {
-                    // v4 layout: 44B header (magic/ver/flag/algoId/kdfId/iterations/salt) + GCM block
-                    // (nonce 12 + tag 16 + cipher). The raw 44 header bytes are the AAD exactly as
-                    // they were written - parsed here and passed as-is, never reassembled field by
-                    // field (a byte-order mismatch would break every decryption).
-                    if (prefix[5] != FlagEncrypted) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver)); // not in the format matrix (E4-19 symmetry)
-                    if (fs.Length < HeaderSizeEncryptedBackup + GcmBlockOverhead + 1) 
+
+
+
+
+                    if (prefix[5] != FlagEncrypted) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
+                    if (fs.Length < HeaderSizeEncryptedBackup + GcmBlockOverhead + 1)
                         return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
                     if (string.IsNullOrEmpty(backupPassword))
-                        return new LoadResult(LoadStatus.NeedPassword); // UI re-enters with the backup password
+                        return new LoadResult(LoadStatus.NeedPassword);
                     var header44 = new byte[HeaderSizeEncryptedBackup];
                     fs.Position = 0;
                     fs.ReadExactly(header44);
@@ -700,14 +786,14 @@ Logic Range: Below methods in this region
                     var kdfId = header44[7];
                     var iter32 = BitConverter.ToUInt32(header44, 8);
                     if (algoId != AlgoIdAes256Gcm || kdfId != KdfIdPbkdf2Sha256 || iter32 < BackupKdfIterationsMin || iter32 > BackupKdfIterationsMax)
-                        return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver)); // unknown algo/kdf or DoS-grade iteration count
+                        return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
                     var salt = header44[12..44];
                     var encBody = new byte[fs.Length - HeaderSizeEncryptedBackup];
                     fs.ReadExactly(encBody);
                     try
                     {
-                        // Auth failure (wrong password OR tampering) is deliberately one
-                        // indistinguishable outcome - never split the two error messages.
+
+
                         body = CryptoService.DecryptGcm(encBody, backupPassword, salt, (int)iter32, header44);
                     }
                     catch
@@ -718,15 +804,15 @@ Logic Range: Below methods in this region
                 else
                 {
                     if (prefix[5] != FlagPlain) return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupNotPlain"));
-                    // E4-19: a v2 plaintext file does not exist in the format matrix (4.7) - reject it,
-                    // symmetric with Load's defensive corruption handling (E1-26).
+
+
                     if (ver == FileVersionCurrent) return new LoadResult(LoadStatus.Corrupted, string.Format(Loc.T("Store_Err_BackupVersion"), ver));
 
                     var headerSize = ver == FileVersionSha256Backup ? HeaderSizeSha256 : HeaderSize;
                     var digestLen = headerSize - 6;
-                    // N2-65: a truncated v1/v2/v3 backup (22..37B) passes the 22B floor but cannot
-                    // hold header+digest+body - classify as Corrupted (symmetric with the v4 branch
-                    // above) instead of letting ReadExactly throw an IOException reported as IoError.
+
+
+
                     if (fs.Length < headerSize + 1)
                         return new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupHeader"));
                     var storedDigest = new byte[digestLen];
@@ -749,43 +835,38 @@ Logic Range: Below methods in this region
 
             db.AppSettings ??= new AppSettings();
             db.AppSettings.McpAllowedProcesses ??= new();
-            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null); 
-            db.AppSettings.McpClientPermissions ??= new(); 
+            db.AppSettings.McpAllowedProcesses.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions ??= new();
             db.AppSettings.Workspaces ??= new();
             db.AppSettings.PrivacyLockEnabled = _encryptionFlag == FlagEncrypted;
 
-            // #23/#24: normalize null partitions, dedupe Ids, clear dangling group refs (prevent ToDictionary/NRE crash)
+
             db.MemoGroups ??= new();
             db.MemoEntries ??= new();
             db.TodoCards ??= new();
             db.NoteCards ??= new();
             db.PathBackupItems ??= new();
             db.DiaryItems ??= new();
-            // N3-18: NULL ELEMENTS inside backup lists must be dropped before per-item work (an
-            // external/edited backup with "todoCards":[null] used to NRE here and fail the import).
+
+
             db.MemoGroups.RemoveAll(x => x == null);
             db.MemoEntries.RemoveAll(x => x == null);
             db.TodoCards.RemoveAll(x => x == null);
             db.NoteCards.RemoveAll(x => x == null);
             db.PathBackupItems.RemoveAll(x => x == null);
             db.DiaryItems.RemoveAll(x => x == null);
-            db.AppSettings.Workspaces.RemoveAll(x => x == null); // N4-03: null element would NRE DatabaseHealth / MainWindow workspace consumers
-            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null); // N4-03: symmetric with the two load paths
+            db.AppSettings.Workspaces.RemoveAll(x => x == null);
+            db.AppSettings.McpClientPermissions.RemoveAll(x => x == null);
             foreach (var en in db.MemoEntries)
             {
                 if (en.Fields == null) en.Fields = new();
                 else en.Fields.RemoveAll(f => f == null);
-                foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; } // N3-18: null field props would shadow the defaults
+                foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
-            foreach (var td in db.TodoCards)
-            {
-                td.SubTexts ??= new();
-                td.SubTexts.RemoveAll(s => s == null); // N3-18: "subTexts":[null] breaks consumers
-                td.CheckedStates ??= new(); 
-            }
+            foreach (var td in db.TodoCards) NormalizeTodoStates(td);
             var gseen = new HashSet<Guid>();
             foreach (var g in db.MemoGroups)
-                if (!gseen.Add(g.Id)) { g.Id = Guid.NewGuid(); gseen.Add(g.Id); } 
+                if (!gseen.Add(g.Id)) { g.Id = Guid.NewGuid(); gseen.Add(g.Id); }
             var eseen = new HashSet<Guid>();
             foreach (var e in db.MemoEntries)
             {
@@ -800,39 +881,64 @@ Logic Range: Below methods in this region
             foreach (var p in db.PathBackupItems) if (!pseen.Add(p.Id)) p.Id = Guid.NewGuid();
             var dseen = new HashSet<string>();
             foreach (var d in db.DiaryItems) if (!dseen.Add(d.Id)) d.Id = Guid.NewGuid().ToString();
-            // N2-64: the same normalization covers the 6.0 additions - duplicate workspace Ids
-            // (switcher duplicates + double-delete on cleanup) and duplicated authorization paths.
+
+
             var wseen = new HashSet<string>();
             foreach (var w in db.AppSettings.Workspaces ?? new())
-                if (!wseen.Add(w.Id)) { w.Id = Guid.NewGuid().ToString(); wseen.Add(w.Id); } // N3-04: sync the renumbered Id into wseen (N1-73 gseen parity) - otherwise the dangling check below misfires for duplicated workspace Ids
+                if (!wseen.Add(w.Id)) { w.Id = Guid.NewGuid().ToString(); wseen.Add(w.Id); }
             var permSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            // N3-17: a backup file may contain null entries in the authorization list (hand-edited /
-            // corrupted file) - guard the predicate so the whole import does not fail as IoError.
+
+
             db.AppSettings.McpClientPermissions?.RemoveAll(r => r == null || string.IsNullOrEmpty(r.Path) || !permSeen.Add(r.Path));
-            // N3-04: dangling WorkspaceId cleanup - a backup may reference a workspace that does not
-            // exist (hand-edited file or a duplicate Id renumbered above); without this the entry is
-            
+
+
+
             foreach (var e in db.MemoEntries) if (!string.IsNullOrEmpty(e.WorkspaceId) && !wseen.Contains(e.WorkspaceId)) e.WorkspaceId = "";
             foreach (var t in db.TodoCards) if (!string.IsNullOrEmpty(t.WorkspaceId) && !wseen.Contains(t.WorkspaceId)) t.WorkspaceId = "";
             foreach (var n in db.NoteCards) if (!string.IsNullOrEmpty(n.WorkspaceId) && !wseen.Contains(n.WorkspaceId)) n.WorkspaceId = "";
             foreach (var d in db.DiaryItems) if (!string.IsNullOrEmpty(d.WorkspaceId) && !wseen.Contains(d.WorkspaceId)) d.WorkspaceId = "";
             foreach (var p in db.PathBackupItems) if (!string.IsNullOrEmpty(p.WorkspaceId) && !wseen.Contains(p.WorkspaceId)) p.WorkspaceId = "";
 
-            
-            
+
+
             Database = db;
-            
-            
+
+
             var oldLoaded = _loaded;
             var oldSuppress = _suppressSave;
             _loaded = true;
-            _suppressSave = false; // N4S-01: the imported db is about to be written to disk - memory and disk become consistent again
+
+
+
+
+
+
+            if (!oldSuppress) _suppressSave = false;
+
+
+
+
+
+
+
+
+
+
+
+
+            if (_suppressSave)
+            {
+                Database = oldDb;
+                _loaded = oldLoaded;
+                _suppressSave = oldSuppress;
+                return new LoadResult(LoadStatus.IoError, RestorePendingMessage);
+            }
             if (_encryptionFlag == FlagEncrypted)
             {
 
                 if (string.IsNullOrEmpty(_password) || PasswordService.GetDeriveSalt() == null)
                 {
-                    Database = oldDb; // E1-05: roll back the in-memory DB before bailing out (L31) - else a later SaveAsync silently overwrites the local db with the imported data
+                    Database = oldDb;
                     _loaded = oldLoaded;
                     _suppressSave = oldSuppress;
                     return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_ImportNoKey"));
@@ -849,7 +955,7 @@ Logic Range: Below methods in this region
         {
             Database = oldDb;
             System.Diagnostics.Debug.WriteLine($"NovaraStore 导入备份失败: {ex}");
-            // #38: deserialize failure = corrupted backup; other IO/permission -> IoError
+
             return ex is System.Text.Json.JsonException
                 ? new LoadResult(LoadStatus.Corrupted, Loc.T("Store_Err_BackupDeserialize"))
                 : new LoadResult(LoadStatus.IoError, ex.Message);
@@ -858,10 +964,27 @@ Logic Range: Below methods in this region
 
     private static LoadResult Corrupted(string detail) => new(LoadStatus.Corrupted, detail);
 
+
+
+
+
+
+
+
+
+
+    private static LoadResult DecryptFailedResult()
+
+
+
+        => PasswordService.HasStagedChange()
+            ? new(LoadStatus.WrongPassword, Loc.T("Store_Err_DecryptFail"))
+            : Corrupted(Loc.T("Store_Err_DecryptFail"));
+
     public Task SaveAsync()
     {
-        if (!_loaded || _suppressSave) return Task.CompletedTask; // N4S-01: suppressed after restore - never write stale memory to disk
-        
+        if (!_loaded || _suppressSave) return Task.CompletedTask;
+
         lock (_saveLock)
         {
             _savePending = true;
@@ -870,10 +993,13 @@ Logic Range: Below methods in this region
         }
         return Task.Run(async () =>
         {
+
+
+            var landed = false;
             try
             {
-                
-                
+
+
                 await Task.Delay(SaveDebounceMs);
                 await _saveGate.WaitAsync();
                 try
@@ -881,27 +1007,28 @@ Logic Range: Below methods in this region
                     while (_savePending)
                     {
                         _savePending = false;
-                        // N5S-01: suppression may flip ON inside the debounce window (Restore runs while a
-                        // write is already queued - pending can also be set by non-UI sources). Recheck
-                        // under the gate, otherwise stale memory lands on the restored snapshot and - with
-                        // the snapshot's paired security.dat - produces ciphertext no password can open.
+
+
+
+
                         if (_suppressSave) break;
                         if (!WriteSnapshot())
                         {
-                            
+
                             Thread.Sleep(60);
                             if (!WriteSnapshot())
                             {
-                                // N2-26 (N1-24 regression): a DETERMINISTIC failure (disk full / NoKey)
-                                // must not spin - the old retry-then-requeue loop re-ran the full
-                                // serialization every ~360ms and re-triggered the SaveFailed dialog
-                                // animation each round. Drop the pending flag: the next data mutation
-                                // re-enters SaveAsync naturally; transient failures already recovered
-                                // via the in-place retry above.
+
+
+
+
+
+
                                 _savePending = false;
                                 break;
                             }
                         }
+                        landed = true;
                     }
                 }
                 finally { _saveGate.Release(); }
@@ -909,8 +1036,15 @@ Logic Range: Below methods in this region
             finally
             {
                 _saveRunning = false;
-                // Race fallback: pending arriving after consume loop is picked up by next round (fix Bug 3)
+
                 if (_savePending) _ = SaveAsync();
+
+
+
+                if (landed)
+                {
+                    try { Saved?.Invoke(); } catch { }
+                }
             }
         });
     }
@@ -918,23 +1052,23 @@ Logic Range: Below methods in this region
     public bool SaveSync()
     {
         if (!_loaded) return false;
-        if (_suppressSave) return true; // N4S-01: report success so exit paths proceed - but write nothing, the restored file on disk is authoritative
+        if (_suppressSave) return true;
         _saveGate.Wait();
         try { return SaveSyncCore(); }
         finally { _saveGate.Release(); }
     }
 
-    
-    
-    
-    
+
+
+
+
     private bool SaveSyncCore()
     {
         if (!_loaded) return false;
-        if (_suppressSave) return true; // N4S-01: restored file on disk is authoritative
-        
-        
-        
+        if (_suppressSave) return true;
+
+
+
         var ok = WriteSnapshot();
         if (!ok)
         {
@@ -955,12 +1089,12 @@ Logic Range: Below methods in this region
             }
             Database = new NovaraDatabase();
             _encryptionFlag = FlagPlain;
-            _needsFormatMigration = false;   // E4-18: reset stale GCM-migration state (v1-CBC + forgot-password reset)
-            _password = null;                // E4-18: no key material after reset
-            _fileVersion = FileVersionLegacy; // E4-18: plaintext is always v1 (2.0-compatible)
+            _needsFormatMigration = false;
+            _password = null;
+            _fileVersion = FileVersionLegacy;
             _loaded = true;
-            _suppressSave = false; // N4S-01: a fresh empty db is authoritative - its write below must land
-            if (!SaveSync()) return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail")); // E5-09: a failed empty-DB write must not report EmptyCreated - PerformReset would delete the password files for a reset that never landed on disk
+            _suppressSave = false;
+            if (!SaveSync()) return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail"));
             return new LoadResult(LoadStatus.EmptyCreated);
         }
         catch (Exception ex)
@@ -969,30 +1103,34 @@ Logic Range: Below methods in this region
         }
     }
 
-    /* ========== NovaraStore Encrypted Write ==========
-Function: Serialization + header (magic/version/flag/MD5) + AES encrypt + atomic tmp-then-move write + Flush(true); failure raises SaveFailed
-Corresponding UI: NovaraStore.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
 private bool WriteSnapshot()
     {
 
-        byte[] json;
-        try
+
+
+
+
+
+        var json = StableJson.SerializeToUtf8BytesStable(Database, JsonOptions);
+        if (json == null)
         {
-            json = JsonSerializer.SerializeToUtf8Bytes(Database, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"NovaraStore 序列化失败（UI 并发修改？下次保存自愈）: {ex}");
+            System.Diagnostics.Debug.WriteLine("NovaraStore 序列化失败（快照不稳定/并发修改，下次保存自愈）");
             return false;
         }
-        var md5 = MD5.HashData(json);
+
+
+
+
 
         var dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        // Atomic write: tmp file then replace; original intact on failure (fix EnableEncryption half-write)
+
         var tmpPath = _filePath + ".tmp";
         try
         {
@@ -1004,18 +1142,18 @@ private bool WriteSnapshot()
                 header[5] = _encryptionFlag;
                 if (_encryptionFlag == FlagEncrypted)
                 {
-                    // GCM (v2/v3): the 16-byte tag authenticates the data, MD5 field stays zero (4.7).
-                    // 9.2#7: ver byte drives the iteration count - v2=100k legacy, v3=3M hardened.
+
+
                     header[4] = _fileVersion == FileVersionKdfHardened ? FileVersionKdfHardened
                               : _fileVersion == FileVersionCurrent ? FileVersionCurrent
                               : FileVersionLegacy;
-                    if (header[4] == FileVersionLegacy) md5.CopyTo(header, 6);
+                    if (header[4] == FileVersionLegacy) MD5.HashData(json).CopyTo(header, 6);
                 }
                 else
                 {
-                    header[4] = FileVersionLegacy; // plaintext is always v1 (2.0-compatible)
+                    header[4] = FileVersionLegacy;
                     _fileVersion = FileVersionLegacy;
-                    md5.CopyTo(header, 6);
+                    MD5.HashData(json).CopyTo(header, 6);
                 }
                 fs.Write(header);
                 if (_encryptionFlag == FlagEncrypted)
@@ -1023,7 +1161,7 @@ private bool WriteSnapshot()
 
                     var salt = PasswordService.GetDeriveSalt();
                     if (salt == null || string.IsNullOrEmpty(_password)) throw new InvalidOperationException(Loc.T("Store_Err_EncNoKey"));
-                    // 9.2#7: parameters implied by the version byte - v3 writes 3M, v1/v2 keep legacy 100k
+
                     var cipher = _fileVersion == FileVersionLegacy
                         ? CryptoService.Encrypt(json, _password, salt)
                         : CryptoService.EncryptGcm(json, _password, salt, _fileVersion == FileVersionKdfHardened ? CryptoService.CurrentIterations : CryptoService.LegacyIterations);
@@ -1033,7 +1171,7 @@ private bool WriteSnapshot()
                 {
                     fs.Write(json);
                 }
-                fs.Flush(true); // D8-3 (Round 5): flush to disk (incl. cache) against power loss
+                fs.Flush(true);
             }
             if (File.Exists(_filePath)) File.SetAttributes(_filePath, FileAttributes.Normal);
             File.Move(tmpPath, _filePath, true);
@@ -1044,7 +1182,7 @@ private bool WriteSnapshot()
         {
             System.Diagnostics.Debug.WriteLine($"NovaraStore 写盘失败: {ex}");
             try { if (File.Exists(tmpPath)) { File.SetAttributes(tmpPath, FileAttributes.Normal); File.Delete(tmpPath); } } catch { }
-            
+
             try { if (File.Exists(_filePath)) File.SetAttributes(_filePath, FileAttributes.Hidden | FileAttributes.ReadOnly); } catch { }
             try
             {

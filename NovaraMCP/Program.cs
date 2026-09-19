@@ -1,8 +1,3 @@
-
-
-
-
-
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -12,7 +7,7 @@ public static class Program
 {
     private const string ProtocolVersion = "2024-11-05";
 
-    /// <summary>We can serve these spec revisions alike (feature surface = tools only).</summary>
+
     private static readonly string[] SupportedVersions = { "2024-11-05", "2025-03-26", "2025-06-18" };
 
     private static string? _token;
@@ -39,8 +34,8 @@ public static class Program
         return 0;
     }
 
-    /// <summary>M3: type-safe string read - GetValue&lt;string&gt;() throws on non-string JSON values
-    /// (malformed client packets), which used to silently drop the whole request.</summary>
+
+
     private static string? GetStr(JsonNode? node)
         => node is JsonValue v && v.TryGetValue(out string? s) ? s : null;
 
@@ -51,10 +46,10 @@ public static class Program
         try { obj = JsonNode.Parse(line) as JsonObject; }
         catch
         {
-            // N5C-03: malformed JSON gets a spec -32700 parse-error response (id=null) instead of silence.
-            // N5-C-01: Respond() early-returns on a null id (notification guard), so the frame must be
-            // written directly here - routed through Respond it was silently swallowed and the client
-            // hung until timeout.
+
+
+
+
             WriteFrame(new JsonObject
             {
                 ["jsonrpc"] = "2.0",
@@ -65,81 +60,98 @@ public static class Program
         }
         if (obj == null)
         {
-            // NM7: JSON-RPC batch (array of requests) - serve each element in order; nested arrays
-            // and bare scalars stay ignored (invalid per spec).
+
+
+
+
+
+
             if (JsonNode.Parse(line) is JsonArray batch)
+            {
+                var responses = new JsonArray();
                 foreach (var el in batch)
-                    if (el is JsonObject o) ProcessLine(o.ToJsonString());
+                    if (el is JsonObject o && ProcessRequest(o) is JsonNode response) responses.Add(response);
+                if (responses.Count > 0) WriteFrame(responses);
+            }
             return;
         }
 
-        var id = obj["id"]; 
+        if (ProcessRequest(obj) is JsonNode frame) WriteFrame(frame);
+    }
+
+
+
+    private static JsonNode? ProcessRequest(JsonObject obj)
+    {
+        var id = obj["id"];
         try
         {
             var method = GetStr(obj["method"]) ?? "";
 
             switch (method)
             {
-                case "initialize": HandleInitialize(id, obj); break;
-                case "tools/list": HandleToolsList(id); break;
-                case "tools/call": HandleToolsCall(id, obj); break;
-                case "ping": Respond(id, new JsonObject()); break;
+                case "initialize": return HandleInitialize(id, obj);
+                case "tools/list": return HandleToolsList(id);
+                case "tools/call": return HandleToolsCall(id, obj);
+                case "ping": return Frame(id, new JsonObject());
                 default:
-                    
-                    
-                    
+
+
+
                     if (id != null)
-                        Respond(id, null, new JsonObject { ["code"] = -32601, ["message"] = $"Method not found: {method}" });
-                    break;
+                        return Frame(id, null, new JsonObject { ["code"] = -32601, ["message"] = $"Method not found: {method}" });
+                    return null;
             }
         }
         catch (Exception ex)
         {
-            // M3: any unexpected per-line failure (e.g. malformed field types deeper in a handler)
-            // must still answer requests, never leave the client hanging until timeout.
+
+
             if (id != null)
-                Respond(id, null, new JsonObject { ["code"] = -32600, ["message"] = $"Invalid request: {ex.Message}" });
+                return Frame(id, null, new JsonObject { ["code"] = -32600, ["message"] = $"Invalid request: {ex.Message}" });
+            return null;
         }
     }
 
-    private static void Respond(JsonNode? id, JsonNode? result, JsonObject? error = null)
+
+    private static JsonObject? Frame(JsonNode? id, JsonNode? result, JsonObject? error = null)
     {
-        if (id == null) return; 
+        if (id == null) return null;
         var resp = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id.DeepClone() };
         if (error != null) resp["error"] = error;
         else resp["result"] = result ?? new JsonObject();
-        WriteFrame(resp);
+        return resp;
     }
 
-    private static void WriteFrame(JsonObject resp)
+    private static void WriteFrame(JsonNode resp)
     {
         Console.WriteLine(resp.ToJsonString());
         Console.Out.Flush();
     }
 
-    private static void HandleInitialize(JsonNode? id, JsonObject obj)
+    private static JsonObject? HandleInitialize(JsonNode? id, JsonObject obj)
     {
-        
+
         var requested = GetStr(obj["params"]?["protocolVersion"]);
         var version = requested != null && SupportedVersions.Contains(requested) ? requested : ProtocolVersion;
-        Respond(id, new JsonObject
+        return Frame(id, new JsonObject
         {
             ["protocolVersion"] = version,
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
-            // N5-T5-01: report the real assembly version (csproj <Version>) - a hardcoded "5.0.0"
-            // drifted from the actual release and misled MCP clients.
+
+
             ["serverInfo"] = new JsonObject { ["name"] = "novara-mcp", ["version"] = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0" }
         });
     }
 
-    private static void HandleToolsList(JsonNode? id)
+    private static JsonObject? HandleToolsList(JsonNode? id)
     {
         var tools = new JsonArray();
         foreach (var t in ToolSchemas()) tools.Add(t);
-        Respond(id, new JsonObject { ["tools"] = tools });
+        return Frame(id, new JsonObject { ["tools"] = tools });
     }
 
-    private static void HandleToolsCall(JsonNode? id, JsonObject obj)
+    private static JsonObject? HandleToolsCall(JsonNode? id, JsonObject obj)
     {
         var name = GetStr(obj["params"]?["name"]) ?? "";
         var args = obj["params"]?["arguments"] as JsonObject;
@@ -148,22 +160,22 @@ public static class Program
         {
             var resultJson = _pipe.Call(name, args);
             var content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = resultJson } };
-            Respond(id, new JsonObject { ["content"] = content });
+            return Frame(id, new JsonObject { ["content"] = content });
         }
         catch (McpForwardError ex)
         {
             var content = new JsonArray { new JsonObject { ["type"] = "text", ["text"] = ex.Message } };
-            Respond(id, new JsonObject { ["content"] = content, ["isError"] = true });
+            return Frame(id, new JsonObject { ["content"] = content, ["isError"] = true });
         }
         catch (Exception ex)
         {
-            // NM9: keep local paths/pipe names out of the client-visible message; detail to stderr.
+
             System.Diagnostics.Debug.WriteLine($"NovaraMCP 内部错误: {ex}");
-            Respond(id, null, new JsonObject { ["code"] = -32603, ["message"] = "内部错误" });
+            return Frame(id, null, new JsonObject { ["code"] = -32603, ["message"] = "内部错误" });
         }
     }
 
-    
+
 
     private static JsonObject Str(string desc) => new() { ["type"] = "string", ["description"] = desc };
     private static JsonObject Bool(string desc) => new() { ["type"] = "boolean", ["description"] = desc };

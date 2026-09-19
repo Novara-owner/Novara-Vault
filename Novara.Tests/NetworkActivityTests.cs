@@ -20,7 +20,7 @@ public class NetworkActivityTests
     public void Begin_NestedSessions_PopInReverseOrder()
     {
         NetworkActivityService.Begin("NetActivity_Kind_Diagnose", "https://outer.example.com");
-        NetworkActivityService.Begin("NetActivity_Kind_Relay", "https://inner.example.com"); // N5-S15-03: Chat kind removed (dead key, no production caller)
+        NetworkActivityService.Begin("NetActivity_Kind_Relay", "https://inner.example.com");
         Assert.Equal("inner.example.com", NetworkActivityService.Current!.Value.Host);
 
         NetworkActivityService.End();
@@ -32,7 +32,7 @@ public class NetworkActivityTests
     [Fact]
     public void End_EmptyStack_IsSafe()
     {
-        NetworkActivityService.End(); // must not throw
+        NetworkActivityService.End();
         Assert.False(NetworkActivityService.IsActive);
     }
 
@@ -45,7 +45,7 @@ public class NetworkActivityTests
             NetworkActivityService.End();
         }
         Assert.True(NetworkActivityService.Recent.Count <= 50);
-        Assert.Equal("h54.example.com", NetworkActivityService.Recent[0].Host); // newest first
+        Assert.Equal("h54.example.com", NetworkActivityService.Recent[0].Host);
     }
 
     [Fact]

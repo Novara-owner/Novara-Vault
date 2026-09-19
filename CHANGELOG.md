@@ -6,6 +6,28 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2026-09-19
+
+> 8.0 completes the second step of the connected era: Novara stops being a set of one-way snapshots and becomes genuinely cross-device. Sync runs through a server **you** host — bundled with the installer, startable with a double-click — and that server still never sees your data. The red lines did not move: the server never sees plaintext, there is no official cloud, and offline never degrades.
+
+### Added
+
+- **Cross-device sync** — the whole database stays converged across every device you pair, end-to-end encrypted with the same `.novaenc` v4 container used by snapshots and encrypted backups. Pairing takes three values (server URL, space id, enrollment secret); the space key is generated on your first device and never reaches the server. Your PC remains the authority: wipe the server and one push rebuilds it.
+- **NovaraSync — a self-hosted server in the installer** — one self-contained executable, so the server machine needs no .NET runtime. It stores versioned ciphertext with retention count and total-size limits, authenticates devices with tokens (constant-time comparison plus failure rate limiting), and supports device registration and revocation. Two one-click scripts ship beside it: one creates the space and prints its credentials exactly once, the other starts the server; both pin the data directory to a user-writable location.
+- **Web reader and limited editor** — the snapshot shell now loads live ciphertext from your server and can edit memos, to-dos and notes; changes are re-encrypted locally and uploaded together with the version they were based on. Plaintext never persists in the page: nothing is stored, the clipboard is cleared after 30 seconds, and memory is cleared after 5 minutes idle.
+- **Conflict handling, stated honestly** — when two devices change the same version the later write wins, and the overwritten version is kept as a conflict copy. The desktop app offers a side-by-side comparison where you keep one side, export the other, or overwrite deliberately.
+- **Device center and sync audit** — paired devices with trust state and last-sync time, per-device token revocation and reset, and a local audit log of every upload, download, conflict detection and conflict resolution.
+- **Connected settings card** — server address, device name and token, the sync switch, push frequency (every save / 5 minutes / manual), last sync time and server version, in one card.
+
+### Changed
+
+- **Sync is opt-in and gated on the privacy lock** — a plaintext vault refuses to enable it and is guided to set a lock first; nothing leaves your machine unencrypted.
+- **The installer now also carries the sync server** (about +40 MiB), so a self-hosted setup needs no separate download.
+
+### Fixed
+
+A pre-release verification of the whole codebase (extensive pre-release verification) hardened this release. Representative user-visible results: the MCP delete permission can no longer be granted while the delete master switch is off; `update_*` tool calls are fully validated before any field is written, so a rejected call can no longer leave a half-applied edit behind; the web editor no longer keeps an unsaved draft alive across a vault lock; and the snapshot template can no longer silently produce a viewer from the previous release.
+
 ## [7.0.0] - 2026-09-10
 
 > 7.0 is not a feature release — it is a change of direction. Novara steps out of the single-machine era and begins the connected era: a cross-device, local-first personal data control layer for humans and AI agents, where both you and your AI can use the data — but only you hold the keys. The first step is read-only, encrypted, self-contained snapshots; sync and self-hosted deployment will grow from the same foundation under three fixed red lines: **the server never sees plaintext, there is no official cloud, and offline never degrades**.

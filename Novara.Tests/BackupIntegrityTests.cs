@@ -44,9 +44,9 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackup(backup, false));
 
         var (header, body) = ReadFile(backup);
-        Assert.Equal((uint)0x41564F4E, BitConverter.ToUInt32(header, 0)); // "NOVA"
-        Assert.Equal(3, header[4]);                                       // v3 backup format
-        Assert.Equal(0, header[5]);                                       // plaintext
+        Assert.Equal((uint)0x41564F4E, BitConverter.ToUInt32(header, 0));
+        Assert.Equal(3, header[4]);
+        Assert.Equal(0, header[5]);
         Assert.Equal(System.Security.Cryptography.SHA256.HashData(body), header[6..38]);
     }
 
@@ -54,14 +54,14 @@ public class BackupIntegrityTests : IDisposable
     public void RoundTrip_V3Import_RestoresData()
     {
         var store = NewStoreWithData("往返条目");
-        Assert.Single(store.Database.MemoEntries); 
+        Assert.Single(store.Database.MemoEntries);
         var backup = Path.Combine(_dir, "rt.novabak");
         Assert.True(store.ExportBackup(backup, false));
 
         var (header, body) = ReadFile(backup);
         var bodyJson = System.Text.Json.JsonDocument.Parse(body);
         Assert.True(bodyJson.RootElement.TryGetProperty("memoEntries", out var arr), "body missing memoEntries: " + body[..Math.Min(200, body.Length)]);
-        Assert.Equal(1, arr.GetArrayLength()); 
+        Assert.Equal(1, arr.GetArrayLength());
 
         var fresh = new NovaraStore(Path.Combine(_dir, "fresh.novadb"));
         var result = fresh.ImportBackup(backup);
@@ -78,7 +78,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackup(backup, false));
 
         var all = File.ReadAllBytes(backup);
-        all[all.Length - 1] ^= 0xFF; // flip one body byte
+        all[all.Length - 1] ^= 0xFF;
         File.WriteAllBytes(backup, all);
 
         var fresh = new NovaraStore(Path.Combine(_dir, "t.novadb"));
@@ -88,7 +88,7 @@ public class BackupIntegrityTests : IDisposable
     [Fact]
     public void Legacy_V1_Backup_StillImportable()
     {
-        
+
         var db = new Novara.Models.NovaraDatabase();
         db.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "历史条目", Type = "自定义" });
         var opts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -118,7 +118,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackup(backup, false));
 
         var all = File.ReadAllBytes(backup);
-        all[5] = 0x01; // FlagEncrypted on a backup - not in the format matrix
+        all[5] = 0x01;
         File.WriteAllBytes(backup, all);
 
         var fresh = new NovaraStore(Path.Combine(_dir, "f.novadb"));
@@ -136,7 +136,7 @@ public class BackupIntegrityTests : IDisposable
         var fresh = new NovaraStore(Path.Combine(_dir, "p.novadb"));
         Assert.Equal(LoadStatus.Ok, fresh.ImportBackup(backup).Status);
         Assert.Single(fresh.Database.MemoEntries);
-        Assert.Single(fresh.Database.PathBackupItems); 
+        Assert.Single(fresh.Database.PathBackupItems);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackup(backup, false));
 
         var all = File.ReadAllBytes(backup);
-        File.WriteAllBytes(backup, all[..30]); 
+        File.WriteAllBytes(backup, all[..30]);
 
         var fresh = new NovaraStore(Path.Combine(_dir, "t2.novadb"));
         Assert.NotEqual(LoadStatus.Ok, fresh.ImportBackup(backup).Status);
@@ -162,19 +162,19 @@ public class BackupIntegrityTests : IDisposable
         var all = File.ReadAllBytes(backup);
 
         var badMagic = (byte[])all.Clone();
-        badMagic[0] = 0x58; // "X"...
+        badMagic[0] = 0x58;
         File.WriteAllBytes(backup, badMagic);
         var fresh = new NovaraStore(Path.Combine(_dir, "m.novadb"));
         Assert.Equal(LoadStatus.Corrupted, fresh.ImportBackup(backup).Status);
 
         var badVer = (byte[])all.Clone();
-        badVer[4] = 5; 
+        badVer[4] = 5;
         var p2 = Path.Combine(_dir, "ver.novabak");
         File.WriteAllBytes(p2, badVer);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "v.novadb")).ImportBackup(p2).Status);
     }
 
-    
+
 
     private static (byte[] Header, byte[] Body) ReadV4File(string path)
     {
@@ -190,15 +190,15 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackupEncrypted(backup, "backup-pw", false));
 
         var (header, body) = ReadV4File(backup);
-        Assert.Equal((uint)0x41564F4E, BitConverter.ToUInt32(header, 0)); // "NOVA"
-        Assert.Equal(4, header[4]);                                       // v4 encrypted backup
-        Assert.Equal(1, header[5]);                                       // FlagEncrypted
-        Assert.Equal(0, header[6]);                                       // AlgoId = AES-256-GCM
-        Assert.Equal(0, header[7]);                                       // KdfId = PBKDF2-SHA256
-        Assert.Equal((uint)3000000, BitConverter.ToUInt32(header, 8));    // iterations in-file (9.2#7 calibration)
+        Assert.Equal((uint)0x41564F4E, BitConverter.ToUInt32(header, 0));
+        Assert.Equal(4, header[4]);
+        Assert.Equal(1, header[5]);
+        Assert.Equal(0, header[6]);
+        Assert.Equal(0, header[7]);
+        Assert.Equal((uint)3000000, BitConverter.ToUInt32(header, 8));
         Assert.True(header[12..44].Any(b => b != 0), "per-backup salt must be random, not zero");
-        Assert.True(body.Length > 28);                                    // nonce(12)+tag(16)+cipher
-        Assert.NotEqual(0x1f, body[0]);                                   // no plaintext GZip magic
+        Assert.True(body.Length > 28);
+        Assert.NotEqual(0x1f, body[0]);
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackupEncrypted(backup, "backup-pw", false));
 
         var fresh = new NovaraStore(Path.Combine(_dir, "wp.novadb"));
-        
+
         Assert.Equal(LoadStatus.Corrupted, fresh.ImportBackup(backup, "wrong-pw").Status);
     }
 
@@ -248,13 +248,13 @@ public class BackupIntegrityTests : IDisposable
 
         var all = File.ReadAllBytes(backup);
         var badSalt = (byte[])all.Clone();
-        badSalt[20] ^= 0xFF; 
+        badSalt[20] ^= 0xFF;
         var p1 = Path.Combine(_dir, "hdr-salt.novaenc");
         File.WriteAllBytes(p1, badSalt);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "hs.novadb")).ImportBackup(p1, "backup-pw").Status);
 
         var badIter = (byte[])all.Clone();
-        badIter[8] ^= 0x01; 
+        badIter[8] ^= 0x01;
         var p2 = Path.Combine(_dir, "hdr-iter.novaenc");
         File.WriteAllBytes(p2, badIter);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "hi.novadb")).ImportBackup(p2, "backup-pw").Status);
@@ -283,18 +283,18 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackupEncrypted(backup, "backup-pw", false));
         var all = File.ReadAllBytes(backup);
 
-        var truncated = all[..40]; 
+        var truncated = all[..40];
         var p1 = Path.Combine(_dir, "tv4a.novaenc");
         File.WriteAllBytes(p1, truncated);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "ta.novadb")).ImportBackup(p1, "backup-pw").Status);
 
-        var noNonce = all[..50]; 
+        var noNonce = all[..50];
         var p2 = Path.Combine(_dir, "tv4b.novaenc");
         File.WriteAllBytes(p2, noNonce);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "tb.novadb")).ImportBackup(p2, "backup-pw").Status);
 
         var plainFlag = (byte[])all.Clone();
-        plainFlag[5] = 0; 
+        plainFlag[5] = 0;
         var p3 = Path.Combine(_dir, "tv4c.novaenc");
         File.WriteAllBytes(p3, plainFlag);
         Assert.Equal(LoadStatus.Corrupted, new NovaraStore(Path.Combine(_dir, "tc.novadb")).ImportBackup(p3, "backup-pw").Status);
@@ -308,7 +308,7 @@ public class BackupIntegrityTests : IDisposable
         Assert.True(store.ExportBackupEncrypted(backup, "backup-pw", false));
 
         var all = File.ReadAllBytes(backup);
-        BitConverter.TryWriteBytes(all.AsSpan(8, 4), uint.MaxValue); 
+        BitConverter.TryWriteBytes(all.AsSpan(8, 4), uint.MaxValue);
         File.WriteAllBytes(backup, all);
 
         var fresh = new NovaraStore(Path.Combine(_dir, "dos.novadb"));
@@ -332,7 +332,7 @@ public class BackupIntegrityTests : IDisposable
     [Fact]
     public void ExportEncrypted_WithLockPassword_RoundTrip()
     {
-        
+
         PasswordService.SetBaseDir(_dir);
         try
         {

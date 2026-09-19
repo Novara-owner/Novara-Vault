@@ -1,6 +1,3 @@
-// POC entry: expose Tiptap to the WebView2 diary editor as a global object.
-// This is bundled to a single IIFE (tiptap.bundle.js) so the main app can load it
-// offline from ms-appx:// without any bundler/CDN at runtime.
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import TextStyle from '@tiptap/extension-text-style';
@@ -10,12 +7,12 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import TextAlign from '@tiptap/extension-text-align';
 
-// Custom image node:
-// 1. allowBase64=true — the stock extension drops data:image/... on parseHTML (photos vanish on reload).
-// 2. persist width/height so resizing is saved with the document.
-// 3. NodeView enables 8-direction edge dragging (like a window). Not aspect-locked.
-// 4. TextAlign is configured to include 'image', so setTextAlign writes a textAlign attr onto this
-//    node; the NodeView wraps the image in a full-width outer div whose text-align does the layout.
+
+
+
+
+
+
 const ResizableImage = Image.extend({
   addOptions() {
     return { inline: false, allowBase64: true, HTMLAttributes: {} };
@@ -178,8 +175,8 @@ const ResizableImage = Image.extend({
   },
 });
 
-// Expose the pieces the C# diary editor needs. `window.NovaraTiptap` is the bridge
-// contract used by the POC HTML page (and later by DiaryEditorPage).
+
+
 globalThis.NovaraTiptap = {
   Editor,
   StarterKit,

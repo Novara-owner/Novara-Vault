@@ -1,9 +1,9 @@
 namespace Novara.Services;
 
-/// <summary>
 
 
-/// </summary>
+
+
 public static class CoreEnv
 {
     public static string DataDirName =>

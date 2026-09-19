@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.TrashPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -16,7 +16,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Top bar: back button + title -->
+
         <Grid Grid.Row="0" Margin="24,20,24,12" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -39,7 +39,7 @@
                        Margin="12,0,0,0" />
         </Grid>
 
-        <!-- List -->
+
         <ScrollViewer Grid.Row="1"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
@@ -47,13 +47,13 @@
             <StackPanel x:Name="TrashList" Spacing="10" />
         </ScrollViewer>
 
-        <!-- Bottom-right floating action rail: restore-all + clear-all -->
+
         <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     Spacing="12"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,24,24">
-            <!-- Restore-all (brand blue, non-danger) -->
+
             <Button x:Name="RestoreAllButton"
                     MinWidth="132" Height="40" Padding="14,0"
                     Style="{StaticResource NovaraPrimaryButtonStyle}"
@@ -65,7 +65,7 @@
                 </StackPanel>
             </Button>
 
-            <!-- Clear-all: danger (separated from the safe restore-all) -->
+
             <Button x:Name="ClearAllButton"
                     MinWidth="132" Height="40" Padding="14,0"
                     Background="#CCFF4545" Foreground="#FFFFFFFF"
@@ -105,7 +105,7 @@
             </Button>
         </StackPanel>
 
-        <!-- Empty state (text only) -->
+
         <StackPanel x:Name="EmptyState" Grid.Row="1" Visibility="Collapsed"
                     HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
                     Margin="0,-12,0,0">
@@ -116,7 +116,7 @@
                        Opacity="0.6" />
         </StackPanel>
 
-        <!-- Delete-forever confirm dialog (red) -->
+
         <Grid x:Name="DeleteForeverOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="DeleteForeverScrim" Background="#2E000000" Tapped="DeleteForeverScrim_Tapped" />
             <Border x:Name="DeleteForeverDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -182,7 +182,7 @@
             </Border>
         </Grid>
 
-        <!-- Clear-all confirm dialog (red) -->
+
         <Grid x:Name="ClearAllOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ClearAllScrim" Background="#2E000000" Tapped="ClearAllScrim_Tapped" />
             <Border x:Name="ClearAllDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -247,7 +247,7 @@
                 </Grid>
             </Border>
         </Grid>
-        <!-- FocusSink: steals focus (no focus border on an invisible 0x0 button), LockScreenPage/SearchPage fix -->
+
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
     </Grid>
 </Page>

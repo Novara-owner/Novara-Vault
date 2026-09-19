@@ -76,6 +76,7 @@ Core design principles:
 | Storage | single-file JSON (`NovaraStore`), optional AES-GCM encryption |
 | Desktop sticky note | standalone `StickNoteHost` process (FileSystemWatcher sync) |
 | MCP | `NovaraMCP.exe` (stdio front end) + named pipe |
+| Sync server | ASP.NET Core 8 minimal API (`Novara.Server`, single-file self-contained; SQLite + filesystem blobs) |
 | HTML parsing / sanitization | AngleSharp |
 | Testing | xUnit (`Novara.Tests`, referencing the pure-logic library `Novara.Core`) |
 | Build | MSBuild / `dotnet publish` self-contained; Inno Setup installer |
@@ -84,7 +85,7 @@ Core design principles:
 
 ## 3. Solution Structure
 
-The `Novara.slnx` solution contains five projects:
+The `Novara.slnx` solution contains seven projects:
 
 ```
 Novara/
@@ -92,13 +93,16 @@ Novara/
 ├── Novara.Core/         pure-logic library (net8.0, no WinUI, referenceable by xUnit)
 ├── Novara.Tests/        xUnit unit tests
 ├── StickNoteHost/       desktop sticky note standalone process (no main window, tray-resident)
-└── NovaraMCP/           MCP stdio front end (pure net8.0 console, single-file publish)
+├── NovaraMCP/           MCP stdio front end (pure net8.0 console, single-file publish)
+├── Novara.Server/       self-hosted sync server host (ASP.NET Core 8, single-file publish)
+└── Novara.Sync.Server/  sync server library (space storage, token auth, retention policy)
 ```
 
 **Layering principle**:
 
 - `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
 - The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
+- `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net8.0` and have no WinUI dependency.
 - `Pages/` contains nine pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage.
 
 **Core decoupling**:
@@ -808,8 +812,9 @@ Novara/
 | 6.0 | 2026-09-06 | Motion design system, Workspaces, Quick Capture, network activity indicator, welcome tour; five full verification rounds (~250 fixes) and MCP security hardening |
 | 6.1 | 2026-09-06 | Fix: new empty memo groups no longer disappear under the no-filter view; explicit toast while a workspace is active |
 | 6.2 | 2026-09-07 | Small-window dialog adaptation across all pages; full-page scrolling note dialog; infinite icon-ring pickers; editor body placeholder; region-based memo pinning with ownership-change mark stripping; incremental verification round (4 fixes) |
-| 7.0 | 2026-09-10 | **The connected era begins** — Novara Snapshot: encrypted self-contained HTML viewer export (`.novaenc` v4 container), read-only browser viewer with local TOTP, light/dark theme, mandatory encryption gate, deployment guide (novara.xin); sync and self-hosted deployment grow from this foundation |
+| 7.0 | 2026-09-10 | **The connected era begins** — Novara Snapshot: encrypted self-contained HTML viewer export (`.novaenc` v4 container), read-only browser viewer with local TOTP, light/dark theme, mandatory encryption gate, deployment guide (novara.xin) |
+| 8.0 | 2026-09-19 | **Cross-device sync** — end-to-end encrypted sync through a self-hosted server bundled with the installer (versioned ciphertext storage, token auth, device registration and revocation); web reader with limited editing and re-encrypted upload; library-level conflict handling that keeps the overwritten version; device center and local sync audit; multi-round pre-release verification of the whole codebase |
 
 ---
 
-> Novara is designed around "local-first, simple, and private". All data belongs to the user and never leaves the machine — and since 7.0, whatever does leave (snapshots, future sync) is encrypted end-to-end, with servers handling ciphertext only.
+> Novara is designed around "local-first, simple, and private". All data belongs to the user and never leaves the machine — and since 7.0, whatever does leave (snapshots, and since 8.0 cross-device sync) is encrypted end-to-end, with servers handling ciphertext only.

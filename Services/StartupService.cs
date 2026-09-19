@@ -1,8 +1,3 @@
-/* ========== StartupService - Auto-Start ==========
-Function: Windows registry Run key management - enable/disable/query real autostart state
-Corresponding UI: StartupService.cs
-Logic Range: Whole file business logic of this module
-*/
 using System.IO;
 using Microsoft.Win32;
 
@@ -11,8 +6,8 @@ namespace Novara.Services;
 public static class StartupService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    // E1-14: run-key value isolated per config so a dev build cannot overwrite the installed
-    // release's autostart entry (Debug="Novara.Dev", Release="Novara").
+
+
     private const string ValueName =
 #if DEBUG
         "Novara.Dev";
@@ -25,8 +20,8 @@ public static class StartupService
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
-            // E4-31: quote the exe path - the installed layout (Program Files) contains spaces and an
-            // unquoted Run value fails to launch at logon; IsEnabled() already trims quotes.
+
+
             key?.SetValue(ValueName, "\"" + GetExecutablePath() + "\"");
             return IsEnabled();
         }

@@ -14,7 +14,7 @@
             <StackPanel x:Name="CardList" Padding="40,12,40,20" Spacing="12" />
         </ScrollViewer>
 
-        
+
         <Canvas x:Name="DragLayer" IsHitTestVisible="False" />
 
         <TextBlock x:Name="EmptyHint"
@@ -119,7 +119,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    
+
                     <Grid Grid.Row="2" Margin="0,8,0,0">
                         <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewTodoConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="12" FontSize="14" Click="NewTodoConfirm_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -147,8 +147,8 @@
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <!-- 6.1-X-08: whole content area scrolls as one page (same as the todo dialog);
-                         title + confirm stay fixed; icon/name/content blocks scroll together -->
+
+
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" HorizontalScrollMode="Disabled" Margin="0,16,0,0">
                         <StackPanel Spacing="16">
                             <Grid>
@@ -171,7 +171,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    
+
                     <Grid Grid.Row="2" Margin="0,16,0,0">
                         <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewNoteConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="12" FontSize="14" Click="NewNoteConfirm_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -196,7 +196,7 @@
                 </Grid>
             </Border>
         </Grid>
-        
+
         <Grid x:Name="SetReminderOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="SetReminderScrim" Background="#2E000000" Tapped="SetReminderScrim_Tapped" />
             <Border x:Name="SetReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -210,7 +210,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="CancelReminderOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="CancelReminderScrim" Background="#2E000000" Tapped="CancelReminderScrim_Tapped" />
             <Border x:Name="CancelReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="400" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -224,7 +224,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="ReminderDueOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ReminderDueScrim" Background="#2E000000" Tapped="ReminderDueScrim_Tapped" />
             <Border x:Name="ReminderDueDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -238,7 +238,7 @@
             </Border>
         </Grid>
 
-        <!-- FocusSink: steals focus (no focus border on an invisible 0x0 button), LockScreenPage/SearchPage fix -->
+
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
     </Grid>
 </Page>

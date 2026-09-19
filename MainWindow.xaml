@@ -12,7 +12,7 @@
     <Grid Background="{ThemeResource AppSurfaceBrush}">
 
         <Grid.Resources>
-            
+
 
 
 
@@ -53,7 +53,7 @@
                 Margin="16,0,0,0"
                 FontSize="15"
                 Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-            
+
 
 
             <Button x:Name="WorkspaceSwitcherButton"
@@ -73,7 +73,7 @@
                         <Grid x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
                             <VisualStateManager.VisualStateGroups>
                                 <VisualStateGroup x:Name="CommonStates">
-                                    
+
                                     <VisualState x:Name="Normal" />
                                     <VisualState x:Name="PointerOver" />
                                     <VisualState x:Name="Pressed" />
@@ -99,9 +99,9 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            
+
             <Border x:Name="NavShadowReceiver" Grid.ColumnSpan="4" IsHitTestVisible="False" />
-            
+
 
 
 
@@ -109,7 +109,7 @@
                     HorizontalAlignment="Left" CornerRadius="16" IsHitTestVisible="False"
                     Opacity="0">
                 <Border.Background>
-                    
+
                     <RadialGradientBrush Center="0.5,0.35" RadiusX="0.5" RadiusY="0.65">
                         <GradientStop Color="#8C7276FF" Offset="0" />
                         <GradientStop Color="#667276FF" Offset="0.5" />
@@ -120,7 +120,7 @@
                 <Border.RenderTransform><TranslateTransform x:Name="NavIndicatorTranslate" Y="8" /></Border.RenderTransform>
             </Border>
             <Grid x:Name="NavMemoHost" Grid.Column="0" Margin="0,0,10,0">
-                <Button x:Name="NavMemo" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Memo" IsTabStop="False" ToolTipService.ToolTip="Ctrl+1">
+                <Button x:Name="NavMemo" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Memo" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavMemoPath" Width="20" Height="20" Stretch="Uniform"
                               Fill="{ThemeResource IconForegroundBrush}" />
@@ -129,7 +129,7 @@
                 </Button>
             </Grid>
             <Grid x:Name="NavFileHost" Grid.Column="1" Margin="0,0,10,0">
-                <Button x:Name="NavFile" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="File" IsTabStop="False" ToolTipService.ToolTip="Ctrl+2">
+                <Button x:Name="NavFile" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="File" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavFilePath" Width="20" Height="20" Stretch="Uniform"
                               Fill="{ThemeResource IconForegroundBrush}" />
@@ -138,7 +138,7 @@
                 </Button>
             </Grid>
             <Grid x:Name="NavPlanHost" Grid.Column="2" Margin="0,0,10,0">
-                <Button x:Name="NavPlan" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Plan" IsTabStop="False" ToolTipService.ToolTip="Ctrl+3">
+                <Button x:Name="NavPlan" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Plan" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavPlanPath" Width="20" Height="20" Stretch="Uniform"
                               Fill="{ThemeResource IconForegroundBrush}" />
@@ -189,7 +189,7 @@
                 </Button>
             </Grid>
             <Grid x:Name="NavDiaryHost" Grid.Column="3">
-                <Button x:Name="NavDiary" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Diary" IsTabStop="False" ToolTipService.ToolTip="Ctrl+4">
+                <Button x:Name="NavDiary" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Diary" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavDiaryPath" Width="20" Height="20" Stretch="Uniform"
                               Fill="{ThemeResource IconForegroundBrush}" />
@@ -241,7 +241,7 @@
             </Grid>
         </Grid>
 
-        
+
 
 
         <Grid x:Name="ChromeScrim" Grid.Row="0" Grid.RowSpan="2"
@@ -305,7 +305,7 @@
                     </Storyboard>
                 </Grid.Resources>
 
-                <!-- Logo -->
+
                 <Image x:Name="WelcomeLogo"
                        Source="ms-appx:///Assets/Novara-R.png"
                        Width="80" Height="80"
@@ -372,13 +372,13 @@
         <Grid x:Name="BottomToolbarPanel" Grid.Row="2"
               HorizontalAlignment="Right" VerticalAlignment="Bottom"
               Margin="0,0,18,20" Width="68" Height="48">
-            <!-- Transparent hover zone covering the full un-collapsed button position (56x32 centred
-                 over the taller bar). PointerEntered/Exited drive the melt expand / auto collapse. -->
+
+
             <Border x:Name="MenuHoverZone" Background="Transparent"
                     PointerEntered="MenuHoverZone_PointerEntered"
                     PointerExited="MenuHoverZone_PointerExited" />
-            <!-- The button itself carries both states: collapsed = 8x48 vertical bar, expanded = 56x32
-                 hamburger. The melt animates width/height/corner/icon in OnMenuRendering. -->
+
+
             <Button x:Name="MenuButton"
                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                     Click="MenuButton_Click"
@@ -388,7 +388,7 @@
                     IsTabStop="False"
                     PointerEntered="MenuButton_PointerEntered"
                     PointerExited="MenuButton_PointerExited">
-                
+
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
@@ -407,7 +407,7 @@
             </Button>
         </Grid>
 
-        
+
         <Grid x:Name="QuickCaptureOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="QuickCaptureScrim" Background="#2E000000" Tapped="QuickCaptureScrim_Tapped" />
             <Border x:Name="QuickCaptureBar" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24"
@@ -516,7 +516,7 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button x:Name="StoreCorruptConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
+                        <Button x:Name="StoreCorruptConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
                                 Background="#CCFF4545" Foreground="#FFFFFFFF"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 BorderThickness="0"
@@ -579,7 +579,7 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button HorizontalAlignment="Right" Width="120" Height="36"
+                        <Button HorizontalAlignment="Center" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="SaveFailedConfirm_Click">
@@ -590,7 +590,7 @@
             </Border>
         </Grid>
 
-        <!-- 4.7: v1-CBC -> v2-GCM migration confirmation (shown once after unlock when NeedsFormatMigration) -->
+
         <Grid x:Name="MigrateFormatOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="MigrateFormatScrim" Background="#2E000000" />
             <Border x:Name="MigrateFormatDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -621,7 +621,7 @@
                                 Click="MigrateLater_Click">
                             <TextBlock Text="暂不升级" Tag="Security_Migrate_Later" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="MigrateConfirmButton" HorizontalAlignment="Right" Width="180" Height="36"
+                        <Button x:Name="MigrateConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 Click="MigrateConfirm_Click">
@@ -632,7 +632,7 @@
             </Border>
         </Grid>
 
-        
+
         <Grid x:Name="McpAuthorizeOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="McpAuthorizeScrim" Background="#2E000000" />
             <Border x:Name="McpAuthorizeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
@@ -679,13 +679,13 @@
 
         <Grid x:Name="ToastHost" Grid.RowSpan="3" IsHitTestVisible="False" />
 
-        
+
         <Grid x:Name="WelcomeCarousel" Visibility="Collapsed" Grid.RowSpan="4"
               Background="Transparent"
               PointerWheelChanged="WelcomeCarousel_WheelChanged">
-            <!-- N4-02: transparent Background keeps the overlay in hit-testing - without it clicks pass through the
-                 blur/tint (both IsHitTestVisible=False) onto the NavBar/title bar now visible underneath -->
-            
+
+
+
 
             <Grid x:Name="CarouselBlurHost" IsHitTestVisible="False" Visibility="Collapsed" />
             <Border x:Name="CarouselTint" Background="{ThemeResource AppSurfaceBrush}" Opacity="0.3" IsHitTestVisible="False" />
@@ -702,7 +702,7 @@
                                            Foreground="{ThemeResource AppTextPrimaryBrush}"
                                            HorizontalAlignment="Center" />
                             </StackPanel>
-                            
+
 
                             <Border x:Name="CarouselMenuMemo" MinWidth="230" CornerRadius="16" Padding="6"
                                     Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
@@ -764,9 +764,9 @@
                                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                                HorizontalAlignment="Center" />
                                 </StackPanel>
-                                
 
-                                
+
+
                                 <Border x:Name="CarouselP1ShadowReceiver" IsHitTestVisible="False" />
                                 <Button x:Name="CarouselP1BtnMemo" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Memo"
                                         Width="200" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-160,-54,0,0"
@@ -808,7 +808,7 @@
                                         </TransformGroup>
                                     </Button.RenderTransform>
                                 </Button>
-                                
+
                                 <TextBlock x:Name="CarouselP1Intro" FontSize="14"
                                            Foreground="{ThemeResource AppTextSecondaryBrush}"
                                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"
@@ -822,7 +822,7 @@
                                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                                HorizontalAlignment="Center" />
                                 </StackPanel>
-                                
+
 
 
                                 <Grid x:Name="CarouselDemoToolbar" HorizontalAlignment="Right" VerticalAlignment="Bottom"
@@ -845,7 +845,7 @@
                                         <TranslateTransform x:Name="CarouselDemoCursorTranslate" X="140" Y="150" />
                                     </Path.RenderTransform>
                                 </Path>
-                                
+
                                 <TextBlock x:Name="CarouselP2Intro" FontSize="14"
                                            Foreground="{ThemeResource AppTextSecondaryBrush}"
                                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"
@@ -859,13 +859,13 @@
                                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                                HorizontalAlignment="Center" />
                                 </StackPanel>
-                                
+
 
 
 
 
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-                                    
+
                                     <Grid Width="400" Height="38">
                                         <Viewbox Width="400" Height="38" Stretch="Uniform" Opacity="0.45">
                                             <Border Width="800" Height="76" CornerRadius="12"
@@ -903,7 +903,7 @@
                                             </Border.Background>
                                         </Border>
                                     </Grid>
-                                    
+
                                     <Viewbox Width="480" Height="45.6" Stretch="Uniform">
                                         <Border Width="800" Height="76" CornerRadius="12"
                                                 Background="{ThemeResource AppSurfaceOverlayBrush}"
@@ -928,7 +928,7 @@
                                             </Grid>
                                         </Border>
                                     </Viewbox>
-                                    
+
                                     <Grid Width="400" Height="38">
                                         <Viewbox Width="400" Height="38" Stretch="Uniform" Opacity="0.45">
                                             <Border Width="800" Height="76" CornerRadius="12"
@@ -959,7 +959,7 @@
                                         </Border>
                                     </Grid>
                                 </StackPanel>
-                                
+
                                 <TextBlock x:Name="CarouselP3Intro" FontSize="14"
                                            Foreground="{ThemeResource AppTextSecondaryBrush}"
                                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"

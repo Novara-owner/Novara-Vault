@@ -12,14 +12,14 @@ using Microsoft.UI;
 
 namespace StickNoteHost;
 
-/// <summary>
-/// Sticky note window (final form, 2026-08-08):
-/// - Unlocked (default): normal window - draggable (custom title bar), resizable,
-///   Win+D hides it (accepted platform behavior).
-/// - Locked: always-on-top (TOPMOST, Win+D immune) + cannot move + cannot resize.
-///   Toggled via right-click menu (pin interaction).
-/// No system close button - close lives in the right-click menu.
-/// </summary>
+
+
+
+
+
+
+
+
 public sealed partial class StickyNoteWindow : Window
 {
     public bool Locked { get; private set; }
@@ -31,50 +31,50 @@ public sealed partial class StickyNoteWindow : Window
     public StickyNoteWindow(string theme, bool isReminder, DateTimeOffset? dueTime)
     {
         InitializeComponent();
-        Title = App.T("Novara 桌面便签", "Novara Sticky Notes", "Novara 桌面便籤", "Novara 스티커 메모", "Novara 付箋"); // D24: localized window title (was hard-coded "Sticky Note")
+        Title = App.T("Novara 桌面便签", "Novara Sticky Notes", "Novara 桌面便籤", "Novara 스티커 메모", "Novara 付箋");
         _lastTheme = theme;
         IsReminder = isReminder;
         DueTime = dueTime;
         if (isReminder)
         {
             TitleText.Text = App.T("提醒", "Reminder", "提醒", "알림", "リマインダー");
-            TitleText.Visibility = Visibility.Collapsed; // countdown sits on top, no title row
+            TitleText.Visibility = Visibility.Collapsed;
             RootBorder.MinWidth = 200;
             RootBorder.MinHeight = 110;
         }
 
         var presenter = (OverlappedPresenter)AppWindow.Presenter;
         presenter.SetBorderAndTitleBar(false, false);
-        presenter.IsResizable = false; // no system resize border (thin grey line); resize is custom via edge hotzones
+        presenter.IsResizable = false;
         presenter.IsMinimizable = false;
         presenter.IsMaximizable = false;
         presenter.IsAlwaysOnTop = false;
 
-        // Subclass removed (2026-08-08): drag/resize are pure XAML; the WM_NCHITTEST
-        // subclass + system modal loop caused the sticky-drag bug (compositor swallows
-        // WM_LBUTTONUP). Lock is enforced by the _locked checks in the pointer handlers.
 
-        Closed += (_, _) => { App.Log("窗口 Closed 触发"); StopCountdownTimer(); _saveTodoTimer?.Stop(); _saveTodoTimer = null; _closed = true; App.NoteWindows.Remove(NoteId); }; 
-        // D19: closing by ANY path (right-click menu, FireDue, Alt+F4/system close) must remove the
-        // data - otherwise a card closed via Alt+F4 leaves a stale stickies.json entry and the
-        // note resurrects as a ghost after the host restarts. RemoveNote is idempotent.
+
+
+
+        Closed += (_, _) => { App.Log("窗口 Closed 触发"); StopCountdownTimer(); _saveTodoTimer?.Stop(); _saveTodoTimer = null; _closed = true; App.NoteWindows.Remove(NoteId); };
+
+
+
         AppWindow.Closing += (_, _) => { App.Log("AppWindow.Closing 触发"); FlushTodoSave(); App.RemoveNote(NoteId); };
 
-                // ApplyTheme in the ctor is overwritten by the first render (theme sync bug 2026-08-08):
-        // newly-created windows came up light even with theme=dark. Re-apply with the last known
-        // theme on activation - and NOT with the system theme (that stage-1 leftover overwrote
-        // the stickies.json theme on every activation, which was the root cause of the bug).
 
-        // Size on first activation (sizing in the ctor is overwritten by initial layout).
+
+
+
+
+
         Activated += (_, _) =>
         {
-            // E1-04: WinUI 3 resets WS_EX_TOOLWINDOW on drag / DPI change / lifecycle rebuild -
-            
+
+
             try
             {
                 var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
                 NativeMethods.HideTaskbarIcon(hwnd);
-                if (Locked) NativeMethods.SetTopmost(hwnd); // E1-16: re-assert topmost on activation (multi-monitor DPI may drop it)
+                if (Locked) NativeMethods.SetTopmost(hwnd);
             }
             catch { }
             if (!_sized)
@@ -91,21 +91,21 @@ public sealed partial class StickyNoteWindow : Window
         Locked = locked;
         var presenter = (OverlappedPresenter)AppWindow.Presenter;
         presenter.IsAlwaysOnTop = locked;
-        // presenter.IsResizable stays false - no system border in either state
+
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         if (locked) NativeMethods.SetTopmost(hwnd);
-        else NativeMethods.SetNotTopmost(hwnd); // D20: explicit HWND_NOTOPMOST (see SetNotTopmost)
+        else NativeMethods.SetNotTopmost(hwnd);
     }
 
-    /// <summary>E1-18: host language changed - refresh localized chrome text on an existing window.</summary>
+
     public void RefreshLocalizedTexts()
     {
         Title = App.T("Novara 桌面便签", "Novara Sticky Notes", "Novara 桌面便籤", "Novara 스티커 메모", "Novara 付箋");
         if (IsReminder) TitleText.Text = App.T("提醒", "Reminder", "提醒", "알림", "リマインダー");
-        UpdateCountdown(); 
+        UpdateCountdown();
     }
 
-    /// <summary>Show & restore from tray (also re-asserts TOPMOST when locked).</summary>
+
     public void ShowWindow()
     {        AppWindow.Show();
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -118,17 +118,17 @@ public sealed partial class StickyNoteWindow : Window
         TitleText.Text = IsReminder ? App.T("提醒", "Reminder", "提醒", "알림", "リマインダー") : title;
         if (items != null)
         {
-            // Interactive desktop todo: checkbox list (main todo + sub-todos). kind is stable per
-            // card id, so a todo window never flips back to the NoteBox TextBlock.
-            // N4H-05: an unrelated sync event used to rebuild the whole panel, resetting the user's
-            // scroll position while they were reading a long todo. Skip when nothing actually changed.
+
+
+
+
             if (!TodoItemsEqual(_items, items))
             {
-                
+
                 if (_todoDirty && _items != null)
                 {
-                    // N2-63a: merge by LABEL instead of by index - a main-program add/remove/reorder
-                    // inside the debounce window made index-paired writes check the wrong rows.
+
+
                     var byLabel = new Dictionary<string, StickyTodoItem>();
                     foreach (var it in _items)
                         if (!string.IsNullOrEmpty(it.Label) && !byLabel.ContainsKey(it.Label)) byLabel[it.Label] = it;
@@ -146,21 +146,21 @@ public sealed partial class StickyNoteWindow : Window
         NoteBox.Text = content;
         if (dueTime.HasValue)
         {
-            // D18: a reschedule while the due sequence is running (beep/flash) must cancel it -
-            // otherwise FireDue finishes and deletes the freshly-rescheduled reminder card.
+
+
             if (_dueFired && dueTime.Value != DueTime) _dueRescheduled = true;
             DueTime = dueTime;
         }
         if (IsReminder)
         {
-            // Content wraps + scrolls (same behaviour as note cards): widening reveals more
-            // per line, tall-enough cards show all lines, overflow scrolls.
+
+
             NoteBox.TextWrapping = TextWrapping.Wrap;
             NoteBox.TextTrimming = TextTrimming.None;
             NoteBox.HorizontalAlignment = HorizontalAlignment.Stretch;
             CountdownText.Visibility = Visibility.Visible;
             UpdateCountdown();
-            if (!_dueFired) StartCountdownTimer(); // N2-59: FireDue owns the card after firing - a concurrent main-program write (SetContent) must not restart a timer that only early-returns on _dueFired
+            if (!_dueFired) StartCountdownTimer();
         }
         else
         {
@@ -172,7 +172,7 @@ public sealed partial class StickyNoteWindow : Window
         }
     }
 
-    // ---- Interactive desktop todo (kind=todo): checkbox list mirroring the main app's plan card. ----
+
 
     private void RenderTodoList()
     {
@@ -183,7 +183,7 @@ public sealed partial class StickyNoteWindow : Window
         NoteScroll.Content = panel;
     }
 
-    /// <summary>N4H-05: structural equality for the checkbox list - label text + checked state.</summary>
+
     private static bool TodoItemsEqual(List<StickyTodoItem>? a, List<StickyTodoItem>? b)
     {
         if (ReferenceEquals(a, b)) return true;
@@ -193,14 +193,14 @@ public sealed partial class StickyNoteWindow : Window
         return true;
     }
 
-    /// <summary>N4H-04: flush a pending debounced todo write-back before process exit.</summary>
+
     public void FlushPendingTodoSave() => FlushTodoSave();
 
     private Grid BuildTodoRow(List<StickyTodoItem> items, int index)
     {
         var it = items[index];
         bool chk = it.Checked;
-        var brand = Color.FromArgb(0xFF, 0x72, 0x76, 0xFF); // brand blue, matches the main app's checkbox
+        var brand = Color.FromArgb(0xFF, 0x72, 0x76, 0xFF);
 
         var row = new Grid { ColumnSpacing = 8, Margin = new Thickness(index > 0 ? 22 : 0, 3, 0, 3) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -241,8 +241,8 @@ public sealed partial class StickyNoteWindow : Window
 
     private void ToggleTodoItem(List<StickyTodoItem> items, int index)
     {
-        // Mirrors the main app's linkage: a sub toggle recomputes the main (all-subs-checked);
-        // a manual main toggle does NOT write back to subs (P5).
+
+
         items[index].Checked = !items[index].Checked;
         if (index > 0)
         {
@@ -250,12 +250,12 @@ public sealed partial class StickyNoteWindow : Window
             for (int i = 1; i < items.Count; i++) if (!items[i].Checked) { allSubChecked = false; break; }
             items[0].Checked = allSubChecked;
         }
-        _todoDirty = true; 
+        _todoDirty = true;
         RenderTodoList();
         ScheduleSaveTodoItems();
     }
 
-    /// <summary>Debounce the todo write-back (coalesces rapid clicks) then push checked states to stickies.json.</summary>
+
     private void ScheduleSaveTodoItems()
     {
         if (_saveTodoTimer == null)
@@ -265,8 +265,8 @@ public sealed partial class StickyNoteWindow : Window
             {
                 _saveTodoTimer.Stop();
                 _saveTodoTimer = null;
-                // N2-63b: clear the dirty flag only after the write landed - a failed write keeps
-                // the toggles pending so the next SetContent merge still preserves them.
+
+
                 var ok = _items != null && App.UpdateTodoItems(NoteId, _items);
                 if (ok) _todoDirty = false;
             };
@@ -275,24 +275,24 @@ public sealed partial class StickyNoteWindow : Window
         _saveTodoTimer.Start();
     }
 
-    /// <summary>Flush a pending toggle before the window closes (so a last check right before close is not lost).</summary>
+
     private void FlushTodoSave()
     {
         if (_saveTodoTimer == null) return;
         _saveTodoTimer.Stop();
         _saveTodoTimer = null;
-        // N2-63b: same as the debounced path - reset only after the write landed
+
         var ok = _items != null && App.UpdateTodoItems(NoteId, _items);
         if (ok) _todoDirty = false;
     }
 
-    /// <summary>Reminder countdown: live mm/dd-based remaining time, refreshed every second.</summary>
+
     private void UpdateCountdown()
     {
         if (!IsReminder || DueTime == null)
         {
-            // N3-46: defensive state (reminder card without a due time) - fold the countdown text
-            // instead of leaving it Visible with stale/empty content (a blank gap in the card body).
+
+
             CountdownText.Visibility = Visibility.Collapsed;
             return;
         }
@@ -310,51 +310,51 @@ public sealed partial class StickyNoteWindow : Window
     }
 
     private bool _dueFired;
-    private bool _dueRescheduled; // D18: set when DueTime is moved to the future mid-due-sequence
+    private bool _dueRescheduled;
     private bool _closed;
 
-    /// <summary>Due: play sound, flash red for ~3s, then close and remove the reminder data.</summary>
+
     private async void FireDue()
     {
         if (_dueFired) return;
         _dueFired = true;
-        StopCountdownTimer(); 
-        
+        StopCountdownTimer();
+
         var toast = NoteBox.Text ?? "";
         if (toast.Length > 120) toast = toast.Substring(0, 120) + "…";
         ToastService.Show(App.T("提醒", "Reminder", "提醒", "알림", "リマインダー"), toast);
-        // MB_ICONEXCLAMATION x3 (~2s): a single beep is too easy to miss.
+
         for (int i = 0; i < 3; i++)
         {
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; } // D18/E4-03: abort the sequence and re-arm for the next due (N3-03: actually restart the countdown timer - resetting the flags alone left the card frozen forever)
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; }
             try { _ = NativeMethods.MessageBeep(0x30); } catch { }
             await Task.Delay(500);
         }
-        // Manual pulse only - Storyboard color animations abort in sensitive window timings (known pitfall).
+
         var red = new SolidColorBrush(Color.FromArgb(0xFF, 0x8B, 0x2A, 0x2A));
         for (int i = 0; i < 5; i++)
         {
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; } // N3-03: restart the countdown timer on abort
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; StartCountdownTimer(); return; }
             RootBorder.Background = red;
             await Task.Delay(300);
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; } // E3-19/E4-03: restore the background before aborting - it was left deep red when postponed mid-pulse (E4-35: recompute from _lastTheme so a theme change mid-sequence is not reverted); N3-03: restart the countdown timer
-            ApplyTheme(_lastTheme); // E5-22: restore from the current theme (was baseBg, captured before the beeps - a theme change mid-sequence would otherwise be reverted on the normal path)
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; }
+            ApplyTheme(_lastTheme);
             await Task.Delay(300);
         }
         if (_closed) return;
-        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; } // E5-21: symmetric with :194 - restore the theme before aborting (ultra-narrow timing after the final pulse, theme change mid-sequence); N3-03: restart the countdown timer
+        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; }
         App.NoteWindows.Remove(NoteId);
         Close();
-        App.RemoveNote(NoteId); // remove data from stickies.json (content-driven lifecycle picks it up)
+        App.RemoveNote(NoteId);
     }
 
     private void StartCountdownTimer()
     {
         if (_countdownTimer != null) return;
-        
+
         if (!IsReminder || DueTime == null) return;
         _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _countdownTimer.Tick += (_, _) => UpdateCountdown();
@@ -369,47 +369,47 @@ public sealed partial class StickyNoteWindow : Window
 
     private DispatcherTimer? _countdownTimer;
 
-    /// <summary>Batch-1 UI: single background + text, theme follows the main app (light/dark).</summary>
+
     public void ApplyTheme(string theme)
     {
         _lastTheme = theme;
         App.Log($"ApplyTheme: {theme}");
         bool dark = theme == "dark";
-        
-        
+
+
         RootBorder.RequestedTheme = dark ? ElementTheme.Dark : ElementTheme.Light;
         RootBorder.Background = new SolidColorBrush(dark
-            ? Color.FromArgb(0xFF, 0x1E, 0x1E, 0x1E)   // AppSurfaceBrush dark
-            : Color.FromArgb(0xFF, 0xF2, 0xF2, 0xF2)); // AppSurfaceBrush light
+            ? Color.FromArgb(0xFF, 0x1E, 0x1E, 0x1E)
+            : Color.FromArgb(0xFF, 0xF2, 0xF2, 0xF2));
         var fg = new SolidColorBrush(dark
-            ? Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF)   // AppTextPrimaryBrush dark
-            : Color.FromArgb(0xDD, 0x00, 0x00, 0x00)); // AppTextPrimaryBrush light
+            ? Color.FromArgb(0xDD, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0xDD, 0x00, 0x00, 0x00));
         _borderBrush = new SolidColorBrush(dark
-            ? Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)   // AppBorderBrush dark
-            : Color.FromArgb(0x40, 0x00, 0x00, 0x00)); // AppBorderBrush light
-        RootBorder.BorderBrush = _borderBrush; // faint theme border (matches main app cards) - brand-blue outline removed
-        TitleText.Foreground = _brandBrush; // brand-blue title (subtle brand element on note/todo cards)
+            ? Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x40, 0x00, 0x00, 0x00));
+        RootBorder.BorderBrush = _borderBrush;
+        TitleText.Foreground = _brandBrush;
         NoteBox.Foreground = fg;
         _fgBrush = fg;
         if (_items != null)
         {
-            // N5H-01: preserve the user's scroll position across the rebuild - SyncNotes calls
-            // ApplyTheme on every stickies.json event (theme/language fields are rewritten by any
-            // main-app write), and the old unconditional RenderTodoList snapped long todos to top.
+
+
+
             double offset = NoteScroll.VerticalOffset;
-            RenderTodoList(); // todo checkbox colors come from _fgBrush/_borderBrush (set above)
+            RenderTodoList();
             NoteScroll.UpdateLayout();
             NoteScroll.ScrollToVerticalOffset(offset);
         }
     }
 
     private SolidColorBrush? _fgBrush;
-    private SolidColorBrush? _borderBrush; // faint checkbox border (theme-dependent)
-    private readonly SolidColorBrush _brandBrush = new(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)); // brand blue #7276FF (card title accent)
+    private SolidColorBrush? _borderBrush;
+    private readonly SolidColorBrush _brandBrush = new(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
     private string _lastTheme = "light";
-    private List<StickyTodoItem>? _items; // todo rows (index 0 = main, 1..n = sub)
-    private DispatcherTimer? _saveTodoTimer; // debounce for todo write-back
-    private bool _todoDirty; 
+    private List<StickyTodoItem>? _items;
+    private DispatcherTimer? _saveTodoTimer;
+    private bool _todoDirty;
 
     public void HideFromTaskbar()
     {
@@ -425,10 +425,10 @@ public sealed partial class StickyNoteWindow : Window
         };
         if (IsReminder)
         {
-            // Reminder card: modify goes through the main app (IPC edit jump).
+
             var edit = new MenuFlyoutItem
             {
-                Text = App.T("修改", "Modify", "修改", "수정", "編集"), // i18n
+                Text = App.T("修改", "Modify", "修改", "수정", "編集"),
                 Icon = MakeIcon(IconPaths.Edit),
             };
             edit.Click += (_, _) => NovaraBridge.EditReminder(NoteId);
@@ -438,31 +438,31 @@ public sealed partial class StickyNoteWindow : Window
         {
             var edit = new MenuFlyoutItem
             {
-                Text = App.T("编辑", "Edit", "編輯", "편집", "編集"), // i18n
+                Text = App.T("编辑", "Edit", "編輯", "편집", "編集"),
                 Icon = MakeIcon(IconPaths.Edit),
             };
-            edit.Click += (_, _) => NovaraBridge.EditNote(NoteId); 
+            edit.Click += (_, _) => NovaraBridge.EditNote(NoteId);
             menu.Items.Add(edit);
         }
         var lockItem = new MenuFlyoutItem
         {
-            Text = Locked ? App.T("解锁", "Unlock", "解鎖", "잠금 해제", "ロック解除") : App.T("锁定", "Lock", "鎖定", "잠금", "ロック"), // i18n
+            Text = Locked ? App.T("解锁", "Unlock", "解鎖", "잠금 해제", "ロック解除") : App.T("锁定", "Lock", "鎖定", "잠금", "ロック"),
             Icon = MakeIcon(Locked ? IconPaths.Unpin : IconPaths.Pin),
         };
         lockItem.Click += (_, _) =>
         {
             SetLocked(!Locked);
-            if (!Locked) Activate(); 
+            if (!Locked) Activate();
         };
         var close = new MenuFlyoutItem
         {
-            Text = App.T("关闭", "Close", "關閉", "닫기", "閉じる"), // i18n
+            Text = App.T("关闭", "Close", "關閉", "닫기", "閉じる"),
             Icon = MakeIcon(IconPaths.Close),
         };
         close.Click += (_, _) =>
         {
             App.NoteWindows.Remove(NoteId);
-            Close(); 
+            Close();
             App.RemoveNote(NoteId);
         };
         menu.Items.Add(lockItem);
@@ -471,9 +471,9 @@ public sealed partial class StickyNoteWindow : Window
         menu.ShowAt(RootBorder, e.GetPosition(RootBorder));
     }
 
-    // Menu icons: mirror the main app's proven pattern (no explicit Width/Height -
-    // setting one makes PathIcon render 1024-coordinate Data as blank; the flyout
-    // sizes the icon slot itself). Multi-path icons are pre-joined in IconPaths.cs.
+
+
+
     private PathIcon MakeIcon(string path) => new()
     {
         Data = MakeGeometry(path),
@@ -489,9 +489,9 @@ public sealed partial class StickyNoteWindow : Window
         double scale = NativeMethods.GetDpiForWindow(hwnd) / 96.0;
         var mi = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
         _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi);
-        // N2-60: waW/waH are MONITOR-RELATIVE sizes but SetWindowSizePos takes VIRTUAL-SCREEN
-        // coordinates - anchor to the work area's actual origin so a default position on a
-        // secondary monitor lands there instead of at the primary's top-left.
+
+
+
         int ox = mi.rcWork.Left, oy = mi.rcWork.Top;
         int waW = mi.rcWork.Right - mi.rcWork.Left;
         int waH = mi.rcWork.Bottom - mi.rcWork.Top;
@@ -500,21 +500,21 @@ public sealed partial class StickyNoteWindow : Window
         if (h < 120) h = 600;
         if (IsReminder)
         {
-            // Reminder cards: note-sized (300x180 logical), anchored bottom-right,
-            // new cards stagger to the left. waW is physical (MONITORINFO units).
-            // N3-47: margin + stagger are logical - multiply by scale like the note branch below,
-            // otherwise high-DPI reminders crowd the corner (stagger/24px shrank to sub-pixel).
+
+
+
+
             int rw = (int)(300 * scale), rh = (int)(180 * scale);
             int margin = (int)(24 * scale);
             int x = ox + waW - rw - margin - (int)(PositionIndex * 32 * scale);
             int y = oy + waH - rh - margin;
             if (x < ox) x = ox;
-            if (y < oy) y = oy; // E5-23: upper bound clamp (extremely high DPI + tiny work area could push y above the screen, symmetric with the x clamp)
+            if (y < oy) y = oy;
             NativeMethods.SetWindowSizePos(hwnd, x, y, rw, rh);
         }
         else
         {
-            // E4-33: clamp the initial position into the work area (multi-card cascades used to run off-screen)
+
             int nx = ox + (int)((200 + PositionIndex * 32) * scale);
             int ny = oy + (int)((220 + PositionIndex * 32) * scale);
             nx = Math.Clamp(nx, ox, Math.Max(ox, ox + waW - w - 24));
@@ -523,10 +523,10 @@ public sealed partial class StickyNoteWindow : Window
         }
     }
 
-    // ---- Drag / resize: pure XAML implementation (no system modal loop; the system
-    //      loop hangs because the XAML compositor swallows WM_LBUTTONUP). ----
-    private const double EdgeHot = 8.0; // logical px
-    private int _dragMode; // 0 none, else HT* code (HTCAPTION = move, HTLEFT.. = resize)
+
+
+    private const double EdgeHot = 8.0;
+    private int _dragMode;
     private int _dragStartX, _dragStartY, _dragStartW, _dragStartH;
     private NativeMethods.POINT _dragStartCursor;
     private bool _dragActive;
@@ -550,7 +550,7 @@ public sealed partial class StickyNoteWindow : Window
                   : bottom ? NativeMethods.HTBOTTOM
                   : left ? NativeMethods.HTLEFT
                   : right ? NativeMethods.HTRIGHT
-                  : NativeMethods.HTCAPTION; // everything else: move the card
+                  : NativeMethods.HTCAPTION;
 
         NativeMethods.GetWindowRect(hwnd, out var r);
         _dragStartX = r.Left; _dragStartY = r.Top;
@@ -568,14 +568,14 @@ public sealed partial class StickyNoteWindow : Window
         NativeMethods.GetCursorPos(out var c);
         int dx = c.X - _dragStartCursor.X, dy = c.Y - _dragStartCursor.Y;
 
-        if (_dragMode == NativeMethods.HTCAPTION) // move
+        if (_dragMode == NativeMethods.HTCAPTION)
         {
             int nx = _dragStartX + dx, ny = _dragStartY + dy;
-            // E4-33: keep at least 60px of the window inside the work area so it can never be dragged off-screen
+
             var mi = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
             _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi);
-            // N3-48: rcWork is PHYSICAL pixels - a hardcoded 60 would silently shrink to ~30 logical
-            
+
+
             int minVis = (int)(60 * NativeMethods.GetDpiForWindow(hwnd) / 96.0);
             nx = Math.Clamp(nx, mi.rcWork.Left - _dragStartW + minVis, mi.rcWork.Right - minVis);
             ny = Math.Clamp(ny, mi.rcWork.Top - _dragStartH + minVis, mi.rcWork.Bottom - minVis);
@@ -583,7 +583,7 @@ public sealed partial class StickyNoteWindow : Window
             return;
         }
 
-        // resize
+
         double scale = NativeMethods.GetDpiForWindow(hwnd) / 96.0;
         int minW = (int)((IsReminder ? 200 : 300) * scale), minH = (int)((IsReminder ? 110 : 450) * scale);
         int L = _dragStartX, T = _dragStartY;
@@ -598,16 +598,16 @@ public sealed partial class StickyNoteWindow : Window
         if (b) B = _dragStartY + _dragStartH + dy;
         if (R - L < minW) { if (l) L = R - minW; else R = L + minW; }
         if (B - T < minH) { if (t) T = B - minH; else B = T + minH; }
-        
+
         var mi2 = new NativeMethods.MONITORINFO { cbSize = Marshal.SizeOf<NativeMethods.MONITORINFO>() };
         _ = NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(hwnd, 2), ref mi2);
-        // N3-48: scale the "60 logical px visible" floor like the move branch (rcWork is physical).
+
         int minVis2 = (int)(60 * scale);
         int w = R - L, h = B - T;
         L = Math.Clamp(L, mi2.rcWork.Left - w + minVis2, mi2.rcWork.Right - minVis2);
         T = Math.Clamp(T, mi2.rcWork.Top - h + minVis2, mi2.rcWork.Bottom - minVis2);
-        w = R - L; h = B - T; // N4-13: recompute AFTER the anchor clamp - the pre-clamp size made the
-        // anchored right/bottom edge drift instead of the dragged left/top edge shrinking against it
+        w = R - L; h = B - T;
+
         NativeMethods.SetWindowSizePos(hwnd, L, T, w, h);
         e.Handled = true;
     }
@@ -622,7 +622,7 @@ public sealed partial class StickyNoteWindow : Window
 
     private void RootBorder_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
-        _dragActive = false; // safety net: never leave the drag state stuck
+        _dragActive = false;
     }
 
     private bool _sized;
@@ -665,8 +665,8 @@ internal static class NativeMethods
 
     public static void SetNotTopmost(nint hwnd)
     {
-        // D20: explicitly drop the topmost Z-order (HWND_NOTOPMOST); relying on the presenter flag
-        // alone can leave the window pinned above other windows after unlocking.
+
+
         _ = SetWindowPos(hwnd, new(-2), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 

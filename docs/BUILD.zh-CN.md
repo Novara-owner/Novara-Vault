@@ -15,7 +15,7 @@
 | Node.js + npm | 任意近期 LTS | 构建 `DiaryEditorJs` 编辑器 bundle |
 | Inno Setup | 6+ | 编译安装脚本（`Installer/setup.iss`） |
 
-> **Windows SDK 路径说明：** `Novara.csproj` 把 `AppxMSBuildToolsPath` 固定为某台机器的 Visual Studio 路径。若在其他机器构建，请更新或删除该属性，以匹配本机的 Visual Studio / Windows SDK 目录。
+> **Windows SDK 路径说明：** `AppxMSBuildToolsPath` 指向 WinUI 生成 PRI 步骤所用的 Appx MSBuild 任务。本仓库**不包含**该属性——它属于**本机构建设置**而非工程设置——因此构建会回落到 .NET SDK 自带的路径。若你的 SDK 没有 `Microsoft.Build.Packaging.Pri.Tasks.dll`，会报 `MSB4062 ... ExpandPriContent`；此时可在命令行传入该属性（或写成环境变量），指向你本机 Visual Studio 的 `AppxPackage` 目录。
 
 ## 工程结构
 
@@ -26,6 +26,8 @@
 | `NovaraMCP/NovaraMCP.csproj` | `NovaraMCP.exe` | MCP 服务器（单文件） |
 | `Novara.Core/Novara.Core.csproj` | 类库 | 纯逻辑（被应用与测试引用） |
 | `Novara.Tests/Novara.Tests.csproj` | xUnit 测试 | 单元测试 |
+| `Novara.Server/Novara.Server.csproj` | `NovaraSync.exe` | 自托管同步服务端宿主（单文件自包含） |
+| `Novara.Sync.Server/Novara.Sync.Server.csproj` | 类库 | 同步服务端逻辑（被 `Novara.Server` 与测试引用） |
 
 ## 步骤
 
@@ -66,6 +68,16 @@ dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 
 同时核验 `Microsoft.Graphics.Canvas.dll` 与 `Microsoft.Graphics.Canvas.Interop.dll` 在发布目录中——模糊特效依赖它们，缺失时静默降级。
 
+随包自带的同步服务端（8.0 起）以「单文件 + 压缩 + 自解压」发布，因此运行它的那台机器无需安装 .NET 运行时：
+
+```powershell
+dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained `
+  -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+把 `NovaraSync.exe` 与它在 `/web` 托管的 `Novara.Web\` 目录一并复制进发布目录的 `Sync\` 子目录。
+
 ### 6. 用 Inno Setup 打包
 
 先清空发布目录：`dotnet publish` 从不删除残留文件，旧版本残留的 `Novara.pri` 混合新 DLL 会让所有改过页面的启动即崩。然后编译 `Installer/setup.iss`。最终安装包包含：
@@ -73,7 +85,8 @@ dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained
 - `Novara.exe` + `Novara.pri`（publish 产物不含 pri，需手动补齐）
 - `Host\` 子目录（StickNoteHost 完整自包含包）
 - `NovaraMCP.exe`
-- `snapshot-viewer.html` —— Novara Snapshot 查看器模板，导出流程加载（7.0 起）
+- `snapshot-viewer.html` —— Novara Snapshot 查看器模板，导出流程加载（7.0 起）；它必须引用 `viewer.js` 与 `viewer.css`，导出时二者会被内联
+- `Sync\` 子目录 —— `NovaraSync.exe` 与 `Novara.Web\` 阅读器站点（8.0 起）
 - `Assets\128.ico`
 
 ## 测试
@@ -89,4 +102,4 @@ dotnet test Novara.Tests/Novara.Tests.csproj
 | 产物 | 位置 |
 |------|------|
 | 安装包 | `Novara_Setup_x.x.x.exe`（来自 `setup.iss`） |
-| 发布目录 | `Novara.exe`、`Novara.pri`、`NovaraMCP.exe`、`snapshot-viewer.html`、`Host\StickNoteHost.exe`、`Assets\` |
+| 发布目录 | `Novara.exe`、`Novara.pri`、`NovaraMCP.exe`、`snapshot-viewer.html`、`Host\StickNoteHost.exe`、`Sync\NovaraSync.exe`、`Sync\Novara.Web\`、`Assets\` |

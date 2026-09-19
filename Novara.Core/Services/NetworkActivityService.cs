@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 namespace Novara.Services;
 
-/// <summary>
-/// 9.3: network activity transparency (Privacy Dashboard step one). The API check entries report
-/// Begin/End pairs; the main window subscribes StateChanged to drive the title-bar badge and reads
-/// Recent for the activity panel. In-memory only by design - visited domains are private and the
-/// trail is meant as instant transparency, not a persistent log.
-/// </summary>
+
+
+
+
+
+
 public static class NetworkActivityService
 {
     public sealed record ActivityEntry(DateTimeOffset Time, string KindKey, string Host, bool Success);
@@ -27,7 +27,7 @@ public static class NetworkActivityService
         get { lock (_gate) return _stack.Count > 0; }
     }
 
-    /// <summary>Top of the session stack (the innermost running activity), or null when idle.</summary>
+
     public static (string KindKey, string Host)? Current
     {
         get
@@ -39,7 +39,7 @@ public static class NetworkActivityService
         }
     }
 
-    /// <summary>Most recent finished activities first (newest at index 0).</summary>
+
     public static IReadOnlyList<ActivityEntry> Recent
     {
         get { lock (_gate) return _recent.ToArray(); }
@@ -51,7 +51,7 @@ public static class NetworkActivityService
         StateChanged?.Invoke();
     }
 
-    /// <summary>Push a running activity. Host is extracted from any url form; empty stays empty.</summary>
+
     public static void Begin(string kindKey, string urlOrHost)
     {
         lock (_gate)
@@ -61,7 +61,7 @@ public static class NetworkActivityService
         StateChanged?.Invoke();
     }
 
-    /// <summary>Pop the innermost activity and append it to the recent trail.</summary>
+
     public static void End(bool success = true)
     {
         ActivityEntry? entry = null;

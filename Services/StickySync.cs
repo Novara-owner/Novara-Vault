@@ -4,12 +4,12 @@ using Novara.Models;
 
 namespace Novara.Services;
 
-/// <summary>
-/// Stage-2 bridge to the desktop-sticky-note host (StickNoteHost.exe):
-/// - stickies.json is a plain-text sync file in the app data dir (avoids the
-///   exclusive lock on data.novadb). Host watches it and updates its notes.
-/// - Format: { "theme": "light|dark", "notes": [ { "id", "kind", "title", "content", "dueTime" } ] }
-/// </summary>
+
+
+
+
+
+
 public static class StickySync
 {
     public static string JsonPath => Path.Combine(
@@ -18,8 +18,8 @@ public static class StickySync
 
     public static string? HostExePath { get; } = FindHostExe();
 
-    /// <summary>E1-03: atomic write (tmp + move) - the Host FileSystemWatcher must never see a
-    /// half-written stickies.json (a truncated file used to nuke all notes and exit the host).</summary>
+
+
     private static void Save(StickyData data)
     {
         var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
@@ -31,7 +31,7 @@ public static class StickySync
         }
         catch
         {
-            try { File.Delete(tmp); } catch { } // N4-24: N3-21 pattern - don't leave a stray *.tmp behind on failure
+            try { File.Delete(tmp); } catch { }
             throw;
         }
     }
@@ -39,21 +39,21 @@ public static class StickySync
 
     private static string? FindHostExe()
     {
-        // 1) Release layout (2026-08-31 test-report fix): full host bundle in a Host\ subfolder
-        //    next to the main exe (setup.iss installs {app}\Host\*). Probed FIRST - a bare
-        //    side-by-side exe from older installs is a .NET apphost without its dll bundle and
-        //    dies instantly (Event 1023), so the complete subfolder must win over it.
+
+
+
+
         var subFolder = Path.Combine(AppContext.BaseDirectory, "Host", "StickNoteHost.exe");
         if (File.Exists(subFolder)) return subFolder;
 
-        // 2) Legacy release layout: host sits next to the main exe (kept for manual deployments).
+
         var sideBySide = Path.Combine(AppContext.BaseDirectory, "StickNoteHost.exe");
         if (File.Exists(sideBySide)) return sideBySide;
 
-        // 2) Dev layout (E5-12): walk up from the output dir to the repo root (the first dir that
-        //    contains the StickNoteHost project), then probe bin[+\x64]\Debug|Release\... - the old
-        //    code hard-coded a fixed 5-level climb onto bin\x64\Debug while the actual output is
-        //    bin\Debug (no x64 layer), so the Dev probe always missed.
+
+
+
+
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
             if (Directory.Exists(Path.Combine(dir, "StickNoteHost")))
@@ -82,8 +82,8 @@ public static class StickySync
             && fe.ActualTheme == Microsoft.UI.Xaml.ElementTheme.Light
             ? "light" : "dark";
 
-    /// <summary>Upsert one note (by id) into stickies.json and launch the host. Returns true when the
-    /// note is (or will be) on the desktop: written AND the host is running / successfully launched.</summary>
+
+
     public static bool SendToDesktop(string id, string kind, string title, string content, List<StickyTodoItem>? items = null)
     {
         try
@@ -94,7 +94,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return false; 
+                if (data == null) return false;
                 var notes = data.Notes ?? new List<StickyNote>();
                 var existing = notes.FirstOrDefault(n => n.Id == id);
                 if (existing != null)
@@ -106,7 +106,7 @@ public static class StickySync
                     notes.Add(new StickyNote { Id = id, Kind = kind, Title = title, Content = content, Items = items });
                 }
                 data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage; // i18n: carry the UI language so the host menus follow
+                data.Language = App.CurrentLanguage;
                 data.Notes = notes;
                 Save(data);
             }
@@ -117,8 +117,8 @@ public static class StickySync
             return false;
         }
 
-        
-        
+
+
         if (HostRunning) return true;
         try
         {
@@ -135,7 +135,7 @@ public static class StickySync
         return false;
     }
 
-    /// <summary>Create a one-shot reminder card in stickies.json and launch the host.</summary>
+
     public static void AddReminder(string content, DateTimeOffset dueTime)
     {
         try
@@ -146,11 +146,11 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return; 
+                if (data == null) return;
                 var notes = data.Notes ?? new List<StickyNote>();
                 notes.Add(new StickyNote { Id = Guid.NewGuid().ToString(), Kind = "reminder", Title = "", Content = content, DueTime = dueTime });
                 data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage; // i18n: carry the UI language so the host menus follow
+                data.Language = App.CurrentLanguage;
                 data.Notes = notes;
                 Save(data);
             }
@@ -160,7 +160,7 @@ public static class StickySync
             System.Diagnostics.Debug.WriteLine($"StickySync.AddReminder 失败: {ex}");
         }
 
-        // Launch host (idempotent per its own single-instance handling if we add one).
+
         try
         {
             if (!string.IsNullOrEmpty(HostExePath) && File.Exists(HostExePath))
@@ -172,7 +172,7 @@ public static class StickySync
         }
     }
 
-    /// <summary>Update an existing reminder card (by id) in stickies.json; host watcher picks it up.</summary>
+
     public static void UpdateReminder(string id, string content, DateTimeOffset dueTime)
     {
         try
@@ -180,10 +180,10 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return; 
+                if (data == null) return;
                 var notes = data.Notes ?? new List<StickyNote>();
                 var existing = notes.FirstOrDefault(n => n.Id == id);
-                if (existing == null) return; // card already gone (expired/closed) - nothing to update
+                if (existing == null) return;
                 existing.Content = content;
                 existing.DueTime = dueTime;
                 data.Theme = ResolveTheme();
@@ -198,7 +198,7 @@ public static class StickySync
         }
     }
 
-    /// <summary>Launch the host if its exe is found (idempotent - its own single instance exits a duplicate).</summary>
+
     public static void LaunchHost()
     {
         try
@@ -212,16 +212,16 @@ public static class StickySync
         }
     }
 
-    /// <summary>True when stickies.json contains any desktop card (note or reminder).</summary>
+
     public static bool HasDesktopCards()
     {
         try { return Load()?.Notes?.Count > 0; } catch { return false; }
     }
 
-    /// <summary>True when the sticky-note host process is running (i.e. desktop notes may exist).
-    /// E2-01: probe the host's single-instance MUTEX (the host creates a Mutex, not an Event -
-    /// an EventWaitHandle.OpenExisting on a same-named Mutex always throws, making this false).
-    /// Matches StickNoteHost.App.SingleInstanceMutexName, Debug/.Dev isolated.</summary>
+
+
+
+
     public static bool HostRunning
     {
         get
@@ -242,17 +242,17 @@ public static class StickySync
         @"Local\StickNoteHost";
 #endif
 
-    /// <summary>True when this card id is already pinned to the desktop.</summary>
+
     public static bool Contains(string id)
     {
         try { return Load()?.Notes?.Any(n => n.Id == id) == true; } catch { return false; }
     }
 
-    /// <summary>True when this note is recorded in stickies.json (i.e. pinned to the desktop).
-    
+
+
     public static bool IsOnDesktop(string id) => Contains(id);
 
-    /// <summary>Update an existing desktop note (no-op unless it was already sent).</summary>
+
     public static void UpdateNote(string id, string kind, string title, string content, List<StickyTodoItem>? items = null)
     {
         try
@@ -260,13 +260,13 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return; 
+                if (data == null) return;
                 var notes = data.Notes ?? new List<StickyNote>();
                 var existing = notes.FirstOrDefault(n => n.Id == id);
-                if (existing == null) return; // never sent to desktop -> leave the file alone
+                if (existing == null) return;
                 existing.Kind = kind; existing.Title = title; existing.Content = content; existing.Items = items;
                 data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage; // i18n: keep the host menu language in sync
+                data.Language = App.CurrentLanguage;
                 Save(data);
             }
         }
@@ -276,7 +276,7 @@ public static class StickySync
         }
     }
 
-    /// <summary>Remove a desktop note (no-op unless it was already sent).</summary>
+
     public static void RemoveNote(string id)
     {
         try
@@ -284,7 +284,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return; 
+                if (data == null) return;
                 var notes = data.Notes ?? new List<StickyNote>();
                 if (notes.RemoveAll(n => n.Id == id) == 0) return;
                 data.Notes = notes;
@@ -297,7 +297,7 @@ public static class StickySync
         }
     }
 
-    /// <summary>Update the theme stored in stickies.json; the host watcher recolors every note immediately. No-op when nothing is on the desktop yet.</summary>
+
     public static void UpdateTheme(string theme)
     {
         try
@@ -305,7 +305,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null || (data.Notes?.Count ?? 0) == 0) return; 
+                if (data == null || (data.Notes?.Count ?? 0) == 0) return;
                 data.Theme = theme;
                 Save(data);
             }
@@ -316,7 +316,7 @@ public static class StickySync
         }
     }
 
-    /// <summary>Update the host menu language stored in stickies.json (i18n); the host applies it on next menu open.</summary>
+
     public static void UpdateLanguage(string lang)
     {
         try
@@ -324,7 +324,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null || (data.Notes?.Count ?? 0) == 0) return; 
+                if (data == null || (data.Notes?.Count ?? 0) == 0) return;
                 data.Language = lang;
                 Save(data);
             }
@@ -339,16 +339,16 @@ public static class StickySync
     {
         try
         {
-            if (!File.Exists(JsonPath)) return new StickyData(); 
-            return JsonSerializer.Deserialize<StickyData>(File.ReadAllText(JsonPath)); 
+            if (!File.Exists(JsonPath)) return new StickyData();
+            return JsonSerializer.Deserialize<StickyData>(File.ReadAllText(JsonPath));
         }
         catch { }
-        return null; 
+        return null;
     }
 
-    /// <summary>E3-07: clear every desktop card (import / reset). Host data is local-only - it is
-    /// never imported/exported; after a full import or a database reset the host must close all
-    /// notes (its watcher sees an empty list and exits). Theme/language are kept.</summary>
+
+
+
     public static void ClearAllNotes()
     {
         try
@@ -356,7 +356,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null || data.Notes is not { Count: > 0 }) return; 
+                if (data == null || data.Notes is not { Count: > 0 }) return;
                 data.Notes = new List<StickyNote>();
                 Save(data);
             }
@@ -364,17 +364,17 @@ public static class StickySync
         catch { }
     }
 
-    /* ========== [StickySync Reverse Channel] ==========
-    Function: watch stickies.json for todo check-state changes written back by the host,
-    update the authoritative TodoCard.CheckedStates in data.novadb, then notify the UI.
-    Corresponding UI: PlanPage (ApplyExternalTodoState)
-    Logic Range: watcher setup + apply loop
-    */
+
+
+
+
+
+
     private static FileSystemWatcher? _watcher;
     private static Action<Guid, List<bool>>? _onTodoChanged;
-    private static bool _applying; // re-entrancy guard (a save during an apply must not recurse)
+    private static bool _applying;
 
-    /// <summary>Start watching stickies.json; onTodoChanged fires on the UI thread after the store is updated.</summary>
+
     public static void StartWatching(Action<Guid, List<bool>> onTodoChanged)
     {
         _onTodoChanged = onTodoChanged;
@@ -391,14 +391,14 @@ public static class StickySync
             _watcher.Changed += OnFileChanged;
             _watcher.Created += OnFileChanged;
             _watcher.Deleted += OnFileChanged;
-            _watcher.Renamed += OnFileChanged; 
-            // Error fires on the watcher thread (buffer overflow on rapid writes) - recreate on the UI thread.
+            _watcher.Renamed += OnFileChanged;
+
             _watcher.Error += (_, _) => App.UiQueue?.TryEnqueue(() =>
             {
                 try { _watcher?.Dispose(); } catch { }
                 _watcher = null;
                 StartWatching(_onTodoChanged!);
-                ApplyTodoChanges(); // N4H-03: mirror the Host-side R4-SN9 fix - changes lost during the overflow window are absorbed immediately instead of waiting for the next unrelated event
+                ApplyTodoChanges();
             });
         }
         catch { }
@@ -407,14 +407,14 @@ public static class StickySync
     private static void OnFileChanged(object sender, FileSystemEventArgs e) =>
         App.UiQueue?.TryEnqueue(ApplyTodoChanges);
 
-    /// <summary>Reconcile host-written todo check states into the authoritative store. Content
-    /// comparison prevents a loop: our own SendToDesktop/UpdateNote writes produce the same states
-    /// already in the store, so no redundant write or UI refresh occurs.</summary>
+
+
+
     private static void ApplyTodoChanges()
     {
         if (_applying) return;
-        
-        
+
+
         if (App.Store?.IsSaveSuppressed == true) return;
         _applying = true;
         try
@@ -436,16 +436,16 @@ public static class StickySync
                 changed = true;
                 _onTodoChanged?.Invoke(id, states);
             }
-            // N3-33: save ONCE after the loop (the debounce inside SaveAsync already coalesced, but
-            // N fire-and-forget calls per round was needless churn); UI notify stays per-card above.
+
+
             if (changed) App.Store?.SaveAsync();
         }
         catch { }
         finally { _applying = false; }
     }
 
-    /// <summary>Build TodoCard.CheckedStates (1 + subtexts) from the host's structured items, guarded
-    /// against length drift (missing/extra items default to false).</summary>
+
+
     private static List<bool> BuildStatesFromItems(TodoCard todo, List<StickyTodoItem> items)
     {
         int total = 1 + (todo.SubTexts?.Count ?? 0);
@@ -465,7 +465,7 @@ public static class StickySync
 public class StickyData
 {
     public string Theme { get; set; } = "light";
-    public string Language { get; set; } = "zh-CN"; // i18n: host menu language (zh-CN / en-US)
+    public string Language { get; set; } = "zh-CN";
     public List<StickyNote>? Notes { get; set; } = new();
 }
 
@@ -475,23 +475,23 @@ public class StickyNote
     public string Kind { get; set; } = "todo";
     public string Title { get; set; } = "";
     public string Content { get; set; } = "";
-    /// <summary>Absolute due time (local offset) for kind=reminder cards; null for notes/todos.</summary>
+
     public DateTimeOffset? DueTime { get; set; }
-    /// <summary>Structured todo rows for kind=todo cards (index 0 = main todo, 1..n = sub-todos).
-    /// Present only for interactive desktop todos; null for note/reminder cards and old data.</summary>
+
+
     public List<StickyTodoItem>? Items { get; set; }
 }
 
-/// <summary>One row of a desktop todo card: label + checked state (mirrors TodoCard.CheckedStates semantics).</summary>
+
 public class StickyTodoItem
 {
     public string Label { get; set; } = "";
     public bool Checked { get; set; }
 }
 
-/// <summary>E4-14: cross-process named mutex serializing stickies.json read-modify-write between the
 
-/// so neither process can interleave a read with the other's write (which used to drop updates).</summary>
+
+
 internal static class StickiesLock
 {
     private static readonly Mutex Mutex = new(false, MutexName);
@@ -505,13 +505,13 @@ internal static class StickiesLock
 
     public static IDisposable Enter()
     {
-        // N2-09 (N1-41 parity with the host side): bounded wait - the host holding the lock must
-        // not freeze the main-program UI forever (all callers run on the UI thread). On timeout
-        // proceed WITHOUT the lock: atomic tmp+move writes keep the file consistent, and
-        // last-writer-wins is an acceptable degradation for a stuck host.
+
+
+
+
         bool acquired;
         try { acquired = Mutex.WaitOne(TimeSpan.FromSeconds(3)); }
-        catch (AbandonedMutexException) { acquired = true; } // previous holder died while holding it - we now own it
+        catch (AbandonedMutexException) { acquired = true; }
         return new Releaser(acquired ? Mutex : null);
     }
 

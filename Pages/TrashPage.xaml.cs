@@ -12,34 +12,34 @@ using Windows.UI;
 
 namespace Novara.Pages;
 
-/// <summary>
-/// Trash (recycle bin): soft-deleted items from all four tabs, mixed, sorted by deletion time.
-/// Cards show name + deletion time + two actions (restore / delete forever). Items older than
-/// 7 days are purged at startup (TrashPage.CleanupExpired). Restoring clears star/pin state
-/// (user decision 2026-08-10: no inherited relations).
-/// </summary>
+
+
+
+
+
+
 public sealed partial class TrashPage : Page
 {
     private object? _pendingDeleteForever;
     private bool _restoring;
-    private CancellationTokenSource? _renderCts; // N5-RC-01: cancels the in-flight chunked render on rebuild/unload
+    private CancellationTokenSource? _renderCts;
 
     public TrashPage()
     {
         InitializeComponent();
-        Unloaded += TrashPage_Unloaded; 
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true); 
+        Unloaded += TrashPage_Unloaded;
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         InitIcons();
-        // N3-57: Esc closes the hard-delete confirm dialogs (parity with the rest of the app) -
-        // a full-screen page without a KeyDown handler left Esc dead on both confirms.
+
+
         KeyDown += (_, e) =>
         {
             if (e.Key != Windows.System.VirtualKey.Escape) return;
             if (DeleteForeverOverlay.Visibility == Visibility.Visible) { HideDeleteForeverDialog(); e.Handled = true; }
             else if (ClearAllOverlay.Visibility == Visibility.Visible) { HideClearAllDialog(); e.Handled = true; }
         };
-        
-        
+
+
         Loaded += (_, _) => FocusSink.Focus(FocusState.Programmatic);
     }
 
@@ -51,11 +51,11 @@ public sealed partial class TrashPage : Page
         RestoreAllPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.RestoreTrash);
     }
 
-    /// <summary>Rebuild the list from the database (called every time the page opens).</summary>
+
     public void Refresh() => BuildList();
 
-    
-    
+
+
     private void TrashPage_Unloaded(object sender, RoutedEventArgs e)
     {
         DeleteForeverOverlay.Visibility = Visibility.Collapsed;
@@ -63,21 +63,21 @@ public sealed partial class TrashPage : Page
         DeleteForeverCd.Reset();
         ClearAllCd.Reset();
         _pendingDeleteForever = null;
-        _renderCts?.Cancel(); // N5-RC-01: stop pending batches against the detached tree (re-entry rebuilds anyway)
+        _renderCts?.Cancel();
     }
 
 
-    
+
     public void StealFocus() => FocusSink.Focus(FocusState.Programmatic);
 
-    /// <summary>Purge soft-deleted items whose 7-day window has passed (called at app startup).</summary>
+
     public static void CleanupExpired()
     {
         var db = App.Store?.Database;
         if (db == null) return;
         var cutoff = DateTime.Now.AddDays(-7);
-        // E3-16: retry the sticky-note removal for expired cards - a failed RemoveNote at soft-delete
-        // time would otherwise leave a permanent ghost card once the db row is physically gone.
+
+
         foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.DeletedAt < cutoff)) Services.StickySync.RemoveNote(n.Id.ToString());
         foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.DeletedAt < cutoff)) Services.StickySync.RemoveNote(t.Id.ToString());
         bool changed = false;
@@ -91,10 +91,10 @@ public sealed partial class TrashPage : Page
 
     private async void BuildList()
     {
-        // N5-RC-01: unlike the tab pages (loaded once, _storeLoaded idempotent), this page rebuilds
-        // (Clear + re-add) on EVERY entry - a stale in-flight chunked render would interleave old
-        // cards into the freshly cleared list (duplicates / restored items). Cancel the previous
-        // render per rebuild so only the newest generation may append.
+
+
+
+
         _renderCts?.Cancel();
         _renderCts?.Dispose();
         _renderCts = new CancellationTokenSource();
@@ -104,10 +104,14 @@ public sealed partial class TrashPage : Page
         var db = App.Store?.Database;
         if (db == null) return;
 
-        
+
         var rows = new List<(string Kind, string Title, DateTime DeletedAt, object Entity, string Format)>();
         foreach (var e in db.MemoEntries.Where(x => x.IsDeleted))
-            rows.Add(("memo", string.IsNullOrEmpty(e.Name) ? e.KeyInfo : e.Name, e.DeletedAt, e, ""));
+
+
+
+
+            rows.Add(("memo", string.IsNullOrEmpty(e.Name) ? MemoFieldMask.MaskedKeyInfo(e.Type, e.KeyInfo) : e.Name, e.DeletedAt, e, ""));
         foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted))
             rows.Add(("path", p.Name, p.DeletedAt, p, ""));
         foreach (var t in db.TodoCards.Where(x => x.IsDeleted))
@@ -119,7 +123,7 @@ public sealed partial class TrashPage : Page
 
         rows = rows.OrderByDescending(r => r.DeletedAt).ToList();
 
-        
+
         int idx = 0;
         try
         {
@@ -129,24 +133,32 @@ public sealed partial class TrashPage : Page
                 {
                     var card = BuildCard(rows[i]);
                     TrashList.Children.Add(card);
-                    if (idx < 10) App.PlayCardEntrance(card, idx); // N5F-04: cap the stagger - unbounded index delayed deep cards by seconds
+                    if (idx < 10) App.PlayCardEntrance(card, idx);
                     idx++;
                 }
             }, ct);
         }
         catch (OperationCanceledException)
         {
-            return; // superseded by a newer BuildList or page unloaded - the new generation owns the list
+            return;
+        }
+        catch (Exception ex)
+        {
+
+
+
+            System.Diagnostics.Debug.WriteLine($"回收站列表渲染失败（重新打开将重建）: {ex}");
+            return;
         }
 
         EmptyState.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        // Hide the action rail when the trash is empty (disabled buttons have no hover effect).
+
         RestoreAllButton.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         ClearAllButton.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (rows.Count == 0) PlayEmptyStateEntrance();
     }
 
-    /// <summary>Fade/slide the empty-state hint in (same pattern as the tab pages' FloatInHint).</summary>
+
     private void PlayEmptyStateEntrance()
     {
         EmptyState.Opacity = 0;
@@ -216,7 +228,7 @@ public sealed partial class TrashPage : Page
         info.Children.Add(time);
         grid.Children.Add(info);
 
-        // Vertical separator mirrors FilePathPage's card: separates content from the action rail.
+
         var separator = new Border
         {
             Width = 2,
@@ -267,8 +279,8 @@ public sealed partial class TrashPage : Page
         var fg = foreground ?? App.GetBrush("IconForegroundBrush");
         if (bold)
         {
-            
-            
+
+
             btn.Content = new Microsoft.UI.Xaml.Shapes.Path
             {
                 Width = 20,
@@ -306,7 +318,7 @@ public sealed partial class TrashPage : Page
         {
             RestoreEntity(entity);
             App.Store?.SaveAsync();
-            App.MainWindow?.MarkTrashChanged(); // tab pages must reload (restored item is visible again)
+            App.MainWindow?.MarkTrashChanged();
             BuildList();
             App.ShowToast(App.GetString("Common_Toast_Restored"));
         }
@@ -316,7 +328,7 @@ public sealed partial class TrashPage : Page
         }
     }
 
-    
+
     private static void RestoreEntity(object entity)
     {
         var db = App.Store?.Database;
@@ -341,7 +353,7 @@ public sealed partial class TrashPage : Page
         }
     }
 
-    
+
     private void RestoreAll()
     {
         if (_restoring) return;
@@ -372,7 +384,7 @@ public sealed partial class TrashPage : Page
 
     private void DeleteForever(object entity)
     {
-        if (_restoring) return; 
+        if (_restoring) return;
         _restoring = true;
         try
         {
@@ -384,11 +396,11 @@ public sealed partial class TrashPage : Page
                 case FilePathEntry pe: db.PathBackupItems.Remove(pe); break;
                 case TodoCard tc:
                     db.TodoCards.Remove(tc);
-                    Services.StickySync.RemoveNote(tc.Id.ToString()); // E3-16: idempotent retry - a failed RemoveNote at soft-delete time would leave a permanent ghost desktop card
+                    Services.StickySync.RemoveNote(tc.Id.ToString());
                     break;
                 case NoteCard nc:
                     db.NoteCards.Remove(nc);
-                    Services.StickySync.RemoveNote(nc.Id.ToString()); // E3-16: see TodoCard
+                    Services.StickySync.RemoveNote(nc.Id.ToString());
                     break;
                 case DiaryEntry de: db.DiaryItems.Remove(de); break;
             }
@@ -405,15 +417,15 @@ public sealed partial class TrashPage : Page
 
     private void ClearAll()
     {
-        if (_restoring) return; 
+        if (_restoring) return;
         _restoring = true;
         try
         {
             var db = App.Store?.Database;
             if (db == null) return;
-            // N4F-02: capture todo/note ids before removal - ClearAll must tear down desktop sticky
-            // cards exactly like DeleteForever does (E3-16 retry parity), else a soft-delete-time
-            // RemoveNote failure + clear becomes a permanent ghost desktop card with no further retries.
+
+
+
             var removedTodoIds = db.TodoCards.Where(x => x.IsDeleted).Select(x => x.Id.ToString()).ToList();
             var removedNoteIds = db.NoteCards.Where(x => x.IsDeleted).Select(x => x.Id.ToString()).ToList();
             db.MemoEntries.RemoveAll(x => x.IsDeleted);
@@ -434,12 +446,12 @@ public sealed partial class TrashPage : Page
         }
     }
 
-    // ---- dialogs ----
+
     private void ShowDeleteForeverDialog()
     {
-        DeleteForeverDangerIcon.Data = App.CreateGeometry(IconData.Danger); // N2-13: danger triangle
-        // N5F-03: reset the dialog's animated visuals before re-showing - the previous hide left
-        // Opacity/Scale/Translate at their end values, so the second open snapped in with no fade.
+        DeleteForeverDangerIcon.Data = App.CreateGeometry(IconData.Danger);
+
+
         DeleteForeverDialog.Opacity = 0;
         DeleteForeverDialogTransform.ScaleX = 0.94; DeleteForeverDialogTransform.ScaleY = 0.94; DeleteForeverDialogTransform.TranslateY = 24;
         DeleteForeverScrim.Opacity = 0;
@@ -453,14 +465,14 @@ public sealed partial class TrashPage : Page
         Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(da, DeleteForeverDialog);
         Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        Motion.AddDialogShowTransform(sb, DeleteForeverDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, DeleteForeverDialogTransform);
         sb.Begin();
-        // 9.3: 30s cooldown on hard-delete confirms (global rule) - enabled when the red frame burns out
+
         DeleteForeverConfirmButton.IsEnabled = false;
-        DeleteForeverConfirmButton.Opacity = 0.45;
+        DeleteForeverConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
         DeleteForeverCd.Completed -= OnDeleteForeverCdCompleted;
         DeleteForeverCd.Completed += OnDeleteForeverCdCompleted;
-        DeleteForeverCd.Start(30);
+        DeleteForeverCd.Start(Motion.CooldownSeconds);
     }
 
     private void OnDeleteForeverCdCompleted()
@@ -472,15 +484,15 @@ public sealed partial class TrashPage : Page
 
     private void HideDeleteForeverDialog()
     {
-        DeleteForeverCd.Reset(); // N2-45: stop the countdown timer on cancel (was spinning up to 30s)
+        DeleteForeverCd.Reset();
         DeleteForeverOverlay.Visibility = Visibility.Collapsed;
         _pendingDeleteForever = null;
     }
 
     private void ShowClearAllDialog()
     {
-        ClearAllDangerIcon.Data = App.CreateGeometry(IconData.Danger); // N2-13: danger triangle
-        // N5F-03: same visual reset as ShowDeleteForeverDialog.
+        ClearAllDangerIcon.Data = App.CreateGeometry(IconData.Danger);
+
         ClearAllDialog.Opacity = 0;
         ClearAllDialogTransform.ScaleX = 0.94; ClearAllDialogTransform.ScaleY = 0.94; ClearAllDialogTransform.TranslateY = 24;
         ClearAllScrim.Opacity = 0;
@@ -494,14 +506,14 @@ public sealed partial class TrashPage : Page
         Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(da, ClearAllDialog);
         Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        Motion.AddDialogShowTransform(sb, ClearAllDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ClearAllDialogTransform);
         sb.Begin();
-        // 9.3: 30s cooldown on hard-delete confirms (global rule)
+
         ClearAllConfirmButton.IsEnabled = false;
-        ClearAllConfirmButton.Opacity = 0.45;
+        ClearAllConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
         ClearAllCd.Completed -= OnClearAllCdCompleted;
         ClearAllCd.Completed += OnClearAllCdCompleted;
-        ClearAllCd.Start(30);
+        ClearAllCd.Start(Motion.CooldownSeconds);
     }
 
     private void OnClearAllCdCompleted()
@@ -513,7 +525,7 @@ public sealed partial class TrashPage : Page
 
     private void HideClearAllDialog()
     {
-        ClearAllCd.Reset(); // N2-45: stop the countdown timer on cancel
+        ClearAllCd.Reset();
         ClearAllOverlay.Visibility = Visibility.Collapsed;
     }
 

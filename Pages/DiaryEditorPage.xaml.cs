@@ -1,8 +1,3 @@
-/* ========== DiaryEditorPage - Diary Editor ==========
-Function: WebView2 rich-text editor - HTML template injection, B/I/U format states, floating toolbar capsule, XSS sanitize, save/exit guards
-Corresponding UI: DiaryEditorPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
@@ -31,25 +26,25 @@ public sealed partial class DiaryEditorPage : Page
     private bool _isColorPickerOpen;
     private bool _isAlignPickerOpen;
     private DiaryEntry? _currentDiary;
-    private string? _navigatingFormat; // N4D-02: format of the template navigation currently in flight - lets LoadDiary detect a mid-flight format switch
+    private string? _navigatingFormat;
     private bool _isBold, _isItalic, _isUnderline;
     private bool _webViewReady;
-    private string _loadedFormat = "html"; 
-    private string? _initialTitle;   
-    private string? _initialContent; 
-    private bool _isMdHeadingPickerOpen; 
-    private bool _isMdPreview; 
+    private string _loadedFormat = "html";
+    private string? _initialTitle;
+    private string? _initialContent;
+    private bool _isMdHeadingPickerOpen;
+    private bool _isMdPreview;
     private static readonly JsonSerializerOptions JsonCaseInsensitive = new() { PropertyNameCaseInsensitive = true };
 
-    
-    private const long MaxDiaryImageBytes = 20L * 1024 * 1024;
-    private long _currentImageBytes; 
 
-    /* ========== DiaryEditor HTML Template ==========
-Function: Editor HTML/JS template: contenteditable body, setAll/getTitle/getBody bridge, execCommand helpers, format-state notify
-Corresponding UI: DiaryEditorPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+    private const long MaxDiaryImageBytes = 20L * 1024 * 1024;
+    private long _currentImageBytes;
+
+
+
+
+
+
 private const string EditorHtmlTemplate = @"<!DOCTYPE html>
 <html><head><meta charset='utf-8'><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
@@ -118,7 +113,7 @@ function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}
 function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
 function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh()}} // N5-S7-01: 载入 setContent 触发的 onUpdate 不算用户编辑
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
-tel.addEventListener('input',function(){{updateTitleSpacing()}});
+tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // : 标题编辑同样是「用户改过」——旧实现只更新字距，于是「仅改标题 + 保存失败」连一句提示都没有（正文编辑有 Editor_SaveFail_Toast），口径不一致
 function getTitle(){{return tel.innerHTML}}
 function getBody(){{return editor.getHTML()}}
 bel.addEventListener('click',function(e){{var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a){{e.preventDefault();var href=a.getAttribute('href');if(href)window.chrome.webview.postMessage(JSON.stringify({{action:'openLink',url:href}}))}}}});
@@ -156,8 +151,8 @@ notifyFormatState();
         string selection = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)";
         string scrollbar = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)";
         string menuBg = isLight ? "#FFFFFF" : "#2A2A2A";
-        // 4.0 #4: Tiptap bundle is inlined into the template (offline, no CDN). It has no raw </script>
-        // so it is safe to inline; read from the publish dir (copied by csproj).
+
+
         string bundle;
         try { bundle = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "tiptap.bundle.js")); }
         catch { bundle = "window.NovaraTiptap={};"; }
@@ -166,7 +161,7 @@ notifyFormatState();
             bundle, App.GetString("Menu_Unlink"), menuBg);
     }
 
-    
+
 
 
 
@@ -231,7 +226,7 @@ function mdClearFormat(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.v
 function mdUndo(){{ta.focus();document.execCommand('undo')}}
 function mdRedo(){{ta.focus();document.execCommand('redo')}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
-tel.addEventListener('input',function(){{updateTitleSpacing()}});
+tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // : MD 编辑器同口径
 ta.addEventListener('input',function(){{autoResize()}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
@@ -256,8 +251,8 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             App.GetString("DiaryEditor_DocumentBodyPlaceholder"));
     }
 
-    
-    
+
+
     internal static string EnforceTitleLength(string title)
     {
         if (string.IsNullOrEmpty(title)) return title;
@@ -279,13 +274,22 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         return sb.ToString().Trim();
     }
 
+
+
+
+
+    internal static bool IsUntitledStored(string title)
+        => string.IsNullOrWhiteSpace(title)
+           || title == "(无标题)"
+           || title == App.GetString("DiaryEditor_Untitled");
+
     public DiaryEditorPage()
     {
         InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true); 
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         Loaded += Page_Loaded;
         Unloaded += Page_Unloaded;
-        KeyDown += Page_KeyDown; // N5D-07: Esc closes the three toolbar picker panels (U2 parity)
+        KeyDown += Page_KeyDown;
     }
 
     private void Page_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -301,46 +305,46 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)
     {
-        
-        
-        
+
+
+
     }
 
     private void OnNavigationStarting(Microsoft.Web.WebView2.Core.CoreWebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
     {
         var uri = e.Uri;
-        // N2-37d: Chromium's blocked-popup placeholder - it must NEVER replace the editor document
-        // (owner-tested: entire page blank, unrecoverable without restart). Cancel unconditionally;
-        // the document-level click takeover above makes this path unreachable in normal flows.
+
+
+
         if (uri == "about:blank#blocked")
         {
             e.Cancel = true;
             return;
         }
-        
-        
+
+
         if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             e.Cancel = true;
-            OpenExternalLink(uri.ToString()); // N2-37: parity with rich-text mode - preview links open through the whitelisted opener instead of dying silently
+            OpenExternalLink(uri.ToString());
         }
         else if (!uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) &&
                  !uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
         {
-            
-            // against the data: base URL NAVIGATED AWAY - the editor DOM got replaced by an empty
-            // document, killing the JS bundle (mode switch dead, only XAML chrome remained).
-            // Cancel everything that is not the bundle's own data:/about: document.
+
+
+
+
             e.Cancel = true;
         }
     }
 
-    /// <summary>
-    
-    /// unhandled, WebView2 replaced the editor document (owner-tested blank page). Open through
-    /// the whitelisted opener instead of spawning a popup.
-    /// </summary>
+
+
+
+
+
     private void OnNewWindowRequested(object? sender, Microsoft.Web.WebView2.Core.CoreWebView2NewWindowRequestedEventArgs e)
     {
         e.Handled = true;
@@ -349,38 +353,46 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     private void OnNavigationCompleted(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (!e.IsSuccess) { _webViewReady = false; return; } 
-        _navigatingFormat = null; // N4D-02: the in-flight template has landed and matches _loadedFormat
+        if (!e.IsSuccess)
+        {
+
+
+
+            Services.CrashLogger.LogNote("DiaryEditorNavigationFailed", $"日记编辑器导航失败: {e.WebErrorStatus}");
+            _webViewReady = false;
+            return;
+        }
+        _navigatingFormat = null;
         _webViewReady = true;
         SetDiaryContent(_currentDiary);
-        _ = RebaselineContentAfterRenderAsync(); // N2-38: re-baseline the dirty snapshot from the editor's normalized output
+        _ = RebaselineContentAfterRenderAsync();
         UpdateToolbarForFormat();
-        UpdateMdViewSwitch(true); 
+        UpdateMdViewSwitch(true);
     }
 
-    /// <summary>N3-15: set by the editor's native input event (user typing/paste), cleared on every
-    /// content load. While true the post-render re-baseline must NOT overwrite _initialContent -
-    /// doing so would fold the user's fresh edits into the baseline and a subsequent save-compare
-    /// would see "clean" and silently drop them.</summary>
+
+
+
+
     private bool _userEditedSinceRender;
 
-    /// <summary>
-    
-    /// comparing the sanitized SOURCE snapshot against getHTML() made every legacy entry open as
-    /// "dirty" (spurious save + ModifiedAt bump). Re-baseline from the editor's own normalized
-    /// output shortly after the render; MD round-trips are stable so only HTML re-baselines.
-    /// </summary>
+
+
+
+
+
+
     private async System.Threading.Tasks.Task RebaselineContentAfterRenderAsync()
     {
         try
         {
-            await System.Threading.Tasks.Task.Delay(500); // let SetDiaryContent's script settle (user-speed edits are far slower)
+            await System.Threading.Tasks.Task.Delay(500);
             if (!_webViewReady || _loadedFormat == "markdown") return;
-            if (_userEditedSinceRender) return; // N3-15: keep the source snapshot as baseline - the user's in-window edits must stay dirty
+            if (_userEditedSinceRender) return;
             var body = await GetJsStringAsync("getBody()");
-            // N4-07: store the SANITIZED body - the save side compares Sanitize(getBody()) (line ~662)
-            // and Tiptap emits "color: #7276FF" while the sanitizer normalizes to "color:#7276FF", so
-            // the raw baseline never matched and every colored entry re-opened as spurious-dirty.
+
+
+
             if (body != null) _initialContent = HtmlSanitizer.Sanitize(body);
         }
         catch { }
@@ -411,7 +423,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             }
             else if (action == "userEdited")
             {
-                _userEditedSinceRender = true; // N3-15: see RebaselineContentAfterRenderAsync
+                _userEditedSinceRender = true;
             }
         }
         catch { }
@@ -420,15 +432,15 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     private static void OpenExternalLink(string url)
     {
         var target = url.Trim();
-        // N3-39: prepend https:// only when there is NO scheme at all - a scheme is text before the
-        // first ':' that appears before any '/'. "mailto:user@x" has a scheme and must not become
-        // "https://mailto:..." (which broke mailto even though the whitelist below allows it).
+
+
+
         var colon = target.IndexOf(':');
         var slash = target.IndexOf('/');
         if (colon < 0 || (slash >= 0 && slash < colon)) target = "https://" + target;
-        // NH3 (defense-in-depth): only schemes the HtmlSanitizer whitelist allows may reach
-        // ShellExecute. file://, javascript:, ms-* etc. are dropped even if a future regression
-        // ever lets one through the content layer.
+
+
+
         var lower = target.ToLowerInvariant();
         if (!(lower.StartsWith("http://") || lower.StartsWith("https://") || lower.StartsWith("mailto:") || lower.StartsWith("ftp://")))
         {
@@ -449,13 +461,13 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        
-        
+
+
         if (_webViewReady) return;
         try
         {
-            
-            
+
+
             var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(
                 null,
                 System.IO.Path.Combine(
@@ -477,18 +489,18 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             ContentWebView.NavigationCompleted -= OnNavigationCompleted;
             ContentWebView.NavigationCompleted += OnNavigationCompleted;
 
-            
+
             cv.NavigationStarting -= OnNavigationStarting;
             cv.NavigationStarting += OnNavigationStarting;
 
-            
-            // and hit NewWindowRequested - unhandled, WebView2 left the editor document (owner-tested
-            // blank page). Route them through the whitelisted opener instead.
+
+
+
             cv.NewWindowRequested -= OnNewWindowRequested;
             cv.NewWindowRequested += OnNewWindowRequested;
 
             ContentWebView.NavigateToString(_loadedFormat == "markdown" ? GetMarkdownHtml() : GetEditorHtml());
-            _navigatingFormat = _loadedFormat; // N4D-02: remember which template is in flight
+            _navigatingFormat = _loadedFormat;
         }
         catch (Exception ex)
         {
@@ -498,13 +510,13 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     public void LoadDiary(DiaryEntry? diary, string? newFormat = null)
     {
-        BackButton.IsEnabled = true; // N4D-03: re-arm the back button for this editing session
+        BackButton.IsEnabled = true;
         _currentDiary = diary;
-        _currentImageBytes = diary != null ? EstimateImageBytes(diary.Content) : 0; 
+        _currentImageBytes = diary != null ? EstimateImageBytes(diary.Content) : 0;
         var format = diary?.Format ?? newFormat ?? "html";
         if (diary != null)
         {
-            _initialTitle = (diary.Title == "(无标题)" || diary.Title == App.GetString("DiaryEditor_Untitled")) ? "" : diary.Title;
+            _initialTitle = IsUntitledStored(diary.Title) ? "" : diary.Title;
             _initialContent = format == "markdown" ? diary.Content : HtmlSanitizer.Sanitize(diary.Content);
         }
         else
@@ -515,49 +527,49 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
         if (_webViewReady && _loadedFormat != format)
         {
-            
+
             _loadedFormat = format;
             _webViewReady = false;
             ContentWebView.NavigateToString(format == "markdown" ? GetMarkdownHtml() : GetEditorHtml());
-            _navigatingFormat = format; // N4D-02
+            _navigatingFormat = format;
         }
         else if (_webViewReady)
         {
             SetDiaryContent(diary);
-            if (format != "markdown") _ = RebaselineContentAfterRenderAsync(); // N3-11: N2-38 only re-baselined the first open (OnNavigationCompleted); a cached-editor re-open lands here and must re-baseline too, otherwise every legacy entry opened a second time still compared dirty
+            if (format != "markdown") _ = RebaselineContentAfterRenderAsync();
         }
         else if (_navigatingFormat != null && _navigatingFormat != format)
         {
-            // N4D-02: a template navigation for another format is still in flight - restart it for this
-            // format. Otherwise the landing handler would post setAll/setMd per the NEW _loadedFormat into
-            // the OLD bundle, get silently dropped (PostMessageAsync), and leave an A-template + B-format
-            // blank editor stuck until another format switch.
+
+
+
+
             _loadedFormat = format;
             ContentWebView.NavigateToString(format == "markdown" ? GetMarkdownHtml() : GetEditorHtml());
             _navigatingFormat = format;
         }
         else
         {
-            
+
             _loadedFormat = format;
         }
         ResetFormatStates();
     }
 
-    
+
     private void SetDiaryContent(DiaryEntry? diary)
     {
         if (diary == null) return;
-        _userEditedSinceRender = false; // N3-15: fresh content load - the edit window restarts
-        string title = (diary.Title == "(无标题)" || diary.Title == App.GetString("DiaryEditor_Untitled")) ? "" : diary.Title;
+        _userEditedSinceRender = false;
+        string title = IsUntitledStored(diary.Title) ? "" : diary.Title;
         if (_loadedFormat == "markdown")
             PostMessageAsync("setMd", new { title = title, body = diary.Content });
         else
             PostMessageAsync("setAll", new { title = title, body = HtmlSanitizer.Sanitize(diary.Content) });
     }
 
-    /// <summary>Estimate the total decoded byte size of base64 images embedded in the stored HTML
-    
+
+
     private static long EstimateImageBytes(string html)
     {
         if (string.IsNullOrEmpty(html)) return 0;
@@ -567,8 +579,8 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         return total;
     }
 
-    
-    
+
+
     public void ClearContent()
     {
         try
@@ -580,16 +592,16 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         _currentImageBytes = 0;
         _initialTitle = null;
         _initialContent = null;
-        BackButton.IsEnabled = true; // N4D-03: fade-out finished - the editor is idle again
+        BackButton.IsEnabled = true;
         ResetFormatStates();
     }
 
-    
-    
+
+
     public void Shutdown()
     {
         _webViewReady = false;
-        _navigatingFormat = null; // N4D-02
+        _navigatingFormat = null;
         try { ContentWebView.Close(); } catch { }
         _currentDiary = null;
         _currentImageBytes = 0;
@@ -597,9 +609,9 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         _initialContent = null;
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void PostMessageAsync(string action, object? data = null)
     {
@@ -607,19 +619,31 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         {
             var cv = ContentWebView.CoreWebView2;
             if (cv == null || !_webViewReady) { System.Diagnostics.Debug.WriteLine($"PostMessage 丢弃（WebView2 未就绪）: {action}"); return; }
-            // N4-08: toolbar commands reach ProseMirror programmatically and never dispatch a native
-            // input event, so the JS "userEdited" signal (N3-15) misses them - a command applied inside
-            // the 500ms re-baseline window used to be folded into the baseline and silently dropped on
-            // save. Mark C#-side for every mutating command (md* edits the MD textarea and never
-            // re-baselines, so it needs no flag).
+
+
+
+
+
             if (action.StartsWith("exec", StringComparison.Ordinal) || action == "insertImage") _userEditedSinceRender = true;
             var msg = new Dictionary<string, object> { ["action"] = action };
             if (data != null)
                 foreach (var p in data.GetType().GetProperties())
                     msg[p.Name] = p.GetValue(data)!;
             cv.PostWebMessageAsString(JsonSerializer.Serialize(msg));
+
+
+            if (action.StartsWith("md", StringComparison.Ordinal))
+            {
+                try { ContentWebView.Focus(FocusState.Programmatic); } catch { }
+                _ = RefocusMdTextareaAsync(cv);
+            }
         }
         catch { }
+    }
+
+    private static async System.Threading.Tasks.Task RefocusMdTextareaAsync(Microsoft.Web.WebView2.Core.CoreWebView2 cv)
+    {
+        try { await cv.ExecuteScriptAsync("(function(){var t=document.querySelector('textarea');if(t){try{t.focus({preventScroll:true})}catch(e){t.focus()}}})()"); } catch { }
     }
 
     private async System.Threading.Tasks.Task<string?> GetJsStringAsync(string script)
@@ -628,34 +652,39 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         {
             if (ContentWebView.CoreWebView2 == null) return null;
             var json = await ContentWebView.CoreWebView2.ExecuteScriptAsync(script);
-            // NH2: no ?? "" here - a JSON literal "null" (the script threw) must stay null so the
-            // save guard treats it as failure; coercing to "" made it indistinguishable from real
-            // empty content and let a blank overwrite through.
+
+
+
             return JsonSerializer.Deserialize<string>(json);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"执行 JS 失败: {ex}");
-            return null; // C5 (Round 5): JS failure returns null (vs empty string); save aborts to avoid blank overwrite
+            return null;
         }
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private async void BackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!BackButton.IsEnabled) return; // N4D-03: swallow rapid double-clicks while the first navigation's fade-out is still running
+        if (!BackButton.IsEnabled) return;
         BackButton.IsEnabled = false;
         bool wasNew = _currentDiary == null;
         bool saved;
         try { saved = await SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); }
-        catch { saved = false; } // N2-39: a hung WebView2 script must not wedge the back button (N1-31 parity with the exit/lock/restart paths)
+        catch { saved = false; }
         if (saved) App.ShowToast(App.GetString(wasNew ? "Common_Toast_Created" : "Common_Toast_Modified"));
-        else if (_userEditedSinceRender) App.ShowToast(App.GetString("Editor_SaveFail_Toast")); 
-        App.MainWindow?.NavigateBackFromEditor(); // re-enabled by ClearContent/LoadDiary when the editor is next used
+        else if (_userEditedSinceRender) App.ShowToast(App.GetString("Editor_SaveFail_Toast"));
+        App.MainWindow?.NavigateBackFromEditor();
     }
+
+
+
+
+    public bool HasUnsavedEdits => _userEditedSinceRender;
 
     public async System.Threading.Tasks.Task<bool> SaveCurrentDiaryAsync()
     {
@@ -670,41 +699,53 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         string? rawBody = await GetJsStringAsync(isMd ? "getMd()" : "getBody()");
         if (rawTitle == null || rawBody == null)
         {
-            // C5 (Round 5): JS failed (navigating/destroyed) - abort save to prevent blank overwrite
+
             System.Diagnostics.Debug.WriteLine("日记保存被阻止：JS 执行失败，内容未变更");
             return false;
         }
 
         string plainTitle = System.Text.RegularExpressions.Regex.Replace(rawTitle, "<.*?>", "").Trim();
         plainTitle = System.Web.HttpUtility.HtmlDecode(plainTitle);
-        plainTitle = EnforceTitleLength(plainTitle); 
+        plainTitle = EnforceTitleLength(plainTitle);
         string cleanedBody = isMd ? rawBody : HtmlSanitizer.Sanitize(rawBody);
         bool bodyHasContent;
         if (isMd)
-            bodyHasContent = !string.IsNullOrWhiteSpace(rawBody); 
+            bodyHasContent = !string.IsNullOrWhiteSpace(rawBody);
         else
-            
-            // (or any non-empty text) as "has content"; an empty paragraph <p></p> counts as empty.
+
+
             bodyHasContent = cleanedBody.Contains("<img", StringComparison.OrdinalIgnoreCase)
                 || !string.IsNullOrWhiteSpace(System.Text.RegularExpressions.Regex.Replace(cleanedBody, "<.*?>", "").Trim());
 
         if (_currentDiary == null && string.IsNullOrEmpty(plainTitle) && !bodyHasContent)
-            return false;
+        {
 
-        
-        if (_currentDiary != null && plainTitle == _initialTitle && cleanedBody == _initialContent)
+
+            _userEditedSinceRender = false;
             return false;
+        }
+
+
+        if (_currentDiary != null && plainTitle == _initialTitle && cleanedBody == _initialContent)
+        {
+
+            _userEditedSinceRender = false;
+            return false;
+        }
 
         var entry = _currentDiary ?? new DiaryEntry();
-        if (_currentDiary == null && isMd) entry.Format = "markdown"; 
-        entry.Title = string.IsNullOrEmpty(plainTitle) ? App.GetString("DiaryEditor_Untitled") : plainTitle;
+        if (_currentDiary == null && isMd) entry.Format = "markdown";
+
+
+
+        entry.Title = plainTitle;
         entry.Content = cleanedBody;
 
         if (_currentDiary == null)
         {
             entry.CreatedAt = DateTime.Now;
             entry.ModifiedAt = entry.CreatedAt;
-            entry.WorkspaceId = App.CurrentWorkspaceId; 
+            entry.WorkspaceId = App.CurrentWorkspaceId;
         }
         else
         {
@@ -712,24 +753,28 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         }
 
         App.MainWindow?.UpsertDiary(entry);
-        // N4W-02 companion: snapshot the just-saved state so repeat invocations (Closing after ExitApp's
-        // pre-save, rapid double-back) hit the dirty check above instead of re-upserting - and a brand-new
-        // diary is no longer duplicated by a second call while _currentDiary is still null.
+
+
+
         _currentDiary = entry;
         _initialTitle = plainTitle;
         _initialContent = cleanedBody;
+
+
+
+        _userEditedSinceRender = false;
         return true;
     }
 
-    // ================================================================
-    //  B / I / U
-    // ================================================================
 
-    /* ========== DiaryEditor B/I/U Toolbar ==========
-Function: Bold/italic/underline buttons: execCommand + format-state feedback, selectionchange-driven active state, floating capsule toolbar
-Corresponding UI: DiaryEditorPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
+
+
+
 private void BoldButton_Click(object sender, RoutedEventArgs e)
     {
         PostMessageAsync("execBold");
@@ -758,7 +803,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
     private void AlignButton_Click(object sender, RoutedEventArgs e)
     {
         if (_isAlignPickerOpen) { HideAlignPickerPanel(); return; }
-        HideColorPickerPanel(); // only one picker may be open at a time
+        HideColorPickerPanel();
         ShowAlignPickerPanel();
     }
 
@@ -816,10 +861,10 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void UpdateFormatButtonStates()
     {
-        
-        
-        var activeBg = App.GetBrush("AppPrimaryButtonBrush");   
-        var normalBg = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)); 
+
+
+        var activeBg = App.GetBrush("AppPrimaryButtonBrush");
+        var normalBg = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         var white = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         var iconBrush = App.GetBrush("IconForegroundBrush");
 
@@ -836,37 +881,37 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void ResetFormatStates()
     {
-        
+
         HideAlignPickerPanel();
         HideColorPickerPanel();
         HideMdHeadingPickerPanel();
         _isBold = _isItalic = _isUnderline = false;
-        // NH9: per-document defaults - a reused editor instance must not inherit the previous
-        // document's Preview mode or collapsed toolbar.
+
+
         _isMdPreview = false;
-        
-        
+
+
         if (_webViewReady)
         {
             if (_loadedFormat == "markdown") { PostMessageAsync("showWrite"); UpdateMdViewSwitch(true); ExpandMdToolbar(); }
-            else ExpandHtmlToolbar(); // N4D-01: was unconditional ExpandMdToolbar - an html doc whose toolbar was folded came back showing the MD toolbar
+            else ExpandHtmlToolbar();
             UpdateFormatButtonStates();
         }
         else _isToolbarCollapsed = false;
     }
 
-    // ================================================================
 
-    // ================================================================
 
-        
-        
+
+
+
+
         private void MeltToolbarAway(Grid container, Microsoft.UI.Xaml.Media.CompositeTransform tr)
         {
             if (_isToolbarCollapsed) return;
             HideAlignPickerPanel();
             HideColorPickerPanel();
-            HideMdHeadingPickerPanel(); 
+            HideMdHeadingPickerPanel();
             _isToolbarCollapsed = true;
             ExpandButton.Visibility = Visibility.Collapsed;
             var sb = new Storyboard();
@@ -915,16 +960,16 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         bool isMd = _loadedFormat == "markdown";
         if (isMd)
         {
-            if (_isMdPreview) { _isMdPreview = false; PostMessageAsync("showWrite"); UpdateMdViewSwitch(true); } 
+            if (_isMdPreview) { _isMdPreview = false; PostMessageAsync("showWrite"); UpdateMdViewSwitch(true); }
             ExpandMdToolbar();
             return;
         }
 
-        
+
         ExpandHtmlToolbar();
     }
 
-    /// <summary>N4D-01: html counterpart of ExpandMdToolbar - expand the HTML toolbar capsule after a fold.</summary>
+
     private void ExpandHtmlToolbar()
     {
         if (!_isToolbarCollapsed) return;
@@ -942,7 +987,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
     private void ColorButton_Click(object sender, RoutedEventArgs e)
     {
         if (_isColorPickerOpen) { HideColorPickerPanel(); return; }
-        HideAlignPickerPanel(); // only one picker may be open at a time
+        HideAlignPickerPanel();
         ShowColorPickerPanel();
     }
 
@@ -991,9 +1036,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         HideColorPickerPanel();
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private async void InsertButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1018,10 +1063,10 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
             await stream.AsStream().CopyToAsync(ms);
             var bytes = ms.ToArray();
             if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge")); return; }
-            
-            // N3-41: re-anchor on the REAL DOM before every insert - _currentImageBytes only grew on
-            // insert and never shrank when the user deleted an image, so the 20MB cap eventually
-            // rejected legal inserts by counting stale/removed bytes.
+
+
+
+
             long existing = await QueryEmbeddedImageBytesAsync();
             if (existing + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded")); return; }
             _currentImageBytes = existing + bytes.Length;
@@ -1031,9 +1076,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         catch { }
     }
 
-    /// <summary>N3-41: sum the DECODED bytes of every data:-embedded image currently in the editor body
-    /// (HTML format only). Falls back to the tracked counter when the DOM query fails (MD format /
-    /// WebView hiccup), so the cap never hard-fails on a stale count.</summary>
+
+
+
     private async System.Threading.Tasks.Task<long> QueryEmbeddedImageBytesAsync()
     {
         try
@@ -1046,9 +1091,9 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         catch { return _currentImageBytes; }
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void InitializeToolbarIcons()
     {
@@ -1072,7 +1117,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
         InitializeRestoreIcon();
 
-        
+
         MdWritePathIcon.Data = App.CreateGeometry(IconData.MdWrite);
         MdPreviewPathIcon.Data = App.CreateGeometry(IconData.MdPreview);
         MdUndoPathIcon.Data = App.CreateGeometry(IconData.EditorUndo);
@@ -1100,15 +1145,15 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void InitializeRestoreIcon()
     {
-        
-        // previously borrowed EditorRedo (semantic mismatch: reset is not a timeline operation).
+
+
         var cv = XamlBindingHelper.ConvertValue;
         RestorePathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.EditorColorReset);
     }
 
-    // ================================================================
-    
-    // ================================================================
+
+
+
 
     private void MdUndoButton_Click(object sender, RoutedEventArgs e) => PostMessageAsync("mdUndo");
     private void MdRedoButton_Click(object sender, RoutedEventArgs e) => PostMessageAsync("mdRedo");
@@ -1133,7 +1178,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         HideMdHeadingPickerPanel();
         _isToolbarCollapsed = true;
         var sb = new Storyboard();
-        
+
         var f = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(Services.Motion.DlgOut), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(f, MdToolbarContainer); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
         var s2 = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(Services.Motion.DlgOut), EasingFunction = Services.Motion.Accelerate() };
@@ -1224,7 +1269,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         ToolbarContainer.Visibility = isMd ? Visibility.Collapsed : Visibility.Visible;
         MdToolbarContainer.Visibility = isMd ? Visibility.Visible : Visibility.Collapsed;
         MdViewSwitch.Visibility = isMd ? Visibility.Visible : Visibility.Collapsed;
-        ExpandButton.Visibility = Visibility.Collapsed; 
+        ExpandButton.Visibility = Visibility.Collapsed;
     }
 
     private GeometryGroup MakeGeometryGroup(string[] paths)

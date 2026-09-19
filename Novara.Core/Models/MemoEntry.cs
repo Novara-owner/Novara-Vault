@@ -14,8 +14,8 @@ public class MemoEntry
     public bool IsDeleted { get; set; }
     public DateTime DeletedAt { get; set; }
     public string Protocol { get; set; } = "";
-    /// <summary>4.0: custom-type entries can pick their own icon. Empty = legacy behaviour (the
-    
+
+
     public string IconKey { get; set; } = "";
-    public string WorkspaceId { get; set; } = ""; // 9.3 Workspace: owning workspace id (empty = unassigned); MemoGroup stays workspace-less
+    public string WorkspaceId { get; set; } = "";
 }

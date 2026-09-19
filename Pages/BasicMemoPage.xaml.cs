@@ -1,8 +1,3 @@
-/* ========== BasicMemoPage - Memo Tab ==========
-Function: Memo groups & entries management - context menus (create/edit/pin/star/delete), search reparent, API connectivity check, group/entry cards
-Corresponding UI: BasicMemoPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -26,9 +21,9 @@ public sealed partial class BasicMemoPage : Page
     private string _pendingMenuAction = null!;
 
     private string _selectedIcon = "";
-    private Services.IconRing? _iconRing; 
-    private string _entrySelectedIcon = "";           
-    private Services.IconRing? _entryIconRing; 
+    private Services.IconRing? _iconRing;
+    private string _entrySelectedIcon = "";
+    private Services.IconRing? _entryIconRing;
     private readonly System.Random _iconRandom = new();
 
     private string _selectedEntryType = "";
@@ -48,30 +43,35 @@ public sealed partial class BasicMemoPage : Page
     private readonly Dictionary<Border, DateTime> _groupCreatedAt = new();
     private readonly Dictionary<Border, DateTime> _entryCreatedAt = new();
     private bool _storeLoaded;
-    private Novara.Models.NovaraDatabase? _loadedDb; // N5M-04: db snapshot this UI build was created from
+    private System.Threading.CancellationTokenSource? _renderCts;
+    private Novara.Models.NovaraDatabase? _loadedDb;
     private List<Border> _standaloneEntries = new();
     private HashSet<Border> _entriesInGroup = new();
     private Border _uncategorizedCard = null!;
     private Border _targetGroupCard = null!;
     private Border _currentEntryCard = null!;
-    
-    
+
+
     private readonly HashSet<Border> _pinnedEntryCards = new();
     private Border _editingEntryCard = null!;
-    
+
     private string _editOrigName = "";
     private string _editOrigIcon = "";
     private List<(string label, string value)> _editOrigFields = new();
-    private string _editGroupOrigName = ""; 
+    private string _editGroupOrigName = "";
     private Border _pendingMoveEntry = null!;
     private Dictionary<Border, FrameworkElement> _entryPinIcons = new();
     private HashSet<Border> _starredEntries = new();
     private Dictionary<Border, FrameworkElement> _entryStarIcons = new();
     private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
     private readonly Dictionary<Border, (CancellationTokenSource Cts, bool Expanded)> _entryExpand = new();
-    private readonly Dictionary<Border, string> _entryIconKeys = new(); // 4.0: entry card -> custom icon key (empty = legacy jigsaw)
 
-    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new(); // N5M-01: per-box CTS (E5-24 pattern)
+
+
+    private readonly Dictionary<Border, List<TextBlock>> _maskedFieldTexts = new();
+    private readonly Dictionary<Border, string> _entryIconKeys = new();
+
+    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
 
     private readonly Dictionary<Border, string> _apiProtocols = new();
@@ -81,12 +81,12 @@ public sealed partial class BasicMemoPage : Page
     private string _selectedApiProtocol = "Bearer";
     private Border? _apiDiagCard;
     private System.Threading.CancellationTokenSource? _apiDiagCts;
-    private System.Action? _apiConfirmProceed;   
+    private System.Action? _apiConfirmProceed;
     private Border? _relayProbeCard;
     private System.Threading.CancellationTokenSource? _relayProbeCts;
-    private Storyboard? _relayProbePulse;         
+    private Storyboard? _relayProbePulse;
 
-    
+
     private Border? _dragCard;
     private Panel? _dragContainer;
     private bool _dragging;
@@ -103,11 +103,11 @@ public sealed partial class BasicMemoPage : Page
     public BasicMemoPage()
     {
         this.InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content); // dialog depth: shadow + chrome veil auto-wiring
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         this.Loaded += Page_Loaded;
-        this.Unloaded += OnPageUnloaded; // 3.0.5
+        this.Unloaded += OnPageUnloaded;
         this.KeyDown += Page_KeyDown;
-        GenerateIcon2.Data = App.CreateGeometry(IconData.Dice); // 9.3 dice icon on the six password-slot generate buttons
+        GenerateIcon2.Data = App.CreateGeometry(IconData.Dice);
         GenerateIcon3.Data = App.CreateGeometry(IconData.Dice);
         GenerateIcon4.Data = App.CreateGeometry(IconData.Dice);
         GenerateIcon5.Data = App.CreateGeometry(IconData.Dice);
@@ -118,11 +118,11 @@ public sealed partial class BasicMemoPage : Page
         AddInfoIcon.PointerExited += (_, _) => AddInfoIcon.Opacity = 0.6;
     }
 
-    /* ========== BasicMemoPage Right Click Menus ==========
-Function: All context menus for memo groups & entries: create/edit/pin/star/detect/delete; menu item text & icons switch by state
-Corresponding UI: BasicMemoPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
 private MenuFlyout BuildContextMenu()
     {
         var menu = new MenuFlyout();
@@ -230,7 +230,7 @@ private MenuFlyout BuildContextMenu()
         var menu = new MenuFlyout();
         menu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
 
-        for (int i = 0; i < EntryTypeLabels.Length; i++)
+        for (int i = 0; i < EntryTypeLabels.Count; i++)
         {
             var type = EntryTypeLabels[i];
             var item = new MenuFlyoutItem
@@ -242,7 +242,7 @@ private MenuFlyout BuildContextMenu()
             item.Click += (s, e) =>
             {
                 _selectedEntryType = type;
-                EntryTypeButtonText.Text = TypeLabel(type); // C4 (Round 5): avoid Chinese contract value in EN UI (aligned with edit path)
+                EntryTypeButtonText.Text = TypeLabel(type);
                 EntryTypeButtonText.Foreground = App.GetBrush("AppTextPrimaryBrush");
                 ApplyEntryFormLayout(type);
             };
@@ -251,7 +251,7 @@ private MenuFlyout BuildContextMenu()
         return menu;
     }
 
-    /// <summary>N4M-02: B9 insert index for group stacks - a pinned entry stays first; the incoming card lands after it (or at top).</summary>
+
     private int PinnedFirstInsertIndex(Panel container, Border incoming)
     {
         var pinned = RegionPinnedEntryCard(container);
@@ -260,13 +260,13 @@ private MenuFlyout BuildContextMenu()
             : 0;
     }
 
-    
-    
+
+
     private Border? RegionPinnedEntryCard(Panel container)
         => container.Children.OfType<Border>().FirstOrDefault(b => _pinnedEntryCards.Contains(b));
 
-    
-    
+
+
     private void StripEntryPersonalMarks(Border card)
     {
         bool hadPin = _pinnedEntryCards.Remove(card);
@@ -280,14 +280,14 @@ private MenuFlyout BuildContextMenu()
         }
     }
 
-    
+
     private void MoveEntryToGroup(Border card, Border gb)
     {
-        
+
         var srcPanel = card.Parent as Panel;
         if (srcPanel != null) srcPanel.Children.Remove(card);
         StripEntryPersonalMarks(card);
-        
+
         if (srcPanel is StackPanel srcSp && srcSp.Parent is Grid srcGrid && srcGrid.Parent is Border srcGroup && !ReferenceEquals(srcGroup, gb))
         {
             UpdateGroupCount(srcGroup);
@@ -302,17 +302,17 @@ private MenuFlyout BuildContextMenu()
         var targetContent = gb.Child as Grid;
         if (targetContent != null && targetContent.Children.Count > 3 && targetContent.Children[2] is StackPanel entryStack)
         {
-            entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, card), card); // N4M-02: was Add - a pinned entry moved into a group sank to the bottom (B9) and the order persisted
+            entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, card), card);
             if (targetContent.Children[3] is Grid emptyHint)
                 emptyHint.Visibility = Visibility.Collapsed;
             UpdateGroupCount(gb);
         }
         SyncUncategorizedCard();
         PersistAll();
-        ApplyCardFilters(); // N2-17: replay workspace/empty-group filters - the entry may belong to a group outside the active workspace
+        ApplyCardFilters();
     }
 
-    /// <summary>N2-57: the group card an entry currently lives in (null = standalone/uncategorized).</summary>
+
     private Border? FindOwningGroupCard(Border entryCard)
     {
         if (!_entriesInGroup.Contains(entryCard)) return null;
@@ -321,12 +321,12 @@ private MenuFlyout BuildContextMenu()
         return null;
     }
 
-    
+
     private void MoveEntryOut(Border card)
     {
         var p = card.Parent as Panel;
         if (p != null) p.Children.Remove(card);
-        StripEntryPersonalMarks(card); 
+        StripEntryPersonalMarks(card);
 
         if (p is StackPanel sp && sp.Parent is Grid g && g.Parent is Border srcGroup)
         {
@@ -335,13 +335,13 @@ private MenuFlyout BuildContextMenu()
                 eh.Visibility = Visibility.Visible;
         }
         _entriesInGroup.Remove(card);
-        
-        // logic as NewEntryConfirmButton_Click's standalone branch) - Add() put the card at the
-        
+
+
+
         int insIdx = 0;
         if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
             insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-        
+
         if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
         {
             int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
@@ -358,7 +358,7 @@ private MenuFlyout BuildContextMenu()
         if (_entryIds.TryGetValue(card, out var outId)) { var me = FindEntry(outId); if (me != null) me.GroupId = null; }
         SyncUncategorizedCard();
         PersistAll();
-        ApplyCardFilters(); // N2-17: replay filters - the uncategorized bucket may be collapsed in the active workspace
+        ApplyCardFilters();
     }
 
     private void EntryTypeButton_Click(object sender, RoutedEventArgs e)
@@ -381,41 +381,41 @@ private MenuFlyout BuildContextMenu()
         FormField5TextBox.Text = "";
         FormField6TextBox.Text = "";
         FormField7TextBox.Text = "";
-        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed; // 9.3: TOTP box reset with the rest of the form
-        TotpSection.Visibility = Visibility.Collapsed; // 9.3: hidden until a type is selected (initial dialog state shows type picker only)
+        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed;
+        TotpSection.Visibility = Visibility.Collapsed;
         CustomFormContainer.Visibility = Visibility.Collapsed;
         CustomNameTextBox.Text = "";
         CustomInfoTextBox_0.Text = "";
         CustomInfoDynamicPanel.Children.Clear();
         _customInfoCount = 1;
         CustomInfoAddButton.Visibility = Visibility.Visible;
-        ClearEntryIconSelection(); 
-        UpdateNewEntryConfirmState(); // UI-2: no type selected -> confirm disabled
+        ClearEntryIconSelection();
+        UpdateNewEntryConfirmState();
     }
 
-    // UI-2 (2026-08-11): live validation for the new-entry dialog - the confirm button stays
-    // disabled (grey, no hover) until every required field of the selected type is non-blank.
+
+
     private void UpdateNewEntryConfirmState()
     {
         string type = _selectedEntryType;
         bool valid = false;
         if (type == "自定义")
         {
-            
+
             valid = !string.IsNullOrWhiteSpace(CustomNameTextBox.Text)
                  && !string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text);
         }
-        else if (!string.IsNullOrWhiteSpace(type)) 
+        else if (!string.IsNullOrWhiteSpace(type))
         {
             valid = !string.IsNullOrWhiteSpace(EntryNameTextBox.Text);
             if (type == "API Key") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text) && !string.IsNullOrWhiteSpace(FormField3TextBox.Text);
             else if (type == "网站") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text);
-            else if (type == "邮箱" || type == "账户") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text); 
-            else if (type == "银行卡") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text); 
-            else if (type == "WiFi") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text); 
-            else if (type == "证件") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text); 
+            else if (type == "邮箱" || type == "账户") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text);
+            else if (type == "银行卡") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text);
+            else if (type == "WiFi") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text);
+            else if (type == "证件") valid = valid && !string.IsNullOrWhiteSpace(FormField2TextBox.Text);
         }
-        
+
         if (valid && _editingEntryCard != null && !EntryContentChanged(type))
             valid = false;
         NewEntryConfirmButton.IsEnabled = valid;
@@ -426,19 +426,19 @@ private MenuFlyout BuildContextMenu()
         UpdateNewEntryConfirmState();
     }
 
-    private bool _entrancePlayed; // E1-26: play the entrance animation only once (page instances are cached by MainWindow)
-    private bool _confirming; // E3-10: one-shot guard for the create confirm button - double-click during the hide animation created duplicate entries
-    private bool _renderInProgress; // N4M-01: true while the chunked fill is still adding cards to the UI
-    private bool _persistAfterRender; // N4M-01: a persistence request arrived during the fill window - rerun it after the fill
+    private bool _entrancePlayed;
+    private bool _confirming;
+    private bool _renderInProgress;
+    private bool _persistAfterRender;
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
 
-        LoadFromStore(); // E1-26: entrance animation now fires inside LoadFromStore after chunked render completes
+        LoadFromStore();
 
-        
-        
-        
+
+
+
         try
         {
             ApplyEntryFormLayout("邮箱");
@@ -447,35 +447,38 @@ private MenuFlyout BuildContextMenu()
         }
         catch { }
 
-        
-        
+
+
         if (_totpTimer != null && !_totpTimer.IsRunning) _totpTimer.Start();
 
         EditGroupClosePathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Close);
     }
 
-    
+
     public void StealFocus() => FocusSink.Focus(FocusState.Programmatic);
 
 
     private async void LoadFromStore()
     {
         if (_storeLoaded) return;
-        _loadedDb = App.Store?.Database; // N5M-04: capture the db this UI build belongs to
+        _loadedDb = App.Store?.Database;
         _storeLoaded = true;
-        HintText.Visibility = Visibility.Collapsed; // P0-1: hide until chunked render decides the real empty state
+        HintText.Visibility = Visibility.Collapsed;
         var db = App.Store?.Database;
-        if (db == null) return;
+
+
+
+        if (db == null) { _storeLoaded = false; return; }
 
         var groups = db.MemoGroups.ToList();
         var entries = db.MemoEntries.Where(x => !x.IsDeleted).ToList();
-        _totpRows.Clear(); // 9.3: rebuild the live TOTP row registry with the fresh card tree
+        _totpRows.Clear();
 
-        bool playEntrance = !_entrancePlayed; // P0-1: only the first load plays the cascade
+        bool playEntrance = !_entrancePlayed;
         int entIdx = 0;
 
-        
-        
+
+
         foreach (var g in groups)
         {
             var card = CreateGroupCard(g.Name, g.IconKey);
@@ -486,16 +489,19 @@ private MenuFlyout BuildContextMenu()
             GroupsContainer.Children.Add(card);
             if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
         }
-        
-        
+
+
         if (_pinnedGroupCard != null && GroupsContainer.Children.Count > 0 && !ReferenceEquals(GroupsContainer.Children[0], _pinnedGroupCard))
         {
             GroupsContainer.Children.Remove(_pinnedGroupCard);
             GroupsContainer.Children.Insert(0, _pinnedGroupCard);
         }
 
-        
-        _renderInProgress = true; // N4M-01: PersistAll during the fill window would rebuild db from the partial UI
+
+        _renderInProgress = true;
+
+        _renderCts?.Cancel();
+        var renderCts = _renderCts = new System.Threading.CancellationTokenSource();
         try
         {
             await ChunkedRender.RunAsync(entries.Count, 6, DispatcherQueue, (s, e) =>
@@ -503,14 +509,14 @@ private MenuFlyout BuildContextMenu()
             for (int i = s; i < e; i++)
             {
                 var en = entries[i];
-                var fields = en.Fields.Select(f => (f.Label, f.Value, f.CanCopy || f.Label == "备注")).ToList(); // 2026-08-29: note is copyable too - display-side flag covers legacy entries saved with CanCopy=false
+                var fields = en.Fields.Select(f => (f.Label, f.Value, f.CanCopy || f.Label == "备注")).ToList();
                 var card = CreateEntryCard(en.Type, en.Name, en.KeyInfo, fields, en.IconKey);
                 _entryIds[card] = en.Id;
                 _entryIconKeys[card] = en.IconKey;
                 _entryCreatedAt[card] = en.CreatedAt;
                 if (!string.IsNullOrEmpty(en.Protocol)) _apiProtocols[card] = en.Protocol;
                 if (en.IsStarred) { _starredEntries.Add(card); if (_entryStarIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
-                
+
                 if (en.IsPinned) { _pinnedEntryCards.Add(card); if (_entryPinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
 
                 if (en.GroupId is Guid gid)
@@ -528,27 +534,47 @@ private MenuFlyout BuildContextMenu()
                     }
 
                 }
-                if (en.IsPinned) { GroupsContainer.Children.Insert(0, card); _standaloneEntries.Insert(0, card); } 
+                if (en.IsPinned) { GroupsContainer.Children.Insert(0, card); _standaloneEntries.Insert(0, card); }
                 else { _standaloneEntries.Add(card); GroupsContainer.Children.Add(card); }
                 if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
             }
-            });
+            }, renderCts.Token);
         }
-        finally { _renderInProgress = false; }
+        catch (System.OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
 
-        _entrancePlayed = true; // P0-1: cascade already played per-card above
+
+
+
+
+            System.Diagnostics.Debug.WriteLine($"备忘录列表渲染失败（页面将被重建）: {ex}");
+            App.MainWindow?.RetireTabPage(typeof(BasicMemoPage));
+            return;
+        }
+
+
+
+
+        finally
+        {
+            renderCts.Dispose();
+            if (ReferenceEquals(_renderCts, renderCts)) { _renderCts = null; _renderInProgress = false; }
+        }
+
+        _entrancePlayed = true;
         if (_standaloneEntries.Count > 0) SyncUncategorizedCard();
-        ApplyCardFilters(); 
-        if (_persistAfterRender) { _persistAfterRender = false; PersistAll(); } // N4M-01: run the deferred rebuild now that every entry has a card
+        ApplyCardFilters();
+        if (_persistAfterRender) { _persistAfterRender = false; PersistAll(); }
     }
 
     private void PersistAll()
     {
         if (_renderInProgress) { _persistAfterRender = true; return; }
-        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return; // N5M-04: stale page after import/reset - never rebuild the new db from old UI // N4M-01: defer - rebuilding db from a partially filled UI would permanently drop not-yet-rendered entries
+        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return;
         var db = App.Store?.Database;
         if (db == null) return;
-        var softDeleted = db.MemoEntries.Where(x => x.IsDeleted).ToList(); // keep trash items across the UI-driven rebuild
+        var softDeleted = db.MemoEntries.Where(x => x.IsDeleted).ToList();
         var groupById = db.MemoGroups.ToDictionary(x => x.Id);
         var entryById = db.MemoEntries.ToDictionary(x => x.Id);
         var groups = new List<MemoGroup>();
@@ -580,18 +606,18 @@ private MenuFlyout BuildContextMenu()
         }
         db.MemoGroups.Clear();
         db.MemoGroups.AddRange(groups);
-        // N2-01: MCP writes land directly in the db without UI cards - keep db entries that are
-        // neither on a card nor soft-deleted across the rebuild, or an Agent-created entry is
-        // silently dropped on the next UI persist (P0). They surface in the UI when the page
-        // instance is rebuilt (NotifyExternalDbMutation marks it stale on MCP writes).
+
+
+
+
         var memoKnownIds = entries.Select(x => x.Id).Concat(softDeleted.Select(x => x.Id)).ToHashSet();
         var memoOrphans = entryById.Values.Where(x => !x.IsDeleted && !memoKnownIds.Contains(x.Id)).ToList();
         db.MemoEntries.Clear();
         db.MemoEntries.AddRange(entries);
-        // N2-16: an entry can be both on a card AND soft-deleted (e.g. MCP deleted it while the page
-        // kept its stale card) - it must land in the db exactly once.
+
+
         var memoSeen = entries.Select(x => x.Id).ToHashSet();
-        db.MemoEntries.AddRange(softDeleted.Where(x => !memoSeen.Contains(x.Id))); // keep soft-deleted items (trash) across the rebuild
+        db.MemoEntries.AddRange(softDeleted.Where(x => !memoSeen.Contains(x.Id)));
         db.MemoEntries.AddRange(memoOrphans);
         App.Store?.SaveAsync();
     }
@@ -634,28 +660,28 @@ private MenuFlyout BuildContextMenu()
         NewGroupDialogTransform.ScaleX = 0.94; NewGroupDialogTransform.ScaleY = 0.94; NewGroupDialogTransform.TranslateY = 24;
         NewGroupDialog.Opacity = 0; DialogScrim.Opacity = 0;
         NewGroupDialogOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         DialogShowAnimation.Begin();
-        _confirming = false; // E4-17: re-arm the one-shot guard when the dialog reopens
+        _confirming = false;
         InitializeIcons();
         LoadUngroupedEntries();
-        // UI-2 (2026-08-11): live validation - the confirm button stays disabled until the name is non-blank.
-        // Explicit IsEnabled=false is required: assigning "" to an already-empty TextBox does NOT raise
-        // TextChanged, so the initial disabled state must not rely on the event.
+
+
+
         GroupNameTextBox.Text = string.Empty;
         ConfirmButton.IsEnabled = false;
     }
 
     private void GroupNameTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        ConfirmButton.IsEnabled = !string.IsNullOrWhiteSpace(GroupNameTextBox.Text); // UI-2: live validity -> disabled (grey, no hover) until valid
+        ConfirmButton.IsEnabled = !string.IsNullOrWhiteSpace(GroupNameTextBox.Text);
     }
 
     private void CloseNewGroupDialog()
     {
         DialogHideAnimation.Completed -= OnDialogHideCompleted;
         DialogHideAnimation.Completed += OnDialogHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         DialogHideAnimation.Begin();
     }
 
@@ -747,7 +773,7 @@ private MenuFlyout BuildContextMenu()
             "鹰_eagle.png", "邮件.png", "圆形_round.png", "云端.png",
             "提醒_reminder.png"
         };
-        
+
         _iconRing ??= new Services.IconRing(IconScrollViewer, IconPanel);
         _iconRing.Tapped -= GroupIconRingTapped;
         _iconRing.Tapped += GroupIconRingTapped;
@@ -760,8 +786,8 @@ private MenuFlyout BuildContextMenu()
                 ? new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } }
                 : null
         });
-        _selectedIcon = ""; 
-        _iconRing?.Highlight(null); 
+        _selectedIcon = "";
+        _iconRing?.Highlight(null);
     }
 
     private void GroupIconRingTapped(Border border)
@@ -771,13 +797,13 @@ private MenuFlyout BuildContextMenu()
         _iconRing?.CenterTo(border);
     }
 
-    
-    
 
-    /// <summary>Populate the custom-entry icon selector (idempotent - built once, reuse across opens).</summary>
+
+
+
     private void LoadEntryIconSelector()
     {
-        
+
         if (EntryIconPanel.Children.Count > 0) return;
         _entryIconRing ??= new Services.IconRing(EntryIconScrollViewer, EntryIconPanel);
         _entryIconRing.Tapped -= EntryIconRingTapped;
@@ -789,7 +815,7 @@ private MenuFlyout BuildContextMenu()
             Tag = key,
             Child = new Viewbox { Width = 24, Height = 24, Stretch = Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } }
         });
-        _entrySelectedIcon = ""; // no default selection: empty = legacy jigsaw
+        _entrySelectedIcon = "";
     }
 
     private void EntryIconRingTapped(Border border)
@@ -797,10 +823,10 @@ private MenuFlyout BuildContextMenu()
         _entrySelectedIcon = border.Tag?.ToString() ?? "";
         _entryIconRing?.Highlight(_entrySelectedIcon);
         _entryIconRing?.CenterTo(border);
-        UpdateNewEntryConfirmState(); 
+        UpdateNewEntryConfirmState();
     }
 
-    /// <summary>Reset the custom-entry icon selection (empty = legacy jigsaw) and clear any highlight.</summary>
+
     private void ClearEntryIconSelection()
     {
         _entrySelectedIcon = "";
@@ -809,13 +835,13 @@ private MenuFlyout BuildContextMenu()
 
     private void LoadUngroupedEntries()
     {
-        UngroupedEntriesPanel.Children.Clear(); // N1-76: ScrollViewer+StackPanel (6th attempt - pure Auto rows, see XAML)
+        UngroupedEntriesPanel.Children.Clear();
 
-        
+
         bool singleMove = _pendingMoveEntry != null;
 
-        
-        
+
+
         var entries = new List<Border>();
         if (!singleMove)
         {
@@ -842,10 +868,10 @@ private MenuFlyout BuildContextMenu()
             UngroupedEntriesPanel.Children.Add(checkBox);
         }
 
-        // N1-76 (10th fix): cap the list ROW short (84px ~ 4 rows) so the whole dialog always fits the
-        // window and the confirm button never overflows the card (measured: content 536 had to shrink
-        // to <=454 on a short window; -160px panel + diag row got it there, so 84px keeps it safely
-        // inside). The list itself scrolls for the rest; shrink the row further for few entries.
+
+
+
+
         UngroupedListSection.RowDefinitions[1].Height = new GridLength(Math.Min(84, entries.Count * 26 + 4));
         UngroupedListSection.Visibility = entries.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -856,7 +882,7 @@ private MenuFlyout BuildContextMenu()
         {
             CornerRadius = new CornerRadius(12),
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
-            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), // E1-09: per-card copy - never mutate the shared theme brush
+            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(16),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -912,7 +938,7 @@ private MenuFlyout BuildContextMenu()
             borderBrush.Color.G,
             borderBrush.Color.B);
         var baseBorderColor = borderBrush.Color;
-        card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }; // E2-05: manual color swap (was ColorAnimation - 0xc000027b-sensitive during page switches)
+        card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
         card.PointerExited += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
         card.ContextRequested += (s, e) => { e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p); };
         AttachCardDrag(card);
@@ -925,17 +951,23 @@ private MenuFlyout BuildContextMenu()
         int count = 0;
         if (groupCard.Child is Grid g && g.Children.Count > 2 && g.Children[2] is StackPanel entryStack)
             foreach (var c in entryStack.Children)
-                if (c.Visibility == Visibility.Visible) count++; 
+                if (c.Visibility == Visibility.Visible) count++;
         ct.Text = string.Format(App.GetString("Memo_Count_N"), count);
     }
 
-    
-    
+
+
     public void ApplyCardFilters()
     {
         string wsId = App.CurrentWorkspaceId;
         bool wsActive = !string.IsNullOrEmpty(wsId);
         var db = App.Store?.Database;
+
+
+
+
+
+        foreach (var texts in _maskedFieldTexts.Values) RestoreFieldMasks(texts);
 
         foreach (var child in GroupsContainer.Children)
         {
@@ -956,8 +988,8 @@ private MenuFlyout BuildContextMenu()
                             if (vis) visibleCount++;
                         }
                 }
-                
-                
+
+
                 gb.Visibility = visibleCount > 0 || !wsActive ? Visibility.Visible : Visibility.Collapsed;
                 if (gb.Child is Grid gg2 && gg2.Children.Count > 3 && gg2.Children[3] is Grid eh)
                     eh.Visibility = visibleCount > 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -1012,6 +1044,28 @@ private MenuFlyout BuildContextMenu()
         _ => type
     };
 
+
+
+
+
+
+
+
+
+
+
+
+    private const string FieldMask = MemoFieldMask.Mask;
+
+    private static bool IsMaskedLabel(string label) => MemoFieldMask.IsMaskedLabel(label);
+
+
+    private static void RestoreFieldMasks(List<TextBlock> maskedTexts)
+    {
+        foreach (var tb in maskedTexts)
+            if (tb.Tag is string) { tb.Text = FieldMask; tb.CharacterSpacing = 150; }
+    }
+
     private static string FieldLabelText(string label) => label switch
     {
         "邮箱地址" => App.GetString("Memo_Field_EmailAddr"),
@@ -1035,8 +1089,8 @@ private MenuFlyout BuildContextMenu()
         _ => label
     };
 
-    // Maps a stored field label back to the correct form slot for the given entry type.
-    // Label-based (not position-based) so editing older entries keeps working after a layout change.
+
+
     private TextBox? FieldSlotFor(string type, string label) => type switch
     {
         "邮箱" => label switch { "邮箱地址" => FormField2TextBox, "邮箱密码" => FormField3TextBox, "备注" => FormField4TextBox, _ => null },
@@ -1049,14 +1103,14 @@ private MenuFlyout BuildContextMenu()
         _ => null
     };
 
-    
+
     private bool EntryContentChanged(string type)
     {
         if (type == "自定义")
         {
             if (CustomNameTextBox.Text.Trim() != _editOrigName) return true;
             if (_entrySelectedIcon != _editOrigIcon) return true;
-            // 9.3: TOTP rides in Fields but lives in its own box - compare it separately (custom entries support TOTP too).
+
             string curTotp = TotpTextBox.Text.Trim();
             string origTotp = _editOrigFields.FirstOrDefault(f => f.label == "TOTP").value ?? "";
             if (curTotp != origTotp) return true;
@@ -1064,9 +1118,9 @@ private MenuFlyout BuildContextMenu()
             if (!string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text)) cur.Add(CustomInfoTextBox_0.Text.Trim());
             foreach (var child in CustomInfoDynamicPanel.Children)
                 if (child is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text)) cur.Add(tb.Text.Trim());
-            // N2-58: exclude the TOTP field from the ORIGINAL side too - it is preserved verbatim on
-            // save (above), so counting it in orig while cur has no TOTP box made the counts never
-            // match and the confirm button lit up even when nothing changed.
+
+
+
             var orig = _editOrigFields.Where(f => f.label != "TOTP").Select(f => f.value).ToList();
             if (cur.Count != orig.Count) return true;
             for (int i = 0; i < cur.Count; i++) if (cur[i] != orig[i]) return true;
@@ -1082,28 +1136,33 @@ private MenuFlyout BuildContextMenu()
                 string orig = _editOrigFields.FirstOrDefault(f => f.label == label).value ?? "";
                 if (cur != orig) return true;
             }
-            // 9.3: TOTP rides in Fields but lives in its own box - compare it separately.
+
             string curTotp = TotpTextBox.Text.Trim();
             string origTotp = _editOrigFields.FirstOrDefault(f => f.label == "TOTP").value ?? "";
             if (curTotp != origTotp) return true;
             return false;
         }
 
-        return true; 
+        return true;
     }
 
     private Border CreateEntryCard(string type, string name, string keyInfo, List<(string label, string value, bool canCopy)> fields, string iconKey = "")
     {
-        
+
         var typeIconGeom = App.CreateGeometry(type switch { "邮箱" => IconData.Email, "账户" => IconData.Account[0] + " " + IconData.Account[1], "API Key" => "M640.45 480.574c17.496 0 31.713 14.041 31.996 31.47l0.004 0.53V811.05c0 88.338-71.612 159.95-159.95 159.95-87.454 0-158.516-70.187-159.929-157.305l-0.021-2.645v-43.29c0-17.673 14.327-32 32-32 17.496 0 31.713 14.042 31.996 31.47l0.004 0.53v43.29c0 52.991 42.958 95.95 95.95 95.95 52.462 0 95.09-42.104 95.937-94.364l0.013-1.586V512.574c0-17.674 14.327-32 32-32zM256.357 352.55c17.673 0 32 14.327 32 32 0 17.496-14.042 31.713-31.47 31.995l-0.53 0.005h-42.745c-52.786 0-95.612 42.94-95.612 95.95 0 52.48 41.974 95.09 94.031 95.938l1.581 0.012H512.5c17.673 0 32 14.327 32 32 0 17.497-14.042 31.714-31.47 31.996l-0.53 0.004H213.612c-88.17 0-159.612-71.63-159.612-159.95 0-87.436 70.02-158.516 156.972-159.929l2.64-0.021h42.745z m554.454 0C899.268 352.55 971 424.15 971 512.5c0 87.468-70.305 158.517-157.54 159.929l-2.649 0.021h-40.997c-17.673 0-32-14.327-32-32 0-17.496 14.042-31.713 31.47-31.995l0.53-0.005h40.997c53.137 0 96.189-42.971 96.189-95.95 0-52.449-42.195-95.09-94.598-95.937l-1.59-0.013H512.5c-17.673 0-32-14.327-32-32 0-17.497 14.042-31.713 31.47-31.996l0.53-0.004h298.311zM512.5 54c87.454 0 158.516 70.187 159.929 157.305l0.021 2.645v42.772c0 17.673-14.327 32-32 32-17.496 0-31.713-14.042-31.996-31.47l-0.004-0.53V213.95c0-52.992-42.958-95.95-95.95-95.95-52.462 0-95.09 42.104-95.937 94.364l-0.013 1.586v297.212c0 17.673-14.327 32-32 32-17.496 0-31.713-14.042-31.996-31.471l-0.004-0.53v-297.21C352.55 125.611 424.162 54 512.5 54z", "网站" => IconData.Website, "银行卡" => IconData.BankCard, "WiFi" => string.Join(" ", IconData.WiFi), "证件" => string.Join(" ", IconData.IdCard), _ => !string.IsNullOrEmpty(iconKey) ? IconData.GetGroupPath(iconKey) : IconData.Custom });
-        var card = new Border { CornerRadius = new CornerRadius(14), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), BorderThickness = new Thickness(1), Padding = new Thickness(12, 10, 12, 10), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top }; // E1-09: per-card copy - never mutate the shared theme brush
+        var card = new Border { CornerRadius = new CornerRadius(14), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), BorderThickness = new Thickness(1), Padding = new Thickness(12, 10, 12, 10), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top };
         var rootGrid = new Grid(); rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var mainRow = new Grid(); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var typeIconViewbox = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 10, 0), Child = new PathIcon { Data = typeIconGeom, Foreground = App.GetBrush("IconForegroundBrush") } };
         Grid.SetColumn(typeIconViewbox, 0);
         var infoPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         infoPanel.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
-        infoPanel.Children.Add(new TextBlock { Text = keyInfo, FontSize = 11, Foreground = App.GetBrush("AppTextTertiaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+
+
+
+
+
+        infoPanel.Children.Add(new TextBlock { Text = MemoFieldMask.MaskedKeyInfo(type, keyInfo, fields.Select(f => (f.label, f.value))), FontSize = 11, Foreground = App.GetBrush("AppTextTertiaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
         Grid.SetColumn(infoPanel, 1);
 
         var entryPinIcon = new Viewbox
@@ -1137,6 +1196,8 @@ private MenuFlyout BuildContextMenu()
         Grid.SetColumn(entryStarIcon, 3);
 
         var expandedGrid = new Grid { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 12, 0, 0) }; expandedGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); expandedGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var maskedTexts = new List<TextBlock>();
+        _maskedFieldTexts[card] = maskedTexts;
         var expandIconPath = App.CreateGeometry(IconData.CardExpand);
         var collapseIconPath = App.CreateGeometry(IconData.CardCollapse);
         var expandIcon = new PathIcon { Data = expandIconPath, Foreground = App.GetBrush("IconForegroundBrush") };
@@ -1149,6 +1210,7 @@ private MenuFlyout BuildContextMenu()
             if (st.Cts != null) st.Cts.Cancel();
             var cts = new CancellationTokenSource();
             _entryExpand[card] = (cts, targetExpand);
+            if (!targetExpand) RestoreFieldMasks(maskedTexts);
             expandIcon.Data = targetExpand ? collapseIconPath : expandIconPath;
             expandViewbox.Margin = targetExpand ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
             StartEntryMelt(expandedGrid, targetExpand, cts.Token);
@@ -1162,20 +1224,40 @@ private MenuFlyout BuildContextMenu()
         var fieldsPanel = new StackPanel { Spacing = 14 };
         foreach (var (label, value, canCopy) in fields)
         {
-            if (label == "TOTP") { fieldsPanel.Children.Add(BuildTotpRow(value)); continue; } // 9.3: live code row instead of a static text line
+            if (label == "TOTP") { fieldsPanel.Children.Add(BuildTotpRow(value)); continue; }
             var row = new Grid { ColumnSpacing = 8 }; row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.Children.Add(new TextBlock { Text = FieldLabelText(label), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
             var recess = new Border { Background = App.GetBrush("AppSurfaceBrush"), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) }; Grid.SetColumn(recess, 1);
             var innerGrid = new Grid { MinHeight = 24 }; innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            innerGrid.Children.Add(new TextBlock { Text = value, FontSize = 12, CharacterSpacing = App.GetCharacterSpacing(value, 150), Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+            bool maskedField = IsMaskedLabel(label);
+            var valueText = new TextBlock { Text = maskedField ? FieldMask : value, FontSize = 12, CharacterSpacing = maskedField ? 150 : App.GetCharacterSpacing(value, 150), Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            if (maskedField)
+            {
+
+
+
+
+
+                valueText.Tag = value;
+                var tapSurface = new Border { Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), Child = valueText };
+                tapSurface.Tapped += (_, _) =>
+                {
+                    if (valueText.Tag is not string original) return;
+                    valueText.Text = original;
+                    valueText.CharacterSpacing = App.GetCharacterSpacing(original, 150);
+                };
+                maskedTexts.Add(valueText);
+                innerGrid.Children.Add(tapSurface);
+            }
+            else innerGrid.Children.Add(valueText);
             if (canCopy) { var cb = new Button { Width = 24, Height = 24, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), BorderThickness = new Thickness(0), Padding = new Thickness(4), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), Tag = value, IsTabStop = false, Content = new Viewbox { Width = 12, Height = 12, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.Copy), Foreground = App.GetBrush("IconForegroundBrush") } } }; cb.Click += CopyToClipboardButton_Click; Grid.SetColumn(cb, 1); innerGrid.Children.Add(cb); }
             recess.Child = innerGrid; row.Children.Add(recess); fieldsPanel.Children.Add(row);
         }
         Grid.SetRow(fieldsPanel, 1); expandedGrid.Children.Add(divider2); expandedGrid.Children.Add(fieldsPanel); Grid.SetRow(expandedGrid, 1);
         rootGrid.Children.Add(mainRow); rootGrid.Children.Add(expandedGrid); card.Child = rootGrid;
 
-        // 4.0: entry-card hover (parity with group cards) - brighten border + lift 3px.
-        // e.Handled blocks bubbling so a nested entry doesn't also lift its parent group card.
+
+
         var translate = new TranslateTransform { Y = 0 }; card.RenderTransform = translate;
         var borderBrush = App.GetBrush("AppBorderBrush");
         var hoverBorderColor = Color.FromArgb(
@@ -1199,7 +1281,7 @@ private MenuFlyout BuildContextMenu()
                 if (!_entryData.ContainsKey(card)) return;
                 _editingEntryCard = card;
                 var d = _entryData[card];
-                
+
                 _editOrigName = d.name;
                 _editOrigIcon = _entryIconKeys.TryGetValue(card, out var oik) ? oik : "";
                 _editOrigFields = d.fields.Select(f => (label: f.Item1, value: f.Item2)).ToList();
@@ -1214,7 +1296,7 @@ private MenuFlyout BuildContextMenu()
                 try { ApplyEntryFormLayout(d.type); }
                 catch (System.Runtime.InteropServices.COMException)
                 {
-                    
+
                     ApplyEntryFormLayout(d.type);
                 }
                 if (d.type == "自定义")
@@ -1222,12 +1304,12 @@ private MenuFlyout BuildContextMenu()
                     CustomNameTextBox.Text = d.name;
                     if (d.fields.Count > 0) CustomInfoTextBox_0.Text = d.fields[0].Item2;
 
-                    
-                    ClearEntryIconSelection(); 
+
+                    ClearEntryIconSelection();
                     _entrySelectedIcon = _entryIconKeys.TryGetValue(card, out var ik) ? ik : "";
                     if (!string.IsNullOrEmpty(_entrySelectedIcon) && _entryIconRing != null)
                     {
-                        
+
                         if (_entryIconRing.FindByTag(_entrySelectedIcon) is Border match) _entryIconRing.CenterTo(match);
                         _entryIconRing.Highlight(_entrySelectedIcon);
                     }
@@ -1236,7 +1318,7 @@ private MenuFlyout BuildContextMenu()
                     _customInfoCount = 1;
                     for (int i = 1; i < d.fields.Count; i++)
                     {
-                        if (d.fields[i].Item1 == "TOTP") { TotpTextBox.Text = d.fields[i].Item2; continue; } // 9.3: TOTP restored to its own box, never into a custom info slot
+                        if (d.fields[i].Item1 == "TOTP") { TotpTextBox.Text = d.fields[i].Item2; continue; }
                         var dtb = CreateCustomInfoTextBox(_customInfoCount);
                         dtb.Text = d.fields[i].Item2;
                         CustomInfoDynamicPanel.Children.Add(dtb);
@@ -1249,12 +1331,12 @@ private MenuFlyout BuildContextMenu()
                     EntryNameTextBox.Text = d.name;
                     foreach (var f in d.fields)
                     {
-                        if (f.Item1 == "TOTP") { TotpTextBox.Text = f.Item2; continue; } // 9.3: TOTP key lives in Fields, restored to its own box
+                        if (f.Item1 == "TOTP") { TotpTextBox.Text = f.Item2; continue; }
                         var slot = FieldSlotFor(d.type, f.Item1);
                         if (slot != null) slot.Text = f.Item2;
                     }
                 }
-                
+
                 UpdateNewEntryConfirmState();
             };
 
@@ -1270,8 +1352,8 @@ private MenuFlyout BuildContextMenu()
 
             if (inGroup)
             {
-                
-                var owningGroup = FindOwningGroupCard(card); // N2-57: the entry's current group must not be listed (same-group "move" silently re-inserted it at the group top)
+
+                var owningGroup = FindOwningGroupCard(card);
                 foreach (var child in GroupsContainer.Children)
                 {
                     if (child is Border gb && !ReferenceEquals(gb, owningGroup) && _groupNameTexts.ContainsKey(gb))
@@ -1289,7 +1371,7 @@ private MenuFlyout BuildContextMenu()
             }
             else
             {
-                
+
                 bool hasGroup = false;
                 foreach (var child in GroupsContainer.Children)
                 {
@@ -1324,8 +1406,8 @@ private MenuFlyout BuildContextMenu()
             m.Items.Add(starMi);
             if (_entryData.TryGetValue(card, out var websiteData) && websiteData.type == "网站")
             {
-                // 4.0 #12: website-type entries get a one-click "open in browser" (the URL is the
-                // entry's keyInfo; a missing scheme is prepended with https://).
+
+
                 var openMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_OpenWebsite"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.OpenWebsite), Foreground = App.GetBrush("IconForegroundBrush") } };
                 openMi.Click += (s2, e2) => OpenWebsite(websiteData.keyInfo);
                 m.Items.Add(openMi);
@@ -1336,12 +1418,12 @@ private MenuFlyout BuildContextMenu()
                 checkMi.Click += (s2, e2) => ShowApiCheckDialog(card);
                 m.Items.Add(checkMi);
 
-                
+
                 var statusDiagMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_ApiStatusDiag"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.ApiStatusDiag), Foreground = App.GetBrush("IconForegroundBrush") } };
                 statusDiagMi.Click += (s2, e2) => ShowApiDiagConfirm(card);
                 m.Items.Add(statusDiagMi);
 
-                
+
                 var relayProbeMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_RelayProbe"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.RelayProbe), Foreground = App.GetBrush("IconForegroundBrush") } };
                 relayProbeMi.Click += (s2, e2) => ShowRelayProbeConfirm(card);
                 m.Items.Add(relayProbeMi);
@@ -1357,26 +1439,26 @@ private MenuFlyout BuildContextMenu()
         return card;
     }
 
-        
+
         private void StartEntryMelt(Grid panel, bool expand, CancellationToken token) => Services.MeltAnim.Begin(panel, expand, 12.0);
 
     private void CopyToClipboardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string text) { var dp = new DataPackage(); dp.SetText(text); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } } // E1-26/N3-14: clipboard can be locked by another process - report the real outcome, never a false "copied"
+        if (sender is Button btn && btn.Tag is string text) { var dp = new DataPackage(); dp.SetText(text); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } }
     }
 
     private void OpenWebsite(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return;
         var target = url.Trim();
-        if (!target.Contains("://")) target = "https://" + target; // no scheme -> default to https (browsers do not open a bare host)
+        if (!target.Contains("://")) target = "https://" + target;
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true }); }
-        catch { } // E1-26: opening the default browser must never crash the app
+        catch { }
     }
 
     private async void FlashTextBox(TextBox tb)
     {
-        // N5M-01: per-box CTS (E5-24 pattern) - the shared CTS let a second flash cancel/truncate the first.
+
         if (_flashCtsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); }
         var cts = new System.Threading.CancellationTokenSource();
         _flashCtsMap[tb] = cts;
@@ -1387,7 +1469,7 @@ private MenuFlyout BuildContextMenu()
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {
-            if (_flashCtsMap.TryGetValue(tb, out var cur) && !ReferenceEquals(cur, cts)) return; // N5F-01: superseded - newer flash owns the box now
+            if (_flashCtsMap.TryGetValue(tb, out var cur) && !ReferenceEquals(cur, cts)) return;
             tb.Background = orig;
             _flashOriginalBgs.Remove(tb);
             _flashCtsMap.Remove(tb);
@@ -1404,7 +1486,7 @@ private MenuFlyout BuildContextMenu()
         {
             CornerRadius = new CornerRadius(12),
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
-            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), // E1-09: per-card copy - never mutate the shared theme brush
+            BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(16),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1508,10 +1590,10 @@ private MenuFlyout BuildContextMenu()
 
                 if (_uncategorizedCard.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is StackPanel sp)
                 {
-                    
-                    
-                    
-                    
+
+
+
+
                     int insertPos = 0;
                     if (RegionPinnedEntryCard(sp) is Border stackPinned)
                         insertPos = sp.Children.IndexOf(stackPinned) + 1;
@@ -1520,8 +1602,8 @@ private MenuFlyout BuildContextMenu()
                         var entry = _standaloneEntries[i];
                         GroupsContainer.Children.Remove(entry);
                         entry.Margin = new Thickness(0, 0, 0, 8);
-                        
-                        
+
+
                         sp.Children.Insert(insertPos, entry);
                         _standaloneEntries.RemoveAt(i);
                     }
@@ -1533,7 +1615,7 @@ private MenuFlyout BuildContextMenu()
     private string GetSelectedIconKey()
     {
         if (string.IsNullOrEmpty(_selectedIcon))
-            return GetRandomIconKey(); 
+            return GetRandomIconKey();
         return IconData.GroupIconMap.TryGetValue(_selectedIcon, out var key) ? key : GetRandomIconKey();
     }
 
@@ -1541,7 +1623,7 @@ private MenuFlyout BuildContextMenu()
 
     private void ConfirmButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_confirming) return; _confirming = true; // E4-17: double-click during the button animation created two identical groups
+        if (_confirming) return; _confirming = true;
         if (string.IsNullOrWhiteSpace(GroupNameTextBox.Text)) { _confirming = false; FlashTextBox(GroupNameTextBox); return; }
         string gn = GroupNameTextBox.Text.Trim(); string ik = GetSelectedIconKey();
         var nc = CreateGroupCard(gn, ik);
@@ -1559,31 +1641,31 @@ private MenuFlyout BuildContextMenu()
                 toMove.Add(entry);
             }
         }
-        // N5M-05: iterate newest-first list in REVERSE so each Insert(PinnedFirst...) lands the
-        // oldest at the deepest slot - the group stack ends up in the same order as the source panel.
+
+
         for (int mi = toMove.Count - 1; mi >= 0; mi--)
         {
             var entry = toMove[mi];
-            
+
             if (_uncategorizedCard?.Child is Grid ugc && ugc.Children.Count > 2 && ugc.Children[2] is StackPanel usp && usp.Children.Contains(entry))
                 usp.Children.Remove(entry);
             else
                 GroupsContainer.Children.Remove(entry);
-            StripEntryPersonalMarks(entry); 
+            StripEntryPersonalMarks(entry);
             _standaloneEntries.Remove(entry);
             _entriesInGroup.Add(entry);
 
             if (_entryIds.TryGetValue(entry, out var mvId)) { var me = FindEntry(mvId); if (me != null) me.GroupId = newGroup.Id; }
             if (nc.Child is Grid g && g.Children.Count > 3 && g.Children[2] is StackPanel entryStack)
             {
-                entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, entry), entry); // N4M-02: pin-first ordering, was Add
+                entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, entry), entry);
                 if (g.Children[3] is Grid emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
                 UpdateGroupCount(nc);
             }
         }
 
-        
+
         int insertIndex = (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
             ? GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1 : 0;
         if (_uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard))
@@ -1597,19 +1679,19 @@ private MenuFlyout BuildContextMenu()
 
         if (_pendingMoveEntry != null)
         {
-            
+
             if (_uncategorizedCard?.Child is Grid ugc2 && ugc2.Children.Count > 2 && ugc2.Children[2] is StackPanel usp2 && usp2.Children.Contains(_pendingMoveEntry))
                 usp2.Children.Remove(_pendingMoveEntry);
             else
-                GroupsContainer.Children.Remove(_pendingMoveEntry); 
-            StripEntryPersonalMarks(_pendingMoveEntry); 
+                GroupsContainer.Children.Remove(_pendingMoveEntry);
+            StripEntryPersonalMarks(_pendingMoveEntry);
             _standaloneEntries.Remove(_pendingMoveEntry);
             _entriesInGroup.Add(_pendingMoveEntry);
 
             if (_entryIds.TryGetValue(_pendingMoveEntry, out var pmId)) { var me = FindEntry(pmId); if (me != null) me.GroupId = newGroup.Id; }
             if (nc.Child is Grid ng && ng.Children.Count > 3 && ng.Children[2] is StackPanel entryStack)
             {
-                entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, _pendingMoveEntry), _pendingMoveEntry); // N4M-02: pin-first ordering, was Add
+                entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, _pendingMoveEntry), _pendingMoveEntry);
                 if (ng.Children[3] is Grid emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
                 UpdateGroupCount(nc);
@@ -1619,9 +1701,9 @@ private MenuFlyout BuildContextMenu()
 
         SyncUncategorizedCard();
         PersistAll();
-        ApplyCardFilters(); 
-        
-        
+        ApplyCardFilters();
+
+
         bool groupHiddenByWorkspace = !string.IsNullOrEmpty(App.CurrentWorkspaceId)
             && toMove.Count == 0 && _pendingMoveEntry == null;
         App.ShowToast(App.GetString(groupHiddenByWorkspace ? "Memo_Toast_Group_Hidden" : "Common_Toast_Created"));
@@ -1631,34 +1713,27 @@ private MenuFlyout BuildContextMenu()
         sb.Begin();
     }
 
-    private readonly string[] EntryTypeLabels = { "邮箱", "账户", "API Key", "网站", "银行卡", "WiFi", "证件", "自定义" };
-    
-    private static readonly Dictionary<string, string[]> EntryTypeFieldLabels = new()
-    {
-        ["邮箱"] = new[] { "邮箱地址", "邮箱密码", "备注" },
-        ["账户"] = new[] { "账号", "密码", "网址", "备注" },
-        ["API Key"] = new[] { "API Key", "URL", "模型 ID", "备注" },
-        ["网站"] = new[] { "网址", "账号", "密码", "备注" },
-        ["银行卡"] = new[] { "卡号", "持卡人", "有效期", "CVV", "密码", "备注" },
-        ["WiFi"] = new[] { "网络名", "密码", "备注" },
-        ["证件"] = new[] { "证件号", "姓名", "签发机构", "有效期", "备注" },
-    };
+
+
+    private static readonly IReadOnlyList<string> EntryTypeLabels = MemoEntryTypes.All;
+
+    private static IReadOnlyDictionary<string, string[]> EntryTypeFieldLabels => MemoEntryTypes.FieldLabels;
     private const int MaxCustomInfoCount = 5;
     private int _customInfoCount = 1;
 
     private void ApplyEntryFormLayout(string type)
     {
         FormField2Label.Text = ""; FormField3Label.Text = ""; FormField4Label.Text = ""; FormField5Label.Text = ""; FormField6Label.Text = ""; FormField7Label.Text = "";
-        TotpLabel.Text = App.GetString("Totp_Label"); // 9.3: static label assigned once per layout pass
-        TotpTextBox.PlaceholderText = App.GetString("Totp_Placeholder"); // 9.3: i18n entry existed since 2a3c12d but was never wired
+        TotpLabel.Text = App.GetString("Totp_Label");
+        TotpTextBox.PlaceholderText = App.GetString("Totp_Placeholder");
         FormField2TextBox.PlaceholderText = ""; FormField3TextBox.PlaceholderText = ""; FormField4TextBox.PlaceholderText = ""; FormField5TextBox.PlaceholderText = ""; FormField6TextBox.PlaceholderText = ""; FormField7TextBox.PlaceholderText = "";
         FormField2TextBox.Text = ""; FormField3TextBox.Text = ""; FormField4TextBox.Text = ""; FormField5TextBox.Text = ""; FormField6TextBox.Text = ""; FormField7TextBox.Text = "";
         FormField2Section.Visibility = Visibility.Collapsed; FormField3Section.Visibility = Visibility.Collapsed;
         FormField4Section.Visibility = Visibility.Collapsed; FormField5Section.Visibility = Visibility.Collapsed;
         FormField6Section.Visibility = Visibility.Collapsed; FormField7Section.Visibility = Visibility.Collapsed;
         EntryNameTextBox.Text = "";
-        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed; // 9.3: clear on type switch within the same dialog (ResetEntryTypeForms only runs on dialog open)
-        UpdateGenerateButtons(type); // 9.3: dice button follows password slots per type
+        TotpTextBox.Text = ""; TotpStatus.Text = ""; TotpStatus.Visibility = Visibility.Collapsed;
+        UpdateGenerateButtons(type);
         switch (type)
         {
             case "邮箱":
@@ -1707,28 +1782,28 @@ private MenuFlyout BuildContextMenu()
         }
         if (type == "自定义") { EntryTypeFormsContainer.Visibility = Visibility.Collapsed; CustomFormContainer.Visibility = Visibility.Visible; LoadEntryIconSelector(); }
         else { EntryTypeFormsContainer.Visibility = Visibility.Visible; CustomFormContainer.Visibility = Visibility.Collapsed; }
-        // 9.3: TOTP block only in password-capable types, parked right after the password slot.
-        
+
+
         Panel? totpHost = null;
-        if (type == "邮箱" || type == "账户" || type == "WiFi") totpHost = FormField3Section; // password slot = F3
-        else if (type == "网站") totpHost = FormField4Section; // password slot = F4
+        if (type == "邮箱" || type == "账户" || type == "WiFi") totpHost = FormField3Section;
+        else if (type == "网站") totpHost = FormField4Section;
         if (totpHost != null)
         {
             if (TotpSection.Parent is Panel prev && !ReferenceEquals(prev, totpHost)) prev.Children.Remove(TotpSection);
-            Grid.SetRow(TotpSection, 2); // section-internal row 3 = right below the password input
+            Grid.SetRow(TotpSection, 2);
             if (!ReferenceEquals(TotpSection.Parent, totpHost)) totpHost.Children.Add(TotpSection);
             TotpSection.Visibility = Visibility.Visible;
         }
         else
         {
-            TotpSection.Visibility = Visibility.Collapsed; // stays parked in its previous host, just hidden
+            TotpSection.Visibility = Visibility.Collapsed;
         }
-        UpdateNewEntryConfirmState(); // UI-2: fields were just cleared (or re-filled) - recompute the confirm state
+        UpdateNewEntryConfirmState();
     }
 
-    
-    
-    
+
+
+
 
     private TextBox? _genTargetSlot;
     private string _genMode = "password";
@@ -1737,9 +1812,9 @@ private MenuFlyout BuildContextMenu()
 
     private void UpdateGenerateButtons(string type)
     {
-        // N4-26: reset every slot first - a slot the new type's labels don't cover (FieldSlotFor
-        // returns null) used to keep the previous type's visibility, leaving a dice button on a
-        // non-password field (masked only by the hidden parent Section).
+
+
+
         GenerateBtn2.Visibility = GenerateBtn3.Visibility = GenerateBtn4.Visibility =
             GenerateBtn5.Visibility = GenerateBtn6.Visibility = GenerateBtn7.Visibility = Visibility.Collapsed;
         if (!EntryTypeFieldLabels.TryGetValue(type, out var labels)) return;
@@ -1771,7 +1846,7 @@ private MenuFlyout BuildContextMenu()
         OpenGenerateDialog(slot);
     }
 
-    /// <summary>Public-shape entry: D4-style callers could open it for a specific slot directly.</summary>
+
     private void OpenGenerateDialog(TextBox slot)
     {
         _genTargetSlot = slot;
@@ -1788,7 +1863,8 @@ private MenuFlyout BuildContextMenu()
         GenChkExcludeAmb.Content = App.GetString("Gen_ExcludeAmbiguous");
         GenRegenerate.Content = App.GetString("Gen_Regenerate");
         GenTokenHint.Text = App.GetString("Gen_TokenHint");
-        GenToken16.Content = "16 B"; GenToken32.Content = "32 B"; GenToken48.Content = "48 B";
+        GenTokenChk16.Content = "16 B"; GenTokenChk32.Content = "32 B"; GenTokenChk48.Content = "48 B";
+        GenTokenChk16.IsChecked = false; GenTokenChk48.IsChecked = false; GenTokenChk32.IsChecked = true;
         GenCancelText.Text = App.GetString("Common_Button_Cancel");
         GenFillText.Text = App.GetString("Gen_Fill");
         GenChkUpper.IsChecked = true; GenChkLower.IsChecked = true; GenChkDigits.IsChecked = true;
@@ -1810,11 +1886,19 @@ private MenuFlyout BuildContextMenu()
     {
         _genMode = mode;
         Style On(string key) => (Style)Application.Current.Resources[key];
+
         GenModePassword.Style = On(mode == "password" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
         GenModeUuid.Style = On(mode == "uuid" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
         GenModeToken.Style = On(mode == "token" ? "NovaraPrimaryButtonStyle" : "NovaraOutlineButtonStyle");
+        GenModePassword.Opacity = mode == "password" ? 1 : 0.6;
+        GenModeUuid.Opacity = mode == "uuid" ? 1 : 0.6;
+        GenModeToken.Opacity = mode == "token" ? 1 : 0.6;
         GenPasswordParams.Visibility = mode == "password" ? Visibility.Visible : Visibility.Collapsed;
         GenTokenParams.Visibility = mode == "token" ? Visibility.Visible : Visibility.Collapsed;
+
+
+        foreach (var b in new[] { GenModePassword, GenModeUuid, GenModeToken })
+            Microsoft.UI.Xaml.VisualStateManager.GoToState(b, "Normal", false);
         Regenerate();
     }
 
@@ -1833,7 +1917,7 @@ private MenuFlyout BuildContextMenu()
                     GenChkExcludeAmb.IsChecked == true))
             };
         }
-        catch (ArgumentException) { _genPreview = ""; } // no class selected - preview empties, fill stays disabled
+        catch (ArgumentException) { _genPreview = ""; }
         GenPreviewText.Text = _genPreview;
         GenFillText.Opacity = _genPreview.Length > 0 ? 1.0 : 0.4;
         if (_genMode == "password")
@@ -1853,16 +1937,26 @@ private MenuFlyout BuildContextMenu()
     private void GenModeToken_Click(object sender, RoutedEventArgs e) => SetGenMode("token");
     private void GenChk_Changed(object sender, RoutedEventArgs e) { if (GenerateOverlay.Visibility == Visibility.Visible) Regenerate(); }
     private void GenLengthSlider_ValueChanged(object sender, RoutedEventArgs e) { if (GenerateOverlay.Visibility == Visibility.Visible) Regenerate(); }
-    private void GenTokenBytes_Click(object sender, RoutedEventArgs e)
+    private void GenTokenChk_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string t } && int.TryParse(t, out var n)) { _genTokenBytes = n; Regenerate(); }
+
+
+        if (sender is CheckBox cb && cb.Tag is string t && int.TryParse(t, out var n))
+        {
+            bool repeat = _genTokenBytes == n;
+            GenTokenChk16.IsChecked = n == 16;
+            GenTokenChk32.IsChecked = n == 32;
+            GenTokenChk48.IsChecked = n == 48;
+            _genTokenBytes = n;
+            if (!repeat) Regenerate();
+        }
     }
     private void GenRegenerate_Click(object sender, RoutedEventArgs e) => Regenerate();
 
     private void GenFill_Click(object sender, RoutedEventArgs e)
     {
         if (_genTargetSlot != null && _genPreview.Length > 0)
-            _genTargetSlot.Text = _genPreview; // rides the existing TextChanged -> confirm-state chain
+            _genTargetSlot.Text = _genPreview;
         CloseGenerateDialog();
     }
 
@@ -1885,13 +1979,13 @@ private MenuFlyout BuildContextMenu()
         _genTargetSlot = null;
     }
 
-    
-    
-    
 
-    // N4-06: every row control is held weakly - the previous strong Code/Seconds/FillCol/RestCol refs
-    // pinned the whole row subtree forever (page instance lives for the whole session, 4.1), so the
-    // Root.TryGetTarget liveness check could never fail and deleted/edited entries kept ticking.
+
+
+
+
+
+
     private sealed record TotpRowRef(WeakReference<FrameworkElement> Root, WeakReference<TextBlock> Code, WeakReference<TextBlock> Seconds,
         WeakReference<ColumnDefinition> FillCol, WeakReference<ColumnDefinition> RestCol, byte[] Key, string Algorithm, int Digits, int Period);
     private readonly List<TotpRowRef> _totpRows = new();
@@ -1899,7 +1993,7 @@ private MenuFlyout BuildContextMenu()
 
     private void TotpTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        UpdateNewEntryConfirmState(); // 9.3: TOTP edits must re-arm the confirm button (empty branch below returns early)
+        UpdateNewEntryConfirmState();
         var v = TotpTextBox.Text.Trim();
         if (string.IsNullOrEmpty(v)) { TotpStatus.Visibility = Visibility.Collapsed; return; }
         if (TotpService.TryParse(v, out var cfg))
@@ -1939,12 +2033,12 @@ private MenuFlyout BuildContextMenu()
             var code = new TextBlock { Text = TotpService.ComputeCode(cfg, nowUnix), FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, CharacterSpacing = 200 };
             var seconds = new TextBlock { Text = TotpService.RemainingSeconds(cfg.Period, nowUnix) + "s", FontSize = 11, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
             var cb = new Button { Width = 24, Height = 24, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), BorderThickness = new Thickness(0), Padding = new Thickness(4), VerticalAlignment = VerticalAlignment.Center, IsTabStop = false, Content = new Viewbox { Width = 12, Height = 12, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.Copy), Foreground = App.GetBrush("IconForegroundBrush") } } };
-            cb.Click += (_, _) => { var dp = new DataPackage(); dp.SetText(TotpService.ComputeCode(cfg)); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } }; // N3-14: report the real outcome (clipboard can be locked by another process); copies the CURRENT code, recomputed live
+            cb.Click += (_, _) => { var dp = new DataPackage(); dp.SetText(TotpService.ComputeCode(cfg)); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } };
             Grid.SetColumn(code, 0); Grid.SetColumn(seconds, 1); Grid.SetColumn(cb, 2);
             inner.Children.Add(code); inner.Children.Add(seconds); inner.Children.Add(cb);
-            // 9.3 fix: hand-drawn 3px track. WinUI ProgressBar plays a RepositionThemeAnimation
-            // (IndicatorLengthDelta) on every Value change, jolting the left edge; Star-column
-            // widths update discretely in layout - right edge moves, left edge stays pinned.
+
+
+
             int remain0 = TotpService.RemainingSeconds(cfg.Period, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             var fillCol = new ColumnDefinition { Width = new GridLength(remain0, GridUnitType.Star) };
             var restCol = new ColumnDefinition { Width = new GridLength(cfg.Period - remain0, GridUnitType.Star) };
@@ -1963,10 +2057,15 @@ private MenuFlyout BuildContextMenu()
         }
         else
         {
-            inner.Children.Add(new TextBlock { Text = storedValue + " · " + App.GetString("Totp_InvalidRender"), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
+
+
+
+
+
+            inner.Children.Add(new TextBlock { Text = App.GetString("Totp_InvalidRender"), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
         }
         recess.Child = inner;
-        row.Children.Add(recess); // 9.3 fix: recess was built but never attached - code/copy/progress never rendered
+        row.Children.Add(recess);
         return row;
     }
 
@@ -1985,15 +2084,15 @@ private MenuFlyout BuildContextMenu()
         for (int i = _totpRows.Count - 1; i >= 0; i--)
         {
             var r = _totpRows[i];
-            // N4-06: any dead weak ref = the row/card tree was collected (delete/edit fully drop the
-            // card dictionaries) - drop the registration instead of ticking on a detached subtree.
+
+
             if (!r.Root.TryGetTarget(out _) || !r.Code.TryGetTarget(out var code) || !r.Seconds.TryGetTarget(out var seconds)
                 || !r.FillCol.TryGetTarget(out var fillCol) || !r.RestCol.TryGetTarget(out var restCol))
             { _totpRows.RemoveAt(i); continue; }
             var remain = TotpService.RemainingSeconds(r.Period, now);
             code.Text = TotpService.ComputeCode(r.Key, r.Algorithm, now / r.Period, r.Digits);
             seconds.Text = remain + "s";
-            fillCol.Width = new GridLength(remain, GridUnitType.Star); // 9.3: discrete layout update, no template animation
+            fillCol.Width = new GridLength(remain, GridUnitType.Star);
             restCol.Width = new GridLength(Math.Max(0, r.Period - remain), GridUnitType.Star);
         }
     }
@@ -2002,7 +2101,7 @@ private MenuFlyout BuildContextMenu()
     {
         string ph = index == 0 ? App.GetString("Memo_Entry_InfoLabel") : string.Format(App.GetString("Memo_Entry_InfoN"), index);
         var tb = new TextBox { Style = (Style)Application.Current.Resources["NovaraTextBoxStyle"], MaxLength = 500, PlaceholderText = ph, VerticalAlignment = VerticalAlignment.Center };
-        tb.TextChanged += EntryField_TextChanged; 
+        tb.TextChanged += EntryField_TextChanged;
         return tb;
     }
 
@@ -2021,7 +2120,7 @@ private MenuFlyout BuildContextMenu()
 
     private void NewEntryConfirmButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_confirming) return; _confirming = true; // E3-10
+        if (_confirming) return; _confirming = true;
         bool isEdit = _editingEntryCard != null;
         string type = _selectedEntryType;
         if (string.IsNullOrWhiteSpace(type)) { _confirming = false; return; }
@@ -2032,15 +2131,14 @@ private MenuFlyout BuildContextMenu()
         {
             name = CustomNameTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(CustomNameTextBox); return; }
-            keyInfo = CustomInfoTextBox_0.Text.Trim();
-            if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(CustomInfoTextBox_0); return; } 
-            fields.Add(("信息", keyInfo, true));
+            if (string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text)) { _confirming = false; FlashTextBox(CustomInfoTextBox_0); return; }
+            fields.Add(("信息", CustomInfoTextBox_0.Text.Trim(), true));
             foreach (var child in CustomInfoDynamicPanel.Children)
                 if (child is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
                     fields.Add(("信息", tb.Text.Trim(), true));
-            // N2-58: a custom entry may carry a TOTP field (only via backup import - the UI never
-            // creates one, and the custom form has no TOTP box). Preserve the original secret on
-            // save instead of silently dropping it; the card renders it as the live code row.
+
+
+
             var origTotpField = _editOrigFields.FirstOrDefault(f => f.Item1 == "TOTP");
             if (!string.IsNullOrEmpty(origTotpField.Item2) && !fields.Any(f => f.Item1 == "TOTP"))
                 fields.Add(("TOTP", origTotpField.Item2, false));
@@ -2052,32 +2150,28 @@ private MenuFlyout BuildContextMenu()
             switch (type)
             {
                 case "邮箱":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } // UI-3
-                    fields.Add(("邮箱地址", keyInfo, true));
-                    if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("邮箱密码", FormField3TextBox.Text.Trim(), true)); 
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("邮箱地址", FormField2TextBox.Text.Trim(), true));
+                    if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("邮箱密码", FormField3TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), true));
                     break;
                 case "账户":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } // UI-3
-                    fields.Add(("账号", keyInfo, true));
-                    if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("密码", FormField3TextBox.Text.Trim(), true)); 
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("账号", FormField2TextBox.Text.Trim(), true));
+                    if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("密码", FormField3TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("网址", FormField4TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), true));
                     break;
                 case "网站":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
-                    fields.Add(("网址", keyInfo, true));
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("网址", FormField2TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("账号", FormField3TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("密码", FormField4TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("备注", FormField5TextBox.Text.Trim(), true));
                     break;
                 case "银行卡":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } 
-                    fields.Add(("卡号", keyInfo, true));
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("卡号", FormField2TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("持卡人", FormField3TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("有效期", FormField4TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("CVV", FormField5TextBox.Text.Trim(), true));
@@ -2085,16 +2179,14 @@ private MenuFlyout BuildContextMenu()
                     if (!string.IsNullOrWhiteSpace(FormField7TextBox.Text)) fields.Add(("备注", FormField7TextBox.Text.Trim(), true));
                     break;
                 case "WiFi":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } 
-                    fields.Add(("网络名", keyInfo, true));
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("网络名", FormField2TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("密码", FormField3TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("备注", FormField4TextBox.Text.Trim(), true));
                     break;
                 case "证件":
-                    keyInfo = FormField2TextBox.Text.Trim();
-                    if (string.IsNullOrWhiteSpace(keyInfo)) { _confirming = false; FlashTextBox(FormField2TextBox); return; } 
-                    fields.Add(("证件号", keyInfo, true));
+                    if (string.IsNullOrWhiteSpace(FormField2TextBox.Text)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
+                    fields.Add(("证件号", FormField2TextBox.Text.Trim(), true));
                     if (!string.IsNullOrWhiteSpace(FormField3TextBox.Text)) fields.Add(("姓名", FormField3TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("签发机构", FormField4TextBox.Text.Trim(), false));
                     if (!string.IsNullOrWhiteSpace(FormField5TextBox.Text)) fields.Add(("有效期", FormField5TextBox.Text.Trim(), false));
@@ -2105,7 +2197,6 @@ private MenuFlyout BuildContextMenu()
                     if (string.IsNullOrWhiteSpace(apiKeyVal)) { _confirming = false; FlashTextBox(FormField2TextBox); return; }
                     var apiUrlVal = FormField3TextBox.Text.Trim();
                     if (string.IsNullOrWhiteSpace(apiUrlVal)) { _confirming = false; FlashTextBox(FormField3TextBox); return; }
-                    keyInfo = apiUrlVal;
                     fields.Add(("API Key", apiKeyVal, true));
                     fields.Add(("URL", apiUrlVal, true));
                     if (!string.IsNullOrWhiteSpace(FormField4TextBox.Text)) fields.Add(("模型 ID", FormField4TextBox.Text.Trim(), true));
@@ -2114,13 +2205,20 @@ private MenuFlyout BuildContextMenu()
             }
         }
 
-        // 9.3: TOTP key rides in Fields (label "TOTP") - encrypted/backup/search/trash all inherit it.
-        // N4-05: the custom branch above already preserved an imported TOTP (N2-58) - appending again
-        // here produced two label="TOTP" fields and two live code rows on the card.
+
+
+
+
+
+        keyInfo = fields.FirstOrDefault(f => f.Item1 == MemoFieldMask.KeyInfoLabelFor(type)).Item2 ?? "";
+
+
+
+
         var totpVal = TotpTextBox.Text.Trim();
         if (!string.IsNullOrEmpty(totpVal) && !fields.Any(f => f.Item1 == "TOTP")) fields.Add(("TOTP", totpVal, true));
 
-        
+
         var entryIconKey = type == "自定义" && !string.IsNullOrEmpty(_entrySelectedIcon) ? _entrySelectedIcon
                          : type == "自定义" ? GetRandomIconKey() : "";
         var card = CreateEntryCard(type, name, keyInfo, fields, entryIconKey);
@@ -2134,7 +2232,7 @@ private MenuFlyout BuildContextMenu()
             Fields = fields.Select(f => new EntryField { Label = f.Item1, Value = f.Item2, CanCopy = f.Item3 }).ToList(),
             CreatedAt = DateTime.Now,
             IconKey = entryIconKey,
-            WorkspaceId = App.CurrentWorkspaceId 
+            WorkspaceId = App.CurrentWorkspaceId
         };
 
         if (_editingEntryCard != null)
@@ -2162,18 +2260,19 @@ private MenuFlyout BuildContextMenu()
             }
             bool wasStarred = _starredEntries.Contains(old);
             bool wasInGroup = _entriesInGroup.Contains(old);
-        
-        
-        
+
+
+
         bool wasInUncategorized = _uncategorizedCard != null
             && parent is StackPanel usp && usp.Parent is Grid ug && ug.Parent is Border ub && ReferenceEquals(ub, _uncategorizedCard);
             _entriesInGroup.Remove(old);
-            int standaloneIdx = _standaloneEntries.IndexOf(old); // N4M-03: preserve the replaced card's list rank for later folds
+            int standaloneIdx = _standaloneEntries.IndexOf(old);
             _standaloneEntries.Remove(old);
             _entryPinIcons.Remove(old);
             _entryStarIcons.Remove(old);
             _entryData.Remove(old);
-            if (_entryExpand.TryGetValue(old, out var eo)) { eo.Cts?.Cancel(); _entryExpand.Remove(old); } // N6-10
+            if (_entryExpand.TryGetValue(old, out var eo)) { eo.Cts?.Cancel(); _entryExpand.Remove(old); }
+            _maskedFieldTexts.Remove(old);
             _entryIconKeys.Remove(old);
             _starredEntries.Remove(old);
             _apiProtocols.Remove(old);
@@ -2187,7 +2286,7 @@ private MenuFlyout BuildContextMenu()
                 {
                     me.Type = type; me.Name = name; me.KeyInfo = keyInfo;
                     me.Fields = fields.Select(f => new EntryField { Label = f.Item1, Value = f.Item2, CanCopy = f.Item3 }).ToList();
-                    if (type == "自定义") me.IconKey = entryIconKey; 
+                    if (type == "自定义") me.IconKey = entryIconKey;
                     if (!string.IsNullOrEmpty(me.Protocol)) _apiProtocols[card] = me.Protocol;
                 }
             }
@@ -2196,7 +2295,7 @@ private MenuFlyout BuildContextMenu()
             if (_pinnedEntryCards.Remove(old)) { _pinnedEntryCards.Add(card); if (_entryPinIcons.TryGetValue(card, out var ep)) ep.Visibility = Visibility.Visible; }
             if (wasStarred) { _starredEntries.Add(card); if (_entryStarIcons.TryGetValue(card, out var es)) es.Visibility = Visibility.Visible; }
             if (wasInGroup) _entriesInGroup.Add(card);
-            else if (!wasInUncategorized) _standaloneEntries.Insert(standaloneIdx < 0 ? 0 : System.Math.Min(standaloneIdx, _standaloneEntries.Count), card); 
+            else if (!wasInUncategorized) _standaloneEntries.Insert(standaloneIdx < 0 ? 0 : System.Math.Min(standaloneIdx, _standaloneEntries.Count), card);
 
         }
         else if (_targetGroupCard != null)
@@ -2210,7 +2309,7 @@ private MenuFlyout BuildContextMenu()
             if (_groupIds.TryGetValue(_targetGroupCard, out var tGid)) entryEntity.GroupId = tGid;
             if (_targetGroupCard.Child is Grid tg && tg.Children.Count > 3 && tg.Children[2] is StackPanel entryStack)
             {
-                
+
                 int insIdx = RegionPinnedEntryCard(entryStack) is Border rp
                     ? entryStack.Children.IndexOf(rp) + 1 : 0;
                 entryStack.Children.Insert(insIdx, card);
@@ -2222,11 +2321,11 @@ private MenuFlyout BuildContextMenu()
         }
         else
         {
-            
+
             int insIdx = 0;
             if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
                 insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-            
+
             if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
             {
                 int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
@@ -2238,7 +2337,7 @@ private MenuFlyout BuildContextMenu()
                 if (insIdx > uc) insIdx = uc;
             }
             GroupsContainer.Children.Insert(insIdx, card);
-            _standaloneEntries.Insert(0, card); // N4M-03: list must mirror the UI's newest-first order - Add() made the first mass fold reverse the visual order
+            _standaloneEntries.Insert(0, card);
 
             App.Store?.Database.MemoEntries.Add(entryEntity);
             _entryIds[card] = entryEntity.Id;
@@ -2248,7 +2347,7 @@ private MenuFlyout BuildContextMenu()
         App.PlayCardEntrance(card);
         if (_editingEntryCard == null) SyncUncategorizedCard();
         PersistAll();
-        ApplyCardFilters(); 
+        ApplyCardFilters();
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
 
         var sb = new Storyboard(); var sx = new DoubleAnimation { To = 0.95, Duration = TimeSpan.FromMilliseconds(100) }; Storyboard.SetTarget(sx, NewEntryConfirmButtonTransform); Storyboard.SetTargetProperty(sx, "ScaleX"); sb.Children.Add(sx);
@@ -2257,7 +2356,7 @@ private MenuFlyout BuildContextMenu()
         sb.Completed += (s, ev) => { var sb2 = new Storyboard(); var sx2 = new DoubleAnimation { To = 1.0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(sx2, NewEntryConfirmButtonTransform); Storyboard.SetTargetProperty(sx2, "ScaleX"); sb2.Children.Add(sx2); var sy2 = new DoubleAnimation { To = 1.0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(sy2, NewEntryConfirmButtonTransform); Storyboard.SetTargetProperty(sy2, "ScaleY"); sb2.Children.Add(sy2); sb2.Completed += (s2, e2) => CloseNewEntryDialog(); sb2.Begin(); };
     }
 
-    /// <summary>Open the entry-edit dialog for a database memo entry id (global search jump).</summary>
+
     public bool FlashEntryById(Guid id)
     {
         foreach (var (card, cid) in _entryIds)
@@ -2277,10 +2376,10 @@ private MenuFlyout BuildContextMenu()
     }
 
 
-    
-    // A captured line becomes a custom-type standalone entry named after the line itself, with the
-    // regular random icon. When the page has never been built (hotkey used while another tab is
-    // open), the entity goes straight into the database - LoadFromStore renders it on first visit.
+
+
+
+
 
     public void QuickCaptureMemo(string text)
     {
@@ -2295,7 +2394,7 @@ private MenuFlyout BuildContextMenu()
             Fields = new List<EntryField>(),
             CreatedAt = DateTime.Now,
             IconKey = iconKey,
-            WorkspaceId = App.CurrentWorkspaceId 
+            WorkspaceId = App.CurrentWorkspaceId
         };
         if (!_storeLoaded)
         {
@@ -2306,11 +2405,11 @@ private MenuFlyout BuildContextMenu()
         }
         var card = CreateEntryCard("自定义", name, "", fields, iconKey);
         _entryIconKeys[card] = iconKey;
-        // 5.0 placement: newest standalone entry goes after pinned groups/entries, before the uncategorized card
+
         int insIdx = 0;
         if (_pinnedGroupCard != null && GroupsContainer.Children.Contains(_pinnedGroupCard))
             insIdx = GroupsContainer.Children.IndexOf(_pinnedGroupCard) + 1;
-        
+
         if (RegionPinnedEntryCard(GroupsContainer) is Border topPinned)
         {
             int pe = GroupsContainer.Children.IndexOf(topPinned) + 1;
@@ -2322,7 +2421,7 @@ private MenuFlyout BuildContextMenu()
             if (insIdx > uc) insIdx = uc;
         }
         GroupsContainer.Children.Insert(insIdx, card);
-        _standaloneEntries.Insert(0, card); // N4M-03: list must mirror the UI's newest-first order
+        _standaloneEntries.Insert(0, card);
         App.Store?.Database.MemoEntries.Add(entryEntity);
         _entryIds[card] = entryEntity.Id;
         _entryCreatedAt[card] = entryEntity.CreatedAt;
@@ -2330,13 +2429,13 @@ private MenuFlyout BuildContextMenu()
         App.PlayCardEntrance(card);
         SyncUncategorizedCard();
         PersistAll();
-        ApplyCardFilters(); // N2-17: replay filters - the capture may not belong to the active workspace
+        ApplyCardFilters();
         App.ShowToast(App.GetString("Common_Toast_Created"));
     }
 
     public void OpenNewEntryDialog()
     {
-        _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
+        _confirming = false;
         NewEntryDialogHideAnimation.Stop();
         NewEntryDialogShowAnimation.Stop();
         NewEntryDialogTransform.ScaleX = 0.94; NewEntryDialogTransform.ScaleY = 0.94; NewEntryDialogTransform.TranslateY = 24;
@@ -2345,9 +2444,9 @@ private MenuFlyout BuildContextMenu()
         EntryTypeSection.Visibility = _editingEntryCard != null ? Visibility.Collapsed : Visibility.Visible;
         ResetEntryTypeForms();
         NewEntryDialogOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
-        Motion.StaggerReset(NewEntryDialog); // M3: rows wait for their staggered entrance
-        Motion.StaggerWire(NewEntryDialogShowAnimation, NewEntryDialog); // M3: wire once (WeakTable-guarded), replays on every Begin
+        DialogDepth.VeilShow();
+        Motion.StaggerReset(NewEntryDialog);
+        Motion.StaggerWire(NewEntryDialogShowAnimation, NewEntryDialog);
         NewEntryDialogShowAnimation.Begin();
     }
 
@@ -2355,7 +2454,7 @@ private MenuFlyout BuildContextMenu()
     {
         NewEntryDialogHideAnimation.Completed -= OnNewEntryDialogHideCompleted;
         NewEntryDialogHideAnimation.Completed += OnNewEntryDialogHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         NewEntryDialogHideAnimation.Begin();
     }
 
@@ -2398,9 +2497,9 @@ private MenuFlyout BuildContextMenu()
 
     private void PinEntryCard(Border card)
     {
-        
-        
-        
+
+
+
         var parent = card.Parent as Panel;
         var oldPinned = parent != null ? RegionPinnedEntryCard(parent) : null;
         if (oldPinned != null && !ReferenceEquals(oldPinned, card) && _entryPinIcons.ContainsKey(oldPinned))
@@ -2412,9 +2511,9 @@ private MenuFlyout BuildContextMenu()
             parent.Children.Remove(card);
             parent.Children.Insert(0, card);
         }
-        
-        
-        
+
+
+
         if (_standaloneEntries.Contains(card))
         {
             _standaloneEntries.Remove(card);
@@ -2496,16 +2595,16 @@ private MenuFlyout BuildContextMenu()
     {
         if (_currentGroupCard == null || !_groupNameTexts.ContainsKey(_currentGroupCard)) return;
         EditGroupNameTextBox.Text = _groupNameTexts[_currentGroupCard].Text;
-        _editGroupOrigName = EditGroupNameTextBox.Text.Trim(); 
+        _editGroupOrigName = EditGroupNameTextBox.Text.Trim();
         EditGroupDialogTransform.ScaleX = 0.94; EditGroupDialogTransform.ScaleY = 0.94; EditGroupDialogTransform.TranslateY = 24;
         EditGroupDialog.Opacity = 0; EditGroupScrim.Opacity = 0;
         EditGroupOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         EditGroupShowAnimation.Begin();
-        UpdateEditGroupConfirmState(); 
+        UpdateEditGroupConfirmState();
     }
 
-    
+
     private void UpdateEditGroupConfirmState()
     {
         string name = EditGroupNameTextBox.Text.Trim();
@@ -2539,16 +2638,16 @@ private MenuFlyout BuildContextMenu()
 
     private void OpenDeleteConfirmDialog(bool isGroup)
     {
-        _deleteConfirming = false; // N5M-02: re-arm on every fresh open
-        // Group deletion is permanent (groups never enter the trash): separate copy + red button.
+        _deleteConfirming = false;
+
         DeleteConfirmMessageText.Text = isGroup
             ? App.GetString("Memo_Group_Delete_ConfirmTip")
             : App.GetString("Memo_Delete_ConfirmTip");
-        
+
         DeleteConfirmTitleText.Foreground = isGroup
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
             : App.GetBrush("AppPrimaryButtonBrush");
-        
+
         DeleteConfirmMessageText.Foreground = isGroup
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
             : App.GetBrush("AppTextPrimaryBrush");
@@ -2557,17 +2656,17 @@ private MenuFlyout BuildContextMenu()
         DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
         DeleteConfirmDialog.Opacity = 0; DeleteConfirmScrim.Opacity = 0;
         DeleteConfirmOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         DeleteConfirmShowAnimation.Begin();
     }
 
     private void CloseDeleteConfirmDialog() { DeleteConfirmHideAnimation.Completed -= OnDeleteConfirmHideCompleted; DeleteConfirmHideAnimation.Completed += OnDeleteConfirmHideCompleted; DialogDepth.VeilHide(); DeleteConfirmHideAnimation.Begin(); }
-    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmHideAnimation.Completed -= OnDeleteConfirmHideCompleted; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _currentEntryCard = null!; _currentGroupCard = null!; _deleteConfirming = false; } // N5M-02: re-arm
+    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmHideAnimation.Completed -= OnDeleteConfirmHideCompleted; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _currentEntryCard = null!; _currentGroupCard = null!; _deleteConfirming = false; }
     private void DeleteConfirmCloseButton_Click(object sender, RoutedEventArgs e) => CloseDeleteConfirmDialog();
     private void DeleteCancelButton_Click(object sender, RoutedEventArgs e) => CloseDeleteConfirmDialog();
     private void DeleteConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) CloseDeleteConfirmDialog(); }
 
-    private bool _deleteConfirming; // N5M-02: one-shot guard - the confirm runs inside a Storyboard.Completed, so a double-click executed the removal twice
+    private bool _deleteConfirming;
 
     private void DeleteConfirmButton_Click(object sender, RoutedEventArgs e)
     {
@@ -2584,9 +2683,9 @@ private MenuFlyout BuildContextMenu()
                 {
                     var parent = _currentEntryCard.Parent as Panel;
                     var delEntryCard = _currentEntryCard;
-                    // Smooth removal inside the group's entry stack. Note: the group card itself is
-                    // content-adaptive and re-flows (shrinks) only when this entry is removed at the end of
-                    // the animation; the brief bottom gap under the removed entry is a platform limitation.
+
+
+
                     App.PlayCardRemoval(parent!, delEntryCard, _dragging, () =>
                     {
                         if (parent is StackPanel sp && sp.Parent is Grid g && g.Children.Count > 3 && g.Children[3] is Grid eh && sp.Children.Count == 0)
@@ -2598,6 +2697,7 @@ private MenuFlyout BuildContextMenu()
                         _entriesInGroup.Remove(delEntryCard);
                         _entryData.Remove(delEntryCard);
                         if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); }
+                        _maskedFieldTexts.Remove(delEntryCard);
                         _entryIconKeys.Remove(delEntryCard);
                         _entryPinIcons.Remove(delEntryCard);
                         _entryStarIcons.Remove(delEntryCard);
@@ -2606,7 +2706,7 @@ private MenuFlyout BuildContextMenu()
                         if (_entryIds.Remove(delEntryCard, out var delEid))
                         {
                             var me = App.Store?.Database.MemoEntries.FirstOrDefault(x => x.Id == delEid);
-                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; } 
+                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; }
                         }
                         _entryCreatedAt.Remove(delEntryCard);
                         _pinnedEntryCards.Remove(delEntryCard);
@@ -2622,13 +2722,14 @@ private MenuFlyout BuildContextMenu()
                 {
                     var delEntryCard = _currentEntryCard;
                     var parent = delEntryCard.Parent as Panel;
-                    // Smooth removal in the uncategorized panel (or wherever the standalone entry lives).
+
                     App.PlayCardRemoval(parent!, delEntryCard, _dragging, () =>
                     {
                         _standaloneEntries.Remove(delEntryCard);
                         _entriesInGroup.Remove(delEntryCard);
                         _entryData.Remove(delEntryCard);
-                        if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); } 
+                        if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); }
+                        _maskedFieldTexts.Remove(delEntryCard);
                         _entryIconKeys.Remove(delEntryCard);
                         _entryPinIcons.Remove(delEntryCard);
                         _entryStarIcons.Remove(delEntryCard);
@@ -2637,7 +2738,7 @@ private MenuFlyout BuildContextMenu()
                         if (_entryIds.Remove(delEntryCard, out var delEid))
                         {
                             var me = App.Store?.Database.MemoEntries.FirstOrDefault(x => x.Id == delEid);
-                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; } 
+                            if (me != null) { me.IsDeleted = true; me.DeletedAt = DateTime.Now; me.IsPinned = false; me.IsStarred = false; }
                         }
                         _entryCreatedAt.Remove(delEntryCard);
                         _pinnedEntryCards.Remove(delEntryCard);
@@ -2670,13 +2771,13 @@ private MenuFlyout BuildContextMenu()
                             _entriesInGroup.Remove(eb);
 
                             if (_entryIds.TryGetValue(eb, out var rid)) { var me = FindEntry(rid); if (me != null) me.GroupId = null; }
-                            StripEntryPersonalMarks(eb); 
+                            StripEntryPersonalMarks(eb);
                         }
                         GroupsContainer.Children.Insert(idx++, entry);
                     }
                 }
                 var delGroupCard = _currentGroupCard;
-                // Smooth removal of the group card (rescued entries already sit below it and slide up too).
+
                 App.PlayCardRemoval(GroupsContainer, delGroupCard, _dragging, () =>
                 {
                     _groupNameTexts.Remove(delGroupCard);
@@ -2685,21 +2786,21 @@ private MenuFlyout BuildContextMenu()
                     if (_groupIds.Remove(delGroupCard, out var delGid))
                     {
                         App.Store?.Database.MemoGroups.RemoveAll(x => x.Id == delGid);
-                        
+
                         foreach (var me in App.Store?.Database.MemoEntries ?? new())
-                            if (me.IsDeleted && me.GroupId == delGid) { me.GroupId = null; me.IsPinned = false; me.IsStarred = false; } 
+                            if (me.IsDeleted && me.GroupId == delGid) { me.GroupId = null; me.IsPinned = false; me.IsStarred = false; }
                     }
                     _groupCreatedAt.Remove(delGroupCard);
                     _pinIcons.Remove(delGroupCard);
                     _starIcons.Remove(delGroupCard);
                     _starredCards.Remove(delGroupCard);
-                    _groupCountTexts.Remove(delGroupCard); // #36: group count text leak
+                    _groupCountTexts.Remove(delGroupCard);
                     if (_pinnedGroupCard == delGroupCard) _pinnedGroupCard = null!;
                     _currentGroupCard = null!;
                     if (GroupsContainer.Children.Count == 0) FloatInHint();
                     SyncUncategorizedCard();
                     PersistAll();
-                    ApplyCardFilters(); // N2-17: rescued entries may not belong to the active workspace
+                    ApplyCardFilters();
                     App.ShowToast(App.GetString("Common_Toast_Deleted"));
                     CloseDeleteConfirmDialog();
                 });
@@ -2710,7 +2811,7 @@ private MenuFlyout BuildContextMenu()
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
-        _totpTimer?.Stop(); // 9.3: no live TOTP rows off-page
+        _totpTimer?.Stop();
         _apiCheckCts?.Cancel();
         _apiCheckCts?.Dispose();
         _apiCheckCts = null;
@@ -2720,17 +2821,23 @@ private MenuFlyout BuildContextMenu()
         _relayProbeCts?.Cancel();
         _relayProbeCts?.Dispose();
         _relayProbeCts = null;
+
+
+
+
+
+        if (_renderInProgress) { _renderCts?.Cancel(); App.MainWindow?.RetireTabPage(typeof(BasicMemoPage)); }
         StopRelayProbePulse();
-        foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } // N5M-01
+        foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); }
         _flashCtsMap.Clear();
-        
+
         foreach (var kv in _flashOriginalBgs) { try { kv.Key.Background = kv.Value; } catch { } }
         _flashOriginalBgs.Clear();
 
         NewGroupDialogOverlay.Visibility = Visibility.Collapsed;
         NewEntryDialogOverlay.Visibility = Visibility.Collapsed;
-        GenerateOverlay.Visibility = Visibility.Collapsed; // N2-56: the generator was the one overlay missing from this teardown
-        _genTargetSlot = null; // N2-56
+        GenerateOverlay.Visibility = Visibility.Collapsed;
+        _genTargetSlot = null;
         EditGroupOverlay.Visibility = Visibility.Collapsed;
         DeleteConfirmOverlay.Visibility = Visibility.Collapsed;
         ApiCheckOverlay.Visibility = Visibility.Collapsed;
@@ -2738,7 +2845,7 @@ private MenuFlyout BuildContextMenu()
         ApiDiagOverlay.Visibility = Visibility.Collapsed;
         ApiConfirmOverlay.Visibility = Visibility.Collapsed;
         RelayProbeOverlay.Visibility = Visibility.Collapsed;
-        DialogDepth.VeilClear(); 
+        DialogDepth.VeilClear();
         _targetGroupCard = null!;
         _editingEntryCard = null!;
         _currentEntryCard = null!;
@@ -2749,7 +2856,7 @@ private MenuFlyout BuildContextMenu()
         _relayProbeCard = null;
         _apiConfirmProceed = null;
         _pendingMenuAction = null!;
-        
+
         if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; }
         _dragging = false;
         if (_dropIndicator != null && _dragContainer != null) { _dragContainer.Children.Remove(_dropIndicator); _dropIndicator = null; }
@@ -2767,21 +2874,21 @@ private MenuFlyout BuildContextMenu()
         if (RelayProbeOverlay.Visibility == Visibility.Visible) { HideRelayProbeOverlay(); e.Handled = true; return; }
         if (ApiConfirmOverlay.Visibility == Visibility.Visible) { HideApiConfirmOverlay(); e.Handled = true; return; }
         if (DeleteConfirmOverlay.Visibility == Visibility.Visible) { CloseDeleteConfirmDialog(); e.Handled = true; return; }
-        if (GenerateOverlay.Visibility == Visibility.Visible) { CloseGenerateDialog(); _genTargetSlot = null; e.Handled = true; return; } // N2-55: the generator sits ON TOP of the new-entry dialog - Esc must close it first, not the dialog underneath
+        if (GenerateOverlay.Visibility == Visibility.Visible) { CloseGenerateDialog(); _genTargetSlot = null; e.Handled = true; return; }
         if (NewEntryDialogOverlay.Visibility == Visibility.Visible) { CloseNewEntryDialog(); e.Handled = true; return; }
         if (EditGroupOverlay.Visibility == Visibility.Visible) { CloseEditGroupDialog(); e.Handled = true; return; }
         if (NewGroupDialogOverlay.Visibility == Visibility.Visible) { CloseNewGroupDialog(); e.Handled = true; return; }
     }
 
-    // ================================================================
 
-    // ================================================================
 
-    /* ========== BasicMemoPage API Check ==========
-Function: API connectivity check dialog: probing/success/fail states with theme color, advanced config button visible only on fail
-Corresponding UI: BasicMemoPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
+
+
 private void ShowApiCheckDialog(Border card)
     {
         if (!_entryData.TryGetValue(card, out var d)) return;
@@ -2792,8 +2899,8 @@ private void ShowApiCheckDialog(Border card)
             else if (f.Item1 == "API Key") key = f.Item2.Trim();
         }
         _apiCheckCard = card;
-        // Clear the previous report before showing "probing" - otherwise the last detection's
-        // structured rows / detail linger until the async probe finishes (looks like stale history).
+
+
         ApiCheckReportRows.Children.Clear();
         ApiCheckReportPanel.Visibility = Visibility.Collapsed;
         ApiCheckStatusDetail.Text = "";
@@ -2816,9 +2923,9 @@ private void ShowApiCheckDialog(Border card)
     {
         ApiCheckStatusText.Text = title;
         ApiCheckStatusDetail.Text = detail;
-        // Empty detail must be explicitly collapsed: the failure-detail area otherwise keeps its
-        // reserved height on success, leaving a large blank stretch (dialog background) between
-        // the report block and the footer note. Dialog height stays purely content-driven.
+
+
+
         ApiCheckStatusDetail.Visibility = string.IsNullOrEmpty(detail) ? Visibility.Collapsed : Visibility.Visible;
         ApiCheckStatusText.Foreground = kind switch
         {
@@ -2834,13 +2941,13 @@ private void ShowApiCheckDialog(Border card)
         ApiCheckDialogTransform.ScaleX = 0.94; ApiCheckDialogTransform.ScaleY = 0.94; ApiCheckDialogTransform.TranslateY = 24;
         ApiCheckDialog.Opacity = 0; ApiCheckScrim.Opacity = 0;
         ApiCheckOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
         Storyboard.SetTarget(si, ApiCheckScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ApiCheckDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ApiCheckDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ApiCheckDialogTransform);
         sb.Begin();
     }
 
@@ -2854,10 +2961,10 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(so, ApiCheckScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ApiCheckDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ApiCheckDialogTransform); // M1: EmphasizedAccelerate (Motion)
-        sb.Completed -= OnApiCheckHideCompleted; // E1-26: prevent handler pile-up on rapid repeated hide
+        Motion.AddDialogHideTransform(sb, ApiCheckDialogTransform);
+        sb.Completed -= OnApiCheckHideCompleted;
         sb.Completed += OnApiCheckHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         sb.Begin();
     }
 
@@ -2874,7 +2981,7 @@ private void ShowApiCheckDialog(Border card)
 
     private async Task RunAutoProbeAsync(string url, string key)
     {
-        System.Threading.CancellationTokenSource? myCts = null; 
+        System.Threading.CancellationTokenSource? myCts = null;
         try
         {
             _apiCheckCts?.Cancel();
@@ -2882,13 +2989,13 @@ private void ShowApiCheckDialog(Border card)
             _apiCheckCts = myCts = new System.Threading.CancellationTokenSource();
             var ct = myCts.Token;
 
-            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url)); // 9.3: detection feedback (title badge was removed)
+            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url));
             var report = await Novara.Services.ApiProbeService.ProbeAsync(url, key, ct);
             if (myCts.IsCancellationRequested) return;
             if (report.Status == Novara.Services.ApiProbeStatus.Success)
             {
-                // Persist the resolved protocol (OpenAI-compatible only; vendor-specific schemes like
-                // x-api-key/query re-resolve automatically on the next probe, so no stored value needed).
+
+
                 if (report.Protocol == "bearer") SaveApiProtocol("Bearer");
                 else if (report.Protocol == "raw") SaveApiProtocol("NoBearer");
             }
@@ -2907,7 +3014,7 @@ private void ShowApiCheckDialog(Border card)
 
     private void ApplyProbeReport(Novara.Services.ApiProbeReport report)
     {
-        // Structured report card: label/value rows for vendor / protocol / endpoint / latency / models.
+
         ApiCheckReportRows.Children.Clear();
         void AddRow(string label, string value)
         {
@@ -2935,10 +3042,10 @@ private void ShowApiCheckDialog(Border card)
             return;
         }
 
-        // Failure: reason (masked server detail) + actionable hint in the detail block.
+
         var detail = new System.Text.StringBuilder();
         if (!string.IsNullOrEmpty(report.Detail)) detail.Append(report.Detail).Append('\n');
-        // Key-prefix mismatch hint: the pasted key clearly belongs to another vendor than the URL does.
+
         if (!string.IsNullOrEmpty(report.KeyHintVendor) &&
             !string.Equals(report.KeyHintVendor, report.Vendor, StringComparison.OrdinalIgnoreCase))
         {
@@ -2985,9 +3092,9 @@ private void ShowApiCheckDialog(Border card)
         }
     }
 
-    // ================================================================
-    
-    // ================================================================
+
+
+
 
     private (string Url, string Key, string Model) GetApiEntryFields(Border card)
     {
@@ -3006,7 +3113,7 @@ private void ShowApiCheckDialog(Border card)
     {
         var (url, key, model) = GetApiEntryFields(card);
         _apiDiagCard = card;
-        
+
         ApiDiagReportRows.Children.Clear();
         ApiDiagReportPanel.Visibility = Visibility.Collapsed;
         ApiDiagStatusDetail.Text = "";
@@ -3043,34 +3150,34 @@ private void ShowApiCheckDialog(Border card)
 
     private async Task RunApiDiagAsync(string url, string key, string model)
     {
-        System.Threading.CancellationTokenSource? myCts = null; // N5A-05: hoisted so the OCE filters below can tell timeout from supersede
+        System.Threading.CancellationTokenSource? myCts = null;
         try
         {
             _apiDiagCts?.Cancel();
             _apiDiagCts?.Dispose();
-            
+
             myCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(180));
             _apiDiagCts = myCts;
             var ct = myCts.Token;
 
-            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url)); // 9.3: detection feedback
+            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url));
             var report = await Novara.Services.ApiDiagnoseService.DiagnoseAsync(url, key,model, ct);
             if (myCts.IsCancellationRequested)
             {
-                // N5A-05: the 180s budget fired - end the flow honestly instead of leaving the
-                // overlay stuck on "checking". N3-61: localized timeout detail (was hardcoded English).
+
+
                 SetApiDiagState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_ApiDiag_Timeout"), true);
             }
             else ApplyDiagReport(report);
         }
         catch (System.OperationCanceledException) when (myCts != null && myCts.IsCancellationRequested)
         {
-            // N5A-05: same timeout semantics for the OCE path. N3-61: localized timeout detail.
+
             SetApiDiagState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_ApiDiag_Timeout"), true);
         }
         catch (System.OperationCanceledException)
         {
-            // superseded by a newer diag run - the newer run owns the overlay now
+
         }
         catch (Exception ex)
         {
@@ -3183,7 +3290,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(si, ApiDiagScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ApiDiagDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ApiDiagDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ApiDiagDialogTransform);
         sb.Begin();
     }
 
@@ -3197,7 +3304,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(so, ApiDiagScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ApiDiagDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ApiDiagDialogTransform); // M1: EmphasizedAccelerate (Motion)
+        Motion.AddDialogHideTransform(sb, ApiDiagDialogTransform);
         sb.Completed -= OnApiDiagHideCompleted;
         sb.Completed += OnApiDiagHideCompleted;
         DialogDepth.VeilHide();
@@ -3214,7 +3321,7 @@ private void ShowApiCheckDialog(Border card)
     private void ApiDiagCloseButton_Click(object sender, RoutedEventArgs e) => HideApiDiagOverlay();
     private void ApiDiagScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ApiDiagScrim)) HideApiDiagOverlay(); }
 
-    
+
 
     private void ShowApiConfirmOverlay(System.Action onProceed, string? desc = null)
     {
@@ -3229,7 +3336,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(si, ApiConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ApiConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ApiConfirmDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ApiConfirmDialogTransform);
         sb.Begin();
     }
 
@@ -3241,7 +3348,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(so, ApiConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ApiConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ApiConfirmDialogTransform); // M1: EmphasizedAccelerate (Motion)
+        Motion.AddDialogHideTransform(sb, ApiConfirmDialogTransform);
         sb.Completed -= OnApiConfirmHideCompleted;
         sb.Completed += OnApiConfirmHideCompleted;
         DialogDepth.VeilHide();
@@ -3260,15 +3367,15 @@ private void ShowApiCheckDialog(Border card)
     private void ApiConfirmCloseButton_Click(object sender, RoutedEventArgs e) => HideApiConfirmOverlay();
     private void ApiConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ApiConfirmScrim)) HideApiConfirmOverlay(); }
 
-    // ================================================================
-    
-    // ================================================================
+
+
+
 
     private void ShowRelayProbeConfirm(Border card)
     {
         var (url, key, model) = GetApiEntryFields(card);
         _relayProbeCard = card;
-        
+
         RelayProbeReportRows.Children.Clear();
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -3310,7 +3417,7 @@ private void ShowApiCheckDialog(Border card)
             _relayProbeCts = new System.Threading.CancellationTokenSource();
             var ct = _relayProbeCts.Token;
 
-            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url)); // 9.3: detection feedback
+            App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url));
             var report = await Novara.Services.RelayProbeService.ProbeAsync(url, key, model, ct);
             if (ct.IsCancellationRequested) return;
             ApplyRelayProbeReport(report);
@@ -3415,7 +3522,7 @@ private void ShowApiCheckDialog(Border card)
             : App.GetBrush("AppTextPrimaryBrush");
     }
 
-    
+
     private void StartRelayProbePulse()
     {
         _relayProbePulse?.Stop();
@@ -3438,15 +3545,15 @@ private void ShowApiCheckDialog(Border card)
     {
         _relayProbePulse?.Stop();
         _relayProbePulse = null;
-        RelayProbeVerdictText.Opacity = 1.0; 
+        RelayProbeVerdictText.Opacity = 1.0;
     }
 
     private void ShowRelayProbeOverlay()
     {
-        
-        
+
+
         double viewport = MemoRoot.ActualHeight;
-        RelayProbeDialog.MaxHeight = viewport > 0 ? Math.Max(360, viewport - 60) : 720;
+        DialogUi.ClampDialogHeight(RelayProbeDialog, viewport);
 
         RelayProbeDialogTransform.ScaleX = 0.94; RelayProbeDialogTransform.ScaleY = 0.94; RelayProbeDialogTransform.TranslateY = 24;
         RelayProbeDialog.Opacity = 0; RelayProbeScrim.Opacity = 0;
@@ -3457,13 +3564,13 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(si, RelayProbeScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, RelayProbeDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, RelayProbeDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, RelayProbeDialogTransform);
         sb.Begin();
     }
 
     private void HideRelayProbeOverlay()
     {
-        StopRelayProbePulse(); 
+        StopRelayProbePulse();
         _relayProbeCts?.Cancel();
         _relayProbeCts?.Dispose();
         _relayProbeCts = null;
@@ -3472,7 +3579,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(so, RelayProbeScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, RelayProbeDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, RelayProbeDialogTransform); // M1: EmphasizedAccelerate (Motion)
+        Motion.AddDialogHideTransform(sb, RelayProbeDialogTransform);
         sb.Completed -= OnRelayProbeHideCompleted;
         sb.Completed += OnRelayProbeHideCompleted;
         DialogDepth.VeilHide();
@@ -3512,7 +3619,7 @@ private void ShowApiCheckDialog(Border card)
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"加载探针数据集失败: {ex}");
-            
+
             try { App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + ex.Message); }
             catch { }
         }
@@ -3525,7 +3632,7 @@ private void ShowApiCheckDialog(Border card)
         ApiProtocolDialogTransform.ScaleX = 0.94; ApiProtocolDialogTransform.ScaleY = 0.94; ApiProtocolDialogTransform.TranslateY = 24;
         ApiProtocolDialog.Opacity = 0; ApiProtocolScrim.Opacity = 0;
         ApiProtocolOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
         Storyboard.SetTarget(si, ApiProtocolScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
@@ -3533,7 +3640,7 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(di, ApiProtocolDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
         foreach (var (val, prop) in new[] { (1.0, "ScaleX"), (1.0, "ScaleY"), (0.0, "TranslateY") })
         {
-            sb.Children.Add(Motion.Eased(val, Motion.DlgIn, Motion.Decelerate, ApiProtocolDialogTransform, prop)); // M1: EmphasizedDecelerate (Motion)
+            sb.Children.Add(Motion.Eased(val, Motion.DlgIn, Motion.Decelerate, ApiProtocolDialogTransform, prop));
         }
         sb.Begin();
     }
@@ -3545,10 +3652,10 @@ private void ShowApiCheckDialog(Border card)
         Storyboard.SetTarget(so, ApiProtocolScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ApiProtocolDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ApiProtocolDialogTransform); // M1: EmphasizedAccelerate (Motion)
+        Motion.AddDialogHideTransform(sb, ApiProtocolDialogTransform);
         sb.Completed -= OnApiProtocolHideCompleted;
         sb.Completed += OnApiProtocolHideCompleted;
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         sb.Begin();
     }
 
@@ -3627,7 +3734,7 @@ private void ShowApiCheckDialog(Border card)
         }
     }
 
-    
+
 
     private void AttachCardDrag(Border card)
     {
@@ -3638,16 +3745,16 @@ private void ShowApiCheckDialog(Border card)
         card.PointerPressed += (s, e) =>
         {
             if (_dragging) return;
-            
-            
+
+
             if (ReferenceEquals(card, _pinnedGroupCard) || _pinnedEntryCards.Contains(card)) return;
-            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return; 
+            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
             grabOffset = pt.Position;
             var pointer = e.Pointer;
             armed = true;
-            e.Handled = true; 
+            e.Handled = true;
 
             var rtb = new RenderTargetBitmap();
             var renderOp = rtb.RenderAsync(card);
@@ -3656,9 +3763,9 @@ private void ShowApiCheckDialog(Border card)
             timer.Tick += async (_, _) =>
             {
                 timer.Stop(); timer = null;
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 try { await renderOp; } catch { }
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 BeginDrag(card, grabOffset, rtb);
                 try { card.CapturePointer(pointer); } catch { }
             };
@@ -3703,16 +3810,16 @@ private void ShowApiCheckDialog(Border card)
         _dragCard = card;
         _dragContainer = card.Parent as Panel;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = _dragContainer != null ? CountVisibleBeforeIn(card, _dragContainer) : 0; // N2-06: origin in visible-slot space
+        _dropIndex = _dragOriginIndex = _dragContainer != null ? CountVisibleBeforeIn(card, _dragContainer) : 0;
 
-        App.StopCardEntrance(card); 
+        App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
-        // N4M-04: reuse the card's own TranslateTransform - replacing it detached the hover
-        // Storyboard's target object, permanently killing the hover lift after the first drag.
+
+
         if (card.RenderTransform is not TranslateTransform tt) { tt = new TranslateTransform(); card.RenderTransform = tt; }
-        tt.X = 0; tt.Y = 0; 
+        tt.X = 0; tt.Y = 0;
 
         try
         {
@@ -3754,8 +3861,8 @@ private void ShowApiCheckDialog(Border card)
         foreach (var child in _dragContainer.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            
-            
+
+
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(_dragContainer).TransformPoint(new Point(0, 0)).Y;
@@ -3770,12 +3877,12 @@ private void ShowApiCheckDialog(Border card)
     {
         if (_dragContainer == null) return;
 
-        
+
         int minIndex = 0;
         if (ReferenceEquals(_dragContainer, GroupsContainer))
         {
-            
-            
+
+
             bool topPinned =
                 (_pinnedGroupCard != null && _dragContainer.Children.Contains(_pinnedGroupCard) && _pinnedGroupCard.Visibility == Visibility.Visible) ||
                 (RegionPinnedEntryCard(_dragContainer) is Border tp && tp.Visibility == Visibility.Visible);
@@ -3783,25 +3890,25 @@ private void ShowApiCheckDialog(Border card)
         }
         else
         {
-            
+
             if (RegionPinnedEntryCard(_dragContainer) is Border rp && rp.Visibility == Visibility.Visible) minIndex = 1;
         }
         index = Math.Max(index, minIndex);
 
-        
-        
+
+
         if (ReferenceEquals(_dragContainer, GroupsContainer)
             && _dragCard != null && _groupNameTexts.ContainsKey(_dragCard)
             && _uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard))
         {
-            // N2-06: the ceiling is the uncategorized card's VISIBLE slot (ComputeDropIndex counts
-            // visible cards only) - with hidden cards in between the physical IndexOf would sit too
-            // high and let a group land past the uncategorized card after the slot translation.
+
+
+
             int uncatIdx = CountVisibleBeforeIn(_uncategorizedCard, GroupsContainer);
             index = Math.Min(index, uncatIdx);
         }
 
-        
+
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
             if (_dropIndicator != null) { _dragContainer.Children.Remove(_dropIndicator); _dropIndicator = null; }
@@ -3889,8 +3996,8 @@ private void ShowApiCheckDialog(Border card)
         card.Opacity = 1;
 
         if (container == null) return;
-        // N2-06: dropIndex is in "slot space including the dragged card" - convert to the
-        // without-self space, then translate back to a physical Children index (hidden cards stay put).
+
+
         int curVisible = CountVisibleBeforeIn(card, container);
         int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
         if (dst != curVisible)
@@ -3899,12 +4006,12 @@ private void ShowApiCheckDialog(Border card)
             container.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, container), card);
         }
 
-        PersistAll(); 
+        PersistAll();
     }
 
-    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> in
-    /// <paramref name="container"/> (visible-slot space matching ComputeDropIndex; the drop
-    /// indicator itself is excluded so the slot stays stable while the indicator is on screen).</summary>
+
+
+
     private int CountVisibleBeforeIn(FrameworkElement card, Panel container)
     {
         int n = 0;
@@ -3917,9 +4024,9 @@ private void ShowApiCheckDialog(Border card)
         return n;
     }
 
-    /// <summary>N2-06: physical Children index where a card must land to become the
-    /// <paramref name="visibleSlot"/>-th visible card (call AFTER removing the dragged card;
-    /// falls back to the end when the slot exceeds the visible count).</summary>
+
+
+
     private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
     {
         int seen = 0;

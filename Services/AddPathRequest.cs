@@ -1,18 +1,10 @@
-/* ========== AddPathRequest - Right-Click "Add to Path Backup" Bridge ==========
-Function: Single-instance add-path bridge (stage-3): a second instance (from the Windows
-right-click menu) passes a file/folder path to the already-running main instance via a
-pending-path.json file + a named event; if the app is closed, the launched process reads
-the same pending path at startup.
-Corresponding UI: FilePathPage (new-path dialog pre-filled)
-Logic Range: Whole file business logic of this module
-*/
 using System.Text.Json;
 
 namespace Novara.Services;
 
 public static class AddPathRequest
 {
-    // E1-13: event name isolated per config (Debug=.Dev) - see EditRequest.cs
+
     public const string EventName =
 #if DEBUG
         @"Local\Novara.AddPathRequest.Dev";
@@ -27,7 +19,7 @@ public static class AddPathRequest
     private static Thread? _thread;
     private static volatile bool _running;
 
-    /// <summary>Listen for add-path requests on a background thread; handler runs on that thread.</summary>
+
     public static void StartListening(Action<string> handler)
     {
         try
@@ -55,12 +47,12 @@ public static class AddPathRequest
             { IsBackground = true };
             _thread.Start();
         }
-        catch { /* event already held or failed - degrade to startup-only handling */ }
+        catch {  }
     }
 
-    // N5W2-04: Stop() removed (zero callers) - same fake-wake-up trap as the other request bridges.
 
-    /// <summary>Consume a pending path if one exists (used at startup and by the listener).</summary>
+
+
     public static string? ReadPending()
     {
         try
@@ -69,7 +61,7 @@ public static class AddPathRequest
             {
                 var json = File.ReadAllText(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingPathFile>(json);
-                
+
                 if (j != null && !string.IsNullOrWhiteSpace(j.Path))
                 {
                     try { File.Delete(PendingPath); } catch { }
@@ -81,7 +73,7 @@ public static class AddPathRequest
         return null;
     }
 
-    /// <summary>Write the request file and signal the running instance (second-instance side).</summary>
+
     public static void Raise(string path)
     {
         try
@@ -94,7 +86,7 @@ public static class AddPathRequest
                 using var evt = EventWaitHandle.OpenExisting(EventName);
                 evt.Set();
             }
-            catch { /* no running instance - the launched process handles it at startup */ }
+            catch {  }
         }
         catch { }
     }

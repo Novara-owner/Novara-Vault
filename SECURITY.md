@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-10 · **Applies to:** Novara 7.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-19 · **Applies to:** Novara 8.0 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 7.0 | ✅ Supported | Current release — first release of the connected era |
+| 8.0 | ✅ Supported | Current release — cross-device sync through a server you host |
+| 7.0 | ✅ Supported | First release of the connected era (encrypted snapshots) |
 | 6.2 | ✅ Supported | Receives critical fixes where feasible |
 | 6.0 | ✅ Supported | Receives critical fixes where feasible |
 | 5.x | ✅ Supported | Receives critical fixes where feasible |
@@ -52,7 +53,7 @@ Please include:
 
 ## 3. Security model & threat model
 
-**What we protect.** Novara is a *local-first personal data control layer* — for you and for your AI agents. Its security goal is to protect your data **at rest** — the single database file on disk — and, since 7.0, wherever you choose to take it, against:
+**What we protect.** Novara is a *local-first personal data control layer* — for you and for your AI agents. Its security goal is to protect your data **at rest** — the single database file on disk — and, since 7.0, wherever you choose to take it — snapshots, and since 8.0 sync between your own devices — against:
 
 - casual or unauthorized reading when the app is locked or closed (via optional encryption);
 - silent tampering of the encrypted file (via AES-GCM authentication);
@@ -94,6 +95,18 @@ The connected era adds a new way for data to leave your machine — and the same
 - **Credentials never ride along** — MCP tokens and per-client authorization data are stripped from the exported settings before the snapshot is sealed.
 - **Zero network by construction** — the exported viewer file performs no network requests whatsoever: no CDN, no fonts, no telemetry. Decryption happens in your browser via the WebCrypto API; the file never "phones home" because there is no home to phone.
 - **Password is the only key** — the snapshot password is not stored anywhere by Novara and cannot be recovered. Hosting a snapshot publicly is safe only as far as the password is strong; the app and the deployment guide both say so plainly.
+
+### Sync (8.0+)
+
+8.0 lets your devices stay in step through a server you run yourself — and that server is a **ciphertext store, not a service that can read you**. The same bar applies as everywhere else: nothing leaves unencrypted, and the server holds no key.
+
+- **The server never sees plaintext** — it stores one versioned ciphertext blob per change plus a small plaintext envelope (container / crypto / sync version numbers, the base version the payload was built on, a device id and a timestamp). It holds no space key, has no user accounts, performs no decryption, and keeps no plaintext logs.
+- **Key separation** — the space key is generated on the first device and never leaves the devices. Pairing uses a space id and an enrollment secret the server prints exactly once; each device then carries its own token. Revoking a lost phone therefore costs nothing: the ciphertext it could have downloaded is useless without a key it never had.
+- **Same container, same contract** — every payload is the `.novaenc` v4 container (44-byte self-describing header used as AES-GCM additional data, PBKDF2-SHA256 at 3,000,000 iterations, gzip-compressed body). Enabling sync requires the privacy lock; a plaintext vault is refused.
+- **Transport** — the protocol assumes HTTPS. The browser side needs a secure context, so the deployment guide recommends a TLS-terminating reverse proxy with automatic certificates (or a private network link), and the bundled server binds to loopback by default.
+- **Token handling** — the server stores only a SHA-256 of each device token, compares in constant time, and rate-limits repeated failures.
+- **Integrity and version discipline** — an upload declares the version it is based on; a mismatch is reported as a conflict instead of silently overwriting, and the overwritten version is retained on the server so a bad push can be rolled back.
+- **Local audit** — every upload, download, conflict detection and conflict resolution is recorded in a local audit log, and the device center shows each paired device's trust state and last sync.
 
 ## 5. Data integrity & reliability
 

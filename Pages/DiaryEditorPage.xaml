@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.DiaryEditorPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -101,8 +101,8 @@
                                     <VisualState x:Name="Normal" />
                                     <VisualState x:Name="PointerOver">
                                         <Storyboard>
-                                            <!-- The swatch's own color IS its background - hover must NOT repaint it,
-                                                 only add a border ring to signal clickability. -->
+
+
                                             <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="BorderBrush">
                                                 <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextSecondaryBrush}" />
                                             </ObjectAnimationUsingKeyFrames>
@@ -127,7 +127,7 @@
             </Setter>
         </Style>
 
-        
+
 
         <Style x:Key="ColorSwatchClearButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="28" />
@@ -174,7 +174,7 @@
             </Setter>
         </Style>
 
-        
+
         <Style x:Key="MdViewSwitchButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="36" />
             <Setter Property="Height" Value="36" />
@@ -216,7 +216,7 @@
                       Fill="#FFFFFFFF" />
             </Button>
 
-            
+
             <StackPanel x:Name="MdViewSwitch"
                         HorizontalAlignment="Right"
                         Orientation="Horizontal"
@@ -329,7 +329,7 @@
                 </Border>
             </Grid>
 
-            
+
             <Grid x:Name="MdToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom" Visibility="Collapsed">
                 <Grid.RenderTransform>
                     <CompositeTransform x:Name="MdToolbarTranslate" TranslateX="0" TranslateY="0" ScaleX="1" ScaleY="1" />
@@ -372,8 +372,8 @@
                 </Border>
             </Grid>
 
-            
-            <!-- ND2: wrapped in a per-picker Overlay so DialogDepth pairs each Scrim with its own panel -->
+
+
             <Grid x:Name="MdHeadingPickerOverlay">
             <Grid x:Name="MdHeadingPickerScrim" Visibility="Collapsed" Background="Transparent" Tapped="MdHeadingPickerScrim_Tapped" />
 

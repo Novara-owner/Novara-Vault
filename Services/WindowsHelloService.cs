@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 using Windows.Security.Credentials;
 using Windows.Security.Credentials.UI;
 
@@ -15,14 +8,14 @@ public static class WindowsHelloService
     private const string Resource = "Novara";
     private const string UserName = "winhello";
 
-    /// <summary>System has Windows Hello configured (availability check, no prompt).</summary>
+
     public static async Task<bool> IsAvailableAsync()
     {
         try { return await UserConsentVerifier.CheckAvailabilityAsync() == UserConsentVerifierAvailability.Available; }
         catch { return false; }
     }
 
-    /// <summary>Credential exists = Windows Hello unlock is enabled (single source of truth).</summary>
+
     public static bool IsEnabled()
     {
         try
@@ -33,12 +26,12 @@ public static class WindowsHelloService
         catch { return false; }
     }
 
-    /// <summary>Store the current password into the vault (enables Windows Hello unlock).</summary>
+
     public static bool Enable(string password)
     {
         try
         {
-            Disable(); // PasswordVault.Add throws on a duplicate (resource,userName) key
+            Disable();
             var vault = new PasswordVault();
             vault.Add(new PasswordCredential(Resource, UserName, password));
             return true;
@@ -46,7 +39,7 @@ public static class WindowsHelloService
         catch { return false; }
     }
 
-    /// <summary>Remove the stored credential (disables Windows Hello unlock).</summary>
+
     public static void Disable()
     {
         try
@@ -55,18 +48,18 @@ public static class WindowsHelloService
             foreach (var c in vault.FindAllByResource(Resource))
                 if (c.UserName == UserName)
                 {
-                    try { c.RetrievePassword(); } catch { } 
+                    try { c.RetrievePassword(); } catch { }
                     vault.Remove(c);
                 }
         }
         catch { }
     }
 
-    /// <summary>Re-store a changed password (keeps the credential consistent after a change).
-    /// Callers MUST gate on IsEnabled() - Update enables the credential as a side effect.</summary>
+
+
     public static bool Update(string newPassword) => Enable(newPassword);
 
-    /// <summary>Read the stored password back (returns null if absent/unreadable).</summary>
+
     public static string? TryGetPassword()
     {
         try
@@ -83,15 +76,15 @@ public static class WindowsHelloService
         catch { return null; }
     }
 
-    /// <summary>Pop the native Windows Hello prompt (message shown inside the system dialog).</summary>
+
     public static async Task<UserConsentVerificationResult> RequestVerificationAsync(string message)
     {
         try { return await UserConsentVerifier.RequestVerificationAsync(message); }
         catch (System.Exception ex)
         {
-            
+
             System.Diagnostics.Debug.WriteLine($"Windows Hello verification error: {ex.Message}");
-            return UserConsentVerificationResult.DeviceBusy; 
+            return UserConsentVerificationResult.DeviceBusy;
         }
     }
 }

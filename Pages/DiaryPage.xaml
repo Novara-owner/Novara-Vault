@@ -37,7 +37,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        
+
         <Canvas x:Name="DragLayer" IsHitTestVisible="False" />
 
         <Grid x:Name="DeleteConfirmOverlay"
@@ -111,7 +111,7 @@
                 </Grid>
             </Border>
         </Grid>
-        <!-- FocusSink: steals focus (no focus border on an invisible 0x0 button), LockScreenPage/SearchPage fix -->
+
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
     </Grid>
 </Page>

@@ -14,7 +14,7 @@
     button.active { background: #0066cc; color: #fff; border-color: #0066cc; }
     .editor { border: 1px solid #ccc; border-radius: 8px; padding: 12px; min-height: 160px; outline: none; }
     .editor:focus { border-color: #0066cc; }
-    /* 选中文字时保留文字本身颜色（默认蓝底白字会盖住颜色标记） */
+
     ::selection { background: rgba(0,0,0,0.15); color: inherit; }
     .output { margin-top: 24px; }
     .output pre { background: #f6f6f6; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
@@ -71,7 +71,7 @@
           onSelectionUpdate: function () { notifyFormatState(); }
         });
 
-        // 40x30 红色 PNG（可见，用于验证插入图片）；真实 app 里文件选择器是 C# 的 FileOpenPicker，不在 POC 范围
+
         window.__poc = {
           sampleImage: 'iVBORw0KGgoAAAANSUhEUgAAACgAAAAeCAYAAABe3VzdAAAAOUlEQVR4nO3OIQEAIAAEse9fGiIgDzExv53t/Gx1QFCwDggK1gFBwTogKFgHBAXrgKBgHRAUrAMvF2vxVygdvPjVAAAAAElFTkSuQmCC'
         };
@@ -84,13 +84,13 @@
             underline: editor.isActive('underline')
           };
           fmtOut.textContent = JSON.stringify(state, null, 2);
-          // 更新按钮高亮（模拟 C# UpdateFormatButtonStates）
+
           document.getElementById('btnBold').className = state.bold ? 'active' : '';
           document.getElementById('btnItalic').className = state.italic ? 'active' : '';
           document.getElementById('btnUnderline').className = state.underline ? 'active' : '';
         }
 
-        // 模拟 C# 的 PostMessageAsync：{ action, ...data }
+
         window.bridge = function (action, data) {
           var m = Object.assign({ action: action }, data || {});
           switch (m.action) {

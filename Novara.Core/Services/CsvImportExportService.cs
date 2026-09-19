@@ -1,7 +1,3 @@
-
-
-
-
 using System.Text;
 using Novara.Models;
 
@@ -19,7 +15,7 @@ public static class CsvImportExportService
 {
     private const string CsvHeader = "Group,Type,Name,URL,Username,Password,Notes";
 
-    // Per-type field label mapping for export: (urlLabel, userLabel, passLabel, requiredLabel)
+
     private static readonly Dictionary<string, (string url, string user, string pass, string required)> TypeMapping = new()
     {
         ["邮箱"] = ("", "邮箱地址", "邮箱密码", "邮箱地址"),
@@ -31,30 +27,10 @@ public static class CsvImportExportService
         ["证件"] = ("", "证件号", "", "证件号"),
     };
 
-    // Per-type field template for import (field labels in order)
-    private static readonly Dictionary<string, string[]> TypeFieldTemplates = new()
-    {
-        ["邮箱"] = new[] { "邮箱地址", "邮箱密码", "备注" },
-        ["账户"] = new[] { "账号", "密码", "网址", "备注" },
-        ["API Key"] = new[] { "API Key", "URL", "模型 ID", "备注" },
-        ["网站"] = new[] { "网址", "账号", "密码", "备注" },
-        ["银行卡"] = new[] { "卡号", "持卡人", "有效期", "CVV", "密码", "备注" },
-        ["WiFi"] = new[] { "网络名", "密码", "备注" },
-        ["证件"] = new[] { "证件号", "姓名", "签发机构", "有效期", "备注" },
-        ["自定义"] = Array.Empty<string>(),
-    };
 
-    
-    private static readonly Dictionary<string, string> KeyInfoLabel = new()
-    {
-        ["邮箱"] = "邮箱地址",
-        ["账户"] = "账号",
-        ["API Key"] = "URL",
-        ["网站"] = "网址",
-        ["银行卡"] = "卡号",
-        ["WiFi"] = "网络名",
-        ["证件"] = "证件号",
-    };
+
+
+    private static IReadOnlyDictionary<string, string[]> TypeFieldTemplates => MemoEntryTypes.FieldLabels;
 
     private static string GetFieldByLabel(List<EntryField> fields, string label)
     {
@@ -67,7 +43,7 @@ public static class CsvImportExportService
         return !string.IsNullOrEmpty(GetFieldByLabel(fields, label));
     }
 
-    // ==================== Export ====================
+
 
     public static string ExportMemoEntriesToCsv(List<MemoEntry> entries, List<MemoGroup> groups)
     {
@@ -91,7 +67,7 @@ public static class CsvImportExportService
             var remainingFields = entry.Fields
                 .Where(f => !string.IsNullOrEmpty(f.Label) && !usedLabels.Contains(f.Label) && !string.IsNullOrEmpty(f.Value))
                 .Select(f => $"{f.Label}: {f.Value}");
-            
+
             var notes = string.Join("\n", remainingFields);
 
             sb.AppendLine(string.Join(",",
@@ -118,14 +94,14 @@ public static class CsvImportExportService
     private static string CsvEscape(string value)
     {
         if (string.IsNullOrEmpty(value)) return "";
-        // NC7 (OWASP CSV injection): a leading =+-@ would execute as a formula when the export is
-        // opened in Excel/WPS. Prefix a single quote - spreadsheets treat it as text and hide it.
-        // N4-48: probe past leading whitespace - Excel/WPS trims before evaluating, so " =SUM(A1)"
-        // used to slip through the first-char check.
-        // N5-S14-01: a leading ' must be escaped too - UnquoteFormulaPrefix strips one quote from
-        // quote-prefixed values on import, so an unescaped '=secret used to round-trip as =secret.
-        // Escaping here gives the strip rule its producer (N5-RC-04): '=secret exports as ''=secret
-        // and imports back intact.
+
+
+
+
+
+
+
+
         var probe = value.TrimStart();
         if (probe.Length > 0 && probe[0] is '=' or '+' or '-' or '@' or '\'')
             value = "'" + value;
@@ -134,12 +110,12 @@ public static class CsvImportExportService
         return value;
     }
 
-    // N2C-2: undo the formula-injection guard on import - a leading ' added before =+-@ by
-    // CsvEscape must be stripped back, otherwise the value round-trips polluted.
-    // N5-S14-01: the strip must be the exact inverse of CsvEscape - only strip when what follows
-    // the quote (past the whitespace CsvEscape also probes) starts with an escape-worthy char.
-    // The old unconditional strip on '=/'+/'-/'@/'- second chars corrupted legitimate values:
-    // '=secret (exported verbatim by the old escape) came back as =secret, and ''=x lost a quote.
+
+
+
+
+
+
     private static string UnquoteFormulaPrefix(string value)
     {
         if (value.Length >= 2 && value[0] == '\'')
@@ -151,8 +127,15 @@ public static class CsvImportExportService
         return value;
     }
 
-    // N2C-5: first non-empty (null OR empty) wins - "Password" column present but blank must
-    // still fall back to "Login Password" (empty string is not null, so ?? alone would not fall back).
+
+
+    private static void UnquoteFormulaPrefixesInPlace(List<string> fields)
+    {
+        for (int i = 0; i < fields.Count; i++) fields[i] = UnquoteFormulaPrefix(fields[i]);
+    }
+
+
+
     private static string FirstNonEmpty(params string?[] values)
     {
         foreach (var v in values)
@@ -160,7 +143,7 @@ public static class CsvImportExportService
         return "";
     }
 
-    // 9.3: Firefox exports carry no name column - derive a readable entry name from the url host.
+
     private static string HostFromUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return "";
@@ -170,7 +153,7 @@ public static class CsvImportExportService
         return s;
     }
 
-    // ==================== Import ====================
+
 
     public static CsvImportResult ParseCsv(string csvText, string targetType)
     {
@@ -179,7 +162,7 @@ public static class CsvImportExportService
         if (lines.Count < 2) return result;
 
         var header = ParseCsvLine(lines[0]);
-        
+
         result.IsNovaraFormat = header.Any(h => string.Equals(h.Trim(), "Group", StringComparison.OrdinalIgnoreCase))
                              && header.Any(h => string.Equals(h.Trim(), "Type", StringComparison.OrdinalIgnoreCase));
 
@@ -187,6 +170,12 @@ public static class CsvImportExportService
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
             var values = ParseCsvLine(lines[i]);
+
+
+
+
+
+            if (result.IsNovaraFormat) UnquoteFormulaPrefixesInPlace(values);
             if (values.Count == 0) continue;
 
             var entry = BuildEntryFromCsvRow(header, values, result.IsNovaraFormat ? null : targetType, out var groupName);
@@ -204,7 +193,7 @@ public static class CsvImportExportService
         for (int i = 0; i < header.Count && i < values.Count; i++)
             row[header[i].Trim()] = values[i];
 
-        bool plainNotes = false; // 9.3: browser/manager dialects carry free-form notes (no "label: value" encoding)
+        bool plainNotes = false;
 
         var group = row.GetValueOrDefault("Group");
         groupName = string.IsNullOrWhiteSpace(group) ? null : group.Trim();
@@ -216,38 +205,38 @@ public static class CsvImportExportService
         var password = FirstNonEmpty(row.GetValueOrDefault("Password"), row.GetValueOrDefault("Login Password"));
         var notes = row.GetValueOrDefault("Notes") ?? row.GetValueOrDefault("Comments") ?? "";
 
-        
+
         if (row.ContainsKey("Login Name"))
         {
             username = row["Login Name"];
-            // NC2: KeePass variants export "Login Password" as the password column - fall back to it
+
             password = FirstNonEmpty(row.GetValueOrDefault("Password"), row.GetValueOrDefault("Login Password"));
             url = row.GetValueOrDefault("Web Site") ?? "";
             notes = row.GetValueOrDefault("Comments") ?? "";
-            plainNotes = true; // N2-19: Comments is this dialect's only notes carrier - don't drop it
+            plainNotes = true;
             if (string.IsNullOrEmpty(name)) name = row.GetValueOrDefault("Account") ?? username;
         }
-        // Bitwarden mapping
+
         if (row.ContainsKey("login_username"))
         {
             username = row["login_username"];
             password = row.GetValueOrDefault("login_password") ?? "";
             url = row.GetValueOrDefault("login_uri") ?? "";
             notes = row.GetValueOrDefault("notes") ?? "";
-            plainNotes = true; // N2-19: same - free-form notes column
+            plainNotes = true;
             if (string.IsNullOrEmpty(name)) name = row.GetValueOrDefault("name") ?? username;
             type = forcedType ?? row.GetValueOrDefault("type") ?? "";
         }
-        // 9.3: browser / manager dialects. Bare "username"+"url" columns (all-lowercase) belong to
-        // Chrome or Firefox - Firefox additionally carries httpRealm / formActionOrigin and has no
-        // name column, so the entry name is derived from the url host. The Group exclusion keeps
-        // Novara's own CSV (which also lowercases to these keys through the ignore-case dictionary)
-        // on the Novara path - its Notes-encoded extra fields would otherwise be wiped.
-        // 1Password ("Title") and Proton ("Item Name") carry Title/Username/Url variants that would
-        // also match the browser probe, so they are tested FIRST (most specific wins).
+
+
+
+
+
+
+
         if (row.ContainsKey("Item Name"))
         {
-            // Proton Pass export: Item Name/Title/Url/Username/Password/TOTP/Note
+
             plainNotes = true;
             name = row.GetValueOrDefault("Item Name") ?? "";
             username = FirstNonEmpty(row.GetValueOrDefault("Username"), row.GetValueOrDefault("Email"));
@@ -257,7 +246,7 @@ public static class CsvImportExportService
         }
         else if (row.ContainsKey("Title"))
         {
-            // 1Password 8 export: Title/Url/Username/Password/Notes
+
             plainNotes = true;
             name = row.GetValueOrDefault("Title") ?? "";
             username = row.GetValueOrDefault("Username") ?? "";
@@ -273,12 +262,12 @@ public static class CsvImportExportService
             url = row["url"];
             if (row.ContainsKey("httpRealm") || row.ContainsKey("formActionOrigin"))
             {
-                name = HostFromUrl(url); // Firefox: no name column
+                name = HostFromUrl(url);
                 notes = "";
             }
             else
             {
-                name = row.GetValueOrDefault("name") ?? ""; // Chrome
+                name = row.GetValueOrDefault("name") ?? "";
                 notes = "";
             }
         }
@@ -286,8 +275,8 @@ public static class CsvImportExportService
         if (string.IsNullOrEmpty(name)) name = username;
         if (string.IsNullOrEmpty(name)) return null;
 
-        
-        // to create zero-field entries whose notes only surfaced as subtitle text.
+
+
         if (!TypeFieldTemplates.ContainsKey(type))
             type = forcedType ?? "自定义";
 
@@ -301,8 +290,8 @@ public static class CsvImportExportService
         };
 
         BuildFieldsForEntry(entry, type, url, username, password, notes, plainNotes: plainNotes);
-        
-        // Generic on purpose: any dialect that ships a TOTP column benefits, others yield null here.
+
+
         var totpColumn = row.GetValueOrDefault("TOTP");
         if (!string.IsNullOrEmpty(totpColumn) && !entry.Fields.Any(f => f.Label == "TOTP"))
             entry.Fields.Add(new EntryField { Label = "TOTP", Value = totpColumn.Trim(), CanCopy = false });
@@ -319,7 +308,7 @@ public static class CsvImportExportService
             return;
         }
 
-        if (template.Length == 0) 
+        if (template.Length == 0)
         {
             var infoValues = ParseCustomInfoValues(notes);
             entry.Fields = infoValues.Select(v => new EntryField { Label = "信息", Value = v, CanCopy = true }).ToList();
@@ -334,31 +323,31 @@ public static class CsvImportExportService
             CanCopy = IsCopyableField(label, type),
         }).ToList();
 
-        
-        // N2-18: "TOTP" is in the label set so the exported "TOTP: <secret>" line parses as its own
-        // field instead of being glued onto the previous field as a continuation line.
+
+
+
         var notesFields = ParseNotesToFields(notes, template.Concat(new[] { "TOTP" }));
         foreach (var f in entry.Fields)
         {
             if (!notesFields.TryGetValue(f.Label, out var v) || string.IsNullOrEmpty(v)) continue;
-            // N4A-03: the dedicated CSV column is authoritative - a note line repeating a known label
-            
-            // overwrite what the column carried.
+
+
+
             if (string.IsNullOrEmpty(f.Value)) f.Value = v;
         }
-        // N2-18: restore the TOTP secret as its own field (round-trips through Notes; the app renders
-        // it as the live code row). CanCopy=false keeps the raw secret off the copy-button row.
+
+
         if (notesFields.TryGetValue("TOTP", out var totpSecret) && !string.IsNullOrEmpty(totpSecret)
             && !entry.Fields.Any(f => f.Label == "TOTP"))
             entry.Fields.Add(new EntryField { Label = "TOTP", Value = totpSecret, CanCopy = false });
 
-        // N4-15: a generic (unrecognized-dialect) CSV may carry pure free-form notes - when parsing
-        
-        // (it used to be silently dropped, preview and result alike).
+
+
+
         if (!plainNotes && notesFields.Count == 0 && !string.IsNullOrWhiteSpace(notes)) plainNotes = true;
 
-        // 9.3: browser/manager dialects carry free-form notes (no "label: value" encoding) - land the
-        
+
+
         if (plainNotes && notes.Length > 0)
         {
             foreach (var f in entry.Fields)
@@ -367,9 +356,12 @@ public static class CsvImportExportService
             }
         }
 
-        entry.KeyInfo = KeyInfoLabel.TryGetValue(type, out var kiLabel)
-            ? (entry.Fields.FirstOrDefault(f => f.Label == kiLabel)?.Value ?? "")
-            : "";
+
+
+
+
+        var kiLabel = MemoFieldMask.KeyInfoLabelFor(type);
+        entry.KeyInfo = entry.Fields.FirstOrDefault(f => f.Label == kiLabel)?.Value ?? "";
     }
 
     private static Dictionary<string, string> ParseNotesToFields(string notes, IEnumerable<string> knownLabels)
@@ -382,8 +374,8 @@ public static class CsvImportExportService
             var line = rawLine.TrimEnd('\r').Trim();
             if (string.IsNullOrEmpty(line)) continue;
             var idx = line.IndexOf(':');
-            // N2C-3: only treat the line as a new "label: value" when the label is a KNOWN field label;
-            // otherwise a continuation line that happens to contain ':' would be misparsed as a new field.
+
+
             if (idx > 0 && idx < line.Length - 1)
             {
                 var label = line[..idx].Trim();
@@ -396,8 +388,8 @@ public static class CsvImportExportService
             }
             if (map.Count > 0)
             {
-                // NC4: continuation line of a multi-line value - append to the previous entry
-                // instead of dropping it (export encodes embedded newlines as bare lines).
+
+
                 var lastKey = map.Keys.Last();
                 map[lastKey] += "\n" + line;
             }
@@ -422,10 +414,10 @@ public static class CsvImportExportService
 
     private static string MatchFieldValue(string fieldLabel, string url, string username, string password)
     {
-        
-        
-        
-        
+
+
+
+
         if (fieldLabel == "网址" || fieldLabel == "URL") return url;
         if (fieldLabel == "邮箱地址" || fieldLabel == "账号" || fieldLabel == "卡号" ||
             fieldLabel == "网络名" || fieldLabel == "证件号") return username;
@@ -433,8 +425,8 @@ public static class CsvImportExportService
         return "";
     }
 
-    // NC5: (type,label)-aware copyability mirroring the creation form exactly - label-only matching
-    
+
+
     private static readonly Dictionary<string, HashSet<string>> CopyableByType = new()
     {
         ["邮箱"]    = new(StringComparer.Ordinal) { "邮箱地址", "邮箱密码" },
@@ -449,7 +441,7 @@ public static class CsvImportExportService
     private static bool IsCopyableField(string label, string type)
         => type == "自定义" || (CopyableByType.TryGetValue(type, out var set) && set.Contains(label));
 
-    // ==================== CSV Parsing ====================
+
 
     private static List<string> SplitCsvLines(string text)
     {
@@ -499,9 +491,11 @@ public static class CsvImportExportService
             }
             else if (ch == ',' && !inQuotes)
             {
-                // NC1: no Trim on data fields - leading/trailing spaces inside quoted values are
-                // legitimate password/note content; header cells are trimmed at consumption time.
-                fields.Add(UnquoteFormulaPrefix(sb.ToString()));
+
+
+
+
+                fields.Add(sb.ToString());
                 sb.Clear();
             }
             else
@@ -509,7 +503,9 @@ public static class CsvImportExportService
                 sb.Append(ch);
             }
         }
-        fields.Add(UnquoteFormulaPrefix(sb.ToString()));
+
+
+                fields.Add(sb.ToString());
         return fields;
     }
 }

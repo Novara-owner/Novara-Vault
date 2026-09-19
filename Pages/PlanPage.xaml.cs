@@ -1,8 +1,3 @@
-/* ========== PlanPage - Plan Tab ==========
-Function: Todo & note card management - check state linkage (sub-all-checked auto-checks main), collapse/expand rules, edit rebuild migration, star/pin ordering
-Corresponding UI: PlanPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -22,8 +17,10 @@ public sealed partial class PlanPage : Page
 {
     private string? _selectedIconKey;
     private string? _noteSelectedIconKey;
+    private Services.IconRing? _todoIconRing;
+    private Services.IconRing? _noteIconRing;
     private readonly System.Random _iconRandom = new();
-    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new(); // N5P-02: per-box CTS (E5-24 pattern)
+    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
     private readonly HashSet<Border> _starredCards = new();
     private readonly HashSet<Border> _pinnedCards = new();
@@ -33,7 +30,7 @@ public sealed partial class PlanPage : Page
     private readonly Dictionary<Border, FrameworkElement> _starIcons = new();
     private Border? _editingTodoCard;
     private Border? _editingNoteCard;
-    
+
     private string _editTodoOrigName = "";
     private string _editTodoOrigIcon = "";
     private string _editTodoOrigMain = "";
@@ -41,29 +38,30 @@ public sealed partial class PlanPage : Page
     private string _editNoteOrigName = "";
     private string _editNoteOrigIcon = "";
     private string _editNoteOrigContent = "";
-    private Border? _pendingReminderCard; 
-    private readonly HashSet<Border> _reminderCards = new(); 
+    private Border? _pendingReminderCard;
+    private readonly HashSet<Border> _reminderCards = new();
     private readonly Dictionary<Border, (string title, string iconKey, string mainText, List<string> subTexts, List<bool> checkedStates)> _todoData = new();
     private readonly Dictionary<Border, bool> _todoCollapsed = new();
-    private readonly Dictionary<Border, Viewbox> _todoCompletedBadges = new(); 
+    private readonly Dictionary<Border, Viewbox> _todoCompletedBadges = new();
     private readonly Dictionary<Border, (string title, string iconKey, string content)> _noteData = new();
 
     private readonly Dictionary<Border, bool> _noteExpanded = new();
 
     private readonly Dictionary<Border, Guid> _cardIds = new();
     private bool _storeLoaded;
-    private Novara.Models.NovaraDatabase? _loadedDb; // N5M-04
-    private bool _bulkLoading; // #28: skip per-card reorder during bulk load; reorder once at end
-    private bool _renderInProgress; // N5P-01: true while the chunked fill is still adding cards to the UI
-    private bool _persistAfterRender; // N5P-01: a persistence request arrived during the fill window - rerun it after the fill
-    private string _currentFilter = "all"; 
-    private bool _confirming; // E3-10: one-shot guard for the create/edit confirm buttons - double-click during the hide animation used to create duplicate items
-    private bool _entrancePlayed; // E4-16: play the entrance animation only once (page instances are cached by MainWindow)
+    private System.Threading.CancellationTokenSource? _renderCts;
+    private Novara.Models.NovaraDatabase? _loadedDb;
+    private bool _bulkLoading;
+    private bool _renderInProgress;
+    private bool _persistAfterRender;
+    private string _currentFilter = "all";
+    private bool _confirming;
+    private bool _entrancePlayed;
 
     private readonly Dictionary<Border, Button> _cardExpandBtns = new();
     private readonly Dictionary<Border, StackPanel> _todoRowPanels = new();
 
-    
+
     private Border? _dragCard;
     private bool _dragging;
     private Point _grabOffset;
@@ -77,35 +75,40 @@ public sealed partial class PlanPage : Page
     private bool _autoScrollActive;
 
     public PlanPage() { InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content); // dialog depth: shadow + chrome veil auto-wiring
-        
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content);
+
         DeleteConfirmTitleText.Text = App.GetString("Dialog_Delete_Title");
         DeleteCancelText.Text = App.GetString("Common_Button_Cancel");
         DeleteConfirmText.Text = App.GetString("Common_Button_Delete");
-        KeyDown += Page_KeyDown; // ND1: was accidentally swallowed into the comment line during the snapshot re-insertion - Esc close was dead on this page
-        // N4-29: past date/time keeps the reminder dialog's confirm disabled (schtasks would silently fail)
+        KeyDown += Page_KeyDown;
+
         SetReminderDatePicker.DateChanged += (_, _) => UpdateSetReminderConfirmState();
         SetReminderTimePicker.TimeChanged += (_, _) => UpdateSetReminderConfirmState();
-        Loaded += (_, _) => { LoadFromStore(); RefreshAllReminderBorders(); }; // E4-16 + N4P-02: reload is idempotent (_storeLoaded); the explicit refresh restarts the 30s timer Unloaded stopped and surfaces reminders that came due while the page was hidden
-        RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs(); 
-        Unloaded += (_, _) => { NewTodoOverlay.Visibility = Visibility.Collapsed; NewNoteOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; ReminderOverlay.Visibility = Visibility.Collapsed; // E3-19: reminder dialog was the only overlay not cleaned on tab switch (M4)
-        // ND6: fold the remaining three overlays too - an open scrim left behind desynced from the chrome veil after a tab switch.
+        Loaded += (_, _) => { LoadFromStore(); RefreshAllReminderBorders(); };
+        RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs();
+        Unloaded += (_, _) => { NewTodoOverlay.Visibility = Visibility.Collapsed; NewNoteOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; ReminderOverlay.Visibility = Visibility.Collapsed;
+
         SetReminderScrim.Opacity = 0; CancelReminderScrim.Opacity = 0; ReminderDueScrim.Opacity = 0;
-        
-        // skipping it left the reminder swallowed forever (_dueShown kept the card, fields stayed
-        // set, the gradient border froze red).
+
+
+
         if (ReminderDueOverlay.Visibility == Visibility.Visible && _dueReminderCard != null)
         {
             ClearReminderOnCard(_dueReminderCard);
             _dueReminderCard = null;
         }
         SetReminderOverlay.Visibility = Visibility.Collapsed; CancelReminderOverlay.Visibility = Visibility.Collapsed; ReminderDueOverlay.Visibility = Visibility.Collapsed;
-        DialogDepth.VeilClear(); 
+        DialogDepth.VeilClear();
         _editingTodoCard = null; _editingNoteCard = null; _pendingDeleteCard = null; _editingReminderId = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; } _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll();
-        _reminderTimer?.Stop(); _reminderTimer = null; // N4P-02: the 30s tick must not run while the page is off-screen - a due reminder would VeilShow the window-level chrome scrim with no visible dialog (reload path restarts it via RefreshAllReminderBorders on Loaded); null so StartReminderRefresh can recreate it
+        _reminderTimer?.Stop(); _reminderTimer = null;
+
+
+
+
+        if (_renderInProgress) { _renderCts?.Cancel(); App.MainWindow?.RetireTabPage(typeof(PlanPage)); }
         }; }
 
-    
+
     public void StealFocus() => FocusSink.Focus(FocusState.Programmatic);
 
     private void Page_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -115,8 +118,8 @@ public sealed partial class PlanPage : Page
         if (ReminderOverlay.Visibility == Visibility.Visible) { HideReminderDialog(); e.Handled = true; return; }
         if (NewNoteOverlay.Visibility == Visibility.Visible) { HideNewNoteDialog(); e.Handled = true; return; }
         if (NewTodoOverlay.Visibility == Visibility.Visible) { HideNewTodoDialog(); e.Handled = true; return; }
-        // N4P-07 (legacy N4 round leftovers): the three reminder-family dialogs never joined the
-        // Esc chain. Due-dialog hide carries its own teardown (ClearReminderOnCard), same as close/confirm.
+
+
         if (SetReminderOverlay.Visibility == Visibility.Visible) { HideSetReminderDialog(); e.Handled = true; return; }
         if (CancelReminderOverlay.Visibility == Visibility.Visible) { HideCancelReminderDialog(); e.Handled = true; return; }
         if (ReminderDueOverlay.Visibility == Visibility.Visible) { HideReminderDueDialog(); e.Handled = true; return; }
@@ -125,21 +128,23 @@ public sealed partial class PlanPage : Page
     private async void LoadFromStore()
     {
         if (_storeLoaded) return;
-        _loadedDb = App.Store?.Database; // N5M-04: capture the db this UI build belongs to (arms the stale-db persist guard below)
+        _loadedDb = App.Store?.Database;
         _storeLoaded = true;
-        _bulkLoading = true; // #28: skip full reorder during bulk build (O(N2) -> one reorder at end)
-        EmptyHint.Visibility = Visibility.Collapsed; // P0-1: hide until chunked render decides the real empty state
+        _bulkLoading = true;
+        EmptyHint.Visibility = Visibility.Collapsed;
         var db = App.Store?.Database;
-        if (db == null) { _bulkLoading = false; return; }
+
+
+        if (db == null) { _bulkLoading = false; _storeLoaded = false; return; }
 
         var todos = db.TodoCards.Where(x => !x.IsDeleted).ToList();
         var notes = db.NoteCards.Where(x => !x.IsDeleted).ToList();
 
-        
-        
-        
-        
-        bool manual = db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0); 
+
+
+
+
+        bool manual = db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0);
         var all = new List<(bool IsTodo, Guid Id, bool IsPinned, int Order, DateTime CreatedAt)>();
         foreach (var t in todos) all.Add((true, t.Id, t.IsPinned, t.Order, t.CreatedAt));
         foreach (var n in notes) all.Add((false, n.Id, n.IsPinned, n.Order, n.CreatedAt));
@@ -156,11 +161,14 @@ public sealed partial class PlanPage : Page
         var todoById = todos.ToDictionary(x => x.Id);
         var noteById = notes.ToDictionary(x => x.Id);
 
-        bool playEntrance = !_entrancePlayed; // P0-1: only the first load plays the cascade
+        bool playEntrance = !_entrancePlayed;
         int entIdx = 0;
 
-        // N5P-01: guard the fill window - PersistOrderAndSave during it rebuilds db from the partial UI
+
         _renderInProgress = true;
+
+        _renderCts?.Cancel();
+        var renderCts = _renderCts = new System.Threading.CancellationTokenSource();
         try
         {
             await ChunkedRender.RunAsync(sorted.Count, 8, DispatcherQueue, (s, e) =>
@@ -190,25 +198,43 @@ public sealed partial class PlanPage : Page
                     }
                     entIdx++;
                 }
-            });
+            }, renderCts.Token);
         }
-        finally { _renderInProgress = false; }
+        catch (System.OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
 
-        _entrancePlayed = true; // P0-1: cascade already played per-card above
+
+
+            System.Diagnostics.Debug.WriteLine($"计划页列表渲染失败（页面将被重建）: {ex}");
+            App.MainWindow?.RetireTabPage(typeof(PlanPage));
+            return;
+        }
+
+
+
+
+        finally
+        {
+            renderCts.Dispose();
+            if (ReferenceEquals(_renderCts, renderCts)) { _renderCts = null; _renderInProgress = false; }
+        }
+
+        _entrancePlayed = true;
         _bulkLoading = false;
-        ReorderCards(); 
-        ApplyCardFilters(); 
-        RefreshAllReminderBorders(); 
-        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); } // N5P-01: run the deferred rebuild now that every entry has a card
+        ReorderCards();
+        ApplyCardFilters();
+        RefreshAllReminderBorders();
+        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
     }
 
     private void PersistOrderAndSave()
     {
         if (_renderInProgress) { _persistAfterRender = true; return; }
-        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return; // N5M-04: stale page after import/reset - never rebuild the new db from old UI // N5P-01: defer - rebuilding db from a partially filled UI would permanently drop not-yet-rendered entries
+        if (_loadedDb != null && !ReferenceEquals(_loadedDb, App.Store?.Database)) return;
         var db = App.Store?.Database;
         if (db == null) return;
-        var softDeletedTodos = db.TodoCards.Where(x => x.IsDeleted).ToList(); // keep trash items across the rebuild
+        var softDeletedTodos = db.TodoCards.Where(x => x.IsDeleted).ToList();
         var softDeletedNotes = db.NoteCards.Where(x => x.IsDeleted).ToList();
         var todoById = db.TodoCards.ToDictionary(x => x.Id);
         var noteById = db.NoteCards.ToDictionary(x => x.Id);
@@ -222,19 +248,19 @@ public sealed partial class PlanPage : Page
                 else if (noteById.TryGetValue(id, out var n)) notes.Add(n);
             }
         }
-        // N2-01: MCP writes land directly in the db without UI cards - keep db entries that are
-        // neither on a card nor soft-deleted across the rebuild (P0, same as the memo page).
+
+
         var todoKnownIds = todos.Select(x => x.Id).Concat(softDeletedTodos.Select(x => x.Id)).ToHashSet();
         var todoOrphans = todoById.Values.Where(x => !x.IsDeleted && !todoKnownIds.Contains(x.Id)).ToList();
         var noteKnownIds = notes.Select(x => x.Id).Concat(softDeletedNotes.Select(x => x.Id)).ToHashSet();
         var noteOrphans = noteById.Values.Where(x => !x.IsDeleted && !noteKnownIds.Contains(x.Id)).ToList();
-        // N2-16: an entry can be both on a card AND soft-deleted (MCP deleted it without a UI
-        // refresh) - it must land in the db exactly once.
+
+
         var todoSeen = todos.Select(x => x.Id).ToHashSet();
         var noteSeen = notes.Select(x => x.Id).ToHashSet();
         db.TodoCards.Clear();
         db.TodoCards.AddRange(todos);
-        db.TodoCards.AddRange(softDeletedTodos.Where(x => !todoSeen.Contains(x.Id))); // keep soft-deleted items (trash)
+        db.TodoCards.AddRange(softDeletedTodos.Where(x => !todoSeen.Contains(x.Id)));
         db.TodoCards.AddRange(todoOrphans);
         db.NoteCards.Clear();
         db.NoteCards.AddRange(notes);
@@ -243,15 +269,15 @@ public sealed partial class PlanPage : Page
         App.Store?.SaveAsync();
     }
 
-    
+
     private void AssignNewCardOrder(TodoCard? todo, NoteCard? note)
     {
         var db = App.Store?.Database;
         if (db == null) return;
         bool manual = db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0);
         if (!manual) return;
-        // N2-41 (N1-33 parity): only cards in the ACTIVE workspace and not soft-deleted take part -
-        // bumping other workspaces' (and trashed) cards polluted their order space.
+
+
         var wsId = App.CurrentWorkspaceId;
         bool inView(string? wid) => string.IsNullOrEmpty(wsId) || wid == wsId;
         foreach (var t in db.TodoCards) if (!t.IsPinned && !t.IsDeleted && inView(t.WorkspaceId) && t.Order > 0) t.Order++;
@@ -298,7 +324,7 @@ public sealed partial class PlanPage : Page
 
     private void UpdateEmptyHint() { bool anyVisible = false; foreach (var c in CardList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; } if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; } EmptyHint.Visibility = Visibility.Visible; EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch { "todo" => App.GetString("Plan_Filter_Todo_Empty"), "note" => App.GetString("Plan_Filter_Note_Empty"), _ => App.GetString("Plan_Empty_Tip") }; FloatInHint(); }
 
-    
+
     public string GetFilter() => _currentFilter;
     public void SetFilter(string filter)
     {
@@ -306,15 +332,15 @@ public sealed partial class PlanPage : Page
         ApplyCardFilters();
     }
 
-    
+
     public void ApplyCardFilters()
     {
         string wsId = App.CurrentWorkspaceId;
         bool wsActive = !string.IsNullOrEmpty(wsId);
         var db = App.Store?.Database;
-        // N3-38: pre-index WorkspaceId per card id ONCE - the per-card FirstOrDefault over the whole
-        
-        // every toggle re-scanned both lists per child.
+
+
+
         Dictionary<Guid, string>? wsById = null;
         if (wsActive && db != null)
         {
@@ -328,8 +354,8 @@ public sealed partial class PlanPage : Page
             bool isNote = b.Tag is string tg && tg == "note";
             bool typeMatch = _currentFilter == "all" || (_currentFilter == "note" && isNote) || (_currentFilter == "todo" && !isNote);
             bool wsMatch = true;
-            // N3-38: dict lookup replaces the per-card double FirstOrDefault. Missing id => hidden,
-            // matching the original (t == null && n == null -> cw == null -> false under a ws filter).
+
+
             if (wsById != null && _cardIds.TryGetValue(b, out var id))
                 wsMatch = wsById.TryGetValue(id, out var cw) && cw == wsId;
             b.Visibility = (typeMatch && wsMatch) ? Visibility.Visible : Visibility.Collapsed;
@@ -372,11 +398,11 @@ public sealed partial class PlanPage : Page
 
     private string? _editingReminderId;
 
-    
-    private void ClampDialogHeight(Border dialog)
-        => dialog.MaxHeight = Math.Max(360, RootGrid.ActualHeight - 60);
 
-    
+    private void ClampDialogHeight(Border dialog)
+        => DialogUi.ClampDialogHeight(dialog, RootGrid);
+
+
     private void ReclampVisibleDialogs()
     {
         if (NewTodoOverlay.Visibility == Visibility.Visible) ClampDialogHeight(NewTodoDialog);
@@ -388,14 +414,14 @@ public sealed partial class PlanPage : Page
     {
         _editingReminderId = null;
         ReminderContentBox.Text = "";
-        var target = DateTime.Now.AddHours(1); 
+        var target = DateTime.Now.AddHours(1);
         ReminderDatePicker.Date = new DateTimeOffset(target.Date);
         ReminderTimePicker.Time = new TimeSpan(target.Hour, 0, 0);
         ReminderDialogTitle.Text = App.GetString("Reminder_New_Title");
         ShowReminderDialogCore();
     }
 
-    /// <summary>Edit mode (desktop reminder card "modify"): pre-fill content and due time.</summary>
+
     public void OpenReminderEdit(Novara.Services.PendingReminderEdit p)
     {
         _editingReminderId = p.Id;
@@ -411,8 +437,8 @@ public sealed partial class PlanPage : Page
 
     private void ShowReminderDialogCore()
     {
-        _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
-        UpdateReminderConfirmState(); // UI-2: initial validity (explicit - empty assignment may not raise TextChanged)
+        _confirming = false;
+        UpdateReminderConfirmState();
         ReminderDialogTransform.ScaleX = 0.94; ReminderDialogTransform.ScaleY = 0.94; ReminderDialogTransform.TranslateY = 24;
         ReminderDialog.Opacity = 0; ReminderScrim.Opacity = 0;
         ReminderOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
@@ -421,7 +447,7 @@ public sealed partial class PlanPage : Page
         Storyboard.SetTarget(si, ReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ReminderDialogTransform);
         sb.Begin();
     }
 
@@ -432,7 +458,7 @@ public sealed partial class PlanPage : Page
         Storyboard.SetTarget(so, ReminderScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ReminderDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ReminderDialogTransform); // M1: EmphasizedAccelerate (Motion)
+        Motion.AddDialogHideTransform(sb, ReminderDialogTransform);
         sb.Completed += (_, _) => ReminderOverlay.Visibility = Visibility.Collapsed;
         DialogDepth.VeilHide();
         sb.Begin();
@@ -443,14 +469,14 @@ public sealed partial class PlanPage : Page
 
     private void ConfirmReminderDialog_Click(object s, RoutedEventArgs e)
     {
-        if (_confirming) return; _confirming = true; // E3-10
+        if (_confirming) return; _confirming = true;
         bool isEdit = _editingReminderId != null;
         var content = ReminderContentBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(ReminderContentBox); return; }
         var d = ReminderDatePicker.Date;
         var t = ReminderTimePicker.Time;
         var due = new DateTimeOffset(d.Year, d.Month, d.Day, t.Hours, t.Minutes, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(d.Year, d.Month, d.Day)));
-        
+
         if (due.LocalDateTime <= DateTime.Now) { _confirming = false; App.ShowToast(App.GetString("Reminder_Past_Time")); FlashTextBox(ReminderContentBox); return; }
         if (isEdit)
             Services.StickySync.UpdateReminder(_editingReminderId!, content, due);
@@ -466,17 +492,38 @@ public sealed partial class PlanPage : Page
     private void HideNewTodoDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, NewTodoScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, NewTodoDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, NewTodoDialogTransform); sb.Completed -= OnNewTodoHideCompleted; sb.Completed += OnNewTodoHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
     private void OnNewTodoHideCompleted(object? sender, object e) { NewTodoOverlay.Visibility = Visibility.Collapsed; _editingTodoCard = null; }
 
-    private void LoadIconSelector() { _selectedIconKey = null; IconPanel.Children.Clear(); foreach (var key in IconData.GroupIconKeysInOrder()) { var b = new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), Tag = key, Child = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } } }; b.Tapped += IconBorder_Tapped; IconPanel.Children.Add(b); } }
-    private void IconBorder_Tapped(object s, TappedRoutedEventArgs e) { if (s is Border b && b.Tag is string k) { SelectIcon(k); CenterIconInScrollViewer(b); UpdateTodoConfirmState(); } }
-    private void SelectIcon(string key) { _selectedIconKey = key; var d = App.GetBrush("AppSurfaceBrush"); var n = App.GetBrush("AppSurfaceOverlayBrush"); foreach (var c in IconPanel.Children) if (c is Border b && b.Tag is string k) { bool o = k == key; b.Background = o ? d : n; b.BorderBrush = o ? App.GetBrush("AppBorderBrush") : null; b.BorderThickness = new Thickness(o ? 1 : 0); } }
-    private void CenterIconInScrollViewer(Border t) { var r = t.TransformToVisual(IconPanel); var p = r.TransformPoint(new Point(0, 0)); double o = p.X - (IconScrollViewer.ViewportWidth / 2) + (t.ActualWidth / 2); o = Math.Max(0, Math.Min(o, IconScrollViewer.ScrollableWidth)); IconScrollViewer.ChangeView(o, null, null, false); }
+    private void LoadIconSelector()
+    {
+
+        _todoIconRing ??= new Services.IconRing(IconScrollViewer, IconPanel);
+        _todoIconRing.Tapped -= TodoIconRingTapped;
+        _todoIconRing.Tapped += TodoIconRingTapped;
+        _todoIconRing.Build(IconData.GroupIconKeysInOrder(), key => new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), Tag = key, Child = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } } });
+        _selectedIconKey = null;
+        _todoIconRing.Highlight(null);
+    }
+    private void TodoIconRingTapped(Border b)
+    {
+        if (_todoIconRing is not { } ring) return;
+        _selectedIconKey = b.Tag?.ToString();
+        ring.Highlight(_selectedIconKey);
+        ring.CenterTo(b);
+        UpdateTodoConfirmState();
+    }
+    private void SelectIcon(string key)
+    {
+        _selectedIconKey = key;
+        _todoIconRing?.Highlight(key);
+        var b = key is null ? null : _todoIconRing?.FindByTag(key);
+        if (b != null) _todoIconRing?.CenterTo(b);
+    }
     private void CloseNewTodo_Click(object s, RoutedEventArgs e) => HideNewTodoDialog();
     private void NewTodoScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, NewTodoScrim)) HideNewTodoDialog(); }
     private void AddSubTodoButton_Click(object s, RoutedEventArgs e) => SubTodoPanel.Children.Add(CreateSubTodoBox());
     private TextBox CreateSubTodoBox() { var tb = new TextBox { Style = (Style)Application.Current.Resources["NovaraTextBoxStyle"], MaxLength = 500, PlaceholderText = App.GetString("Plan_Todo_SubPlaceholder") }; tb.TextChanged += PlanField_TextChanged; return tb; }
 
-    // UI-2 (2026-08-11): live validation - confirm buttons stay disabled (grey, no hover) until
-    // every required field of the corresponding dialog is non-blank.
+
+
     private void UpdateReminderConfirmState()
     {
         ConfirmReminderDialogButton.IsEnabled = !string.IsNullOrWhiteSpace(ReminderContentBox.Text);
@@ -485,13 +532,13 @@ public sealed partial class PlanPage : Page
     private void UpdateTodoConfirmState()
     {
         bool valid = !string.IsNullOrWhiteSpace(TodoNameBox.Text) && !string.IsNullOrWhiteSpace(MainTodoBox.Text);
-        
+
         if (valid && _editingTodoCard != null && !TodoContentChanged())
             valid = false;
         NewTodoConfirmButton.IsEnabled = valid;
     }
 
-    
+
     private bool TodoContentChanged()
     {
         if (TodoNameBox.Text.Trim() != _editTodoOrigName) return true;
@@ -508,13 +555,13 @@ public sealed partial class PlanPage : Page
     private void UpdateNoteConfirmState()
     {
         bool valid = !string.IsNullOrWhiteSpace(NoteNameBox.Text) && !string.IsNullOrWhiteSpace(NoteContentBox.Text);
-        
+
         if (valid && _editingNoteCard != null && !NoteContentChanged())
             valid = false;
         NewNoteConfirmButton.IsEnabled = valid;
     }
 
-    
+
     private bool NoteContentChanged()
     {
         if (NoteNameBox.Text.Trim() != _editNoteOrigName) return true;
@@ -532,7 +579,7 @@ public sealed partial class PlanPage : Page
 
     private void NewTodoConfirm_Click(object s, RoutedEventArgs e)
     {
-        if (_confirming) return; _confirming = true; // E3-10
+        if (_confirming) return; _confirming = true;
         bool isEdit = _editingTodoCard != null;
         var name = TodoNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(TodoNameBox); return; }
         var iconKey = _selectedIconKey ?? GetRandomIconKey();
@@ -551,18 +598,18 @@ public sealed partial class PlanPage : Page
                     te.SubTexts = new List<string>(subTexts);
                     if (_todoData.TryGetValue(nc, out var nd2)) te.CheckedStates = new List<bool>(nd2.checkedStates);
                 }
-                
+
                 if (Services.StickySync.Contains(editTid.ToString()))
                     Services.StickySync.UpdateNote(editTid.ToString(), "todo", name, "", BuildTodoItems(mainText, subTexts, newStates));
-                if (wasReminder) RefreshReminderBorder(nc); // N2-25: AFTER the _cardIds assignment - the call reads the map and early-returned when invoked before it
+                if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
-            ReorderCards(); 
+            ReorderCards();
             PersistOrderAndSave();
         } else {
-            // N4P-03: same as the edit branch - build under _bulkLoading (skips the in-build reorder),
-            // map the id, THEN reorder. The old order let BuildTodoCard's tail ReorderCards run while the
-            // new card was unmapped: its sort key degraded to int.MaxValue and it sank below every card.
+
+
+
             _bulkLoading = true;
             var nc2 = BuildTodoCard(name, iconKey, mainText, subTexts);
             _bulkLoading = false;
@@ -571,23 +618,23 @@ public sealed partial class PlanPage : Page
             App.Store?.Database.TodoCards.Add(te2);
             _cardIds[nc2] = te2.Id;
             App.PlayCardEntrance(nc2);
-            ReorderCards(); // N4P-03
+            ReorderCards();
             PersistOrderAndSave();
-            SetFilter(_currentFilter); // N4P-10: a card created under an active filter must respect it immediately (NH4 parity)
+            SetFilter(_currentFilter);
         }
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
         HideNewTodoDialog();
     }
 
-    /* ========== PlanPage Card Building ==========
-Function: Todo/note card construction, state dictionaries, collapse/expand buttons, bulk-load reorder skip (#28), edit rebuild migration (C2)
-Corresponding UI: PlanPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
 private Border BuildTodoCard(string title, string iconKey, string mainText, List<string> subTexts, List<bool>? states = null)
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        var card = new Border { CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), // E5-20: per-card copy - never mutate the shared theme brush (E1-09 pattern)
+        var card = new Border { CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1), Padding = new Thickness(20, 18, 20, 18), HorizontalAlignment = HorizontalAlignment.Stretch, RenderTransform = new TranslateTransform() };
         var root = new Grid(); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var tr = new Grid(); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -601,7 +648,7 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         _pinIcons[card] = pinIcon; _starIcons[card] = starIcon;
         var expandIcon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), IconData.CardCollapse), Foreground = App.GetBrush("IconForegroundBrush") };
         var expandViewbox = new Viewbox { Width = 18, Height = 18, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = expandIcon };
-        // BuildTodoCard expand
+
         var expandBtn = new Button { Width = 36, Height = 36, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = expandViewbox, Visibility = Visibility.Collapsed, IsTabStop = false };
         Grid.SetColumn(expandBtn, 5); tr.Children.Add(expandBtn);
         var doneBadge = BuildTodoDoneBadge();
@@ -624,7 +671,7 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
 
         AddDisplayRow(lp, mainText, false, checkedStates, 0, card);
         for (int i = 0; i < subTexts.Count; i++) AddDisplayRow(lp, subTexts[i], true, checkedStates, i + 1, card);
-        RefreshCardState(card, checkedStates); // N4P-09: was subTexts-only - a completed no-sub todo lost its badge after restart/edit-rebuild
+        RefreshCardState(card, checkedStates);
 
         card.Tag = "todo"; _todoData[card] = (title, iconKey, mainText, subTexts, checkedStates);
         AttachCardHoverEffect(card);
@@ -638,7 +685,7 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         _todoCollapsed[card] = collapsed;
         if (!_todoRowPanels.TryGetValue(card, out var lp)) return;
         for (int i = 1; i < lp.Children.Count; i++) lp.Children[i].Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        // 4.0 #8: collapsed main-todo shows a single ellipsized line; expanded wraps to show everything.
+
         if (lp.Children.Count > 0 && lp.Children[0] is Grid mainRow && mainRow.Children.Count > 1 && mainRow.Children[1] is Grid tw && tw.Children.Count > 0 && tw.Children[0] is TextBlock tb)
         {
             tb.TextWrapping = collapsed ? TextWrapping.NoWrap : TextWrapping.Wrap;
@@ -652,11 +699,11 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         }
     }
 
-    /* ========== PlanPage Check Linkage ==========
-Function: Sub-all-checked auto-checks main (P3), uncheck sub unchecks main & expands (P4), manual main uncheck keeps subs (P5)
-Corresponding UI: PlanPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
 private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changedIndex)
     {
         if (changedIndex > 0)
@@ -673,23 +720,32 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         {
             var t = App.Store?.Database.TodoCards.FirstOrDefault(x => x.Id == cid);
             if (t != null) { t.CheckedStates = new List<bool>(states); App.Store?.SaveAsync(); }
-            
+
             if (Services.StickySync.Contains(cid.ToString()) && _todoData.TryGetValue(card, out var td))
                 Services.StickySync.UpdateNote(cid.ToString(), "todo", td.title ?? "", "", BuildTodoItems(td.mainText, td.subTexts, states));
         }
     }
 
-    /// <summary>Reverse sync entry: the host toggled a desktop todo - refresh this card's visual
-    /// check states (the store was already updated by StickySync.ApplyTodoChanges). No-op when the
-    /// card is not built yet (page not loaded); LoadFromStore will pick up the new states.</summary>
+
+
+
     public void ApplyExternalTodoState(Guid id, List<bool> states)
     {
         Border? card = null;
         foreach (var (c, cid) in _cardIds) if (cid == id) { card = c; break; }
         if (card == null || !_todoData.TryGetValue(card, out var td)) return;
         var cur = td.checkedStates;
-        int n = Math.Min(cur.Count, states.Count);
-        for (int i = 0; i < n; i++) cur[i] = states[i];
+
+
+
+
+
+
+
+
+
+        if (cur.Count != states.Count) return;
+        for (int i = 0; i < cur.Count; i++) cur[i] = states[i];
         RefreshTodoRowsVisual(card, cur);
         RefreshCardState(card, cur);
     }
@@ -700,10 +756,10 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         foreach (var s in states) if (!s) { allChecked = false; break; }
         SetTodoCardCollapsed(card, allChecked);
         if (_todoCompletedBadges.TryGetValue(card, out var badge))
-            badge.Visibility = allChecked ? Visibility.Visible : Visibility.Collapsed; 
+            badge.Visibility = allChecked ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    
+
     private Viewbox BuildTodoDoneBadge()
     {
         var canvas = new Grid { Width = 1024, Height = 1024 };
@@ -715,8 +771,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
         };
-        canvas.Children.Add(MakePath(IconData.TodoDoneFlagLight, Color.FromArgb(0xFF, 0x8C, 0x93, 0xFF))); 
-        canvas.Children.Add(MakePath(IconData.TodoDoneFlagDark, Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))); 
+        canvas.Children.Add(MakePath(IconData.TodoDoneFlagLight, Color.FromArgb(0xFF, 0x8C, 0x93, 0xFF)));
+        canvas.Children.Add(MakePath(IconData.TodoDoneFlagDark, Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)));
         canvas.Children.Add(MakePath(IconData.TodoDoneCheck, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)));
         return new Viewbox { Width = 16, Height = 16, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = canvas };
     }
@@ -741,7 +797,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         if (row.Children[1] is Grid tw && tw.Children.Count >= 1 && tw.Children[0] is TextBlock tb)
         {
             tb.Opacity = chk ? 0.45 : 1;
-            // 4.0 #8: strikethrough only over the text itself (a stretched Border line would span the whole column).
+
             tb.TextDecorations = chk ? Windows.UI.Text.TextDecorations.Strikethrough : Windows.UI.Text.TextDecorations.None;
         }
     }
@@ -749,12 +805,12 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     private Grid AddDisplayRow(StackPanel list, string text, bool indented, List<bool> checkedStates, int index, Border card)
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        // 4.0 #8: horizontal StackPanel gave the text infinite width so TextWrapping never kicked in.
-        // Two-column Grid gives the text a bounded width -> it wraps and stays fully visible when expanded.
+
+
         var row = new Grid { ColumnSpacing = 8, Margin = new Thickness(indented ? 24 : 0, 6, 0, 6) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        // 4.0 #8: checkbox - rounded faint border when unchecked, solid brand-blue + white check when checked.
+
         var checkBox = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), BorderBrush = App.GetBrush("AppBorderBrush"), BorderThickness = new Thickness(1.5), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var cm = new Microsoft.UI.Xaml.Shapes.Path { Data = (Geometry)cv(typeof(Geometry), "M5 11l4 5 10-8"), Stroke = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)), StrokeThickness = 2.5, Width = 14, Height = 14, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
         checkBox.Child = cm;
@@ -765,7 +821,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         Grid.SetColumn(tw, 1); row.Children.Add(tw);
         void UpdateVisual() => UpdateRowVisual(row, checkedStates[index]);
         cb.Tapped += (_, _) => { checkedStates[index] = !checkedStates[index]; UpdateVisual(); OnTodoRowCheckedChanged(card, checkedStates, index); };
-        UpdateVisual(); 
+        UpdateVisual();
         list.Children.Add(row);
         return row;
     }
@@ -786,22 +842,22 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
             baseBorderColor.B);
         card.PointerEntered += (_, _) =>
         {
-            if (_dragging) return; 
-            // E2-05: manual color swap - ColorAnimation on hover is 0xc000027b-sensitive during page
-            // switches (DiaryPage crash 2026-08-10); only the TranslateY lift stays animated.
+            if (_dragging) return;
+
+
             if (!_reminderCards.Contains(card) && card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor;
             if (card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
         };
         card.PointerExited += (_, _) =>
         {
-            if (_dragging) return; 
+            if (_dragging) return;
             if (!_reminderCards.Contains(card) && card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor;
             if (card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
         };
     }
     private void AttachCardContextMenu(Border c) { c.ContextRequested += (s, e) => { e.Handled = true; var m = BuildCardContextMenu(c); if (e.TryGetPosition(c, out var p)) m.ShowAt(c, p); else m.ShowAt(c, new Point(0, 0)); }; }
 
-    
+
 
     private void AttachCardDrag(Border card)
     {
@@ -812,16 +868,16 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         card.PointerPressed += (s, e) =>
         {
             if (_dragging) return;
-            if (_currentFilter != "all") return; 
-            if (_pinnedCards.Contains(card)) return; 
-            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return; 
+            if (_currentFilter != "all") return;
+            if (_pinnedCards.Contains(card)) return;
+            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
             grabOffset = pt.Position;
-            var pointer = e.Pointer; 
+            var pointer = e.Pointer;
             armed = true;
 
-            
+
             var rtb = new RenderTargetBitmap();
             var renderOp = rtb.RenderAsync(card);
 
@@ -829,11 +885,11 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
             timer.Tick += async (_, _) =>
             {
                 timer.Stop(); timer = null;
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 try { await renderOp; } catch { }
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 BeginDrag(card, grabOffset, rtb);
-                try { card.CapturePointer(pointer); } catch { } 
+                try { card.CapturePointer(pointer); } catch { }
             };
             timer.Start();
         };
@@ -845,7 +901,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
                 if (ReferenceEquals(_dragCard, card)) UpdateDrag(e);
                 return;
             }
-            if (armed) 
+            if (armed)
             {
                 var pt = e.GetCurrentPoint(card);
                 double dx = pt.Position.X - grabOffset.X, dy = pt.Position.Y - grabOffset.Y;
@@ -875,17 +931,17 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, CardList); // N2-06: origin in visible-slot space
+        _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, CardList);
 
-        
-        
-        App.StopCardEntrance(card); 
+
+
+        App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
-        card.RenderTransform = new TranslateTransform(); 
+        card.RenderTransform = new TranslateTransform();
 
-        
+
         try
         {
             var ghost = new Image
@@ -921,14 +977,14 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private int ComputeDropIndex(Point ptInList)
     {
-        
-        
-        
+
+
+
         int count = 0;
         foreach (var child in CardList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            
+
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(CardList).TransformPoint(new Point(0, 0)).Y;
@@ -941,19 +997,19 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private void UpdateDropIndicator(int index)
     {
-        
-        
-        
+
+
+
         int pinnedVisible = 0;
         foreach (var c in CardList.Children)
             if (c is Border pb && pb.Visibility == Visibility.Visible && _pinnedCards.Contains(pb))
                 pinnedVisible++;
         index = Math.Max(index, pinnedVisible);
-        
+
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
             if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; }
-            _dropIndex = _dragOriginIndex; 
+            _dropIndex = _dragOriginIndex;
             return;
         }
         if (_dropIndicator != null) CardList.Children.Remove(_dropIndicator);
@@ -964,7 +1020,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private Border CreateDropIndicator()
     {
-        
+
         var b = new Border { Height = 16, Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)) };
         b.Child = new Border
         {
@@ -995,7 +1051,7 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         if (_autoScrollActive) return;
         _autoScrollActive = true;
         _autoScrollFrame = 0;
-        
+
         Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnAutoScrollRendering;
     }
 
@@ -1013,8 +1069,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         var newOffset = Math.Clamp(CardScrollViewer.VerticalOffset + _autoScrollDir * 8, 0, CardScrollViewer.ScrollableHeight);
         CardScrollViewer.ChangeView(null, newOffset, null, true);
 
-        
-        
+
+
         if (++_autoScrollFrame < 3) return;
         _autoScrollFrame = 0;
         var ptInList = RootGrid.TransformToVisual(CardList).TransformPoint(_lastPointerInRoot);
@@ -1023,8 +1079,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
     private void EndDrag()
     {
-        
-        
+
+
         if (!_dragging || _dragCard == null) return;
         var card = _dragCard;
         _dragCard = null;
@@ -1032,34 +1088,34 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
 
         int dropIndex = _dropIndex;
 
-        
+
         if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
         if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; }
         StopAutoScroll();
 
-        
+
         card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
-        _ = RefreshReminderBorder(card); 
+        _ = RefreshReminderBorder(card);
 
-        
-        // N2-06: dropIndex is in "slot space including the dragged card" - convert to the
-        // without-self space, then translate back to a physical Children index (hidden cards stay put).
+
+
+
         int curVisible = CountVisibleBeforeIn(card, CardList);
         int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
         if (dst != curVisible)
         {
             CardList.Children.Remove(card);
             CardList.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, CardList), card);
-        }
 
-        PersistManualOrder();
+            PersistManualOrder();
+        }
     }
 
-    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> in
-    /// <paramref name="container"/> (visible-slot space matching ComputeDropIndex; the drop
-    /// indicator itself is excluded).</summary>
+
+
+
     private int CountVisibleBeforeIn(FrameworkElement card, Panel container)
     {
         int n = 0;
@@ -1072,8 +1128,8 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         return n;
     }
 
-    /// <summary>N2-06: physical Children index where a card must land to become the
-    /// <paramref name="visibleSlot"/>-th visible card (call AFTER removing the dragged card).</summary>
+
+
     private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
     {
         int seen = 0;
@@ -1089,9 +1145,9 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         return children.Count;
     }
 
-    
-    
-    
+
+
+
     private void PersistManualOrder()
     {
         var db = App.Store?.Database;
@@ -1099,12 +1155,12 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         var todoById = db.TodoCards.ToDictionary(x => x.Id);
         var noteById = db.NoteCards.ToDictionary(x => x.Id);
         int order = 0;
-        // N2-06 two-pass: visible cards take 1..N in the just-dragged order, then hidden cards
-        // (other workspaces/filters) continue in their own relative order.
+
+
         foreach (var child in CardList.Children)
         {
-            
-            
+
+
             if (child is Border b && b.Visibility == Visibility.Visible && _cardIds.TryGetValue(b, out var id))
             {
                 if (todoById.TryGetValue(id, out var t)) t.Order = ++order;
@@ -1125,11 +1181,11 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue; var m = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var si = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _starredCards.Contains(card) ? App.GetString("Menu_Unstar") : App.GetString("Menu_Star"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _starredCards.Contains(card) ? IconData.Unstar : IconData.Star), Foreground = App.GetBrush("IconForegroundBrush") } }; si.Click += (_, _) => { if (_starredCards.Contains(card)) { _starredCards.Remove(card); if (_starIcons.TryGetValue(card, out var sv)) sv.Visibility = Visibility.Collapsed; } else { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var sv)) sv.Visibility = Visibility.Visible; } SyncCardStar(card, _starredCards.Contains(card)); };
-        var pi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _pinnedCards.Contains(card) ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _pinnedCards.Contains(card) ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") } }; pi.Click += (_, _) => { bool willPin = !_pinnedCards.Contains(card); if (willPin) { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Visible; } else { _pinnedCards.Remove(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Collapsed; } SyncCardPin(card, willPin); if (willPin) ReorderCards(); 
+        var pi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = _pinnedCards.Contains(card) ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), _pinnedCards.Contains(card) ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") } }; pi.Click += (_, _) => { bool willPin = !_pinnedCards.Contains(card); if (willPin) { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Visible; } else { _pinnedCards.Remove(card); if (_pinIcons.TryGetValue(card, out var pv)) pv.Visibility = Visibility.Collapsed; } SyncCardPin(card, willPin); if (willPin) ReorderCards();
 PersistOrderAndSave(); };
         var ei = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Edit"), Icon = new PathIcon { Data = MakeGroup(IconData.Edit), Foreground = App.GetBrush("IconForegroundBrush") } }; ei.Click += (_, _) => { if (card.Tag is string tg && tg == "note") ShowEditNoteDialog(card); else ShowEditTodoDialog(card); };
-        m.Items.Add(pi); m.Items.Add(si); 
-        
+        m.Items.Add(pi); m.Items.Add(si);
+
         if (card.Tag is string tg2 && tg2 is "note" or "todo")
         {
             string? cardId = _cardIds.TryGetValue(card, out var g) ? g.ToString() : null;
@@ -1146,7 +1202,7 @@ PersistOrderAndSave(); };
                 m.Items.Add(sdi);
             }
         }
-        
+
         if (card.Tag is string tg3 && tg3 is "note" or "todo")
         {
             bool hasReminder = HasReminder(card);
@@ -1166,7 +1222,7 @@ PersistOrderAndSave(); };
         m.Items.Add(new MenuFlyoutSeparator()); m.Items.Add(di); return m;
     }
 
-    
+
 
     private bool HasReminder(Border card)
     {
@@ -1185,14 +1241,14 @@ PersistOrderAndSave(); };
         var target = DateTime.Now.AddHours(1);
         SetReminderDatePicker.Date = new DateTimeOffset(target.Date);
         SetReminderTimePicker.Time = new TimeSpan(target.Hour, 0, 0);
-        UpdateSetReminderConfirmState(); // N4-29: initial M5 state (default target is Now+1h, enabled)
+        UpdateSetReminderConfirmState();
         SetReminderDialogTransform.ScaleX = 0.94; SetReminderDialogTransform.ScaleY = 0.94; SetReminderDialogTransform.TranslateY = 24;
         SetReminderDialog.Opacity = 0; SetReminderScrim.Opacity = 0;
         SetReminderOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, SetReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, SetReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, SetReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, SetReminderDialogTransform);
         sb.Begin();
     }
 
@@ -1200,9 +1256,9 @@ PersistOrderAndSave(); };
     private void SetReminderClose_Click(object s, RoutedEventArgs e) => HideSetReminderDialog();
     private void SetReminderScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, SetReminderScrim)) HideSetReminderDialog(); }
 
-    // N4-29: schtasks silently fails to register a past moment (exit code ignored) and the system
-    // reminder would never fire - M5: the confirm button stays disabled until the picked date+time
-    // is in the future. Wired to DateChanged/TimeChanged in the constructor.
+
+
+
     private void UpdateSetReminderConfirmState()
     {
         var due = SetReminderDatePicker.Date.Date + SetReminderTimePicker.Time;
@@ -1214,7 +1270,7 @@ PersistOrderAndSave(); };
         if (_pendingReminderCard == null) return;
         var card = _pendingReminderCard;
         var due = SetReminderDatePicker.Date.Date + SetReminderTimePicker.Time;
-        
+
         if (due <= DateTime.Now) { UpdateSetReminderConfirmState(); SetReminderConfirmButton.IsEnabled = false; return; }
         SetReminderOnCard(card, due);
         HideSetReminderDialog();
@@ -1231,7 +1287,7 @@ PersistOrderAndSave(); };
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, CancelReminderScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, CancelReminderDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, CancelReminderDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, CancelReminderDialogTransform);
         sb.Begin();
     }
 
@@ -1247,12 +1303,12 @@ PersistOrderAndSave(); };
         HideCancelReminderDialog();
     }
 
-    
+
     private void SetReminderOnCard(Border card, DateTime due)
     {
         var db = App.Store?.Database;
         if (db == null || !_cardIds.TryGetValue(card, out var id)) return;
-        _dueShown.Remove(card); // N4P-01: reminder is gone (or being re-set) - a future due must fire again
+        _dueShown.Remove(card);
         if (card.Tag is string tg && tg == "note")
         {
             var n = db.NoteCards.FirstOrDefault(x => x.Id == id);
@@ -1264,17 +1320,17 @@ PersistOrderAndSave(); };
             if (t != null) { t.ReminderAt = due; t.ReminderSetAt = DateTime.Now; }
         }
         App.Store?.SaveAsync();
-        Services.ReminderScheduler.Schedule(id, due); 
+        Services.ReminderScheduler.Schedule(id, due);
         RefreshReminderBorder(card);
         StartReminderRefresh();
     }
 
-    
+
     private void ClearReminderOnCard(Border card)
     {
         var db = App.Store?.Database;
         if (db == null || !_cardIds.TryGetValue(card, out var id)) return;
-        _dueShown.Remove(card); // N4P-01: reminder cleared - allow a future reminder on this card to fire again
+        _dueShown.Remove(card);
         if (card.Tag is string tg && tg == "note")
         {
             var n = db.NoteCards.FirstOrDefault(x => x.Id == id);
@@ -1286,12 +1342,12 @@ PersistOrderAndSave(); };
             if (t != null) { t.ReminderAt = null; t.ReminderSetAt = null; }
         }
         App.Store?.SaveAsync();
-        Services.ReminderScheduler.Cancel(id); 
-        _reminderCards.Remove(card); // N4P-05: keep the hover set in sync - PointerEntered skips cards still registered here, so the border hover effect died after cancel/confirm
+        Services.ReminderScheduler.Cancel(id);
+        _reminderCards.Remove(card);
         ResetCardBorder(card);
     }
 
-    
+
     private bool RefreshReminderBorder(Border card)
     {
         var db = App.Store?.Database;
@@ -1320,15 +1376,15 @@ PersistOrderAndSave(); };
         card.BorderThickness = new Thickness(1);
     }
 
-    
+
     private static Color ReminderColor(DateTime setAt, DateTime dueAt)
     {
         double total = (dueAt - setAt).TotalSeconds;
         double elapsed = (DateTime.Now - setAt).TotalSeconds;
         double p = total <= 0 ? 1 : Math.Clamp(elapsed / total, 0, 1);
-        double h = 130 * (1 - p);        
-        double s = 1.0 - 0.154 * p;      
-        double v = 0.8 + 0.067 * p;      
+        double h = 130 * (1 - p);
+        double s = 1.0 - 0.154 * p;
+        double v = 0.8 + 0.067 * p;
         return HsvToRgb(h, s, v);
     }
 
@@ -1348,10 +1404,10 @@ PersistOrderAndSave(); };
     }
 
     private DispatcherTimer? _reminderTimer;
-    private readonly HashSet<Border> _dueShown = new(); // N4P-01: cards whose due dialog/toast already fired - the 30s tick must not re-fire them until the reminder is cleared or re-set
-    private bool _deleteConfirming; // N4P-11: one-shot guard - double-click during the 200ms hide animation ran the removal twice (double toast, double persist)
+    private readonly HashSet<Border> _dueShown = new();
+    private bool _deleteConfirming;
 
-    
+
     private void StartReminderRefresh()
     {
         if (_reminderTimer != null) return;
@@ -1367,14 +1423,14 @@ PersistOrderAndSave(); };
         foreach (var (card, _) in _cardIds)
         {
             if (card.Tag is not string tg || (tg != "note" && tg != "todo")) continue;
-            // N4-28: the due card must ALSO get its border refreshed (p=1 = full red) - the old
-            // if/else-if chain skipped it because IsReminderDue consumed the branch.
+
+
             if (dueCard == null && IsReminderDue(card)) { dueCard = card; if (RefreshReminderBorder(card)) anyReminder = true; }
             else if (RefreshReminderBorder(card)) anyReminder = true;
         }
         if (anyReminder) StartReminderRefresh();
-        
-        if (dueCard != null && ReminderDueOverlay.Visibility != Visibility.Visible && _dueShown.Add(dueCard)) ShowReminderDueDialog(dueCard); // N4P-01: fire once per reminder - an unconfirmed dialog must not re-toast + re-animate every 30s
+
+        if (dueCard != null && ReminderDueOverlay.Visibility != Visibility.Visible && _dueShown.Add(dueCard)) ShowReminderDueDialog(dueCard);
     }
 
     private bool IsReminderDue(Border card)
@@ -1407,14 +1463,14 @@ PersistOrderAndSave(); };
         ReminderDueContentText.Text = content;
         ReminderDueConfirmText.Text = App.GetString("Reminder_Due_Confirm");
         var toast = content.Length > 120 ? content.Substring(0, 120) + "…" : content;
-        Services.ToastService.Show(App.GetString("Reminder_Due_Title"), toast); 
+        Services.ToastService.Show(App.GetString("Reminder_Due_Title"), toast);
         ReminderDueDialogTransform.ScaleX = 0.94; ReminderDueDialogTransform.ScaleY = 0.94; ReminderDueDialogTransform.TranslateY = 24;
         ReminderDueDialog.Opacity = 0; ReminderDueScrim.Opacity = 0;
         ReminderDueOverlay.Visibility = Visibility.Visible; ClampDialogHeight(ReminderDueDialog); DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, ReminderDueScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, ReminderDueDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ReminderDueDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ReminderDueDialogTransform);
         sb.Begin();
     }
 
@@ -1423,9 +1479,9 @@ PersistOrderAndSave(); };
         DialogDepth.VeilHideImmediate();
         ReminderDueOverlay.Visibility = Visibility.Collapsed;
         if (_dueReminderCard != null) { ClearReminderOnCard(_dueReminderCard); _dueReminderCard = null; }
-        // N3-37: another card may be due right NOW - fire it immediately instead of letting it sit
-        // until the next 30s tick (simultaneous dues used to pop one dialog, then stall the rest
-        // for up to 30s of stale border + missed notification timing).
+
+
+
         DispatcherQueue.TryEnqueue(RefreshAllReminderBorders);
     }
 
@@ -1433,18 +1489,18 @@ PersistOrderAndSave(); };
     private void ReminderDueScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ReminderDueScrim)) HideReminderDueDialog(); }
     private void ReminderDueConfirm_Click(object s, RoutedEventArgs e) => HideReminderDueDialog();
 
-    
+
     public bool ShowReminderDueById(Guid id)
     {
         foreach (var (card, cid) in _cardIds)
         {
             if (cid == id && card.Tag is string tg && (tg == "todo" || tg == "note"))
             {
-                
-                
+
+
                 if (ReminderDueOverlay.Visibility == Visibility.Visible) return true;
-                if (!_dueShown.Add(card)) return true; // N3-08: the 30s tick already fired this card - re-showing would double-dialog/toast and overwrite _dueReminderCard, orphaning the first card's reminder fields + its schtasks task
-                ShowReminderDueDialog(card); // N4P-01: system-pull/forward path fires the dialog directly - register it so the 30s tick does not re-fire while unconfirmed
+                if (!_dueShown.Add(card)) return true;
+                ShowReminderDueDialog(card);
                 return true;
             }
         }
@@ -1474,7 +1530,7 @@ PersistOrderAndSave(); };
         return Services.StickySync.SendToDesktop(id, kind, title, content, items);
     }
 
-    /// <summary>Build the structured todo rows for stickies.json from plan-card data (index 0 = main todo, 1..n = sub-todos).</summary>
+
     private static List<StickyTodoItem> BuildTodoItems(string mainText, List<string> subTexts, List<bool> states)
     {
         var items = new List<StickyTodoItem>
@@ -1494,7 +1550,7 @@ PersistOrderAndSave(); };
         var pinned = children.Where(c => c is Border b && _pinnedCards.Contains(b)).OrderByDescending(c => _createdAt.GetValueOrDefault((Border)c, DateTime.MinValue)).ToList();
         var unpinned = children.Where(c => c is Border b && !_pinnedCards.Contains(b)).ToList();
 
-        
+
         bool manual = db != null && (db.TodoCards.Any(x => x.Order > 0) || db.NoteCards.Any(x => x.Order > 0));
         if (manual)
         {
@@ -1519,7 +1575,7 @@ PersistOrderAndSave(); };
     private string GetRandomIconKey() => $"Group{_iconRandom.Next(1, IconData.GroupIconCount + 1):D2}";
     private async void FlashTextBox(TextBox tb)
     {
-        if (_flashCtsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); } // N5P-02: per-box CTS (E5-24 pattern)
+        if (_flashCtsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); }
         var cts = new System.Threading.CancellationTokenSource();
         _flashCtsMap[tb] = cts;
 
@@ -1529,7 +1585,7 @@ PersistOrderAndSave(); };
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {
-            if (_flashCtsMap.TryGetValue(tb, out var cur) && !ReferenceEquals(cur, cts)) return; // N5F-01: superseded - newer flash owns the box now
+            if (_flashCtsMap.TryGetValue(tb, out var cur) && !ReferenceEquals(cur, cts)) return;
             tb.Background = orig;
             _flashOriginalBgs.Remove(tb);
             _flashCtsMap.Remove(tb);
@@ -1541,7 +1597,7 @@ PersistOrderAndSave(); };
     }
     private void ShowDeleteConfirmDialog() { DeleteConfirmMessageText.Text = _pendingDeleteCard != null && _pendingDeleteCard.Tag is string tg && tg == "note" ? App.GetString("Plan_Note_Delete_ConfirmTip") : App.GetString("Plan_Todo_Delete_ConfirmTip"); DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24; DeleteConfirmDialog.Opacity = 0; DeleteConfirmScrim.Opacity = 0; DeleteConfirmOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, DeleteConfirmScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, DeleteConfirmDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, DeleteConfirmDialogTransform); sb.Begin(); }
     private void HideDeleteConfirmDialog() { var sb = new Storyboard(); var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(so, DeleteConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so); var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) }; Storyboard.SetTarget(d, DeleteConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d); Motion.AddDialogHideTransform(sb, DeleteConfirmDialogTransform); sb.Completed -= OnDeleteConfirmHideCompleted; sb.Completed += OnDeleteConfirmHideCompleted; DialogDepth.VeilHide(); sb.Begin(); }
-    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; } // N4P-11: re-arm after the overlay is truly gone
+    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; }
     private void DeleteConfirmClose_Click(object s, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteConfirmScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog(); }
     private void DeleteConfirmButton_Click(object s, RoutedEventArgs e) { if (_pendingDeleteCard == null) { HideDeleteConfirmDialog(); return; } if (_deleteConfirming) return; _deleteConfirming = true; { bool isNote = _pendingDeleteCard.Tag is string tg && tg == "note"; _starredCards.Remove(_pendingDeleteCard); _pinnedCards.Remove(_pendingDeleteCard); _pinIcons.Remove(_pendingDeleteCard); _starIcons.Remove(_pendingDeleteCard); _todoData.Remove(_pendingDeleteCard); _todoCollapsed.Remove(_pendingDeleteCard); _todoCompletedBadges.Remove(_pendingDeleteCard); _noteData.Remove(_pendingDeleteCard); _noteExpanded.Remove(_pendingDeleteCard); _cardExpandBtns.Remove(_pendingDeleteCard); _todoRowPanels.Remove(_pendingDeleteCard); _createdAt.Remove(_pendingDeleteCard); _reminderCards.Remove(_pendingDeleteCard); _dueShown.Remove(_pendingDeleteCard);
@@ -1552,34 +1608,29 @@ PersistOrderAndSave(); };
                 if (isNote)
                 {
                     var c = db?.NoteCards.FirstOrDefault(x => x.Id == delId);
-                    if (c != null) { c.IsDeleted = true; c.DeletedAt = DateTime.Now; TeardownReminderOnDelete(delId, c.ReminderAt, c); }
+                    if (c != null) { c.IsDeleted = true; c.DeletedAt = DateTime.Now; c.IsPinned = false; c.IsStarred = false; TeardownReminderOnDelete(delId, c.ReminderAt, c); }
                 }
                 else
                 {
                     var c = db?.TodoCards.FirstOrDefault(x => x.Id == delId);
-                    if (c != null) { c.IsDeleted = true; c.DeletedAt = DateTime.Now; TeardownReminderOnDelete(delId, c.ReminderAt, c); }
+                    if (c != null) { c.IsDeleted = true; c.DeletedAt = DateTime.Now; c.IsPinned = false; c.IsStarred = false; TeardownReminderOnDelete(delId, c.ReminderAt, c); }
                 }
                 Services.StickySync.RemoveNote(delId.ToString());
             }
             var delCard = _pendingDeleteCard;
             App.PlayCardRemoval(CardList, delCard, _dragging, () => { PersistOrderAndSave(); UpdateEmptyHint(); App.ShowToast(App.GetString("Common_Toast_Deleted")); }); } HideDeleteConfirmDialog(); }
 
-    /// <summary>N4P-04: a deleted card's schtasks one-shot would still fire later - it drags the app to
-    /// the foreground and finds no card (dead popup + orphan task). Cancel the task and clear the fields
-    /// so a trash-restore does not resurrect a stale (likely past-due) reminder either.</summary>
+
+
+
     private void TeardownReminderOnDelete(Guid id, DateTime? reminderAt, object entity)
     {
         if (reminderAt == null) return;
-        Services.ReminderScheduler.Cancel(id);
-        switch (entity)
-        {
-            case NoteCard n: n.ReminderAt = null; n.ReminderSetAt = null; break;
-            case TodoCard t: t.ReminderAt = null; t.ReminderSetAt = null; break;
-        }
+        Services.ReminderScheduler.Teardown(id, reminderAt, entity);
         App.Store?.SaveAsync();
     }
 
-    /// <summary>Open the note-edit dialog for a database note id (used by desktop-sticky edit jump).</summary>
+
     public bool OpenEditNoteById(Guid id)
     {
         foreach (var (card, cid) in _cardIds)
@@ -1593,7 +1644,7 @@ PersistOrderAndSave(); };
         return false;
     }
 
-    /// <summary>Open the todo-edit dialog for a database todo id (used by desktop-sticky edit jump - todo cards share the host "Edit" bridge).</summary>
+
     public bool OpenEditTodoById(Guid id)
     {
         foreach (var (card, cid) in _cardIds)
@@ -1607,7 +1658,7 @@ PersistOrderAndSave(); };
         return false;
     }
 
-    /// <summary>Open the todo-edit dialog for a database todo id (global search jump).</summary>
+
     private bool FlashCardAndScroll(Border card)
     {
         if (card == null) return false;
@@ -1638,10 +1689,10 @@ PersistOrderAndSave(); };
 
     private void ShowEditTodoDialog(Border card)
     {
-        _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
+        _confirming = false;
         if (!_todoData.TryGetValue(card, out var d)) return;
         _editingTodoCard = card;
-        _editTodoOrigName = d.title;   
+        _editTodoOrigName = d.title;
         _editTodoOrigIcon = d.iconKey;
         _editTodoOrigMain = d.mainText;
         _editTodoOrigSubs = d.subTexts.ToList();
@@ -1654,16 +1705,16 @@ PersistOrderAndSave(); };
         SubTodoPanel.Children.Add(CreateSubTodoBox());
         LoadIconSelector();
         SelectIcon(d.iconKey);
-        UpdateTodoConfirmState(); // UI-2: edit-fill -> recompute validity
+        UpdateTodoConfirmState();
         NewTodoDialogTransform.ScaleX = 0.94; NewTodoDialogTransform.ScaleY = 0.94; NewTodoDialogTransform.TranslateY = 24; NewTodoDialog.Opacity = 0; NewTodoScrim.Opacity = 0; NewTodoOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewTodoDialog);
         var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewTodoScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewTodoDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewTodoDialogTransform); Motion.StaggerReset(NewTodoDialog); Motion.StaggerWire(sb, NewTodoDialog); sb.Begin();
     }
     private void ShowEditNoteDialog(Border card)
     {
-        _confirming = false; // E3-10: re-arm the confirm guard when the dialog re-opens
+        _confirming = false;
         if (!_noteData.TryGetValue(card, out var d)) return;
         _editingNoteCard = card;
-        _editNoteOrigName = d.title;   
+        _editNoteOrigName = d.title;
         _editNoteOrigIcon = d.iconKey;
         _editNoteOrigContent = d.content;
         NewNoteDialogTitle.Text = App.GetString("Plan_Note_EditTitle");
@@ -1671,7 +1722,7 @@ PersistOrderAndSave(); };
         NoteContentBox.Text = d.content;
         LoadNoteIconSelector();
         SelectNoteIcon(d.iconKey);
-        UpdateNoteConfirmState(); // UI-2: edit-fill -> recompute validity
+        UpdateNoteConfirmState();
         NewNoteDialogTransform.ScaleX = 0.94; NewNoteDialogTransform.ScaleY = 0.94; NewNoteDialogTransform.TranslateY = 24; NewNoteDialog.Opacity = 0; NewNoteScrim.Opacity = 0; NewNoteOverlay.Visibility = Visibility.Visible; DialogDepth.VeilShow(); ClampDialogHeight(NewNoteDialog);
         var sb = new Storyboard(); var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, NewNoteScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si); var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, NewNoteDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di); Motion.AddDialogShowTransform(sb, NewNoteDialogTransform); Motion.StaggerReset(NewNoteDialog); Motion.StaggerWire(sb, NewNoteDialog); sb.Begin();
     }
@@ -1681,14 +1732,35 @@ PersistOrderAndSave(); };
     private void OnNewNoteHideCompleted(object? sender, object e) { NewNoteOverlay.Visibility = Visibility.Collapsed; _editingNoteCard = null; }
     private void CloseNewNote_Click(object s, RoutedEventArgs e) => HideNewNoteDialog();
     private void NewNoteScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, NewNoteScrim)) HideNewNoteDialog(); }
-    private void LoadNoteIconSelector() { _noteSelectedIconKey = null; NoteIconPanel.Children.Clear(); foreach (var key in IconData.GroupIconKeysInOrder()) { var b = new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), Tag = key, Child = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } } }; b.Tapped += NoteIconBorder_Tapped; NoteIconPanel.Children.Add(b); } }
-    private void NoteIconBorder_Tapped(object s, TappedRoutedEventArgs e) { if (s is Border b && b.Tag is string k) { SelectNoteIcon(k); CenterNoteIconInScrollViewer(b); UpdateNoteConfirmState(); } }
-    private void SelectNoteIcon(string key) { _noteSelectedIconKey = key; var d = App.GetBrush("AppSurfaceBrush"); var n = App.GetBrush("AppSurfaceOverlayBrush"); foreach (var c in NoteIconPanel.Children) if (c is Border b && b.Tag is string k) { bool o = k == key; b.Background = o ? d : n; b.BorderBrush = o ? App.GetBrush("AppBorderBrush") : null; b.BorderThickness = new Thickness(o ? 1 : 0); } }
-    private void CenterNoteIconInScrollViewer(Border t) { var r = t.TransformToVisual(NoteIconPanel); var p = r.TransformPoint(new Point(0, 0)); double o = p.X - (NoteIconScrollViewer.ViewportWidth / 2) + (t.ActualWidth / 2); o = Math.Max(0, Math.Min(o, NoteIconScrollViewer.ScrollableWidth)); NoteIconScrollViewer.ChangeView(o, null, null, false); }
-    
-    // Single-line captures land as real cards through the same build/map/reorder pipeline as the
-    // dialogs. When this page has never been built (hotkey used while another tab is open), the
-    // entity goes straight into the database - LoadFromStore renders it on the first visit.
+    private void LoadNoteIconSelector()
+    {
+
+        _noteIconRing ??= new Services.IconRing(NoteIconScrollViewer, NoteIconPanel);
+        _noteIconRing.Tapped -= NoteIconRingTapped;
+        _noteIconRing.Tapped += NoteIconRingTapped;
+        _noteIconRing.Build(IconData.GroupIconKeysInOrder(), key => new Border { Width = 48, Height = 48, CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), Tag = key, Child = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.GetGroupPath(key)), Foreground = App.GetBrush("IconForegroundBrush") } } });
+        _noteSelectedIconKey = null;
+        _noteIconRing.Highlight(null);
+    }
+    private void NoteIconRingTapped(Border b)
+    {
+        if (_noteIconRing is not { } ring) return;
+        _noteSelectedIconKey = b.Tag?.ToString();
+        ring.Highlight(_noteSelectedIconKey);
+        ring.CenterTo(b);
+        UpdateNoteConfirmState();
+    }
+    private void SelectNoteIcon(string key)
+    {
+        _noteSelectedIconKey = key;
+        _noteIconRing?.Highlight(key);
+        var b = key is null ? null : _noteIconRing?.FindByTag(key);
+        if (b != null) _noteIconRing?.CenterTo(b);
+    }
+
+
+
+
 
     public void QuickCaptureTodo(string text)
     {
@@ -1704,16 +1776,16 @@ PersistOrderAndSave(); };
         }
         var iconKey = GetRandomIconKey();
         _bulkLoading = true;
-        var nc = BuildTodoCard(t, iconKey, t, new List<string>()); // title and main text carry the same line: main text is the checkable item
+        var nc = BuildTodoCard(t, iconKey, t, new List<string>());
         _bulkLoading = false;
         var te = new TodoCard { Title = t, IconKey = iconKey, MainText = t, SubTexts = new List<string>(), CheckedStates = _todoData.TryGetValue(nc, out var td) ? new List<bool>(td.checkedStates) : new List<bool>(), CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
         AssignNewCardOrder(te, null);
         App.Store?.Database.TodoCards.Add(te);
         _cardIds[nc] = te.Id;
         App.PlayCardEntrance(nc);
-        ReorderCards(); // N4P-03 parity
+        ReorderCards();
         PersistOrderAndSave();
-        SetFilter(_currentFilter); // N4P-10 parity: a card created under an active filter must respect it
+        SetFilter(_currentFilter);
         App.ShowToast(App.GetString("Common_Toast_Created"));
     }
 
@@ -1731,7 +1803,7 @@ PersistOrderAndSave(); };
         }
         var iconKey = GetRandomIconKey();
         _bulkLoading = true;
-        var nc = BuildNoteCard(t, iconKey, t); // title = card name, content = the same line
+        var nc = BuildNoteCard(t, iconKey, t);
         _bulkLoading = false;
         var ne = new NoteCard { Title = t, IconKey = iconKey, Content = t, IsExpanded = _noteExpanded.TryGetValue(nc, out var nexp) && nexp, CreatedAt = DateTime.Now, WorkspaceId = App.CurrentWorkspaceId };
         AssignNewCardOrder(null, ne);
@@ -1744,7 +1816,7 @@ PersistOrderAndSave(); };
         App.ShowToast(App.GetString("Common_Toast_Created"));
     }
 
-    private void NewNoteConfirm_Click(object s, RoutedEventArgs e) { if (_confirming) return; _confirming = true; bool isEdit = _editingNoteCard != null; // E3-10
+    private void NewNoteConfirm_Click(object s, RoutedEventArgs e) { if (_confirming) return; _confirming = true; bool isEdit = _editingNoteCard != null;
         var name = NoteNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(NoteNameBox); return; } var iconKey = _noteSelectedIconKey ?? GetRandomIconKey(); var content = NoteContentBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(NoteContentBox); return; } if (_editingNoteCard != null) { var old = _editingNoteCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); bool wasReminder = _reminderCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; bool wasExpanded = _noteExpanded.TryGetValue(old, out var we) && we; _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _noteData.Remove(old); _cardExpandBtns.Remove(old); _noteExpanded.Remove(old); _createdAt.Remove(old); _reminderCards.Remove(old); _dueShown.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildNoteCard(name, iconKey, content, wasExpanded); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } if (wasReminder) { _reminderCards.Add(nc); } App.PlayCardEntrance(nc);
 
             if (_cardIds.TryGetValue(old, out var editNid))
@@ -1756,16 +1828,16 @@ PersistOrderAndSave(); };
                     ne.Title = name; ne.IconKey = iconKey; ne.Content = content;
                     ne.IsExpanded = _noteExpanded.TryGetValue(nc, out var nexp) && nexp;
                 }
-                
+
                 if (Services.StickySync.Contains(editNid.ToString()))
                     Services.StickySync.UpdateNote(editNid.ToString(), "note", name, content);
-                if (wasReminder) RefreshReminderBorder(nc); // N2-25: AFTER the _cardIds assignment (see todo flow)
+                if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
-            ReorderCards(); 
+            ReorderCards();
             PersistOrderAndSave();
         } else {
-            // N4P-03: mirror the todo branch - map the id before any reorder sees the card.
+
             _bulkLoading = true;
             var nc2 = BuildNoteCard(name, iconKey, content);
             _bulkLoading = false;
@@ -1774,16 +1846,16 @@ PersistOrderAndSave(); };
             App.Store?.Database.NoteCards.Add(ne2);
             _cardIds[nc2] = ne2.Id;
             App.PlayCardEntrance(nc2);
-            ReorderCards(); // N4P-03
+            ReorderCards();
             PersistOrderAndSave();
-            SetFilter(_currentFilter); // N4P-10: respect the active filter (NH4 parity)
+            SetFilter(_currentFilter);
         }
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
         HideNewNoteDialog(); }
     private Border BuildNoteCard(string title, string iconKey, string content, bool expanded = false)
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        var card = new Border { CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), // E5-20: per-card copy - never mutate the shared theme brush (E1-09 pattern)
+        var card = new Border { CornerRadius = new CornerRadius(12), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1), Padding = new Thickness(20, 18, 20, 18), HorizontalAlignment = HorizontalAlignment.Stretch, RenderTransform = new TranslateTransform() };
         var root = new Grid(); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var tr = new Grid(); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); tr.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1804,7 +1876,53 @@ PersistOrderAndSave(); };
         Grid.SetRow(contentBlock, 1); root.Children.Add(contentBlock);
         card.Child = root;
         bool needExpand = content.Length > 240 || content.Contains('\n');
-        if (needExpand) { expandBtn.Visibility = Visibility.Visible; expandIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.CardExpand); expandViewbox.Margin = new Thickness(-2, -1, 0, 0); _noteExpanded[card] = expanded; if (expanded) { contentBlock.MaxLines = 0; contentBlock.TextTrimming = TextTrimming.None; expandIcon.Data = (Geometry)cv(typeof(Geometry), IconData.CardCollapse); expandViewbox.Margin = new Thickness(0); } expandBtn.Click += (_, _) => { bool expanded = _noteExpanded.TryGetValue(card, out var ex) && ex; expanded = !expanded; _noteExpanded[card] = expanded; contentBlock.MaxLines = expanded ? 0 : 3; contentBlock.TextTrimming = expanded ? TextTrimming.None : TextTrimming.CharacterEllipsis; expandIcon.Data = expanded ? (Geometry)cv(typeof(Geometry), IconData.CardCollapse) : (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.CardExpand); expandViewbox.Margin = expanded ? new Thickness(0) : new Thickness(-2, -1, 0, 0); SyncNoteExpanded(card, expanded); }; _cardExpandBtns[card] = expandBtn; }
+
+
+
+        _noteExpanded[card] = expanded;
+
+        void EnableExpand()
+        {
+            if (_cardExpandBtns.ContainsKey(card)) return;
+            expandBtn.Visibility = Visibility.Visible;
+            expandIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.CardExpand);
+            expandViewbox.Margin = new Thickness(-2, -1, 0, 0);
+            if (_noteExpanded.TryGetValue(card, out var isExp) && isExp)
+            {
+                contentBlock.MaxLines = 0; contentBlock.TextTrimming = TextTrimming.None;
+                expandIcon.Data = (Geometry)cv(typeof(Geometry), IconData.CardCollapse);
+                expandViewbox.Margin = new Thickness(0);
+            }
+            expandBtn.Click += (_, _) =>
+            {
+                bool nowExpanded = !(_noteExpanded.TryGetValue(card, out var ex) && ex);
+                _noteExpanded[card] = nowExpanded;
+                contentBlock.MaxLines = nowExpanded ? 0 : 3;
+                contentBlock.TextTrimming = nowExpanded ? TextTrimming.None : TextTrimming.CharacterEllipsis;
+                expandIcon.Data = nowExpanded ? (Geometry)cv(typeof(Geometry), IconData.CardCollapse) : (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.CardExpand);
+                expandViewbox.Margin = nowExpanded ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
+                SyncNoteExpanded(card, nowExpanded);
+            };
+            _cardExpandBtns[card] = expandBtn;
+        }
+
+        if (needExpand) EnableExpand();
+        else
+        {
+
+
+
+            contentBlock.Loaded += (_, _) =>
+            {
+                if (!contentBlock.IsTextTrimmed) return;
+
+
+
+
+                _noteExpanded[card] = true;
+                EnableExpand();
+            };
+        }
         card.Tag = "note"; _noteData[card] = (title, iconKey, content); _createdAt[card] = DateTime.Now;
         AttachCardHoverEffect(card);
         AttachCardDrag(card);

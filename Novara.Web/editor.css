@@ -1,0 +1,276 @@
+.edit-sync-hint {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 6px 16px calc(26px + var(--safe-bottom, 0px));
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+
+#editUploadButton .icon {
+  color: #7276FF;
+}
+
+#editUploadButton:disabled .icon {
+  opacity: 0.4;
+}
+
+
+
+#editUploadButton {
+  cursor: default;
+}
+
+#editUploadButton:focus,
+#editUploadButton:focus-visible {
+  outline: none;
+}
+
+
+
+
+
+
+.reader-body.markdown {
+  padding: 24px 3px 45px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+
+
+.reader-nav .reader-delete {
+  margin-left: auto;
+}
+
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.edit-button {
+  border: 1px solid var(--border, #33FFFFFF);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.edit-button.is-primary {
+  background: #7276FF;
+  border-color: #7276FF;
+  color: #fff;
+  font-weight: 600;
+}
+
+.edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-field-name {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.edit-input {
+  width: 100%;
+  border: 1px solid var(--border, #33FFFFFF);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.edit-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-note .edit-input {
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+
+.edit-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.edit-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: #7276FF;
+  flex: none;
+}
+
+
+.edit-conflict {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 20px;
+}
+
+.edit-conflict[hidden] {
+  display: none;
+}
+
+.edit-conflict-card {
+  width: min(520px, 100%);
+  border-radius: 20px;
+  padding: 22px;
+  background: var(--card);
+  border: 1px solid var(--border, #33FFFFFF);
+}
+
+.edit-conflict-card h2 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  color: #7276FF;
+}
+
+.edit-conflict-card p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.edit-conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-conflict-actions .edit-button {
+  padding: 11px 14px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.edit-conflict-actions .is-danger {
+  color: #FF6B6B;
+  border-color: #FF6B6B;
+}
+
+
+.edit-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-section-actions .edit-create-form {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.edit-button.is-danger {
+  color: #FF6B6B;
+  border-color: #FF6B6B;
+}
+
+
+.edit-create-kinds {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-kind {
+  flex: 1;
+  text-align: center;
+}
+
+.edit-kind.is-selected {
+  background: #7276FF;
+  border-color: #7276FF;
+  color: #fff;
+  font-weight: 600;
+}
+
+#editCreateName,
+#editCreateDetail {
+  width: 100%;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+
+
+
+
+.edit-doc {
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-doc .edit-input {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
+.edit-doc .edit-input:focus,
+.edit-doc .edit-input:focus-visible {
+  outline: none;
+}
+
+
+
+
+
+
+
+
+
+
+.edit-doc .edit-doc-body {
+  margin-top: 2px;
+  padding-top: 12px;
+  padding-bottom: 20px;
+  border-top: 1px solid var(--border);
+  font: 13px/1.8 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  resize: none;
+  overflow-y: auto;
+}
+
+
+
+
+
+.reader:has(.edit-doc) .reader-header {
+  display: none;
+}

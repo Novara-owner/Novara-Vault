@@ -1,8 +1,3 @@
-/* ========== LockScreenPage - Privacy Lock ==========
-Function: Lock screen - password entry (long password, 4.7), Enter/arrow submit, wrong-password flash, 30-min lockout countdown, forget-password flow, deactivation clear (G13)
-Corresponding UI: LockScreenPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -33,34 +28,41 @@ public sealed partial class LockScreenPage : Page
     public event Action? UnlockSucceeded;
 
     public event Action? CorruptDetected;
-    public event Action? IoErrorDetected; // E3-12: transient read failure - MainWindow shows a retry-only dialog (NO rebuild offer)
+    public event Action? IoErrorDetected;
 
     public LockScreenPage()
     {
         InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content); // dialog depth: shadow + chrome veil auto-wiring
-        // ND4: ForgotOverlay is nested inside UnlockView (two levels deep) - the container scan
-        // cannot reach it, so pair it explicitly. Chrome drive is pointless here: LockScreenFrame
-        // covers the whole window anyway.
+
+
+        if (App.CurrentLanguage == "en-US")
+        {
+            LockTitle.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa");
+            LockTitle.CharacterSpacing = 0;
+        }
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content);
+
+
+
         Novara.Services.DialogDepth.AttachPair(ForgotScrim, ForgotDialog, driveChrome: false);
         KeyDown += Page_KeyDown;
         Unloaded += (_, _) =>
         {
             _lockTimer?.Stop(); _lockTimer = null; _autoUnlockCts?.Cancel();
-            // N3-52: stop EVERY Forever storyboard on unload, not just Hello - the hint & countdown
-            // breathing animations kept running on the detached tree (same class as N2-46).
+
+
             WindowsHelloBreathing.Stop();
             ForgotHintBreathing.Stop();
             CountdownBreathing.Stop();
-        }; // #43: timer Unloaded guard (prevent leak/update hidden UI)
+        };
         Loaded += (_, _) =>
         {
             _normalBorderBrush = App.GetBrush("AppBorderBrush");
-            _failCount = PasswordService.GetFailCount(); // Bug 15: restore persisted fail count
+            _failCount = PasswordService.GetFailCount();
 
-            // 5.0: Windows Hello text is visible only when enabled (credential exists).
-            // NH7: breathing itself starts in OnLockEntryCompleted - an early Begin here gets
-            // suppressed by LockEntryAnimation (same target property, HoldEnd, starts later).
+
+
+
             WindowsHelloText.Visibility = WindowsHelloService.IsEnabled() ? Visibility.Visible : Visibility.Collapsed;
 
             if (PasswordService.IsLockoutEnabled() && PasswordService.IsLockedOut(out _))
@@ -68,19 +70,24 @@ public sealed partial class LockScreenPage : Page
                 EnterLockedState();
                 return;
             }
-            
-            
+
+
             _failCount = PasswordService.GetFailCount();
             LockEntryAnimation.Completed -= OnLockEntryCompleted;
             LockEntryAnimation.Completed += OnLockEntryCompleted;
             LockEntryAnimation.Begin();
-            PasswordInput.Focus(FocusState.Programmatic);
 
-            // 5.0: auto-start one Windows Hello attempt when enabled (failure keeps the lock screen so the icon can retry)
+
+
+
+
+            DispatcherQueue.TryEnqueue(FocusPasswordInput);
+
+
             if (WindowsHelloService.IsEnabled())
             {
-                // N5-S11-05 annotation line; fresh CTS mirrors the PasswordChanged pattern (the field
-                // is still null on first load) - also silences the CS8602 the bare dereference carried.
+
+
                 _autoUnlockCts?.Cancel();
                 _autoUnlockCts = new CancellationTokenSource();
                 _ = AutoUnlockWithWindowsHelloAsync(_autoUnlockCts.Token);
@@ -93,82 +100,82 @@ public sealed partial class LockScreenPage : Page
         if (e.Key == VirtualKey.Enter) { e.Handled = true; _ = VerifyAsync(); }
     }
 
-    // ---- Auto-unlock: as soon as the entered password matches, unlock without Enter/arrow. ----
-    // A long password has no fixed length, so "done typing" cannot be known - probe on every
-    // change instead: debounce, verify PBKDF2 on the thread pool (UI stays responsive), unlock on
-    // success, stay silent on failure (the user may still be typing; Enter/arrow still submit
-    // explicitly and report errors). Failures here do NOT count toward the 5-strike lockout.
-    // E1-07 (2026-08-10): brute-force hardening - probes are capped per program run (~64, resets on
-    // restart) and the debounce is 400ms, so automated guessing is slow and bounded while normal
-    // typing (probe count = keystrokes after the 6th char) stays far below the cap.
+
+
+
+
+
+
+
+
     private const int AutoProbeLimit = 64;
     private static readonly TimeSpan AutoProbeDebounce = TimeSpan.FromMilliseconds(400);
     private CancellationTokenSource? _autoUnlockCts;
     private int _autoUnlockSeq;
-    private static int _autoProbeCount; // N2-44/N3-09: static - the E1-07 budget is per PROGRAM RUN, not per lock-screen instance
+    private static int _autoProbeCount;
 
     private void PasswordInput_PasswordChanged(object sender, RoutedEventArgs e)
     {
         if (_verifying) return;
-        if (PasswordInput.Password.Length < 6) return; // below the min length - nothing to check yet
-        if (_autoProbeCount >= AutoProbeLimit) return; // E1-07: probe budget exhausted for this run (Enter/arrow still work)
+        if (PasswordInput.Password.Length < 6) return;
+        if (_autoProbeCount >= AutoProbeLimit) return;
         _autoProbeCount++;
         _autoUnlockCts?.Cancel();
         _autoUnlockCts = new CancellationTokenSource();
         var seq = ++_autoUnlockSeq;
-        
+
         var pw = PasswordInput.Password;
         _ = CheckAutoUnlockAsync(pw, seq, _autoUnlockCts.Token);
     }
 
     private async System.Threading.Tasks.Task CheckAutoUnlockAsync(string pw, int seq, System.Threading.CancellationToken ct)
     {
-        try { await System.Threading.Tasks.Task.Delay(AutoProbeDebounce, ct); } catch { return; } // debounced / superseded
+        try { await System.Threading.Tasks.Task.Delay(AutoProbeDebounce, ct); } catch { return; }
         if (seq != _autoUnlockSeq || _verifying) return;
-        if (PasswordInput.Password != pw) return; // the user kept typing - a newer probe is queued
+        if (PasswordInput.Password != pw) return;
         var result = await System.Threading.Tasks.Task.Run(() => App.Store?.LoadWithPassword(pw));
-        // N3-53: re-check the LIVE password content after the blocking verify too - the pre-run
-        // check above only covers the debounce window; the user may backspace below 6 chars (or
-        // keep typing) WHILE PBKDF2 runs, and seq alone would let the stale probe unlock anyway.
-        if (seq != _autoUnlockSeq || _verifying || PasswordInput.Password != pw) return; // E1-06: superseded / a submit already won - drop this stale probe
+
+
+
+        if (seq != _autoUnlockSeq || _verifying || PasswordInput.Password != pw) return;
         if (result?.Status == LoadStatus.Ok)
         {
-            _verifying = true; // same success path as VerifyAsync (auto-unlock)
+            _verifying = true;
             _failCount = 0;
             PasswordService.SetFailCount(0);
             App.ApplyStoredSettings();
             PlayExitAnimation();
             return;
         }
-        // E5-14: only a wrong password is silent by design (the user may not have finished typing);
-        // corruption / IO failures must surface exactly like the manual VerifyAsync path.
+
+
         if (result?.Status == LoadStatus.Corrupted) { CorruptDetected?.Invoke(); return; }
         if (result?.Status == LoadStatus.IoError) { IoErrorDetected?.Invoke(); return; }
-        // wrong password: silent by design - the user may not have finished typing
+
     }
 
     private void UnlockButton_Click(object sender, RoutedEventArgs e) => _ = VerifyAsync();
 
-    private bool _unlockStarted; // E1-06: one-shot guard for the exit animation / UnlockSucceeded
+    private bool _unlockStarted;
 
     private async System.Threading.Tasks.Task VerifyAsync()
     {
-        if (_verifying) return; // E1-06: re-entry guard (double Enter / Enter + arrow)
+        if (_verifying) return;
         _verifying = true;
         FocusSink.Focus(FocusState.Programmatic);
         await UnlockWithPasswordAsync(PasswordInput.Password);
     }
 
-    /* ========== Windows Hello Unlock ==========
-    Function: pop native Hello prompt -> read PasswordVault -> unlock via the shared path.
-    Corresponding UI: LockScreenPage.xaml (WindowsHelloText)
-    */
+
+
+
+
     private async void WindowsHelloText_Tapped(object sender, TappedRoutedEventArgs e)
     {
         await TryUnlockWithWindowsHelloAsync();
     }
 
-    /* ========== Windows Hello Unlock (shared) ========== */
+
     private async System.Threading.Tasks.Task TryUnlockWithWindowsHelloAsync(System.Threading.CancellationToken ct = default)
     {
         if (_verifying) return;
@@ -176,17 +183,17 @@ public sealed partial class LockScreenPage : Page
         FocusSink.Focus(FocusState.Programmatic);
         try
         {
-            ct.ThrowIfCancellationRequested(); 
+            ct.ThrowIfCancellationRequested();
             var result = await WindowsHelloService.RequestVerificationAsync(App.GetString("Lock_WinHello_VerifyMsg"));
             if (result == UserConsentVerificationResult.DeviceNotPresent)
             {
-                // NH14: Hello vanished mid-session (PIN/biometrics removed) - retire the dead entrance.
+
                 WindowsHelloText.Visibility = Visibility.Collapsed;
             }
             if (result != UserConsentVerificationResult.Verified)
             {
-                // Failed (non-cancel) reuses the wrong-password shake; a manual cancel stays silent
-                // (the native Hello prompt already reports its own error).
+
+
                 if (result != UserConsentVerificationResult.Canceled)
                     await ShakeAndFlashAsync();
                 _verifying = false;
@@ -196,7 +203,7 @@ public sealed partial class LockScreenPage : Page
             var pw = WindowsHelloService.TryGetPassword();
             if (string.IsNullOrEmpty(pw))
             {
-                await ShakeAndFlashAsync(); // credential missing (anomalous) -> shake
+                await ShakeAndFlashAsync();
                 _verifying = false;
                 return;
             }
@@ -208,25 +215,25 @@ public sealed partial class LockScreenPage : Page
 
     private async System.Threading.Tasks.Task AutoUnlockWithWindowsHelloAsync(System.Threading.CancellationToken ct)
     {
-        try { await System.Threading.Tasks.Task.Delay(1000, ct); } catch (System.OperationCanceledException) { return; } 
-        if (ct.IsCancellationRequested) return; // wait for the entrance animation to settle
-        // NH14: availability gate - no configured PIN/biometrics means no entrance and no native prompt.
+        try { await System.Threading.Tasks.Task.Delay(1000, ct); } catch (System.OperationCanceledException) { return; }
+        if (ct.IsCancellationRequested) return;
+
         if (!await WindowsHelloService.IsAvailableAsync())
         {
             WindowsHelloText.Visibility = Visibility.Collapsed;
             return;
         }
         if (_verifying) return;
-        if (LockedView.Visibility == Visibility.Visible) return; // locked out - never auto-attempt
-        if (!string.IsNullOrEmpty(PasswordInput.Password)) return; // the user is typing a password - do not interrupt
+        if (LockedView.Visibility == Visibility.Visible) return;
+        if (!string.IsNullOrEmpty(PasswordInput.Password)) return;
         await TryUnlockWithWindowsHelloAsync(ct);
     }
 
     private async System.Threading.Tasks.Task UnlockWithPasswordAsync(string pw, bool fromHello = false)
     {
-        // N3-54: PBKDF2-3M verify must NOT run on the UI thread - a long password + high iterations
-        // froze the lock screen for the whole derivation (auto-probe already used Task.Run; the
-        // manual submit path was the asymmetric leftover). _verifying + seq keep it race-free.
+
+
+
         var result = await System.Threading.Tasks.Task.Run(() => App.Store?.LoadWithPassword(pw));
         if (result != null && result.Status == LoadStatus.Ok)
         {
@@ -239,20 +246,20 @@ public sealed partial class LockScreenPage : Page
 
         if (result != null && result.Status == LoadStatus.Corrupted)
         {
-            _verifying = false; // Bug 20: reset flag so input works after the corrupt dialog closes
+            _verifying = false;
             CorruptDetected?.Invoke();
             return;
         }
         if (result != null && result.Status == LoadStatus.IoError)
         {
-            _verifying = false; // E3-12: transient IO failure - retry dialog, never the rebuild offer
+            _verifying = false;
             IoErrorDetected?.Invoke();
             return;
         }
 
-        // NH15: the Hello gesture already passed biometric verification - a stale vault credential
-        // is an anomaly, not a wrong-password strike. Retire the credential and never count it
-        // toward the 5-strike lockout; the password channel takes over cleanly.
+
+
+
         if (fromHello)
         {
             WindowsHelloService.Disable();
@@ -276,29 +283,29 @@ public sealed partial class LockScreenPage : Page
         _verifying = false;
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void OnLockEntryCompleted(object? sender, object e)
     {
         ForgotHintBreathing.Begin();
-        // NH7: start the Hello breathing only AFTER the entrance animation finished - starting it
-        // in Loaded let LockEntryAnimation (same target property, HoldEnd) suppress it forever.
+
+
         WindowsHelloBreathing.Begin();
     }
 
-    /* ========== LockScreen Locked State ==========
-Function: 5-fail lockout: red countdown breath animation, timer until lockout expiry, auto return to entry, forget-password flow
-Corresponding UI: LockScreenPage.xaml.cs
-Logic Range: Below methods in this region
-*/
+
+
+
+
+
 private void EnterLockedState()
     {
         _verifying = false;
-        _autoUnlockCts?.Cancel(); 
+        _autoUnlockCts?.Cancel();
         _autoUnlockSeq++;
-        PasswordInput.Password = ""; 
+        PasswordInput.Password = "";
         LockEntryAnimation.Stop();
         ForgotHintBreathing.Stop();
         UnlockView.Visibility = Visibility.Collapsed;
@@ -313,7 +320,7 @@ private void EnterLockedState()
 
     private void UpdateLockCountdown()
     {
-        var remain = PasswordService.GetRemainingLockout(); 
+        var remain = PasswordService.GetRemainingLockout();
         if (remain <= TimeSpan.Zero)
         {
             ExitLockedState();
@@ -330,19 +337,19 @@ private void EnterLockedState()
         LockedView.Visibility = Visibility.Collapsed;
         UnlockView.Visibility = Visibility.Visible;
         _failCount = 0;
-        PasswordService.ClearLockout(); 
+        PasswordService.ClearLockout();
         PasswordService.SetFailCount(0);
         ClearInput();
-        // Fix: replay entrance animation to restore input/forgot-password visibility - LockEntryAnimation plays once on the Loaded non-locked branch;
-        // when starting inside the lock period it never played, so PasswordInputPanel/ForgotPasswordText Opacity stays at XAML initial 0,
-        // after countdown only the title remains visible (input & forgot-password missing)
+
+
+
         LockEntryAnimation.Stop();
         LockEntryAnimation.Completed -= OnLockEntryCompleted;
         LockEntryAnimation.Completed += OnLockEntryCompleted;
         LockEntryAnimation.Begin();
     }
 
-    private bool _shakeRunning; 
+    private bool _shakeRunning;
     private async System.Threading.Tasks.Task ShakeAndFlashAsync()
     {
         if (_shakeRunning) return;
@@ -372,15 +379,15 @@ private void EnterLockedState()
         PasswordInput.BorderThickness = new Thickness(1);
         t.X = 0;
         }
-        finally { _shakeRunning = false; } 
+        finally { _shakeRunning = false; }
     }
 
     private void PlayExitAnimation()
     {
-        if (_unlockStarted) return; // E1-06: one-shot - a second success path must not replay the exit
+        if (_unlockStarted) return;
         _unlockStarted = true;
         ForgotHintBreathing.Stop();
-        WindowsHelloBreathing.Stop(); // 5.0: stop the breathing text before it moves out
+        WindowsHelloBreathing.Stop();
         var sb = new Storyboard();
 
         var tx = new DoubleAnimation { To = -240, Duration = TimeSpan.FromMilliseconds(500), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
@@ -398,7 +405,7 @@ private void EnterLockedState()
         var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
         Storyboard.SetTarget(fo, ForgotPasswordText); Storyboard.SetTargetProperty(fo, "Opacity"); sb.Children.Add(fo);
 
-        // 5.0: the Windows Hello text moves out left (same direction as the title)
+
         var wx = new DoubleAnimation { To = -240, Duration = TimeSpan.FromMilliseconds(500), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
         Storyboard.SetTarget(wx, WindowsHelloTextTransform); Storyboard.SetTargetProperty(wx, "X"); sb.Children.Add(wx);
         var wo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
@@ -408,10 +415,24 @@ private void EnterLockedState()
         sb.Begin();
     }
 
-    public void ClearInput() // D1 (Round 5): clear password on window deactivation (rule G13)
+    public void ClearInput()
     {
         PasswordInput.Password = string.Empty;
-        if (LockedView.Visibility == Visibility.Visible) return; 
+        if (LockedView.Visibility == Visibility.Visible) return;
+        PasswordInput.Focus(FocusState.Programmatic);
+    }
+
+
+
+
+
+
+
+
+    public void FocusPasswordInput()
+    {
+        if (LockedView.Visibility == Visibility.Visible) return;
+        if (ForgotOverlay.Visibility == Visibility.Visible) return;
         PasswordInput.Focus(FocusState.Programmatic);
     }
 
@@ -421,22 +442,22 @@ private void EnterLockedState()
         if (ForgotOverlay.Visibility == Visibility.Visible) { HideForgotDialog(); e.Handled = true; }
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
     private void ForgotPassword_Tapped(object sender, TappedRoutedEventArgs e)
     {
         ShowForgotDialog();
     }
 
-    private bool _forgotAnimating;   // N4T-06: hide-animation re-entry guard
-    private bool _forgotConfirming;  // N4T-06: confirm double-click guard - double-click ran ResetDatabase twice + UnlockSucceeded twice
+    private bool _forgotAnimating;
+    private bool _forgotConfirming;
 
     private void ShowForgotDialog()
     {
-        if (_forgotAnimating) return; // N4T-06: a running hide-fade would otherwise yank the freshly shown dialog back down
-        _forgotConfirming = false; // N4T-06: fresh dialog session
-        ForgotDangerIcon.Data = App.CreateGeometry(IconData.Danger); // N2-13: danger triangle
+        if (_forgotAnimating) return;
+        _forgotConfirming = false;
+        ForgotDangerIcon.Data = App.CreateGeometry(IconData.Danger);
         ForgotDialogTransform.ScaleX = 0.94; ForgotDialogTransform.ScaleY = 0.94; ForgotDialogTransform.TranslateY = 24;
         ForgotDialog.Opacity = 0;
         ForgotScrim.Opacity = 0;
@@ -446,14 +467,14 @@ private void EnterLockedState()
         Storyboard.SetTarget(si, ForgotScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(di, ForgotDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ForgotDialogTransform); // M1: EmphasizedDecelerate (Motion)
+        Motion.AddDialogShowTransform(sb, ForgotDialogTransform);
         sb.Begin();
-        // 9.3: 30s cooldown on the hard-delete (full database reset) confirm (global rule)
+
         ForgotConfirmButton.IsEnabled = false;
-        ForgotConfirmButton.Opacity = 0.45;
+        ForgotConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
         ForgotCd.Completed -= OnForgotCdCompleted;
         ForgotCd.Completed += OnForgotCdCompleted;
-        ForgotCd.Start(30);
+        ForgotCd.Start(Motion.CooldownSeconds);
     }
 
     private void OnForgotCdCompleted()
@@ -465,9 +486,9 @@ private void EnterLockedState()
 
     private void HideForgotDialog()
     {
-        if (_forgotAnimating) return; // N4T-06: M2 - a second hide during the fade re-ran Completed early
+        if (_forgotAnimating) return;
         _forgotAnimating = true;
-        ForgotCd.Reset(); // 9.3: stop the cooldown frame - reopening starts a fresh 30s
+        ForgotCd.Reset();
         ForgotConfirmButton.IsEnabled = true;
         ForgotConfirmButton.Opacity = 1;
         var sb = new Storyboard();
@@ -475,8 +496,8 @@ private void EnterLockedState()
         Storyboard.SetTarget(so, ForgotScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ForgotDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ForgotDialogTransform); // M1: EmphasizedAccelerate (Motion)
-        sb.Completed += (_, _) => { ForgotOverlay.Visibility = Visibility.Collapsed; _forgotAnimating = false; }; // N4T-06: re-arm only after fully hidden
+        Motion.AddDialogHideTransform(sb, ForgotDialogTransform);
+        sb.Completed += (_, _) => { ForgotOverlay.Visibility = Visibility.Collapsed; _forgotAnimating = false; };
         sb.Begin();
     }
 
@@ -490,31 +511,32 @@ private void EnterLockedState()
 
     private void ForgotConfirm_Click(object sender, RoutedEventArgs e)
     {
-        if (_forgotConfirming) return; // N5T-06: double-click ran the wipe twice and UnlockSucceeded twice (double entry animation)
-        if (_verifying) return; // N5T2-07: an auto-probe LoadWithPassword is in flight - its Ok reply must not double-unlock after the wipe
+        if (_forgotConfirming) return;
+        if (_verifying) return;
         _forgotConfirming = true;
         _verifying = true;
-        _autoUnlockSeq++; // N5T2-07: invalidate any probe already past its pre-await check
+        _autoUnlockSeq++;
         try
         {
-            // N4S-03: align with SettingsPage.PerformReset (E4-07) - reset FIRST and only delete the
-            // password files when the empty db actually landed on disk. The old order (delete first,
-            // ignore ResetDatabase result) left the old encrypted db on disk with no password file when
-            // the reset failed: next startup rejects every password with no recovery path.
+
+
+
+
             var resetResult = App.Store?.ResetDatabase();
             if (resetResult == null || resetResult.Status != LoadStatus.EmptyCreated)
             {
                 HideForgotDialog();
-                _ = ShakeAndFlashAsync(); // reuse the wrong-password feedback - the wipe did not happen, stay locked
+                _ = ShakeAndFlashAsync();
                 return;
             }
             PasswordService.Delete();
             PasswordService.DeleteLockout();
-            WindowsHelloService.Disable(); // 5.0: forgot-password wipes the DB - drop the Hello credential
-            Services.StickySync.ClearAllNotes(); // E3-07 parity with PerformReset - desktop notes of the wiped db must not ghost around
+            WindowsHelloService.Disable();
+            Services.StickySync.ClearAllNotes();
+            Services.SyncService.MarkRestorePendingConfirm();
             HideForgotDialog();
-            PlayExitAnimation(); // N2-46: symmetric exit (stops the Forever breathing + plays the teardown) - its Completed invokes UnlockSucceeded; the direct call left the animation pinned to the unloaded page
+            PlayExitAnimation();
         }
-        finally { _verifying = false; } // N5T2-07: always release, success or stay-locked failure
+        finally { _verifying = false; }
     }
 }

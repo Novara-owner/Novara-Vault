@@ -1,0 +1,44 @@
+.m3-token-input {
+  padding-right: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.05em;
+}
+
+
+.m3-field + .m3-field {
+  margin-top: 15px;
+}
+
+
+
+
+
+
+
+
+
+.titlebar-brand #editUploadButton {
+  flex: none;
+}
+
+
+#editCreateButton {
+  grid-column: 3;
+  justify-self: end;
+}
+
+
+
+
+
+
+
+#themeToggle.drawer-theme {
+  grid-column: auto;
+  justify-self: stretch;
+  margin-top: 7px;
+}
+
+#themeToggle.drawer-theme::after {
+  content: attr(aria-label);
+}

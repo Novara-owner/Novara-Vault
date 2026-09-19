@@ -1,8 +1,3 @@
-
-
-
-
-
 namespace StickNoteHost;
 
 public static class IconPaths

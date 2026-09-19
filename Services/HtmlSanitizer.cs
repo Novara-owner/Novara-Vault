@@ -1,9 +1,3 @@
-
-
-
-
-
-
 using AngleSharp.Html.Parser;
 using DomNode = AngleSharp.Dom.INode;
 using DomElement = AngleSharp.Dom.IElement;
@@ -13,26 +7,26 @@ namespace Novara.Services;
 
 public static class HtmlSanitizer
 {
-    /// <summary>N4C-04: recursion cap - adversarial deep nesting (tens of thousands of levels) made the
-    /// unwrap recursion overflow the stack; StackOverflowException is uncatchable and kills the process.</summary>
+
+
     private const int MaxDepth = 200;
 
     public static string Sanitize(string html)
     {
         if (string.IsNullOrWhiteSpace(html)) return html ?? "";
-        html = NormalizeLegacyFontTags(html); // N4D-07: legacy <font> must survive Tiptap's schema on next load
+        html = NormalizeLegacyFontTags(html);
         var doc = new HtmlParser().ParseDocument(html);
         if (doc.Body == null) return html;
         SanitizeNode(doc.Body, 0);
         return doc.Body.InnerHtml;
     }
 
-    /// <summary>
-    /// N4D-07: pre-5.0 diaries may contain <c>&lt;font color&gt;</c>. Tiptap has no Font extension, so
-    /// setContent would silently drop those nodes and the next save would lose the colors for good.
-    /// Convert to <c>span style="color:..."</c> up front - that form survives both this whitelist and
-    /// Tiptap parsing. Color values are restricted to safe CSS color characters before embedding.
-    /// </summary>
+
+
+
+
+
+
     private static string NormalizeLegacyFontTags(string html)
     {
         if (!html.Contains("font", StringComparison.OrdinalIgnoreCase)) return html;
@@ -41,13 +35,13 @@ public static class HtmlSanitizer
             "<font\\b[^>]*?color\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))[^>]*>",
             m =>
             {
-                var raw = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Value; // N5D-04: third alt covers unquoted values
+                var raw = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Success ? m.Groups[2].Value : m.Groups[3].Value;
                 var safe = System.Text.RegularExpressions.Regex.Replace(raw ?? "", "[^A-Za-z0-9#(),.%\\s-]", "");
                 return "<span style=\"color:" + safe.Trim() + "\">";
             },
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         html = System.Text.RegularExpressions.Regex.Replace(html, "<font\\b[^>]*>", "<span>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        html = System.Text.RegularExpressions.Regex.Replace(html, "</\\s*font\\s*>", "</span>", System.Text.RegularExpressions.RegexOptions.IgnoreCase); // N5D-03: tolerate whitespace before '>'
+        html = System.Text.RegularExpressions.Regex.Replace(html, "</\\s*font\\s*>", "</span>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return html;
     }
 
@@ -77,10 +71,10 @@ public static class HtmlSanitizer
         {
             if (child is DomElement el)
             {
-                // N5D-01: over-deep subtrees are REMOVED, not skipped - a plain `return` left them
-                // in the DOM fully unsanitized (on*/protocol/script intact) and they leaked into
-                // exported HTML collections. Dropping also bounds Body.InnerHtml serialization
-                // depth, closing the residual stack-overflow vector on legal deep nesting.
+
+
+
+
                 if (depth >= MaxDepth) { el.Remove(); continue; }
                 var tag = el.LocalName;
                 if (DropTags.Contains(tag)) { el.Remove(); continue; }
@@ -103,16 +97,16 @@ public static class HtmlSanitizer
         }
     }
 
-    /// <summary>
-    /// N3-02: a node promoted by the unwrap branch must go through the exact same element checks
-    /// (tag whitelist + attribute sanitization) as any other element. Passing it straight to
-    /// SanitizeNode only processed its CHILDREN, leaving on*/javascript: attributes on the promoted
-    /// element itself (e.g. &lt;x&gt;&lt;a href="javascript:..."&gt; survived a single pass).
-    /// Disallowed promoted tags are unwrapped recursively, mirroring the main loop.
-    /// </summary>
+
+
+
+
+
+
+
     private static void SanitizePromoted(DomNode node, int depth)
     {
-        if (node is not DomElement el) return; // text nodes need nothing
+        if (node is not DomElement el) return;
         if (depth >= MaxDepth) { el.Remove(); return; }
         var tag = el.LocalName;
         if (DropTags.Contains(tag)) { el.Remove(); return; }
@@ -145,7 +139,7 @@ public static class HtmlSanitizer
             }
             else if (name == "style")
             {
-                
+
                 var v = SanitizeStyle(attr.Value ?? "");
                 if (string.IsNullOrEmpty(v)) el.RemoveAttribute(attr.Name);
                 else el.SetAttribute("style", v);
@@ -153,10 +147,10 @@ public static class HtmlSanitizer
         }
     }
 
-    /// <summary>
-    
-    
-    /// </summary>
+
+
+
+
     private static string SanitizeStyle(string style)
     {
         if (string.IsNullOrWhiteSpace(style)) return "";
@@ -180,7 +174,7 @@ public static class HtmlSanitizer
             {
                 if (val is "left" or "right" or "center" or "justify") kept.Add(prop + ":" + val);
             }
-            
+
         }
         return string.Join(";", kept);
     }
@@ -188,15 +182,21 @@ public static class HtmlSanitizer
     private static bool IsSafeUrl(string url)
     {
         if (string.IsNullOrEmpty(url)) return false;
-        if (url.StartsWith("//")) return false; 
-        if (url.StartsWith('/') || url.StartsWith('#') || url.StartsWith("./") || url.StartsWith("../")) return true;
-        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+
+
+
+
+
+        var normalized = url.Replace('\\', '/');
+        if (normalized.StartsWith("//")) return false;
+        if (normalized.StartsWith('/') || normalized.StartsWith('#') || normalized.StartsWith("./") || normalized.StartsWith("../")) return true;
+        if (normalized.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
-            
-            
+
+
             const string prefix = "data:image/";
-            if (!url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-            var rest = url.Substring(prefix.Length);
+            if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            var rest = normalized.Substring(prefix.Length);
             var end = rest.IndexOfAny(new[] { ';', ',' });
             var mime = end < 0 ? rest : rest.Substring(0, end);
             return mime.Equals("png", StringComparison.OrdinalIgnoreCase)
@@ -205,8 +205,8 @@ public static class HtmlSanitizer
                 || mime.Equals("gif", StringComparison.OrdinalIgnoreCase)
                 || mime.Equals("webp", StringComparison.OrdinalIgnoreCase);
         }
-        var idx = url.IndexOf(':');
+        var idx = normalized.IndexOf(':');
         if (idx < 0) return true;
-        return AllowedSchemes.Contains(url[..idx]);
+        return AllowedSchemes.Contains(normalized[..idx]);
     }
 }

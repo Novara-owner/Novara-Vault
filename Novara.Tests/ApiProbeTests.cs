@@ -3,24 +3,24 @@ using Xunit;
 
 namespace Novara.Tests;
 
-// NA7 (R1): coverage for the post-refactor probe behaviors - URL tail normalization, bare-array
-// success acceptance, expanded vendor matrix, key-prefix hints, and CSV-injection escaping.
+
+
 public class ApiProbeRefactorTests
 {
-    // ---- NormalizeBaseUrl ----
+
 
     [Theory]
     [InlineData("https://api.x.com/v1/chat/completions", "https://api.x.com/v1")]
     [InlineData("https://api.x.com/v1/completions", "https://api.x.com/v1")]
-    [InlineData("https://api.x.com/v1/Chat/Completions", "https://api.x.com/v1")] // case-insensitive
-    [InlineData("https://api.x.com/v1", "https://api.x.com/v1")]                 // no suffix -> untouched
-    [InlineData("https://api.x.com/", "https://api.x.com/")]                     // plain trailing slash untouched here
+    [InlineData("https://api.x.com/v1/Chat/Completions", "https://api.x.com/v1")]
+    [InlineData("https://api.x.com/v1", "https://api.x.com/v1")]
+    [InlineData("https://api.x.com/", "https://api.x.com/")]
     public void NormalizeBaseUrl_StripsKnownCompletionTails(string input, string expected)
     {
         Assert.Equal(expected, ApiProbeService.NormalizeBaseUrl(input));
     }
 
-    // ---- SuggestVendorForKey ----
+
 
     [Theory]
     [InlineData("sk-ant-api03-xxx", "Anthropic")]
@@ -36,20 +36,20 @@ public class ApiProbeRefactorTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("sk-proj-generic-openai-style")] // generic sk- deliberately unmapped
-    [InlineData("sk-antx-not-quite")]            // prefix must match exactly at start
+    [InlineData("sk-proj-generic-openai-style")]
+    [InlineData("sk-antx-not-quite")]
     public void SuggestVendorForKey_UnknownOrMissing_ReturnsNull(string? key)
     {
         Assert.Null(ApiProbeService.SuggestVendorForKey(key));
     }
 
-    // ---- Bare-root-array success acceptance ----
+
 
     [Fact]
     public void IsValidModelsBody_RootArray_IsAccepted()
     {
         Assert.True(ApiProbeService.IsValidModelsBody("""[{"id":"m1"},{"id":"m2"}]""", "data"));
-        Assert.True(ApiProbeService.IsValidModelsBody("[]", "data")); // empty still a valid endpoint
+        Assert.True(ApiProbeService.IsValidModelsBody("[]", "data"));
     }
 
     [Fact]
@@ -63,11 +63,11 @@ public class ApiProbeRefactorTests
     [Fact]
     public void ExtractModels_RootArrayObjectsAndStrings_BothExtracted()
     {
-        var models = ApiProbeService.ExtractModels("""["a-model",{"id":"b-model"}]""", "data"); // N5V-02: direct internal call (was reflection)
+        var models = ApiProbeService.ExtractModels("""["a-model",{"id":"b-model"}]""", "data");
         Assert.Equal(new[] { "a-model", "b-model" }, models);
     }
 
-    // ---- Expanded vendor matrix recognition ----
+
 
     [Theory]
     [InlineData("https://api.mistral.ai/v1", "Mistral")]
@@ -102,7 +102,7 @@ public class ApiProbeRefactorTests
     }
 }
 
-// NC7: OWASP CSV injection guard on the export path.
+
 public class CsvExportEscapeTests
 {
     private static string ExportOne(Novara.Models.MemoEntry entry)

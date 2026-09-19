@@ -1,9 +1,3 @@
-/* ========== ProbeDataSet + Loader (API upgrade Step 4) ==========
-Function: externalize the relay-probe dataset (benchmark questions / poisoning regex) into a local
-JSON file so fingerprints can be updated WITHOUT code changes.
-Freeze constraint: no runtime hot-reload - replace the file then restart the app. Loader validates the
-file and falls back to the built-in default on any parse/validation error (never crash on a bad file).
-*/
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -28,11 +22,11 @@ public sealed class BenchmarkQuestion
 public static class ProbeDataSetLoader
 {
     public const string DefaultFileName = "ProbeDataSet.json";
-    // N3-30: cap poisoning patterns (AnalyzePoisoning matches each serially with a 1s ReDoS guard).
+
     private const int MaxPoisoningPatterns = 64;
 
-    /// <summary>Built-in default dataset - the fallback used when the JSON file is missing or invalid.
-    /// Kept in sync with the shipped ProbeDataSet.json.</summary>
+
+
     public static ProbeDataSet Default() => new()
     {
         Version = 1,
@@ -55,34 +49,34 @@ public static class ProbeDataSetLoader
         },
     };
 
-    /// <summary>Validate a dataset: required sections present + every regex compiles (a bad external
-    /// regex must not crash the app at probe time).</summary>
+
+
     public static bool Validate(ProbeDataSet? ds, out string error)
     {
         error = "";
         if (ds == null) { error = "empty"; return false; }
         if (ds.BenchmarkQuestions == null || ds.BenchmarkQuestions.Count == 0) { error = "no-benchmark-questions"; return false; }
-        
+
         foreach (var q in ds.BenchmarkQuestions)
         {
             if (q == null || string.IsNullOrWhiteSpace(q.Prompt) || string.IsNullOrWhiteSpace(q.Expected))
-            { error = "bad-benchmark-question"; return false; } 
+            { error = "bad-benchmark-question"; return false; }
         }
         var patterns = (ds.PoisoningStrongPatterns ?? new()) .Concat(ds.PoisoningWeakPatterns ?? new());
         foreach (var p in patterns)
         {
-            if (string.IsNullOrWhiteSpace(p)) { error = "bad-pattern-null"; return false; } 
+            if (string.IsNullOrWhiteSpace(p)) { error = "bad-pattern-null"; return false; }
             try { _ = new Regex(p); }
             catch (System.Exception ex) { error = "bad-regex: " + p + " (" + ex.Message + ")"; return false; }
         }
-        // N2-29 (N1-49 follow-up): cap the dataset at 7 questions - each costs ~256 output tokens
-        
-        // blow the budget and SKIP the probe. The shipped default (3) is untouched.
+
+
+
         if (ds.BenchmarkQuestions.Count > 7)
             ds.BenchmarkQuestions = ds.BenchmarkQuestions.Take(7).ToList();
-        // N3-30: cap the poisoning pattern count too - AnalyzePoisoning runs each pattern with a
-        // 1s ReDoS guard SERIALLY, so an unbounded list lets a hostile dataset stall the whole
-        
+
+
+
         if ((ds.PoisoningStrongPatterns?.Count ?? 0) > MaxPoisoningPatterns)
             ds.PoisoningStrongPatterns = ds.PoisoningStrongPatterns!.Take(MaxPoisoningPatterns).ToList();
         if ((ds.PoisoningWeakPatterns?.Count ?? 0) > MaxPoisoningPatterns)
@@ -90,7 +84,7 @@ public static class ProbeDataSetLoader
         return true;
     }
 
-    /// <summary>Parse + validate JSON. Returns null + an error string on any failure (never throws).</summary>
+
     public static bool TryParse(string json, out ProbeDataSet? dataSet, out string error)
     {
         dataSet = null;
@@ -109,9 +103,9 @@ public static class ProbeDataSetLoader
         }
     }
 
-    /// <summary>Load the shipped / externally-replaced ProbeDataSet.json from the app directory
-    /// (restart-to-apply, no runtime hot-reload). Falls back to Default() when the file is missing or
-    /// invalid - never throws, never crashes the probe suite.</summary>
+
+
+
     public static ProbeDataSet LoadFromFile()
     {
         try

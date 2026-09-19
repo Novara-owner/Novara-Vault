@@ -14,7 +14,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Top: back button + search capsule (identical to the memo/path page search box) -->
+
         <Grid Grid.Row="0" Margin="24,20,24,12" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -45,17 +45,17 @@
                              VerticalAlignment="Center"
                              MaxLength="200"
                              Margin="40,0,132,0" />
-                    <!-- cancel (x) button is created in code, exactly like the tab pages -->
+
                 </Grid>
             </Border>
         </Grid>
 
-        <!-- Results -->
+
         <ScrollViewer Grid.Row="1" Padding="24,8,24,24">
             <StackPanel x:Name="ResultPanel" Spacing="10" />
         </ScrollViewer>
 
-        <!-- Blank hint: single line of text only (no icon). No-result hint: icon + text. Same float-in as tab pages. -->
+
         <StackPanel x:Name="EmptyHintPanel"
                     Grid.Row="1"
                     HorizontalAlignment="Center"
@@ -80,7 +80,7 @@
                        Opacity="0.5" Visibility="Collapsed" />
         </StackPanel>
 
-        <!-- FocusSink: steals focus from the back button (no focus border on an invisible 0x0 button), same fix as LockScreenPage -->
+
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
     </Grid>
 </Page>

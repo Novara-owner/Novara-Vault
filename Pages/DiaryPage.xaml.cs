@@ -1,8 +1,3 @@
-/* ========== DiaryPage - Diary Tab ==========
-Function: Diary entry list - pinned-first + modified-time-desc ordering, star/pin incremental updates, entry open/delete
-Corresponding UI: DiaryPage.xaml.cs
-Logic Range: Whole file business logic of this module
-*/
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -32,9 +27,9 @@ public sealed partial class DiaryPage : Page
     private MenuFlyoutItem? _cardExportNoImageItem;
     private DiaryEntry? _currentMenuTarget;
     private bool _hasLoaded;
-    private bool _entrancePlayed; // E4-16: play the entrance animation only once (page instances are cached by MainWindow)
-    private string _currentFilter = "all"; 
-    private CancellationTokenSource? _loadCts; // P0-1: cancel in-flight chunked render on re-refresh
+    private bool _entrancePlayed;
+    private string _currentFilter = "all";
+    private CancellationTokenSource? _loadCts;
 
     private readonly List<DiaryEntry> _diaries;
 
@@ -44,11 +39,12 @@ public sealed partial class DiaryPage : Page
     private readonly Storyboard _deleteConfirmShowStoryboard = new();
     private readonly Storyboard _deleteConfirmHideStoryboard = new();
 
-    
+
     private Border? _dragCard;
     private bool _dragging;
-    private DateTime _dragEndTime;      
-    private Border? _dragEndCard;       
+    private DateTime _dragEndTime;
+    private bool _persistOrderAfterRender;
+    private Border? _dragEndCard;
     private Point _grabOffset;
         private Image? _dragGhost;
         private Border? _dropIndicator;
@@ -62,7 +58,7 @@ public sealed partial class DiaryPage : Page
     public DiaryPage()
     {
         InitializeComponent();
-        Novara.Services.DialogDepth.AttachContainer((Grid)Content); // dialog depth: shadow + chrome veil auto-wiring
+        Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         KeyDown += Page_KeyDown;
 
         _diaries = (App.Store?.Database.DiaryItems ?? new List<DiaryEntry>()).Where(x => !x.IsDeleted).ToList();
@@ -73,17 +69,29 @@ public sealed partial class DiaryPage : Page
 
         Unloaded += (_, _) =>
         {
+
+
+
+            _loadCts?.Cancel();
             _deleteConfirmHideStoryboard.Stop();
             DeleteConfirmOverlay.Visibility = Visibility.Collapsed;
             _currentMenuTarget = null;
-            DialogDepth.VeilClear(); 
-            
-            if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; }
-            _dragging = false; _dragCard = null;
-            if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
-            if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropIndicator = null; }
-            StopAutoScroll();
+            DialogDepth.VeilClear();
+
+            ResetDragState();
         };
+    }
+
+
+
+
+    private void ResetDragState()
+    {
+        if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; }
+        _dragging = false; _dragCard = null;
+        if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
+        if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropIndicator = null; }
+        StopAutoScroll();
     }
 
     private void Page_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -94,37 +102,54 @@ public sealed partial class DiaryPage : Page
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        if (!_hasLoaded) { _hasLoaded = true; RefreshDiaryList(); } // E4-16: entrance animation now fires inside RefreshDiaryList after chunked render completes
+
+
+        if (!_hasLoaded) RefreshDiaryList();
     }
 
-    
+
     public void StealFocus() => FocusSink.Focus(FocusState.Programmatic);
 
     public async void RefreshDiaryList()
     {
-        
+
+
+
+
+
+
+        ResetDragState();
+
+
+
+
+
+
+        _hasLoaded = false;
+
+
         _loadCts?.Cancel();
         var cts = _loadCts = new CancellationTokenSource();
         var token = cts.Token;
 
-        double savedOffset = DiaryScrollViewer.VerticalOffset; 
+        double savedOffset = DiaryScrollViewer.VerticalOffset;
 
         _diaryPinIcons.Clear();
         _diaryStarIcons.Clear();
         DiaryList.Children.Clear();
-        EmptyHint.Visibility = Visibility.Collapsed; // P0-1: hide until chunked render decides the real empty state
+        EmptyHint.Visibility = Visibility.Collapsed;
 
         var diaries = _diaries;
-        if (diaries.Count == 0) { _loadCts = null; UpdateEmptyHint(); return; } 
+        if (diaries.Count == 0) { _loadCts = null; _hasLoaded = true; UpdateEmptyHint(); return; }
 
         var sorted = diaries
             .OrderByDescending(d => d.IsPinned)
-            .ThenByDescending(d => d.IsPinned ? (d.PinnedAt ?? d.ModifiedAt) : DateTime.MinValue) 
-            .ThenBy(d => d.Order <= 0 ? int.MaxValue : d.Order) 
+            .ThenByDescending(d => d.IsPinned ? (d.PinnedAt ?? d.ModifiedAt) : DateTime.MinValue)
+            .ThenBy(d => d.Order <= 0 ? int.MaxValue : d.Order)
             .ThenByDescending(d => d.ModifiedAt)
             .ToList();
 
-        bool playEntrance = !_entrancePlayed; // P0-1: only the first load plays the cascade
+        bool playEntrance = !_entrancePlayed;
         int entIdx = 0;
 
         try
@@ -141,13 +166,35 @@ public sealed partial class DiaryPage : Page
             }, token);
         }
         catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+
+
+
+            System.Diagnostics.Debug.WriteLine($"记录页列表渲染失败（页面将被重建）: {ex}");
+            App.MainWindow?.RetireTabPage(typeof(DiaryPage));
+            return;
+        }
+        finally
+        {
+
+
+
+
+
+
+            cts.Dispose();
+            if (ReferenceEquals(_loadCts, cts)) _loadCts = null;
+        }
 
         if (token.IsCancellationRequested) return;
-        _entrancePlayed = true; // P0-1: cascade already played per-card above
-        _loadCts = null; 
-        SetFilter(_currentFilter); // NH4: rebuilt cards default to Visible - re-apply the active filter so it survives refresh/pin/delete/import
+        _hasLoaded = true;
+        _entrancePlayed = true;
+        if (ReferenceEquals(_loadCts, cts)) _loadCts = null;
+        if (_persistOrderAfterRender) { _persistOrderAfterRender = false; PersistDiaryOrder(); }
+        SetFilter(_currentFilter);
         UpdateEmptyHint();
-        if (savedOffset > 0) DiaryScrollViewer.ChangeView(null, savedOffset, null, true); 
+        if (savedOffset > 0) DiaryScrollViewer.ChangeView(null, savedOffset, null, true);
     }
 
     private Border BuildDiaryCard(DiaryEntry entry, int index)
@@ -168,8 +215,8 @@ public sealed partial class DiaryPage : Page
 
         card.Tapped += (s, _) =>
         {
-            
-            
+
+
             if (ReferenceEquals(s, _dragEndCard) && (DateTime.Now - _dragEndTime).TotalMilliseconds < 300) return;
             App.MainWindow?.NavigateToEditor(entry);
         };
@@ -195,10 +242,11 @@ public sealed partial class DiaryPage : Page
 
         var titleText = new TextBlock
         {
-            Text = entry.Title,
+
+            Text = App.DiaryTitleText(entry.Title),
             FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            CharacterSpacing = App.GetCharacterSpacing(entry.Title, 180),
+            CharacterSpacing = App.GetCharacterSpacing(App.DiaryTitleText(entry.Title), 180),
             Foreground = App.GetBrush("AppTextPrimaryBrush"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
@@ -215,7 +263,7 @@ public sealed partial class DiaryPage : Page
         Grid.SetColumn(iconStack, 1);
         titleRow.Children.Add(iconStack);
 
-        
+
         if (entry.Format == "markdown")
         {
             iconStack.Children.Add(new Viewbox
@@ -312,9 +360,9 @@ public sealed partial class DiaryPage : Page
             baseColor.B);
         card.PointerEntered += (_, _) =>
         {
-            if (_dragging) return; 
-            // E4-12: manual color swap - ColorAnimation on hover is 0xc000027b-sensitive during page
-            // switches (DiaryPage crash 2026-08-10); only the TranslateY lift stays animated.
+            if (_dragging) return;
+
+
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverColor;
             if (card.RenderTransform is TranslateTransform t)
             {
@@ -324,7 +372,7 @@ public sealed partial class DiaryPage : Page
         };
         card.PointerExited += (_, _) =>
         {
-            if (_dragging) return; 
+            if (_dragging) return;
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseColor;
             if (card.RenderTransform is TranslateTransform t)
             {
@@ -334,7 +382,7 @@ public sealed partial class DiaryPage : Page
         };
     }
 
-    
+
 
     private void AttachCardDrag(Border card)
     {
@@ -345,16 +393,16 @@ public sealed partial class DiaryPage : Page
         card.PointerPressed += (s, e) =>
         {
             if (_dragging) return;
-            if (_currentFilter != "all") return; 
-            if (card.Tag is DiaryEntry d && d.IsPinned) return; 
-            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return; 
+            if (_currentFilter != "all") return;
+            if (card.Tag is DiaryEntry d && d.IsPinned) return;
+            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
             grabOffset = pt.Position;
             var pointer = e.Pointer;
             armed = true;
 
-            
+
             var rtb = new RenderTargetBitmap();
             var renderOp = rtb.RenderAsync(card);
 
@@ -362,9 +410,9 @@ public sealed partial class DiaryPage : Page
             timer.Tick += async (_, _) =>
             {
                 timer.Stop(); timer = null;
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 try { await renderOp; } catch { }
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; } 
+                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 BeginDrag(card, grabOffset, rtb);
                 try { card.CapturePointer(pointer); } catch { }
             };
@@ -408,13 +456,13 @@ public sealed partial class DiaryPage : Page
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
-        _dropIndex = _dragOriginIndex = CountVisibleBefore(card); // N2-06: origin in VISIBLE-slot space (same space as ComputeDropIndex)
+        _dropIndex = _dragOriginIndex = CountVisibleBefore(card);
 
-        App.StopCardEntrance(card); 
+        App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
-        card.RenderTransform = new TranslateTransform(); 
+        card.RenderTransform = new TranslateTransform();
 
         try
         {
@@ -455,8 +503,8 @@ public sealed partial class DiaryPage : Page
         foreach (var child in DiaryList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
-            
-            
+
+
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(DiaryList).TransformPoint(new Point(0, 0)).Y;
@@ -469,18 +517,18 @@ public sealed partial class DiaryPage : Page
 
     private void UpdateDropIndicator(int index)
     {
-        
-        
+
+
         int pinnedVisible = 0;
         foreach (var child in DiaryList.Children)
             if (child is Border b && b.Visibility == Visibility.Visible && b.Tag is DiaryEntry d && d.IsPinned)
                 pinnedVisible++;
         index = Math.Max(index, pinnedVisible);
-        
+
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
             if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropIndicator = null; }
-            _dropIndex = _dragOriginIndex; 
+            _dropIndex = _dragOriginIndex;
             return;
         }
         if (_dropIndicator != null) DiaryList.Children.Remove(_dropIndicator);
@@ -549,8 +597,8 @@ public sealed partial class DiaryPage : Page
         var card = _dragCard;
         _dragCard = null;
         _dragging = false;
-        _dragEndTime = DateTime.Now; 
-        _dragEndCard = card; 
+        _dragEndTime = DateTime.Now;
+        _dragEndCard = card;
 
         int dropIndex = _dropIndex;
 
@@ -562,20 +610,30 @@ public sealed partial class DiaryPage : Page
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
 
-        // N2-06: dropIndex is in "slot space including the dragged card" (ComputeDropIndex counts it);
-        // convert to the without-self space, then translate back to a physical Children index.
-        int curVisible = CountVisibleBefore(card); // current visible slot, excluding the card itself
+
+
+
+        if (!ReferenceEquals(card.Parent, DiaryList)) return;
+
+
+
+        int curVisible = CountVisibleBefore(card);
         int dst = dropIndex > curVisible ? dropIndex - 1 : dropIndex;
         if (dst != curVisible)
         {
             DiaryList.Children.Remove(card);
             DiaryList.Children.Insert(PhysicalIndexForVisibleSlot(dst), card);
-        }
 
-        PersistDiaryOrder();
+
+
+
+
+
+            PersistDiaryOrder();
+        }
     }
 
-    /// <summary>N2-06: number of Visible cards strictly before <paramref name="card"/> (its visible slot).</summary>
+
     private int CountVisibleBefore(Border card)
     {
         int n = 0;
@@ -587,8 +645,8 @@ public sealed partial class DiaryPage : Page
         return n;
     }
 
-    /// <summary>N2-06: physical Children index where a card must land to become the
-    /// <paramref name="visibleSlot"/>-th visible card (past the end when the slot exceeds them).</summary>
+
+
     private int PhysicalIndexForVisibleSlot(int visibleSlot)
     {
         int seen = 0;
@@ -603,11 +661,16 @@ public sealed partial class DiaryPage : Page
         return DiaryList.Children.Count;
     }
 
-    
-    
-    
+
+
+
     private void PersistDiaryOrder()
     {
+
+
+
+
+        if (_loadCts != null) { _persistOrderAfterRender = true; return; }
         int order = 0;
         foreach (var child in DiaryList.Children)
             if (child is Border b && b.Visibility == Visibility.Visible && b.Tag is DiaryEntry d && !d.IsPinned)
@@ -623,8 +686,8 @@ public sealed partial class DiaryPage : Page
         foreach (var child in DiaryList.Children)
         {
             if (child is not Microsoft.UI.Xaml.Controls.Border card || card.Tag is not Models.DiaryEntry entry || entry.Id != id) continue;
-            // N4D-05: the card may be hidden by the diary/document filter - flashing an invisible card
-            // reported success while the user saw nothing. Reset to "mixed" first so the target shows.
+
+
             if (card.Visibility != Visibility.Visible && _currentFilter != "all") SetFilter("all");
             try
             {
@@ -654,7 +717,7 @@ public sealed partial class DiaryPage : Page
         FloatInHint();
     }
 
-    
+
     public string GetFilter() => _currentFilter;
     public void SetFilter(string filter)
     {
@@ -662,7 +725,7 @@ public sealed partial class DiaryPage : Page
         ApplyCardFilters();
     }
 
-    
+
     public void ApplyCardFilters()
     {
         string wsId = App.CurrentWorkspaceId;
@@ -697,23 +760,23 @@ public sealed partial class DiaryPage : Page
         sb.Begin();
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private MenuFlyout BuildEmptyAreaMenu()
     {
         var menu = new MenuFlyout();
         menu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
 
-        
+
         var newDocItem = new MenuFlyoutItem
         {
             Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
             Text = App.GetString("Diary_New_Document"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.Document), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        newDocItem.Click += (_, _) => App.MainWindow?.NavigateToEditor(null, "markdown"); 
+        newDocItem.Click += (_, _) => App.MainWindow?.NavigateToEditor(null, "markdown");
         menu.Items.Add(newDocItem);
 
         var newDiaryItem = new MenuFlyoutItem
@@ -731,13 +794,13 @@ public sealed partial class DiaryPage : Page
             Text = App.GetString("Diary_Import_Document"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.Import), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        importDocItem.Click += (_, _) => _ = ImportDocument(); 
+        importDocItem.Click += (_, _) => _ = ImportDocument();
         menu.Items.Add(importDocItem);
 
         return menu;
     }
 
-    
+
     private async System.Threading.Tasks.Task ImportDocument()
     {
         try
@@ -754,41 +817,42 @@ public sealed partial class DiaryPage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导入 Markdown 失败: {ex.Message}");
-            App.ShowToast(App.GetString("Diary_Import_Fail")); // NH11: surface the failure to the user
+            App.ShowToast(App.GetString("Diary_Import_Fail"));
         }
     }
 
-    /// <summary>Shared import core for both the in-app picker and the system .md right-click menu
-    /// ("Import Novara"): read the raw text, store it untouched, filename (sans extension) as title.
-    /// Empty files are rejected silently, matching NH11.</summary>
+
+
+
     public async System.Threading.Tasks.Task ImportDocumentFromPath(string filePath)
     {
         try
         {
             var ext = Path.GetExtension(filePath);
             if (!string.Equals(ext, ".md", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(ext, ".markdown", StringComparison.OrdinalIgnoreCase)) return; // whitelist
+                !string.Equals(ext, ".markdown", StringComparison.OrdinalIgnoreCase)) return;
 
-            if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge")); return; } 
-            
-            
+            if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge")); return; }
+
+
             string content;
             try
             {
                 var bytes = await File.ReadAllBytesAsync(filePath);
                 content = new System.Text.UTF8Encoding(false, true).GetString(bytes);
-                if (content.Length > 0 && content[0] == '\uFEFF') content = content.Substring(1); 
+                if (content.Length > 0 && content[0] == '\uFEFF') content = content.Substring(1);
             }
             catch (System.Text.DecoderFallbackException)
             {
                 App.ShowToast(App.GetString("Diary_Import_Fail"));
                 return;
             }
-            // NH11: empty file -> nothing to create (matches the editor's empty-doc rule)
+
             if (string.IsNullOrWhiteSpace(content)) return;
-            var title = Path.GetFileNameWithoutExtension(filePath);
-            if (string.IsNullOrWhiteSpace(title)) title = App.GetString("DiaryEditor_Untitled");
-            // NH11+N2H-4: enforce the 120 non-whitespace-char title cap, matching the editor's count
+
+
+            var title = Path.GetFileNameWithoutExtension(filePath).Trim();
+
             title = DiaryEditorPage.EnforceTitleLength(title);
 
             UpsertDiary(new DiaryEntry { Title = title, Content = content, Format = "markdown", WorkspaceId = App.CurrentWorkspaceId });
@@ -796,11 +860,11 @@ public sealed partial class DiaryPage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导入 Markdown 失败: {ex.Message}");
-            App.ShowToast(App.GetString("Diary_Import_Fail")); // NH11: surface the failure to the user
+            App.ShowToast(App.GetString("Diary_Import_Fail"));
         }
     }
 
-    // Bug 21c: menu is built once; refresh pin/star item text+icon per right-click target
+
     private void UpdatePinStarMenuItems(DiaryEntry entry)
     {
         if (_cardPinItem != null)
@@ -814,7 +878,7 @@ public sealed partial class DiaryPage : Page
             if (_cardStarItem.Icon is PathIcon s) s.Data = App.CreateGeometry(entry.IsStarred ? IconData.Unstar : IconData.Star);
         }
 
-        
+
         bool isDoc = entry.Format == "markdown";
         if (_cardExportItem != null)
             _cardExportItem.Text = isDoc ? App.GetString("Diary_Export") : App.GetString("Menu_ExportMd");
@@ -902,24 +966,24 @@ public sealed partial class DiaryPage : Page
         return menu;
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     public void UpsertDiary(DiaryEntry entry)
     {
-        // D22: look up in the FULL db list, not the filtered _diaries - if the diary was trashed
-        // while its editor stayed open, it is missing from _diaries but still in the db; the old
-        // code fell into the else branch and saved a SECOND copy with a fresh Id.
+
+
+
         var all = App.Store?.Database.DiaryItems;
         var existing = all?.Find(d => d.Id == entry.Id);
         if (existing != null)
         {
             existing.Title = entry.Title;
             existing.Content = entry.Content;
-            existing.Format = entry.Format; // NH12: keep the field authoritative even though format is immutable today (future conversion must not silently drop it)
+            existing.Format = entry.Format;
             existing.ModifiedAt = entry.ModifiedAt;
-            if (existing.IsDeleted) // saving resurrects the trashed diary as its single clean copy
+            if (existing.IsDeleted)
             {
                 existing.IsDeleted = false;
                 existing.DeletedAt = default;
@@ -929,19 +993,19 @@ public sealed partial class DiaryPage : Page
         else
         {
             entry.Id = Guid.NewGuid().ToString(); entry.CreatedAt = DateTime.Now; entry.ModifiedAt = DateTime.Now;
-            
-            
-            
+
+
+
             var wsId = App.CurrentWorkspaceId;
             bool inView(DiaryEntry d) => string.IsNullOrEmpty(wsId) || d.WorkspaceId == wsId;
             if (all != null && all.Any(d => !d.IsDeleted && inView(d) && d.Order > 0))
             {
-                
-                
+
+
                 foreach (var d in all) if (!d.IsDeleted && !d.IsPinned && inView(d) && d.Order > 0) d.Order++;
                 entry.Order = 1;
             }
-            App.Store?.Database.DiaryItems.Add(entry); _diaries.Add(entry); // E1-01: new diary MUST land in the db (else it vanishes on restart)
+            App.Store?.Database.DiaryItems.Add(entry); _diaries.Add(entry);
         }
         App.Store?.SaveAsync();
         RefreshDiaryList();
@@ -951,10 +1015,10 @@ public sealed partial class DiaryPage : Page
     {
         if (!entry.IsPinned)
         {
-            
+
             foreach (var d in _diaries)
             {
-                
+
                 if (d != entry && d.IsPinned && d.Format == entry.Format && d.WorkspaceId == entry.WorkspaceId)
                 {
                     d.IsPinned = false;
@@ -974,11 +1038,11 @@ public sealed partial class DiaryPage : Page
         App.Store?.SaveAsync();
         if (_diaryPinIcons.TryGetValue(entry, out var pv))
             pv.Visibility = entry.IsPinned ? Visibility.Visible : Visibility.Collapsed;
-        
+
         if (entry.IsPinned)
         {
-            
-            
+
+
             if (_loadCts != null) RefreshDiaryList();
             else ReorderDiaryCards();
         }
@@ -1009,18 +1073,19 @@ public sealed partial class DiaryPage : Page
 
     private void DeleteDiary(DiaryEntry entry)
     {
-        // Smooth removal: fade the target card out while lower cards slide up to fill the gap, then
-        // drop it from data and rebuild. Find the card via its Tag (entries map 1:1 to cards).
+
+
         Microsoft.UI.Xaml.Controls.Border? card = null;
         foreach (var child in DiaryList.Children)
             if (child is Microsoft.UI.Xaml.Controls.Border b && ReferenceEquals(b.Tag, entry)) { card = b; break; }
 
         if (card == null || card.Parent != DiaryList)
         {
-            // Fallback: nothing to animate, remove directly.
+
             _diaries.Remove(entry);
             entry.IsDeleted = true;
             entry.DeletedAt = DateTime.Now;
+            entry.IsPinned = false; entry.PinnedAt = null; entry.IsStarred = false;
             App.Store?.SaveAsync();
             _diaryPinIcons.Remove(entry);
             _diaryStarIcons.Remove(entry);
@@ -1035,6 +1100,7 @@ public sealed partial class DiaryPage : Page
             _diaries.Remove(entry);
             entry.IsDeleted = true;
             entry.DeletedAt = DateTime.Now;
+            entry.IsPinned = false; entry.PinnedAt = null; entry.IsStarred = false;
             App.Store?.SaveAsync();
             _diaryPinIcons.Remove(entry);
             _diaryStarIcons.Remove(entry);
@@ -1044,12 +1110,12 @@ public sealed partial class DiaryPage : Page
         });
     }
 
-    /* ========== Diary Export as Markdown ==========
-    Function: 4.0 #10 - right-click a diary card and export it as a single .md file (title + HTML body
-    converted to Markdown). Images stay inline as base64 data URIs so the file is self-contained.
-    Corresponding UI: DiaryPage card context menu "Menu_ExportMd"
-    Logic Range: below
-    */
+
+
+
+
+
+
     private async System.Threading.Tasks.Task ExportDiaryAsMarkdown(DiaryEntry entry, bool removeImages)
     {
         try
@@ -1064,9 +1130,9 @@ public sealed partial class DiaryPage : Page
 
             string md;
             if (entry.Format == "markdown")
-                md = entry.Content; 
+                md = entry.Content;
             else
-                md = HtmlToMarkdown(entry.Title, entry.Content, removeImages);
+                md = HtmlToMarkdown(App.DiaryTitleText(entry.Title), entry.Content, removeImages);
             File.WriteAllText(file.Path, md, new UTF8Encoding(false));
             App.ShowToast(App.GetString("Common_Toast_Exported"));
         }
@@ -1091,23 +1157,23 @@ public sealed partial class DiaryPage : Page
 
         if (string.IsNullOrWhiteSpace(html)) return sb.ToString();
 
-        // N5D-09: strip REAL tags while the text is still encoded, THEN decode. Decoding first turned
-        
-        // silently losing plain words from the exported markdown.
+
+
+
         var t = html;
 
-        // Images: preserve the base64 data URI (self-contained markdown), or drop entirely
-        // (removeImages) - no placeholder, so the text stays clean.
+
+
         t = Regex.Replace(t, @"<img[^>]*src=[""']([^""']+)[""'][^>]*/?>",
             removeImages ? "" : "![]($1)", RegexOptions.IgnoreCase);
 
-        // Inline formatting
+
         t = Regex.Replace(t, @"</?(?:b|strong)>", "**", RegexOptions.IgnoreCase);
         t = Regex.Replace(t, @"</?(?:i|em)>", "*", RegexOptions.IgnoreCase);
-        // u / font / span / p / div: no markdown equivalent - strip the tag, keep the content
+
         t = Regex.Replace(t, @"</?(?:u|font|span|p|div)[^>]*>", "", RegexOptions.IgnoreCase);
 
-        // Lists
+
         t = Regex.Replace(t, @"<ul[^>]*>", "\n", RegexOptions.IgnoreCase);
         t = Regex.Replace(t, @"</ul>", "\n", RegexOptions.IgnoreCase);
         t = Regex.Replace(t, @"<ol[^>]*>", "\n", RegexOptions.IgnoreCase);
@@ -1115,30 +1181,30 @@ public sealed partial class DiaryPage : Page
         t = Regex.Replace(t, @"<li[^>]*>", "- ", RegexOptions.IgnoreCase);
         t = Regex.Replace(t, @"</li>", "\n", RegexOptions.IgnoreCase);
 
-        // Line breaks
+
         t = Regex.Replace(t, @"<br\s*/?>", "\n", RegexOptions.IgnoreCase);
 
-        // Any remaining tag -> strip
+
         t = Regex.Replace(t, @"<[^>]+>", "");
 
-        // N5D-09: decode LAST - entities the user typed as visible text ("&lt;div&gt;") survive the
-        // tag stripper (they are not real tags while encoded) and only become literal text here.
+
+
         t = System.Net.WebUtility.HtmlDecode(t);
 
-        // Collapse 3+ newlines
+
         t = Regex.Replace(t, @"\n{3,}", "\n\n");
 
         sb.Append(t.Trim());
         return sb.ToString();
     }
 
-    // ================================================================
 
-    // ================================================================
+
+
 
     private void InitDeleteConfirmAnimations()
     {
-        // Show animation
+
         var scrimFadeIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
         Storyboard.SetTarget(scrimFadeIn, DeleteConfirmScrim);
         Storyboard.SetTargetProperty(scrimFadeIn, "Opacity");
@@ -1164,7 +1230,7 @@ public sealed partial class DiaryPage : Page
         Storyboard.SetTargetProperty(slideUp, "TranslateY");
         _deleteConfirmShowStoryboard.Children.Add(slideUp);
 
-        // Hide animation
+
         var scrimFadeOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(scrimFadeOut, DeleteConfirmScrim);
         Storyboard.SetTargetProperty(scrimFadeOut, "Opacity");
@@ -1202,14 +1268,14 @@ public sealed partial class DiaryPage : Page
         DeleteConfirmDialog.Opacity = 0;
         DeleteConfirmScrim.Opacity = 0;
         DeleteConfirmOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow(); 
+        DialogDepth.VeilShow();
         _deleteConfirmShowStoryboard.Stop();
         _deleteConfirmShowStoryboard.Begin();
     }
 
     private void CloseDeleteConfirmDialog()
     {
-        DialogDepth.VeilHide(); 
+        DialogDepth.VeilHide();
         _deleteConfirmHideStoryboard.Begin();
         _currentMenuTarget = null;
     }
@@ -1233,7 +1299,7 @@ public sealed partial class DiaryPage : Page
 
     private void RootGrid_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
-        // N5D-06: keyboard Menu / Shift+F10 carries no position - fall back like the card menu does.
+
         if (!args.TryGetPosition(RootGrid, out var point)) point = new Windows.Foundation.Point(0, 0);
         _emptyAreaMenu.ShowAt(RootGrid, point);
     }
