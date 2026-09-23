@@ -6,6 +6,26 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.0] - Unreleased
+
+> 9.0 is the deployment release. The self-hosted server gains an official container image, a one-command compose stack with automatic HTTPS, and an operations CLI — while the data format, the cryptography and the wire contract do not move by a single byte. The server still never sees plaintext.
+
+### Added
+
+- **Official container image** — `ghcr.io/novara-owner/novara-sync` (mirrored on Docker Hub): multi-stage build, runs as a non-root user, `HEALTHCHECK` on `/healthz`, and a startup self-check that probes the data root with a real write — an unwritable directory exits immediately with actionable `chown` guidance instead of failing per request. The image and the bare binary are verified to behave identically. amd64 (x86-64).
+- **Compose + Caddy, one command** — `deploy/compose/` brings up the sync server and an automatic-HTTPS reverse proxy together, with a first-run flow of three steps: create a space, start the stack, pair a device. The Caddyfile is parameterized so bare-metal and compose users share one file; plain HTTP and self-signed TLS are documented fallbacks.
+- **Space administration CLI** — `NovaraSync space create|list|show|delete|rotate-secret`: `--json` on every command, exit codes 0 (success) / 1 (business failure) / 2 (command-line error), fully non-interactive. Deletion is a local CLI operation by design — the server API exposes no delete endpoint, by contract.
+- **Per-release verification attachments** — `SHA256SUMS` for the installer, `IMAGES.txt` pinning the image digests, and an SBOM (SPDX, Syft-generated); how to use them is documented in [docs/VERIFYING.md](docs/VERIFYING.md).
+
+### Changed
+
+- **Server components move to .NET 10 LTS** (`Novara.Server`, `Novara.Sync.Server`) while the desktop app and the shared `Novara.Core` stay on .NET 8. No storage-format, schema or contract change of any kind.
+- **Help center** — the documentation moved to [novara.xin/help/](https://novara.xin/help/) (36 pages: getting started, features, security, sync, self-hosting, reference). The app's help links and the installer's post-install checkbox now point there; the retired single-file deployment guide is superseded by `deploy/README.md`, `deploy/compose/README.md` and the help center.
+
+### Fixed
+
+- The container health check keeps working when a host allowlist is configured (the probe now sends a `Host` header instead of being rejected by the server's own host filter), and the compose network pins Caddy to the upper half of the subnet so dynamic address allocation cannot collide with it.
+
 ## [8.0.0] - 2026-09-19
 
 > 8.0 completes the second step of the connected era: Novara stops being a set of one-way snapshots and becomes genuinely cross-device. Sync runs through a server **you** host — bundled with the installer, startable with a double-click — and that server still never sees your data. The red lines did not move: the server never sees plaintext, there is no official cloud, and offline never degrades.

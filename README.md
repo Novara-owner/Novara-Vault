@@ -3,6 +3,10 @@
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Novara-owner/Novara-Vault"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/Novara-owner/Novara-Vault/badge"></a>
+</p>
+
+<p align="center">
   <img src="images/English-WelcomePage.png" alt="Novara welcome page" width="720" />
 </p>
 
@@ -15,6 +19,17 @@ Not a password manager. Not a notes app. A data control layer for the AI era —
 Today that layer takes the shape of memos (with built-in API-key connectivity testing), file paths, to-dos, sticky notes, and rich-text records, in one fast, native application that works fully offline. Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters.
 
 ---
+
+## 9.0 — Self-Hosting, One Command Away
+
+9.0 is the deployment release: the server you could already run on Windows now ships the way servers actually reach people. One `docker compose up -d` brings up the sync server with automatic HTTPS on hardware you already own. Nothing about the data changes — the server still only ever handles ciphertext, and the red lines did not move.
+
+- **Official container image** — `ghcr.io/novara-owner/novara-sync` (mirrored on Docker Hub): multi-stage build, runs as non-root, health-checked, and it refuses to start on an unwritable data directory instead of failing per request. Each release pins the image digest in an `IMAGES.txt` attachment.
+- **Compose + Caddy, one command** — `deploy/compose/` brings up the sync server and an automatic-HTTPS reverse proxy together; no domain? Plain HTTP and a self-signed fallback are one line away.
+- **An operations CLI that answers back** — `NovaraSync space create|list|show|delete|rotate-secret`, JSON output everywhere, deterministic exit codes, no interactive prompts — scriptable into NAS schedulers and cron.
+- **A real help center** — [novara.xin/help/](https://novara.xin/help/) (36 pages) covers first steps, self-hosting on Synology / QNAP / Ubuntu / Windows, and the security boundary; the app's help buttons now point there.
+- **Server runtime on .NET 10 LTS** — the exposed-to-the-world server components move up while the desktop app stays on .NET 8. Same contract, same container format, zero migration.
+- **Verify what you run** — each release ships `SHA256SUMS` for the installer, `IMAGES.txt` for the image, and an SBOM; see [docs/VERIFYING.md](docs/VERIFYING.md).
 
 ## 8.0 — Sync, on a Server You Own
 
