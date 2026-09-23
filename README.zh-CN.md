@@ -3,6 +3,10 @@
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Novara-owner/Novara-Vault"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/Novara-owner/Novara-Vault/badge"></a>
+</p>
+
+<p align="center">
   <img src="images/Chinese-WelcomePage.png" alt="Novara 欢迎页" width="720" />
 </p>
 
@@ -15,6 +19,17 @@ Novara 是一个**本地优先的个人数据控制层——为你，也为你�
 今天，这层数据控制以备忘（内置 API Key 连通检测）、路径备份、待办、桌面便签与富文本记录的形态工作，全部装在一个快速、原生、完全离线可用的应用里。数据保存在 `%LocalAppData%\Novara\` 下的便携单文件数据库中，可选 **AES-256-GCM 认证加密**保护，密码最长 64 位。
 
 ---
+
+## 9.0 — 自托管，一条命令的事
+
+9.0 是部署与分发版本：原本就能在 Windows 上跑起来的服务端，现在以服务器真正到达人们手里的方式交付。一条 `docker compose up -d` 就能在你已有的机器上把同步服务端连同自动 HTTPS 一起拉起来。数据层面什么都没变——服务器依旧只经手密文，红线没有移动。
+
+- **官方容器镜像** —— `ghcr.io/novara-owner/novara-sync`（Docker Hub 同步镜像）：多阶段构建、非 root 运行、带健康检查；数据目录不可写时直接拒绝启动并给出修复指引，而不是每个请求各自失败。每个版本都会在 `IMAGES.txt` 附件中钉住镜像 digest。
+- **Compose + Caddy，一条命令** —— `deploy/compose/` 把同步服务端与自动 HTTPS 反代一起拉起；没有域名？明文 HTTP 与自签回退都只差一行配置。
+- **有问必答的运维命令行** —— `NovaraSync space create|list|show|delete|rotate-secret`，全命令支持 `--json`、退出码确定、全程无交互提问——可以直接写进 NAS 计划任务与 cron。
+- **真正的帮助中心** —— [novara.xin/help/](https://novara.xin/help/)（36 页）覆盖上手、群晖 / 威联通 / Ubuntu / Windows 自托管与安全边界；程序内的「部署帮助」按钮现在指向这里。
+- **服务端运行时升级到 .NET 10 LTS** —— 暴露在公网上的服务端组件先行升级，桌面端保持 .NET 8。契约不变、容器格式不变、零迁移。
+- **校验你运行的东西** —— 每个版本附带安装包的 `SHA256SUMS`、镜像的 `IMAGES.txt` 与 SBOM；见 [docs/VERIFYING.zh-CN.md](docs/VERIFYING.zh-CN.md)。
 
 ## 8.0 — 同步，跑在你自己的服务器上
 

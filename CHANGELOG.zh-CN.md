@@ -6,6 +6,26 @@ Novara 的所有重要变更均记录于此。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [9.0.0] - 未发布
+
+> 9.0 是部署与分发版本。自托管服务端迎来官方容器镜像、一条命令的 compose 套件与自动 HTTPS，外加一套运维命令行——而数据格式、密码学与线上契约一个字节都没有动。服务器依旧看不到明文。
+
+### 新增
+
+- **官方容器镜像** —— `ghcr.io/novara-owner/novara-sync`（Docker Hub 同步镜像）：多阶段构建、以非 root 用户运行、`HEALTHCHECK` 打 `/healthz`，并带启动自检——用一次真实写探针检查数据根目录，目录不可写就立即退出并给出可执行的 `chown` 指引，而不是让每个请求各自失败。镜像与裸二进制经实测行为一致。amd64（x86-64）。
+- **Compose + Caddy，一条命令** —— `deploy/compose/` 把同步服务端与自动 HTTPS 反代一起拉起，首跑三步：建空间、起套件、配对设备。Caddyfile 已参数化，裸机与 compose 用户共用同一份文件；明文 HTTP 与自签 TLS 都有文档化的回退路径。
+- **空间管理命令行** —— `NovaraSync space create|list|show|delete|rotate-secret`：每条命令都支持 `--json`，退出码 0（成功）/ 1（业务失败）/ 2（命令行错误），全程无交互提问。删除按设计是纯本地 CLI 操作——服务端 API 按契约不设删除端点。
+- **逐版本核验附件** —— 安装包的 `SHA256SUMS`、钉住镜像 digest 的 `IMAGES.txt`、以及 SBOM（SPDX，Syft 生成）；用法见 [docs/VERIFYING.zh-CN.md](docs/VERIFYING.zh-CN.md)。
+
+### 变更
+
+- **服务端组件升级到 .NET 10 LTS**（`Novara.Server`、`Novara.Sync.Server`），桌面端与共享层 `Novara.Core` 保持 .NET 8。存储格式、schema、契约零变更。
+- **帮助中心** —— 文档迁移至 [novara.xin/help/](https://novara.xin/help/)（36 页：上手、功能、安全、同步、自托管、参考）。程序内的帮助链接与安装器的安装完成勾选项现在都指向这里；退役的单文件部署指南由 `deploy/README.md`、`deploy/compose/README.md` 与帮助中心承接。
+
+### 修复
+
+- 配置了 Host 允许名单后容器健康检查不再被服务端自己的 Host 过滤拒掉（探针现在会带上 `Host` 头）；compose 网络把 Caddy 钉在网段上半区，动态地址分配不会再与它冲突。
+
 ## [8.0.0] - 2026-09-19
 
 > 8.0 补上了互联时代的第二步：Novara 不再只是一组单向快照，而是真正的跨设备。同步经由一台**你自己**托管的服务器完成——它随安装包一并交付、双击即可启动——而服务器依旧看不到你的数据。红线没有移动：服务器零明文、无官方云、离线能力永不倒退。
