@@ -1107,6 +1107,9 @@ public static class SyncService
 
 
 
+
+
+
             SyncAuditLog.WriteOrdered(outcome.Status switch
             {
                 SyncRoundStatus.Pull => Audit(state, SyncAuditEvents.TakeRemote, outcome.RemoteVersion),
@@ -1255,6 +1258,12 @@ public static class SyncService
         {
             SanitizePulledDiaryHtml();
             if (remindersBefore is not null) ResyncReminders(remindersBefore);
+
+
+
+
+            if (App.Store is { } pulledStore)
+                PaperTheme.SyncHintWith(pulledStore.Database.AppSettings.Theme);
         }
 
 

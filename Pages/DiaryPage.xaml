@@ -21,7 +21,7 @@
                    FontSize="13"
                    FontWeight="Light"
                    Foreground="{ThemeResource AppTextTertiaryBrush}"
-                   Opacity="0.6"
+                   Opacity="1"
                    TextWrapping="NoWrap"
                    MaxWidth="600"
                    Visibility="Visible" />

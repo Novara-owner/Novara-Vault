@@ -1,5 +1,5 @@
 #define MyAppName "Novara"
-#define MyAppVersion "8.0.0"
+#define MyAppVersion "9.0.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 
@@ -80,13 +80,22 @@ Source: "{#PublishDir}\NovaraMCP.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 
 
+
+
+
+
 Source: "{#PublishDir}\Sync\*"; DestDir: "{app}\Sync"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "Sync\1-建空间.cmd"; DestDir: "{app}\Sync"; Flags: ignoreversion
 Source: "Sync\2-启动服务端.cmd"; DestDir: "{app}\Sync"; Flags: ignoreversion
+Source: "Sync\3-查看空间.cmd"; DestDir: "{app}\Sync"; Flags: ignoreversion
 
 [Run]
 
-Filename: "https://novara.xin"; Description: "查看 Novara 使用教程"; Flags: postinstall nowait skipifsilent shellexec
+
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait
+
+
+Filename: "https://novara.xin/help/"; Description: "查看 Novara 使用教程"; Flags: postinstall nowait skipifsilent shellexec
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

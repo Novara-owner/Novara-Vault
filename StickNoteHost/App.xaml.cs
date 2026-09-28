@@ -262,7 +262,7 @@ public partial class App : Application
                 {
                     if (NoteWindows.TryGetValue(n.Id, out var w))
                     {
-                        w.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
+                        w.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items, n.Color, n.W, n.H);
                         w.ApplyTheme(theme);
                         Log($"SyncNotes: 更新便签窗口 id={n.Id}");
                     }
@@ -276,7 +276,7 @@ public partial class App : Application
                         foreach (var existing in App.NoteWindows.Values)
                             if (existing.IsReminder) reminderIdx = Math.Max(reminderIdx, existing.PositionIndex + 1);
                         var nw = new StickyNoteWindow(theme, n.Kind == "reminder", n.DueTime) { NoteId = n.Id, PositionIndex = n.Kind == "reminder" ? reminderIdx : idx };
-                        nw.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items);
+                        nw.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items, n.Color, n.W, n.H);
                         nw.Activate();
                         nw.HideFromTaskbar();
                         nw.Closed += (_, _) => Log($"便签 {n.Id} Closed");
@@ -401,6 +401,47 @@ public partial class App : Application
         }
     }
 
+
+
+    public static bool UpdateNoteColor(string id, string? color)
+    {
+        try
+        {
+            using (StickiesLock.Enter())
+            {
+                var data = Load();
+                if (data == null) return false;
+                var note = data.Notes.FirstOrDefault(n => n.Id == id);
+                if (note == null) return false;
+                note.Color = string.IsNullOrEmpty(color) ? null : color;
+                _skipNextSync = true;
+                if (!Save(data)) { _skipNextSync = false; Log("UpdateNoteColor: Save 失败，复位 echo 守卫"); return false; }
+                return true;
+            }
+        }
+        catch (Exception ex) { _skipNextSync = false; Log($"UpdateNoteColor 失败: {ex.Message}"); return false; }
+    }
+
+
+    public static bool UpdateNoteSize(string id, int w, int h)
+    {
+        try
+        {
+            using (StickiesLock.Enter())
+            {
+                var data = Load();
+                if (data == null) return false;
+                var note = data.Notes.FirstOrDefault(n => n.Id == id);
+                if (note == null) return false;
+                note.W = w; note.H = h;
+                _skipNextSync = true;
+                if (!Save(data)) { _skipNextSync = false; Log("UpdateNoteSize: Save 失败，复位 echo 守卫"); return false; }
+                return true;
+            }
+        }
+        catch (Exception ex) { _skipNextSync = false; Log($"UpdateNoteSize 失败: {ex.Message}"); return false; }
+    }
+
     public static void Log(string msg)
     {
         try
@@ -483,6 +524,13 @@ public class StickyNote
 
 
     public List<StickyTodoItem>? Items { get; set; }
+
+
+
+    public string? Color { get; set; }
+
+    public int? W { get; set; }
+    public int? H { get; set; }
 }
 
 

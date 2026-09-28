@@ -13,6 +13,17 @@ var options = new SyncServerOptions
 
 
 
+
+
+
+if (SyncHostSetup.ValidateDataRoot(options.StorageRoot) is string dataProblem)
+{
+    Console.Error.WriteLine($"NovaraSync: refusing to start - {dataProblem}.");
+    return 1;
+}
+
+
+
 var storeKind = (Environment.GetEnvironmentVariable("NOVARA_SYNC_STORE") ?? "sqlite").Trim().ToLowerInvariant();
 ISpaceStore store = storeKind is "file" or "json"
     ? new FileSpaceStore(options.StorageRoot)

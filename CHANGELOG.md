@@ -6,7 +6,7 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [9.0.0] - Unreleased
+## [9.0.0] - 2026-09-28
 
 > 9.0 is the deployment release. The self-hosted server gains an official container image, a one-command compose stack with automatic HTTPS, and an operations CLI — while the data format, the cryptography and the wire contract do not move by a single byte. The server still never sees plaintext.
 
@@ -16,9 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Compose + Caddy, one command** — `deploy/compose/` brings up the sync server and an automatic-HTTPS reverse proxy together, with a first-run flow of three steps: create a space, start the stack, pair a device. The Caddyfile is parameterized so bare-metal and compose users share one file; plain HTTP and self-signed TLS are documented fallbacks.
 - **Space administration CLI** — `NovaraSync space create|list|show|delete|rotate-secret`: `--json` on every command, exit codes 0 (success) / 1 (business failure) / 2 (command-line error), fully non-interactive. Deletion is a local CLI operation by design — the server API exposes no delete endpoint, by contract.
 - **Per-release verification attachments** — `SHA256SUMS` for the installer, `IMAGES.txt` pinning the image digests, and an SBOM (SPDX, Syft-generated); how to use them is documented in [docs/VERIFYING.md](docs/VERIFYING.md).
+- **Export as image** — a diary entry or the whole memo collection as crisp PNG long-images in two widths (820px desktop, 420px mobile), rendered off-screen and sliced automatically for very long content; sensitive exports are gated behind the privacy lock and a plain-text warning.
+- **Paper themes** — four reading-friendly paper palettes (Cream / Almond / Kraft / Cold Grey) that recolor the app, the editors and the desktop sticky notes, with softened brand accents; every hard-coded brand blue in the UI now follows one source.
+- **Animation toggle** — one switch turns motion off app-wide (card entrances, page transitions, hover lifts) for accessibility and low-end hardware; dialogs, press feedback and the collapse animations keep their feedback role.
+- **Check for updates** — a click in Settings fetches a static manifest, downloads the installer with a progress bar, verifies its SHA-256 and hands off to a silent install. No background polling, and every request shows up in the network activity panel.
+- **Desktop sticky notes, rebuilt** — frameless pure-color cards with system rounded corners, a 20-color self-contained palette, per-note color and size persistence, and context menus that follow the main app.
+- **Edge menu** — the hamburger handle moves to the screen edge as a two-stage slide-out panel; the docking side is configurable in Settings.
 
 ### Changed
 
+- **New installs start on the Almond paper theme** — existing installations keep whatever theme they had, and old versions that do not know paper fall back to the system theme.
 - **Server components move to .NET 10 LTS** (`Novara.Server`, `Novara.Sync.Server`) while the desktop app and the shared `Novara.Core` stay on .NET 8. No storage-format, schema or contract change of any kind.
 - **Help center** — the documentation moved to [novara.xin/help/](https://novara.xin/help/) (36 pages: getting started, features, security, sync, self-hosting, reference). The app's help links and the installer's post-install checkbox now point there; the retired single-file deployment guide is superseded by `deploy/README.md`, `deploy/compose/README.md` and the help center.
 

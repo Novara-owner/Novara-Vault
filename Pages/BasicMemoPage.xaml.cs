@@ -631,6 +631,13 @@ private MenuFlyout BuildContextMenu()
     private void FloatInHint()
     {
         HintText.Visibility = Visibility.Visible;
+
+        if (!App.IsAnimationsEnabled)
+        {
+            HintText.Opacity = 1;
+            if (HintText.RenderTransform is TranslateTransform st) st.Y = 0;
+            return;
+        }
         HintText.Opacity = 0;
         if (HintText.RenderTransform is not TranslateTransform tt)
         {
@@ -639,7 +646,7 @@ private MenuFlyout BuildContextMenu()
         }
         else tt.Y = 20;
         var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 0.6, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, HintText); Storyboard.SetTargetProperty(oa, "Opacity");
         sb.Children.Add(oa);
         var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
@@ -901,9 +908,9 @@ private MenuFlyout BuildContextMenu()
         var nameText = new TextBlock { Text = groupName, FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
         Grid.SetColumn(nameText, 1);
         var rightPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        var pinIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardPin), Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)) } };
+        var pinIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardPin), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
         rightPanel.Children.Add(pinIcon);
-        var starIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardStar), Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)) } };
+        var starIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardStar), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
         rightPanel.Children.Add(starIcon);
         var countText = new TextBlock { Text = App.GetString("Memo_Count_Zero"), FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
         var iconText2 = new TextBlock { Text = "\uE70D", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 10, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
@@ -922,9 +929,11 @@ private MenuFlyout BuildContextMenu()
 
         var emptyHint = new Grid { MinHeight = 100, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Visible };
         var emptyStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
-        emptyStack.Children.Add(new TextBlock { Text = "\uE721", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 28, Foreground = App.GetBrush("AppTextTertiaryBrush"), Opacity = 0.3, HorizontalAlignment = HorizontalAlignment.Center });
-        emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Tip"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 13, Foreground = App.GetBrush("AppTextSecondaryBrush"), Opacity = 0.7 });
-        emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Hint"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush"), Opacity = 0.5 });
+
+
+        emptyStack.Children.Add(new TextBlock { Text = "\uE721", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 28, Foreground = App.GetBrush("AppTextTertiaryBrush"), HorizontalAlignment = HorizontalAlignment.Center });
+        emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Tip"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 13, Foreground = App.GetBrush("AppTextSecondaryBrush") });
+        emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Hint"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush") });
         emptyHint.Children.Add(emptyStack);
         Grid.SetRow(emptyHint, 2);
 
@@ -938,8 +947,8 @@ private MenuFlyout BuildContextMenu()
             borderBrush.Color.G,
             borderBrush.Color.B);
         var baseBorderColor = borderBrush.Color;
-        card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
-        card.PointerExited += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
+        card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
+        card.PointerExited += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
         card.ContextRequested += (s, e) => { e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p); };
         AttachCardDrag(card);
         return card;
@@ -1175,7 +1184,7 @@ private MenuFlyout BuildContextMenu()
             Child = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.CardPin),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         Grid.SetColumn(entryPinIcon, 2);
@@ -1190,7 +1199,7 @@ private MenuFlyout BuildContextMenu()
             Child = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.CardStar),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         Grid.SetColumn(entryStarIcon, 3);
@@ -1266,8 +1275,8 @@ private MenuFlyout BuildContextMenu()
             borderBrush.Color.G,
             borderBrush.Color.B);
         var baseBorderColor = borderBrush.Color;
-        card.PointerEntered += (s, e) => { e.Handled = true; if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
-        card.PointerExited += (s, e) => { e.Handled = true; if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); };
+        card.PointerEntered += (s, e) => { e.Handled = true; if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
+        card.PointerExited += (s, e) => { e.Handled = true; if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
 
         card.ContextRequested += (s, e) =>
         {
@@ -3813,7 +3822,7 @@ private void ShowApiCheckDialog(Border card)
         _dropIndex = _dragOriginIndex = _dragContainer != null ? CountVisibleBeforeIn(card, _dragContainer) : 0;
 
         App.StopCardEntrance(card);
-        card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
+        card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
 
@@ -3929,7 +3938,7 @@ private void ShowApiCheckDialog(Border card)
         {
             Height = 2,
             CornerRadius = new CornerRadius(1),
-            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)),
+            Background = new SolidColorBrush(PaperTheme.BrandColor),
             VerticalAlignment = VerticalAlignment.Center,
         };
         return b;

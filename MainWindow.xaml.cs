@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
@@ -48,23 +48,17 @@ public sealed partial class MainWindow : Window
 
 
 
-    private const double MenuBarW = 8, MenuBarH = 48, MenuBarR = 4;
-    private const double MenuBtnW = 56, MenuBtnH = 32, MenuBtnR = 8;
-    private const double MenuAnchorX = 6;
-    private const double MenuBreath = 3;
-    private const double MenuTransitionMs = 320;
-    private bool _menuExpanded;
-    private bool _menuOpen;
-    private bool _hoverZoneHover;
-    private bool _menuBtnHover;
-
-
-
-    private bool _menuAnimating;
-    private double _menuProgress;
-    private double _menuAnimFrom, _menuAnimTo;
-    private System.Diagnostics.Stopwatch? _menuAnimWatch;
-    private System.Diagnostics.Stopwatch _glowWatch = System.Diagnostics.Stopwatch.StartNew();
+    private bool _sideOpen;
+    private bool _sideAnimating;
+    private double _sideProgress;
+    private double _sideFrom, _sideTo;
+    private double _sideFinalTarget;
+    private System.Diagnostics.Stopwatch? _sideWatch;
+    private FrameworkElement? _sideRoot;
+    private Windows.Foundation.Point _lastPointerPos;
+    private double _edgeSign = -1.0;
+    private Windows.Foundation.Rect _panelHome;
+    private const double SidePhaseMs = 220;
 
 
     public void MarkTrashChanged() => _trashChanged = true;
@@ -197,6 +191,7 @@ public sealed partial class MainWindow : Window
 
         this.SizeChanged += (_, e) => UpdateWelcomeLayout(e.Size.Width, e.Size.Height);
         this.SizeChanged += (_, _) => UpdateWorkspaceSwitcherPosition();
+        this.SizeChanged += (_, _) => { if (_sideOpen) RecachePanelHome(); };
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(CustomTitleBar);
@@ -211,8 +206,15 @@ public sealed partial class MainWindow : Window
         {
             if (_storeInitialized && App.Store is not { IsEncrypted: true }) WelcomeEntryAnimation.Begin();
         };
-        InitBottomToolbarIcon();
         InitNavIcons();
+        if (Content is FrameworkElement sideMenuRoot)
+        {
+            _sideRoot = sideMenuRoot;
+            sideMenuRoot.AddHandler(FrameworkElement.PointerPressedEvent,
+                new PointerEventHandler(RootPointerPressedForSideMenu), true);
+            sideMenuRoot.PointerMoved += OnMenuSideRootPointerMoved;
+            sideMenuRoot.PointerExited += OnMenuSideRootPointerExited;
+        }
 
         if (Content is FrameworkElement root)
         {
@@ -330,9 +332,6 @@ public sealed partial class MainWindow : Window
         App.InitSystemThemeWatcher();
         Services.StickySync.UpdateLanguage(App.CurrentLanguage);
         Services.StickySync.StartWatching((id, states) => _planPage?.ApplyExternalTodoState(id, states));
-
-
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnMenuRendering;
 
 
         var pendingId = Novara.Services.EditRequest.ReadPending();
@@ -464,6 +463,7 @@ public sealed partial class MainWindow : Window
 
 
         _storeInitialized = true;
+        ApplyEdgeMenuSide(App.Store?.Database.AppSettings.EdgeMenuSide ?? "左侧");
         if (!skipWelcome && App.Store is not { IsEncrypted: true })
             WelcomeEntryAnimation.Begin();
     }
@@ -632,7 +632,7 @@ private void CreateTrayIcon()
 
 
 
-    private static async Task<(bool Saved, bool Refused)> FlushEditorForExitAsync(DiaryEditorPage ed)
+    public static async Task<(bool Saved, bool Refused)> FlushEditorForExitAsync(DiaryEditorPage ed)
     {
         bool saved = false, timedOut = false, threw = false;
         try { saved = await ed.SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); }
@@ -658,6 +658,22 @@ private void CreateTrayIcon()
 
 
 
+
+    public static async Task FlushPendingEditorForRestartAsync()
+    {
+        if (App.MainWindow is { } mw && mw._diaryEditorPage is { } ed)
+            await FlushEditorForExitAsync(ed);
+    }
+
+
+
+
+
+
+
+
+
+public void BeginUpdateExit() => _isTrayExit = true;
 
 private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
@@ -1314,192 +1330,238 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             {
                 "深色模式" => ElementTheme.Dark,
                 "浅色模式" => ElementTheme.Light,
+
+                var t when t != null && t.StartsWith("类纸", StringComparison.Ordinal) => ElementTheme.Light,
+
+
+
+
+                _ when PaperTheme.IsPaperName(PaperTheme.PeekHint()) => ElementTheme.Light,
                 _ => ElementTheme.Default
             };
         }
-    }
-
-    private void InitBottomToolbarIcon()
-    {
-        var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        MenuPathIcon.Data = (Geometry)cv(typeof(Geometry), IconData.Menu);
+        ApplyPaperBrandToNavGlow();
     }
 
 
 
 
 
-
-    private void MenuHoverZone_PointerEntered(object sender, PointerRoutedEventArgs e) { _hoverZoneHover = true; ExpandMenu(); }
-    private void MenuButton_PointerEntered(object sender, PointerRoutedEventArgs e) { _menuBtnHover = true; ExpandMenu(); }
-
-    private void MenuHoverZone_PointerExited(object sender, PointerRoutedEventArgs e) { _hoverZoneHover = false; OnMenuZonePointerExited(); }
-    private void MenuButton_PointerExited(object sender, PointerRoutedEventArgs e) { _menuBtnHover = false; OnMenuZonePointerExited(); }
-
-    private void OnMenuZonePointerExited()
+    public void ApplyPaperBrandToNavGlow()
     {
-        if (!_menuExpanded) return;
-
-
-
-        DispatcherQueue.TryEnqueue(() =>
+        if (NavIndicator.Background is RadialGradientBrush rgb)
         {
-            if (!_menuExpanded) return;
-            if (_menuOpen) return;
-            if (!_hoverZoneHover && !_menuBtnHover)
-                StartAutoCollapse();
-        });
-    }
-
-    private void ExpandMenu()
-    {
-        if (_menuExpanded) return;
-        _menuExpanded = true;
-        StartMenuTransition(1.0);
-    }
-
-    private void CollapseMenu()
-    {
-        if (!_menuExpanded) return;
-        _menuExpanded = false;
-        StartMenuTransition(0.0);
-    }
-
-    private void StartMenuTransition(double targetProgress)
-    {
-        _menuAnimFrom = _menuProgress;
-        _menuAnimTo = targetProgress;
-        _menuAnimWatch = System.Diagnostics.Stopwatch.StartNew();
-        _menuAnimating = true;
-    }
-
-
-    private void ApplyMenuProgress(double p)
-    {
-        MenuButton.Width = MenuBarW + (MenuBtnW - MenuBarW) * p;
-        MenuButton.Height = MenuBarH + (MenuBtnH - MenuBarH) * p;
-        MenuButton.CornerRadius = new CornerRadius(MenuBarR + (MenuBtnR - MenuBarR) * p);
-        MenuPathIcon.Opacity = p;
+            var c = PaperTheme.BrandColor;
+            foreach (var stop in rgb.GradientStops)
+                stop.Color = Windows.UI.Color.FromArgb(stop.Color.A, c.R, c.G, c.B);
+        }
     }
 
 
 
-    private void OnMenuRendering(object? sender, object e)
+
+
+    private void MenuButton_PointerEntered(object sender, PointerRoutedEventArgs e) => OpenMenuSidePanel();
+
+    private void OpenMenuSidePanel()
+    {
+        if (_sideRoot == null) return;
+        if (_sideOpen && MenuSidePanel.Visibility == Visibility.Visible) return;
+        if (MenuSideItems.Children.Count == 0) BuildMenuSideItems();
+        _sideOpen = true;
+        MenuSidePanel.Visibility = Visibility.Visible;
+        MenuSidePanel.UpdateLayout();
+        _sideFinalTarget = 2.0;
+        MenuButton.IsHitTestVisible = false;
+        MenuSidePanelTranslate.X = 0;
+        _panelHome = MenuSidePanel.TransformToVisual(_sideRoot)
+                         .TransformBounds(new Windows.Foundation.Rect(0, 0, MenuSidePanel.ActualWidth, MenuSidePanel.ActualHeight));
+        MenuSidePanelTranslate.X = _edgeSign * -MenuSidePanel.ActualWidth;
+        StartSideTransition(Math.Min(_sideProgress + 1.0, 2.0));
+        EnsureSideRendering();
+    }
+
+
+
+
+
+    private void RecachePanelHome()
+    {
+        if (_sideRoot == null) return;
+        MenuSidePanel.UpdateLayout();
+        var measured = MenuSidePanel.TransformToVisual(_sideRoot)
+                          .TransformBounds(new Windows.Foundation.Rect(0, 0, MenuSidePanel.ActualWidth, MenuSidePanel.ActualHeight));
+        measured.X -= MenuSidePanelTranslate.X;
+        _panelHome = measured;
+    }
+
+
+    public void ApplyEdgeMenuSide(string side)
+    {
+        bool left = side != "右侧";
+        _edgeSign = left ? -1.0 : 1.0;
+        var align = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        BottomToolbarPanel.HorizontalAlignment = align;
+        MenuSidePanel.HorizontalAlignment = align;
+        MenuHandleBar.HorizontalAlignment = align;
+        MenuButton.HorizontalAlignment = align;
+        MenuSidePanel.CornerRadius = left ? new CornerRadius(0, 12, 12, 0) : new CornerRadius(12, 0, 0, 12);
+        MenuHandleBar.CornerRadius = left ? new CornerRadius(0, 3, 3, 0) : new CornerRadius(3, 0, 0, 3);
+        if (_sideOpen) CloseMenuSidePanel();
+        ApplySideProgress(_sideProgress);
+    }
+
+    private void CloseMenuSidePanel()
+    {
+        if (!_sideOpen) return;
+        _sideOpen = false;
+        MenuButton.IsHitTestVisible = true;
+        _sideFinalTarget = 0.0;
+        StartSideTransition(Math.Max(_sideProgress - 1.0, 0.0));
+        EnsureSideRendering();
+    }
+
+    private bool PointerInMenuZone()
+    {
+        if (_sideRoot == null) return false;
+        var pr = _panelHome;
+        pr.X -= 12; pr.Y -= 12; pr.Width += 24; pr.Height += 24;
+        return pr.Contains(_lastPointerPos);
+    }
+
+    private void OnMenuSideRootPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_sideRoot == null) return;
+        _lastPointerPos = e.GetCurrentPoint(_sideRoot).Position;
+        if (!_sideOpen) return;
+        if (!PointerInMenuZone()) CloseMenuSidePanel();
+    }
+
+    private void OnMenuSideRootPointerExited(object sender, PointerRoutedEventArgs e)
     {
 
-        if (_menuAnimating)
+        if (_sideOpen && !PointerInMenuZone()) CloseMenuSidePanel();
+    }
+
+
+    private void RootPointerPressedForSideMenu(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_sideOpen) return;
+        if (IsWithinMenuSide(e.OriginalSource)) return;
+        CloseMenuSidePanel();
+    }
+
+    private bool IsWithinMenuSide(object source)
+    {
+        DependencyObject? d = source as DependencyObject;
+        while (d != null)
         {
-            double elapsed = _menuAnimWatch?.Elapsed.TotalMilliseconds ?? 1000;
-            double t = Math.Clamp(elapsed / MenuTransitionMs, 0.0, 1.0);
-            double eased = 1 - Math.Pow(1 - t, 3);
-            _menuProgress = _menuAnimFrom + (_menuAnimTo - _menuAnimFrom) * eased;
-            ApplyMenuProgress(_menuProgress);
-            MenuButtonTranslate.X = MenuAnchorX;
-            if (t >= 1.0)
+            if (d == MenuSidePanel || d == MenuButton) return true;
+            d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d);
+        }
+        return false;
+    }
+
+    private void StartSideTransition(double target)
+    {
+        _sideFrom = _sideProgress;
+        _sideTo = target;
+        _sideWatch = System.Diagnostics.Stopwatch.StartNew();
+        _sideAnimating = true;
+    }
+
+    private void EnsureSideRendering()
+    {
+
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnMenuSideRendering;
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnMenuSideRendering;
+    }
+
+    private void OnMenuSideRendering(object? sender, object e)
+    {
+        if (!_sideAnimating) return;
+        double elapsed = _sideWatch?.Elapsed.TotalMilliseconds ?? SidePhaseMs;
+        double t = Math.Clamp(elapsed / SidePhaseMs, 0.0, 1.0);
+        double eased = 1 - Math.Pow(1 - t, 3);
+        _sideProgress = _sideFrom + (_sideTo - _sideFrom) * eased;
+        ApplySideProgress(_sideProgress);
+        if (t >= 1.0)
+        {
+            _sideAnimating = false;
+            _sideWatch?.Stop(); _sideWatch = null;
+            if (Math.Abs(_sideProgress - _sideFinalTarget) > 0.001)
             {
-                _menuProgress = _menuAnimTo;
-                ApplyMenuProgress(_menuProgress);
-                _menuAnimating = false;
-                _menuAnimWatch?.Stop(); _menuAnimWatch = null;
-
-                if (_menuAnimTo <= 0.001) _glowWatch.Restart();
+                StartSideTransition(Math.Clamp(_sideProgress + Math.Sign(_sideFinalTarget - _sideProgress), 0.0, 2.0));
+                EnsureSideRendering();
             }
-        }
-
-        else if (!_menuExpanded && _menuProgress <= 0.001 && BottomToolbarPanel.Visibility == Visibility.Visible)
-        {
-            double phase = (_glowWatch.Elapsed.TotalMilliseconds % 3200.0) / 3200.0;
-            double s = Math.Sin(phase * Math.PI * 2.0);
-            MenuButtonTranslate.X = MenuAnchorX + s * MenuBreath;
-        }
-        else
-        {
-            MenuButtonTranslate.X = MenuAnchorX;
+            else if (!_sideOpen)
+                MenuSidePanel.Visibility = Visibility.Collapsed;
         }
     }
 
-    private void StartAutoCollapse()
+    private void ApplySideProgress(double p)
     {
-        CollapseMenu();
+
+        double handle = Math.Clamp(p, 0.0, 1.0);
+        double panel = Math.Clamp(p - 1.0, 0.0, 1.0);
+        MenuButtonTranslate.X = _edgeSign * 6 * handle;
+        MenuHandleBarTranslate.X = _edgeSign * 6 * handle;
+        double panelW = MenuSidePanel.ActualWidth;
+        if (panelW < 10) panelW = MenuSidePanel.MinWidth + MenuSidePanel.Padding.Left + MenuSidePanel.Padding.Right;
+        MenuSidePanelTranslate.X = _edgeSign * panelW * (1 - panel);
     }
 
-    private void MenuButton_Click(object sender, RoutedEventArgs e)
+    private void BuildMenuSideItems()
     {
-
-
-        if (!_menuExpanded) { ExpandMenu(); return; }
-
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
-        var menu = new MenuFlyout
+        var white = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255));
+        var idle = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        var hover = App.GetBrush("AppPrimaryButtonHoverBrush");
+
+        void AddItem(string[] paths, string textKey, System.Action action)
         {
-            MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"]
-        };
-        _menuOpen = true;
-        menu.Closed += (_, _) =>
-        {
-            _menuOpen = false;
-            DispatcherQueue.TryEnqueue(CollapseMenu);
-        };
+            var group = new GeometryGroup();
+            foreach (var p in paths)
+                group.Children.Add((Geometry)cv(typeof(Geometry), p));
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            content.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+            {
+                Data = group,
+                Width = 16,
+                Height = 16,
+                Stretch = Stretch.Uniform,
+                Fill = white,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = App.GetString(textKey),
+                FontSize = 14,
+                Foreground = white,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var item = new Border
+            {
+                Background = idle,
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10, 8, 10, 8),
+                Child = content
+            };
+            item.PointerEntered += (_, _) => item.Background = hover;
+            item.PointerExited += (_, _) => item.Background = idle;
+            item.PointerPressed += (_, _) =>
+            {
+                action();
+                CloseMenuSidePanel();
+            };
+            MenuSideItems.Children.Add(item);
+        }
 
 
-        var toolsGroup = new GeometryGroup();
-        foreach (var p in IconData.Tools)
-            toolsGroup.Children.Add((Geometry)cv(typeof(Geometry), p));
-        var toolsItem = new MenuFlyoutItem
-        {
-            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
-            Text = App.GetString("Menu_Tools"),
-            Icon = new PathIcon { Data = toolsGroup, Foreground = App.GetBrush("IconForegroundBrush") },
-            KeyboardAcceleratorTextOverride = "Ctrl+T"
-        };
-        toolsItem.Click += (_, _) => NavigateToTools();
-        menu.Items.Add(toolsItem);
-
-
-        var searchGroup = new GeometryGroup();
-        foreach (var p in IconData.Search)
-            searchGroup.Children.Add((Geometry)cv(typeof(Geometry), p));
-        var searchItem = new MenuFlyoutItem
-        {
-            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
-            Text = App.GetString("Menu_Search"),
-            Icon = new PathIcon { Data = searchGroup, Foreground = App.GetBrush("IconForegroundBrush") },
-            KeyboardAcceleratorTextOverride = "Ctrl+K"
-        };
-        searchItem.Click += (_, _) => OpenSearchPage();
-        menu.Items.Add(searchItem);
-
-
-        var trashItem = new MenuFlyoutItem
-        {
-            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
-            Text = App.GetString("Trash_Title"),
-            Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), IconData.Delete), Foreground = App.GetBrush("IconForegroundBrush") },
-            KeyboardAcceleratorTextOverride = "Ctrl+Shift+Backspace"
-        };
-        trashItem.Click += (_, _) => OpenTrashPage();
-        menu.Items.Add(trashItem);
-
-
-        var settingsGroup = new GeometryGroup();
-        foreach (var p in IconData.Settings)
-            settingsGroup.Children.Add((Geometry)cv(typeof(Geometry), p));
-        var settingsItem = new MenuFlyoutItem
-        {
-            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
-            Text = App.GetString("Setting_Title_Page"),
-            Icon = new PathIcon { Data = settingsGroup, Foreground = App.GetBrush("IconForegroundBrush") },
-            KeyboardAcceleratorTextOverride = "Ctrl+,"
-        };
-        settingsItem.Click += (_, _) => NavigateToSettings();
-        menu.Items.Add(settingsItem);
-
-
-
-
-
-
-        menu.ShowAt(MenuButton);
+        AddItem(IconData.Tools, "Menu_Tools", () => NavigateToTools());
+        AddItem(IconData.Search, "Menu_Search", () => OpenSearchPage());
+        AddItem(new[] { IconData.Delete }, "Trash_Title", () => OpenTrashPage());
+        AddItem(IconData.Settings, "Setting_Title_Page", () => NavigateToSettings());
     }
 
 
@@ -1688,7 +1750,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         }
         catch { }
         }
-
 
     public void ApplyVisibleTabs(HashSet<string> visibleTabs)
     {
@@ -2030,11 +2091,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
         CarouselDemoCursorTranslate.X = DemoCursorStartX;
         CarouselDemoCursorTranslate.Y = DemoCursorStartY;
-        CarouselDemoMenuFace.Width = 8;
-        CarouselDemoMenuFace.Height = 48;
-        CarouselDemoMenuFace.CornerRadius = new CornerRadius(4);
-        CarouselDemoMenuIcon.Opacity = 0;
-        CarouselDemoMenuTranslate.X = 6;
+        CarouselDemoMenuTranslate.X = 0;
+        CarouselDemoPanelTranslate.X = -118;
+        CarouselDemoGhostHover.Opacity = 0;
 
 
 
@@ -2142,15 +2201,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void BuildCarouselPage2()
     {
+        CarouselPage2.SizeChanged += (_, _) => CarouselPage2.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, CarouselPage2.ActualWidth, CarouselPage2.ActualHeight) };
         CarouselP2Title.Text = App.GetString("Carousel_P2_Title");
         CarouselP2Intro.Text = App.GetString("Carousel_P2_Desc");
-        CarouselDemoMenuIcon.Data = App.CreateGeometry(IconData.Menu);
     }
 
 
 
-    private const double DemoCursorStartX = 140, DemoCursorStartY = 150;
-    private const double DemoCursorEndX = 600, DemoCursorEndY = 313;
+    private const double DemoCursorStartX = 620, DemoCursorStartY = 150;
+    private const double DemoCursorEndX = 74, DemoCursorEndY = 309;
+    private const double DemoCursorPanelX = 128, DemoCursorPanelY = 252;
 
     private static double DemoEaseInOut(double t) => t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
     private static double DemoCubicOut(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 3);
@@ -2169,41 +2229,42 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void ApplyCarouselDemo(double t)
     {
-        double phase = t % 4.4;
-        double p;
+        double phase = t % 5.0;
+        double handleP, panelP, ghostHl;
         double cx, cy;
         if (phase < 1.0)
         {
             double k = DemoEaseInOut(phase);
             cx = DemoLerp(DemoCursorStartX, DemoCursorEndX, k);
             cy = DemoLerp(DemoCursorStartY, DemoCursorEndY, k);
-            p = 0;
+            handleP = 0; panelP = 0; ghostHl = 0;
         }
-        else if (phase < 1.32) { cx = DemoCursorEndX; cy = DemoCursorEndY; p = DemoCubicOut((phase - 1.0) / 0.32); }
-        else if (phase < 2.4) { cx = DemoCursorEndX; cy = DemoCursorEndY; p = 1; }
-        else
+        else if (phase < 1.22) { cx = DemoCursorEndX; cy = DemoCursorEndY; handleP = DemoCubicOut((phase - 1.0) / 0.22); panelP = 0; ghostHl = 0; }
+        else if (phase < 1.44) { cx = DemoCursorEndX; cy = DemoCursorEndY; handleP = 1; panelP = DemoCubicOut((phase - 1.22) / 0.22); ghostHl = 0; }
+        else if (phase < 1.7)
         {
-
-
-            if (phase < 3.2)
-            {
-                double k = DemoEaseInOut((phase - 2.4) / 0.8);
-                cx = DemoLerp(DemoCursorEndX, DemoCursorStartX, k);
-                cy = DemoLerp(DemoCursorEndY, DemoCursorStartY, k);
-            }
-            else { cx = DemoCursorStartX; cy = DemoCursorStartY; }
-            p = phase < 2.72 ? 1 - DemoCubicOut((phase - 2.4) / 0.32) : 0;
+            double k = DemoEaseInOut((phase - 1.44) / 0.26);
+            cx = DemoLerp(DemoCursorEndX, DemoCursorPanelX, k);
+            cy = DemoLerp(DemoCursorEndY, DemoCursorPanelY, k);
+            handleP = 1; panelP = 1; ghostHl = 0;
         }
+        else if (phase < 2.9) { cx = DemoCursorPanelX; cy = DemoCursorPanelY; handleP = 1; panelP = 1; ghostHl = DemoCubicOut((phase - 1.7) / 0.3); }
+        else if (phase < 3.15)
+        {
+            double k = DemoEaseInOut((phase - 2.9) / 0.25);
+            cx = DemoLerp(DemoCursorPanelX, DemoCursorStartX, k);
+            cy = DemoLerp(DemoCursorPanelY, DemoCursorStartY, k);
+            handleP = 1; panelP = 1; ghostHl = 1;
+        }
+        else if (phase < 3.37) { cx = DemoCursorStartX; cy = DemoCursorStartY; handleP = 1; panelP = 1 - DemoCubicOut((phase - 3.15) / 0.22); ghostHl = 0; }
+        else if (phase < 3.59) { cx = DemoCursorStartX; cy = DemoCursorStartY; handleP = 1 - DemoCubicOut((phase - 3.37) / 0.22); panelP = 0; ghostHl = 0; }
+        else { cx = DemoCursorStartX; cy = DemoCursorStartY; handleP = 0; panelP = 0; ghostHl = 0; }
 
         CarouselDemoCursorTranslate.X = cx;
         CarouselDemoCursorTranslate.Y = cy;
-
-        CarouselDemoMenuFace.Width = 8 + (56 - 8) * p;
-        CarouselDemoMenuFace.Height = 48 + (32 - 48) * p;
-        CarouselDemoMenuFace.CornerRadius = new CornerRadius(4 + (8 - 4) * p);
-        CarouselDemoMenuIcon.Opacity = p;
-
-        CarouselDemoMenuTranslate.X = p > 0.01 ? 6 : 6 + Math.Sin(t * 2 * Math.PI / 3.2) * 3;
+        CarouselDemoMenuTranslate.X = -6 * handleP;
+        CarouselDemoPanelTranslate.X = -118 * (1 - panelP);
+        CarouselDemoGhostHover.Opacity = ghostHl;
     }
 
 
@@ -2225,7 +2286,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselLockHelloText.Text = App.GetString("Setting_WinHello_Title");
         CarouselLockSetupText.Text = App.GetString("Setting_PrivacyLock_Setup");
     }
-
 
 
 
@@ -2796,6 +2856,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void PlayPageIn(object? previous)
     {
         if (ReferenceEquals(previous, RootFrame.Content)) return;
+        if (!App.IsAnimationsEnabled) return;
         _pageInBoard?.Stop();
         _pageInBoard = null;
         var tt = RootFrame.RenderTransform as TranslateTransform ?? new TranslateTransform();

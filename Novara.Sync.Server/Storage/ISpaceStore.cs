@@ -12,6 +12,32 @@ public interface ISpaceStore
     SpaceRecord? GetSpace(string spaceId);
     void SaveSpace(SpaceRecord space);
 
+
+
+
+
+
+
+
+
+
+
+
+    IReadOnlyList<SpaceRecord> ListSpaces();
+
+
+
+
+
+
+
+
+
+
+
+
+    void DeleteSpace(string spaceId);
+
     IReadOnlyList<DeviceRecord> GetDevices(string spaceId);
     DeviceRecord? GetDevice(string spaceId, string deviceId);
     void SaveDevice(string spaceId, DeviceRecord device);

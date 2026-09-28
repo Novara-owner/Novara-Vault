@@ -60,12 +60,10 @@ public sealed partial class FilePathPage : Page
     {
         InitializeComponent();
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
-        PickFilePathIcon.Data = App.CreateGeometry(IconData.PickFile);
-        PickFolderPathIcon.Data = App.CreateGeometry(IconData.PickFolder);
-        PickFileIcon.PointerEntered += (_, _) => PickFileIcon.Opacity = 1.0;
-        PickFileIcon.PointerExited += (_, _) => PickFileIcon.Opacity = 0.6;
-        PickFolderIcon.PointerEntered += (_, _) => PickFolderIcon.Opacity = 1.0;
-        PickFolderIcon.PointerExited += (_, _) => PickFolderIcon.Opacity = 0.6;
+        PickPathIcon.Data = App.CreateGeometry(IconData.PickFolder);
+        PickPathButton.Flyout = BuildPickPathMenu();
+        PickPathButton.PointerEntered += (_, _) => PickPathIcon.Opacity = 1.0;
+        PickPathButton.PointerExited += (_, _) => PickPathIcon.Opacity = 0.6;
         KeyDown += Page_KeyDown;
         ContentRoot.SizeChanged += (_, _) => { if (NewPathOverlay.Visibility == Visibility.Visible) DialogUi.ClampDialogHeight(NewPathDialog, ContentRoot); };
         Loaded += (_, _) => { LoadFromStore();
@@ -266,6 +264,13 @@ public sealed partial class FilePathPage : Page
 
     private void FloatInHint()
     {
+
+        if (!App.IsAnimationsEnabled)
+        {
+            EmptyHint.Opacity = 1;
+            if (EmptyHint.RenderTransform is TranslateTransform st) st.Y = 0;
+            return;
+        }
         EmptyHint.Opacity = 0;
         if (EmptyHint.RenderTransform is not TranslateTransform tt)
         {
@@ -274,7 +279,7 @@ public sealed partial class FilePathPage : Page
         }
         else tt.Y = 20;
         var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 0.6, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, EmptyHint); Storyboard.SetTargetProperty(oa, "Opacity");
         sb.Children.Add(oa);
         var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
@@ -392,6 +397,39 @@ public sealed partial class FilePathPage : Page
     private void NewPathScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
         if (ReferenceEquals(e.OriginalSource, NewPathScrim)) HideNewPathDialog();
+    }
+
+
+    private MenuFlyout BuildPickPathMenu()
+    {
+        var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
+        var menu = new MenuFlyout();
+        menu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
+        var fileItem = new MenuFlyoutItem
+        {
+            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+            Text = App.GetString("Path_SelectFile"),
+            Icon = new PathIcon
+            {
+                Data = (Geometry)cv(typeof(Geometry), IconData.PickFile),
+                Foreground = App.GetBrush("IconForegroundBrush")
+            }
+        };
+        fileItem.Click += PickFileButton_Click;
+        var folderItem = new MenuFlyoutItem
+        {
+            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+            Text = App.GetString("Path_SelectFolder"),
+            Icon = new PathIcon
+            {
+                Data = (Geometry)cv(typeof(Geometry), IconData.PickFolder),
+                Foreground = App.GetBrush("IconForegroundBrush")
+            }
+        };
+        folderItem.Click += PickFolderButton_Click;
+        menu.Items.Add(fileItem);
+        menu.Items.Add(folderItem);
+        return menu;
     }
 
     private async void PickFileButton_Click(object sender, RoutedEventArgs e)
@@ -612,7 +650,7 @@ public sealed partial class FilePathPage : Page
             Child = new PathIcon
             {
                 Data = (Geometry)cv(typeof(Geometry), IconData.CardPin),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         var starIcon = new Viewbox
@@ -624,7 +662,7 @@ public sealed partial class FilePathPage : Page
             Child = new PathIcon
             {
                 Data = (Geometry)cv(typeof(Geometry), IconData.CardStar),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         iconStack.Children.Add(starIcon);
@@ -951,14 +989,14 @@ public sealed partial class FilePathPage : Page
                 currentBase.G,
                 currentBase.B);
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor;
-            if (card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
+            if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
         };
         card.PointerExited += (_, _) =>
         {
             if (_dragging) return;
             var currentBase = _cardBaseBorderColor.TryGetValue(card, out var c) ? c : baseBorderColor;
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = currentBase;
-            if (card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
+            if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform t) { var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); }
         };
     }
 
@@ -1037,7 +1075,7 @@ public sealed partial class FilePathPage : Page
         _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, PathList);
 
         App.StopCardEntrance(card);
-        card.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
+        card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
         card.RenderTransform = new TranslateTransform();
@@ -1117,7 +1155,7 @@ public sealed partial class FilePathPage : Page
         {
             Height = 2,
             CornerRadius = new CornerRadius(1),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)),
+            Background = new SolidColorBrush(PaperTheme.BrandColor),
             VerticalAlignment = VerticalAlignment.Center,
         };
         return b;

@@ -64,6 +64,26 @@ public sealed record StoredEnvelope(string Json, VersionRecord Version);
 
 
 
+public sealed record SpaceSummary(
+    string SpaceId,
+    string Name,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    long CurrentVersion,
+    long KeyWrapVersion,
+    int DeviceCount,
+    int RevokedDeviceCount,
+    bool HasReadToken,
+    bool HasEditorDevice,
+    long UsedBytes,
+    long QuotaBytes,
+    int MaxVersions);
+
+
+
+
+
+
 public sealed class SpaceService
 {
     private readonly ISpaceStore _store;
@@ -110,6 +130,104 @@ public sealed class SpaceService
 
         return SyncResult<NewSpaceCredentials>.Ok(
             new NewSpaceCredentials(spaceId, enrollmentSecret));
+    }
+
+
+
+
+
+    public SyncResult<IReadOnlyList<SpaceSummary>> ListSpaces()
+        => SyncResult<IReadOnlyList<SpaceSummary>>.Ok(_store.ListSpaces().Select(Summarise).ToList());
+
+
+    public SyncResult<SpaceSummary> DescribeSpace(string spaceId)
+    {
+        var space = _store.GetSpace(spaceId);
+        return space is null
+            ? SyncResult<SpaceSummary>.Fail(SyncErrorCode.SpaceNotFound, "space not found")
+            : SyncResult<SpaceSummary>.Ok(Summarise(space));
+    }
+
+
+
+
+
+
+
+
+
+    public SyncResult<SpaceSummary> DeleteSpace(string spaceId)
+    {
+        var gate = _locks.GetOrAdd(spaceId, _ => new SemaphoreSlim(1, 1));
+        gate.Wait();
+        try
+        {
+            var space = _store.GetSpace(spaceId);
+            if (space is null) return SyncResult<SpaceSummary>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
+
+
+
+            var summary = Summarise(space);
+            _store.DeleteSpace(spaceId);
+            return SyncResult<SpaceSummary>.Ok(summary);
+        }
+        finally { gate.Release(); }
+    }
+
+
+
+
+
+
+
+
+
+
+    public SyncResult<NewSpaceCredentials> RotateEnrollmentSecret(string spaceId)
+    {
+        var gate = _locks.GetOrAdd(spaceId, _ => new SemaphoreSlim(1, 1));
+        gate.Wait();
+        try
+        {
+
+
+
+            var fresh = _store.GetSpace(spaceId);
+            if (fresh is null) return SyncResult<NewSpaceCredentials>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
+
+            var enrollmentSecret = TokenAuth.NewEnrollmentSecret();
+            fresh.EnrollmentHash = TokenAuth.Hash(enrollmentSecret);
+            fresh.UpdatedAt = DateTime.UtcNow;
+            _store.SaveSpace(fresh);
+
+            return SyncResult<NewSpaceCredentials>.Ok(new NewSpaceCredentials(fresh.SpaceId, enrollmentSecret));
+        }
+        finally { gate.Release(); }
+    }
+
+
+
+
+
+
+    private SpaceSummary Summarise(SpaceRecord space)
+    {
+        var versions = _store.GetVersions(space.SpaceId);
+        var devices = _store.GetDevices(space.SpaceId);
+        return new SpaceSummary(
+            space.SpaceId,
+            space.Name,
+            space.CreatedAt,
+            space.UpdatedAt,
+            space.CurrentVersion,
+            space.KeyWrapVersion,
+            devices.Count,
+            devices.Count(d => d.Revoked),
+            !string.IsNullOrEmpty(space.ReadTokenHash),
+            devices.Any(d => string.Equals(d.DeviceId, EditorDeviceId, StringComparison.Ordinal) && !d.Revoked),
+            RetentionPolicy.UsedBytes(versions),
+            space.QuotaBytes,
+            space.MaxVersions);
     }
 
 

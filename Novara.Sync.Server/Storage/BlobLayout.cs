@@ -4,6 +4,11 @@ namespace Novara.Sync.Server.Storage;
 
 
 
+
+
+
+
+
 internal static class BlobLayout
 {
     public const string ConflictSuffix = ".conflict";
@@ -16,7 +21,23 @@ internal static class BlobLayout
         => !string.IsNullOrEmpty(id) && id.Length <= 128 &&
            id.All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_');
 
-    public static string SpaceDirectory(string root, string spaceId) => Path.Combine(root, "spaces", spaceId);
+    public static string SpacesRoot(string root) => Path.Combine(root, "spaces");
+
+    public static string SpaceDirectory(string root, string spaceId) => Path.Combine(SpacesRoot(root), spaceId);
+
+
+
+
+
+
+
+    public static bool RemoveSpaceDirectory(string root, string spaceId)
+    {
+        var dir = SpaceDirectory(root, spaceId);
+        if (!Directory.Exists(dir)) return false;
+        Directory.Delete(dir, recursive: true);
+        return true;
+    }
 
     public static string BlobDirectory(string root, string spaceId) => Path.Combine(SpaceDirectory(root, spaceId), "blobs");
 

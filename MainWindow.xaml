@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Window
     x:Class="Novara.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -369,41 +369,47 @@
             </Grid>
         </Grid>
 
+
+
         <Grid x:Name="BottomToolbarPanel" Grid.Row="2"
-              HorizontalAlignment="Right" VerticalAlignment="Bottom"
-              Margin="0,0,18,20" Width="68" Height="48">
-
-
-            <Border x:Name="MenuHoverZone" Background="Transparent"
-                    PointerEntered="MenuHoverZone_PointerEntered"
-                    PointerExited="MenuHoverZone_PointerExited" />
-
+              HorizontalAlignment="Left" VerticalAlignment="Bottom"
+              Margin="0,0,0,20">
+            <Border x:Name="MenuSidePanel"
+                    VerticalAlignment="Bottom"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource AppPrimaryButtonBrush}"
+                    CornerRadius="0,12,12,0"
+                    Padding="10,8"
+                    MinWidth="118"
+>
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="MenuSidePanelTranslate" X="0" />
+                </Border.RenderTransform>
+                <StackPanel x:Name="MenuSideItems" Spacing="2" />
+            </Border>
+            <Border x:Name="MenuHandleBar" Width="6" Height="56"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Background="{ThemeResource AppPrimaryButtonBrush}" CornerRadius="0,3,3,0">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="MenuHandleBarTranslate" X="0" />
+                </Border.RenderTransform>
+            </Border>
 
             <Button x:Name="MenuButton"
-                    Style="{StaticResource NovaraPrimaryButtonStyle}"
-                    Click="MenuButton_Click"
-                    Width="8" Height="48" Padding="0"
-                    CornerRadius="4"
-                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Width="24" Height="56"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
                     IsTabStop="False"
-                    PointerEntered="MenuButton_PointerEntered"
-                    PointerExited="MenuButton_PointerExited">
-
+                    Background="Transparent"
+                    PointerEntered="MenuButton_PointerEntered">
+                <Button.RenderTransform>
+                    <TranslateTransform x:Name="MenuButtonTranslate" X="0" />
+                </Button.RenderTransform>
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
-                        <Grid Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
-                            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Grid>
+                        <Grid Background="Transparent" />
                     </ControlTemplate>
                 </Button.Template>
-                <Button.RenderTransform>
-                    <TranslateTransform x:Name="MenuButtonTranslate" X="6" />
-                </Button.RenderTransform>
-                <Path x:Name="MenuPathIcon"
-                      Width="18" Height="18"
-                      Stretch="Uniform"
-                      Fill="#FFFFFFFF"
-                      Opacity="0" />
             </Button>
         </Grid>
 
@@ -824,17 +830,37 @@
                                 </StackPanel>
 
 
-
-                                <Grid x:Name="CarouselDemoToolbar" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                      Margin="0,0,70,115" Width="68" Height="48">
-                                    <Border x:Name="CarouselDemoMenuFace" Width="8" Height="48" CornerRadius="4"
-                                            Background="{ThemeResource AppPrimaryButtonBrush}"
-                                            HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Grid x:Name="CarouselDemoToolbar" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                      Margin="0,0,0,115" Width="130" Height="170">
+                                    <Border x:Name="CarouselDemoSidePanel" Width="118" VerticalAlignment="Bottom"
+                                            Background="{ThemeResource AppPrimaryButtonBrush}" CornerRadius="0,12,12,0" Padding="10,8">
                                         <Border.RenderTransform>
-                                            <TranslateTransform x:Name="CarouselDemoMenuTranslate" X="6" />
+                                            <TranslateTransform x:Name="CarouselDemoPanelTranslate" X="-118" />
                                         </Border.RenderTransform>
-                                        <Path x:Name="CarouselDemoMenuIcon" Width="18" Height="18" Stretch="Uniform"
-                                              Fill="#FFFFFFFF" Opacity="0" />
+                                        <StackPanel Spacing="6">
+                                            <Border Height="26" CornerRadius="8" Margin="2,0">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="#FFFFFF" Opacity="0.2" />
+                                                </Border.Background>
+                                            </Border>
+                                            <Border x:Name="CarouselDemoGhostHover" Height="26" CornerRadius="8" Margin="2,0" Opacity="0">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="#FFFFFF" Opacity="0.45" />
+                                                </Border.Background>
+                                            </Border>
+                                            <Border Height="26" CornerRadius="8" Margin="2,0">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="#FFFFFF" Opacity="0.2" />
+                                                </Border.Background>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="CarouselDemoMenuFace" Width="6" Height="56" CornerRadius="0,3,3,0"
+                                            Background="{ThemeResource AppPrimaryButtonBrush}"
+                                            HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                        <Border.RenderTransform>
+                                            <TranslateTransform x:Name="CarouselDemoMenuTranslate" X="0" />
+                                        </Border.RenderTransform>
                                     </Border>
                                 </Grid>
                                 <Path x:Name="CarouselDemoCursor" Width="26" Height="28" Stretch="Uniform"
@@ -864,10 +890,11 @@
 
 
 
-                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
 
-                                    <Grid Width="400" Height="38">
-                                        <Viewbox Width="400" Height="38" Stretch="Uniform" Opacity="0.45">
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" Height="110">
+
+                                    <Grid Width="400" Height="38" VerticalAlignment="Top" Margin="0,72,0,0">
+                                        <Viewbox Width="400" Height="38" Stretch="Uniform">
                                             <Border Width="800" Height="76" CornerRadius="12"
                                                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                                                     BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
@@ -877,34 +904,54 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="CarouselMcpTitle" FontSize="16"
+                                                    <TextBlock x:Name="CarouselArchiveTitle" FontSize="16"
                                                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                                                VerticalAlignment="Center" Margin="4,0,0,0" />
-                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                            <TextBlock x:Name="CarouselMcpAuditText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        </Button>
-                                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                            <TextBlock x:Name="CarouselMcpConfigText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        </Button>
-                                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                            <TextBlock x:Name="CarouselMcpToggleText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        </Button>
-                                                    </StackPanel>
+                                                    <Button Grid.Column="2" Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                                        <TextBlock x:Name="CarouselArchiveButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
                                                 </Grid>
                                             </Border>
                                         </Viewbox>
-                                        <Border Height="24" VerticalAlignment="Top">
+                                        <Border Height="20" VerticalAlignment="Bottom">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="{ThemeResource CarouselFadeColor}" Offset="0" />
-                                                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                                                    <GradientStop Color="{ThemeResource CarouselFadeColorTransparent}" Offset="0" />
+                                                    <GradientStop Color="{ThemeResource CarouselFadeColor}" Offset="1" />
                                                 </LinearGradientBrush>
                                             </Border.Background>
                                         </Border>
                                     </Grid>
 
-                                    <Viewbox Width="480" Height="45.6" Stretch="Uniform">
+                                    <Viewbox Width="440" Height="41.8" Stretch="Uniform" VerticalAlignment="Top" Margin="0,38,0,0">
+                                        <Border Width="800" Height="76" CornerRadius="12"
+                                                Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                                BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="CarouselMcpTitle" FontSize="16"
+                                                           Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                                           VerticalAlignment="Center" Margin="4,0,0,0" />
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                                        <TextBlock x:Name="CarouselMcpAuditText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
+                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                                        <TextBlock x:Name="CarouselMcpConfigText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
+                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                                        <TextBlock x:Name="CarouselMcpToggleText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </Viewbox>
+
+                                    <Viewbox Width="480" Height="45.6" Stretch="Uniform" VerticalAlignment="Top">
                                         <Border Width="800" Height="76" CornerRadius="12"
                                                 Background="{ThemeResource AppSurfaceOverlayBrush}"
                                                 BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
@@ -928,37 +975,7 @@
                                             </Grid>
                                         </Border>
                                     </Viewbox>
-
-                                    <Grid Width="400" Height="38">
-                                        <Viewbox Width="400" Height="38" Stretch="Uniform" Opacity="0.45">
-                                            <Border Width="800" Height="76" CornerRadius="12"
-                                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
-                                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="CarouselArchiveTitle" FontSize="16"
-                                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                                               VerticalAlignment="Center" Margin="4,0,0,0" />
-                                                    <Button Grid.Column="2" Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselArchiveButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                </Grid>
-                                            </Border>
-                                        </Viewbox>
-                                        <Border Height="24" VerticalAlignment="Bottom">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#00FFFFFF" Offset="0" />
-                                                    <GradientStop Color="{ThemeResource CarouselFadeColor}" Offset="1" />
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                        </Border>
-                                    </Grid>
-                                </StackPanel>
+                                </Grid>
 
                                 <TextBlock x:Name="CarouselP3Intro" FontSize="14"
                                            Foreground="{ThemeResource AppTextSecondaryBrush}"

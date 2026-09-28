@@ -30,6 +30,7 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 - **A real help center** — [novara.xin/help/](https://novara.xin/help/) (36 pages) covers first steps, self-hosting on Synology / QNAP / Ubuntu / Windows, and the security boundary; the app's help buttons now point there.
 - **Server runtime on .NET 10 LTS** — the exposed-to-the-world server components move up while the desktop app stays on .NET 8. Same contract, same container format, zero migration.
 - **Verify what you run** — each release ships `SHA256SUMS` for the installer, `IMAGES.txt` for the image, and an SBOM; see [docs/VERIFYING.md](docs/VERIFYING.md).
+- **And on the desktop** — export any diary or the whole memo collection as an image, four paper themes with new installs starting on Almond, an app-wide animation toggle, an in-app update checker, and a rebuilt sticky-note card with its own palette.
 
 ## 8.0 — Sync, on a Server You Own
 

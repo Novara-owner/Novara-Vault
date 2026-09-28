@@ -103,7 +103,8 @@ public static class StickySync
                 }
                 else
                 {
-                    notes.Add(new StickyNote { Id = id, Kind = kind, Title = title, Content = content, Items = items });
+
+                    notes.Add(new StickyNote { Id = id, Kind = kind, Title = title, Content = content, Items = items, Color = PaperTheme.CurrentStickyColorKey });
                 }
                 data.Theme = ResolveTheme();
                 data.Language = App.CurrentLanguage;
@@ -480,6 +481,12 @@ public class StickyNote
 
 
     public List<StickyTodoItem>? Items { get; set; }
+
+
+    public string? Color { get; set; }
+
+    public int? W { get; set; }
+    public int? H { get; set; }
 }
 
 

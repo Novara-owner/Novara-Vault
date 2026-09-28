@@ -32,6 +32,101 @@ public class SyncHostTests
 
 
     [Fact]
+    public void ValidateDataRoot_CreatesAMissingDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "novara-dataroot-" + Guid.NewGuid().ToString("N"));
+        var nested = Path.Combine(root, "data");
+        try
+        {
+
+
+            Assert.Null(SyncHostSetup.ValidateDataRoot(nested));
+            Assert.True(Directory.Exists(nested));
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Fact]
+    public void ValidateDataRoot_LeavesNoProbeFileBehind()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "novara-dataroot-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Assert.Null(SyncHostSetup.ValidateDataRoot(root));
+
+
+            Assert.Empty(Directory.GetFiles(root));
+        }
+        finally { TryDelete(root); }
+    }
+
+    [Fact]
+    public void ValidateDataRoot_RefusesAPathThatCannotBeCreated()
+    {
+
+
+
+
+        var file = Path.Combine(Path.GetTempPath(), "novara-dataroot-file-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            File.WriteAllText(file, "not a directory");
+            var problem = SyncHostSetup.ValidateDataRoot(Path.Combine(file, "data"));
+
+            Assert.NotNull(problem);
+            Assert.Contains("cannot be written", problem);
+
+
+
+
+            if (OperatingSystem.IsWindows())
+                Assert.Contains("NOVARA_SYNC_DATA", problem);
+            else
+                Assert.Contains("chown -R", problem);
+        }
+        finally
+        {
+            try { File.Delete(file); } catch (Exception) { }
+        }
+    }
+
+    [Fact]
+    public void ValidateDataRoot_NamesTheUidTheImageActuallyUses()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "novara-dataroot-file-" + Guid.NewGuid().ToString("N"));
+        var previous = Environment.GetEnvironmentVariable("APP_UID");
+        try
+        {
+            File.WriteAllText(file, "not a directory");
+            Environment.SetEnvironmentVariable("APP_UID", "4242");
+
+            var problem = SyncHostSetup.ValidateDataRoot(Path.Combine(file, "data"));
+
+
+
+
+            Assert.NotNull(problem);
+            if (!OperatingSystem.IsWindows())
+                Assert.Contains("4242:4242", problem);
+            else
+                Assert.Contains("NOVARA_SYNC_DATA", problem);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APP_UID", previous);
+            try { File.Delete(file); } catch (Exception) { }
+        }
+    }
+
+    private static void TryDelete(string directory)
+    {
+        try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); }
+        catch (Exception) { }
+    }
+
+
+
+    [Fact]
     public void ValidateWebRoot_RefusesADataDirectoryInsideTheWebRoot()
     {
         var web = Path.Combine(Path.GetTempPath(), "novara-site");

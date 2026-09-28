@@ -1,7 +1,12 @@
-novara.example.com {
+{$NOVARA_DOMAIN:novara.example.com} {
 	encode zstd gzip
 
-	reverse_proxy 127.0.0.1:5180 {
+
+
+
+
+
+	reverse_proxy {$NOVARA_UPSTREAM:127.0.0.1:5180} {
 
 
 

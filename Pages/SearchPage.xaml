@@ -62,7 +62,7 @@
                     VerticalAlignment="Center"
                     Spacing="10"
                     Visibility="Collapsed">
-            <Viewbox x:Name="EmptyHintIconBox" Width="56" Height="56" Stretch="Uniform" Opacity="0.5"
+            <Viewbox x:Name="EmptyHintIconBox" Width="56" Height="56" Stretch="Uniform" Opacity="1"
                      Visibility="Collapsed">
                 <PathIcon x:Name="EmptyHintIcon" Foreground="{ThemeResource AppTextSecondaryBrush}" />
             </Viewbox>
@@ -71,13 +71,13 @@
                        TextAlignment="Center"
                        FontSize="13" FontWeight="Light"
                        Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="0.6" TextWrapping="NoWrap" MaxWidth="600" />
+                       Opacity="1" TextWrapping="NoWrap" MaxWidth="600" />
             <TextBlock x:Name="CmdHintText"
                        HorizontalAlignment="Center"
                        TextAlignment="Center"
                        FontSize="12" FontWeight="Light"
                        Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="0.5" Visibility="Collapsed" />
+                       Opacity="1" Visibility="Collapsed" />
         </StackPanel>
 
 
