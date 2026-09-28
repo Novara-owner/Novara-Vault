@@ -1,0 +1,119 @@
+# NovaraSync - one-command deployment: the server, and optionally Caddy in front of it.
+#
+# First run: see README.md in this directory. Short version:
+#   cp .env.example .env      # then edit it
+#   docker compose --profile https up -d
+#
+# Two shapes, and the profile decides which:
+#   docker compose up -d                    -> the server alone. For deployments that terminate TLS
+#                                              somewhere else: Tailscale, a Cloudflare tunnel, or a
+#                                              reverse proxy already on this host.
+#   docker compose --profile https up -d    -> the server plus Caddy, which obtains a certificate
+#                                              for NOVARA_DOMAIN and terminates TLS itself.
+#
+# TLS is not optional for the API. The server refuses plain-HTTP API requests that did not arrive
+# from a trusted proxy (V2-52), so a bare `http://<nas>:5180` answers 403 to every /api call. That
+# is the rule working, not a misconfiguration to route around - the desktop client and the reader
+# both refuse plain http off loopback for the same reason.
+
+name: novara-sync
+
+services:
+  novara-sync:
+    # Pin a digest in production (docker inspect --format '{{index .RepoDigests 0}}'), or set
+    # NOVARA_IMAGE in .env. The tag is what a first run needs; the digest is what an upgrade
+    # review needs.
+    image: ${NOVARA_IMAGE:-ghcr.io/novara-owner/novara-sync:9.0.0}
+    restart: unless-stopped
+    environment:
+      NOVARA_SYNC_DATA: /data
+
+      # The hostname this deployment answers to. Host filtering stays off while this is empty,
+      # and it is the one-line backstop against Host header games, so set it in .env.
+      NOVARA_SYNC_ALLOWED_HOSTS: ${NOVARA_SYNC_ALLOWED_HOSTS:-}
+
+      # Optional. Per-space storage quota in bytes (default 500 MiB) and versions kept per file
+      # (default 10). Leaving them empty keeps the built-in defaults.
+      NOVARA_SYNC_QUOTA_BYTES: ${NOVARA_SYNC_QUOTA_BYTES:-}
+      NOVARA_SYNC_MAX_VERSIONS: ${NOVARA_SYNC_MAX_VERSIONS:-}
+
+      # Caddy is not loopback, so it has to be named here or every forwarded request looks like
+      # plain http from a stranger and the API answers 403. The address is fixed in the network
+      # block below precisely so this line can be a constant: a service name cannot be resolved
+      # into an environment variable, and the server takes single addresses only (no CIDR).
+      NOVARA_SYNC_TRUSTED_PROXIES: ${NOVARA_SYNC_TRUSTED_PROXIES:-172.28.0.250,172.28.0.1}
+    volumes:
+      # The documented default: the operator can see the files and back them up by copying the
+      # directory. A bind mount takes its ownership from the host, so if ./data belongs to a
+      # different uid the server refuses to start and prints the exact chown line to run -
+      # that is the startup check doing its job, not a crash.
+      - ./data:/data
+      # The zero-permission-problems alternative, described in README.md: swap the line above for
+      # this one. Docker seeds a fresh named volume from the image's /data, ownership included.
+      # - novara-data:/data
+    ports:
+      # Loopback only, and only so a TLS terminator running on this host (Tailscale, cloudflared,
+      # an existing nginx) can reach the container. It is never exposed to the network - the whole
+      # point of the plain-http refusal is that a plaintext port should not be reachable at all.
+      # Drop this block if you always run the https profile.
+      - "127.0.0.1:5180:5180"
+    networks:
+      # No fixed address here, deliberately. Only Caddy needs one (it is named in
+      # NOVARA_SYNC_TRUSTED_PROXIES), and pinning this service as well makes every one-off
+      # `docker compose run --rm novara-sync ...` fail with "Address already in use" while the
+      # server is up - which is exactly the first-run step in README.md.
+      - sync-net
+
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      novara-sync:
+        # Caddy waits for the server's own health check, so a first `up -d` does not race the
+        # certificate challenge against a process that has not finished starting.
+        condition: service_healthy
+    environment:
+      NOVARA_DOMAIN: ${NOVARA_DOMAIN:?set NOVARA_DOMAIN in .env - it is the hostname Caddy obtains a certificate for}
+      # The one line that differs from the bare-metal instructions, which is why there is only
+      # one copy of the Caddyfile.
+      NOVARA_UPSTREAM: novara-sync:5180
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy stores issued certificates here. Without this volume every recreate re-issues them,
+      # which runs into the certificate authority's rate limits and can lock the domain out.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      sync-net:
+        # Top of the subnet, not the bottom. Docker's IPAM hands out dynamic addresses from the low
+        # end upwards, so a pinned address next to the gateway gets taken by whichever service
+        # starts first - measured: the server grabbed 172.28.0.2 and Caddy could not start at all
+        # ("failed to set up container networking: Address already in use"). Pinning Caddy high
+        # leaves dynamic allocation the whole low range, which is also what keeps
+        # `docker compose run --rm novara-sync ...` working (that one breaks if this service is
+        # pinned instead, because the one-off container asks for the same address).
+        ipv4_address: 172.28.0.250
+
+networks:
+  sync-net:
+    ipam:
+      config:
+        # Fixed for two reasons: Caddy's address has to be a constant in
+        # NOVARA_SYNC_TRUSTED_PROXIES (a service name cannot be resolved into an environment
+        # variable), and pinning the subnet makes the gateway address deterministic - the gateway
+        # is what a request looks like when it arrives through the published loopback port, i.e.
+        # from a TLS terminator running on the host rather than in a container.
+        # If 172.28.0.0/24 collides with something on your network, change the subnet and Caddy's
+        # ipv4_address together, and NOVARA_SYNC_TRUSTED_PROXIES in .env to match.
+        - subnet: 172.28.0.0/24
+
+volumes:
+  caddy-data:
+  caddy-config:
+  # Uncomment together with the named-volume line on the novara-sync service.
+  # novara-data:

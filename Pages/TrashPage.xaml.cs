@@ -161,6 +161,13 @@ public sealed partial class TrashPage : Page
 
     private void PlayEmptyStateEntrance()
     {
+
+        if (!App.IsAnimationsEnabled)
+        {
+            EmptyState.Opacity = 1;
+            if (EmptyState.RenderTransform is TranslateTransform st) st.Y = 0;
+            return;
+        }
         EmptyState.Opacity = 0;
         if (EmptyState.RenderTransform is not TranslateTransform tt)
         {

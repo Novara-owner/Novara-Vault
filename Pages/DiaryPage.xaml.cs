@@ -25,6 +25,7 @@ public sealed partial class DiaryPage : Page
     private MenuFlyoutItem? _cardStarItem;
     private MenuFlyoutItem? _cardExportItem;
     private MenuFlyoutItem? _cardExportNoImageItem;
+    private MenuFlyoutItem? _cardExportImageItem;
     private DiaryEntry? _currentMenuTarget;
     private bool _hasLoaded;
     private bool _entrancePlayed;
@@ -287,7 +288,7 @@ public sealed partial class DiaryPage : Page
             Child = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.CardPin),
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         iconStack.Children.Add(pinIcon);
@@ -301,7 +302,7 @@ public sealed partial class DiaryPage : Page
             Child = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.CardStar),
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF))
+                Foreground = new SolidColorBrush(PaperTheme.BrandColor)
             }
         };
         iconStack.Children.Add(starIcon);
@@ -364,7 +365,7 @@ public sealed partial class DiaryPage : Page
 
 
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverColor;
-            if (card.RenderTransform is TranslateTransform t)
+            if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform t)
             {
                 var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                 var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin();
@@ -374,7 +375,7 @@ public sealed partial class DiaryPage : Page
         {
             if (_dragging) return;
             if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseColor;
-            if (card.RenderTransform is TranslateTransform t)
+            if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform t)
             {
                 var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
                 var st = new Storyboard(); Storyboard.SetTarget(la, t); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin();
@@ -459,7 +460,7 @@ public sealed partial class DiaryPage : Page
         _dropIndex = _dragOriginIndex = CountVisibleBefore(card);
 
         App.StopCardEntrance(card);
-        card.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
+        card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
         card.BorderThickness = new Thickness(2);
         card.Opacity = 0.35;
         card.RenderTransform = new TranslateTransform();
@@ -544,7 +545,7 @@ public sealed partial class DiaryPage : Page
         {
             Height = 2,
             CornerRadius = new CornerRadius(1),
-            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF)),
+            Background = new SolidColorBrush(PaperTheme.BrandColor),
             VerticalAlignment = VerticalAlignment.Center,
         };
         return b;
@@ -744,6 +745,7 @@ public sealed partial class DiaryPage : Page
     private void FloatInHint()
     {
         EmptyHint.Opacity = 0;
+        if (!App.IsAnimationsEnabled) { EmptyHint.Opacity = 1; if (EmptyHint.RenderTransform is TranslateTransform st) st.Y = 0; return; }
         if (EmptyHint.RenderTransform is not TranslateTransform tt)
         {
             tt = new TranslateTransform { Y = 20 };
@@ -751,7 +753,7 @@ public sealed partial class DiaryPage : Page
         }
         else tt.Y = 20;
         var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 0.6, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, EmptyHint); Storyboard.SetTargetProperty(oa, "Opacity");
         sb.Children.Add(oa);
         var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
@@ -884,6 +886,9 @@ public sealed partial class DiaryPage : Page
             _cardExportItem.Text = isDoc ? App.GetString("Diary_Export") : App.GetString("Menu_ExportMd");
         if (_cardExportNoImageItem != null)
             _cardExportNoImageItem.Visibility = isDoc ? Visibility.Collapsed : Visibility.Visible;
+
+        if (_cardExportImageItem != null)
+            _cardExportImageItem.Visibility = isDoc ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private MenuFlyout BuildCardContextMenu()
@@ -943,6 +948,19 @@ public sealed partial class DiaryPage : Page
         exportNoImageItem.Click += (s, _e) => { if (_currentMenuTarget != null) _ = ExportDiaryAsMarkdown(_currentMenuTarget, true); };
         _cardExportNoImageItem = exportNoImageItem;
 
+        var exportImageItem = new MenuFlyoutItem
+        {
+            Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+            Text = App.GetString("Menu_ExportImage"),
+            Icon = new PathIcon
+            {
+                Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.ExportImage),
+                Foreground = App.GetBrush("IconForegroundBrush")
+            }
+        };
+        exportImageItem.Click += (s, _e) => { if (_currentMenuTarget != null) _ = ExportDiaryAsImage(_currentMenuTarget); };
+        _cardExportImageItem = exportImageItem;
+
         var sep = new MenuFlyoutSeparator();
         var deleteItem = new MenuFlyoutItem
         {
@@ -961,6 +979,7 @@ public sealed partial class DiaryPage : Page
         menu.Items.Add(starItem);
         menu.Items.Add(exportItem);
         menu.Items.Add(exportNoImageItem);
+        menu.Items.Add(exportImageItem);
         menu.Items.Add(sep);
         menu.Items.Add(deleteItem);
         return menu;
@@ -1148,6 +1167,77 @@ public sealed partial class DiaryPage : Page
         var cleaned = Regex.Replace(name, @"[<>:""/\\|?*]", "_");
         cleaned = cleaned.Trim().TrimEnd('.');
         return string.IsNullOrEmpty(cleaned) ? "diary" : cleaned;
+    }
+
+
+
+
+
+
+
+
+
+    private async System.Threading.Tasks.Task ExportDiaryAsImage(DiaryEntry entry)
+    {
+        Windows.Storage.StorageFile? picked = null;
+        try
+        {
+            if (App.MainWindow is not { } mw) return;
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(mw));
+            picker.FileTypeChoices.Add("PNG", new List<string> { ".png" });
+            picker.SuggestedFileName = SanitizeFileName(entry.Title);
+            var file = picked = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            var logo = ImageExportService.TryReadLogoSvg();
+            var exportedAt = DateTime.Now;
+            string content = HtmlSanitizer.Sanitize(entry.Content ?? "");
+            string title = App.DiaryTitleText(entry.Title);
+            string wide = ImageExportTemplates.BuildDiaryHtml(title, content,
+                entry.CreatedAt, entry.ModifiedAt, ImageExportTemplates.WideWidth, exportedAt, logo);
+            string narrow = ImageExportTemplates.BuildDiaryHtml(title, content,
+                entry.CreatedAt, entry.ModifiedAt, ImageExportTemplates.NarrowWidth, exportedAt, logo);
+
+            var narrowPath = ImageExportService.SiblingPath(file.Path, "_mobile");
+            int wideParts = 0, narrowParts = 0;
+            bool wideDone = false, narrowDone = false;
+            var session = await ImageExportSession.BeginAsync(wide, ImageExportTemplates.WideWidth, RootGrid);
+            if (session != null)
+            {
+                try
+                {
+                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(file.Path);
+                    if (wideDone && await session.LoadAsync(narrow, ImageExportTemplates.NarrowWidth))
+                        (narrowParts, narrowDone) = await session.ScreenshotToFileAsync(narrowPath);
+                }
+                finally { session.Close(); }
+            }
+            if (wideDone && narrowDone)
+            {
+                int parts = Math.Max(wideParts, narrowParts);
+                App.ShowToast(parts > 1
+                    ? string.Format(App.GetString("Export_Image_MultiPart"), parts)
+                    : App.GetString("Common_Toast_Exported"));
+            }
+            else
+            {
+                ImageExportService.DeleteGroupFiles(file.Path, wideParts);
+                ImageExportService.DeleteGroupFiles(narrowPath, narrowParts);
+                App.ShowToast(App.GetString("Common_Toast_Failed"));
+            }
+        }
+        catch (Exception ex)
+        {
+
+            System.Diagnostics.Debug.WriteLine($"导出图片失败: {ex.Message}");
+            if (picked?.Path != null)
+            {
+                ImageExportService.DeleteGroupFiles(picked.Path, 0);
+                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked.Path, "_mobile"), 0);
+            }
+            App.ShowToast(App.GetString("Common_Toast_Failed"));
+        }
     }
 
     private static string HtmlToMarkdown(string title, string html, bool removeImages = false)

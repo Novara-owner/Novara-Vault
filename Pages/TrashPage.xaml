@@ -113,7 +113,7 @@
                        HorizontalAlignment="Center" TextAlignment="Center"
                        FontSize="13" FontWeight="Light"
                        Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="0.6" />
+                       Opacity="1" />
         </StackPanel>
 
 

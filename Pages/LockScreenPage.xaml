@@ -192,14 +192,15 @@
                                             <VisualState x:Name="PointerOver">
                                                 <Storyboard>
                                                     <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#FF8C93FF" />
+
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonHoverBrush}" />
                                                     </ObjectAnimationUsingKeyFrames>
                                                 </Storyboard>
                                             </VisualState>
                                             <VisualState x:Name="Pressed">
                                                 <Storyboard>
                                                     <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="#FF5855FF" />
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonPressedBrush}" />
                                                     </ObjectAnimationUsingKeyFrames>
                                                 </Storyboard>
                                             </VisualState>

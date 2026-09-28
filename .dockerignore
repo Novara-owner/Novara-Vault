@@ -1,0 +1,46 @@
+# Build context hygiene. Two reasons, and the second one is a correctness problem rather than a
+# speed problem:
+#   1. the host's build output is several GB and none of it is a build input;
+#   2. COPY would otherwise carry the host's obj/ into the image, and the files there
+#      (project.assets.json, the generated MSBuild files) hold absolute Windows paths such as
+#      C:\Users\... - the in-container restore then reads assets pointing outside the container and
+#      fails in a way that reads like a code error rather than a context error.
+**/bin/
+**/obj/
+_publish_tmp/
+Novara_Publish/
+.vs/
+.vscode/
+.git/
+.gitignore
+*.user
+**/__pycache__/
+node_modules/
+
+# Desktop-only trees. Novara.Server references Novara.Sync.Server, which references Novara.Core -
+# nothing else in the repository is compiled for the image.
+Novara.Tests/
+NovaraMCP/
+StickNoteHost/
+Pages/
+Services/
+Themes/
+Assets/
+DiaryEditorJs/
+Installer/
+Tools/
+deploy/
+memory/
+
+# Documentation and the desktop project's own files.
+*.md
+*.slnx
+app.manifest
+App.xaml
+App.xaml.cs
+AppResources.cs
+IconData.cs
+MainWindow.xaml
+MainWindow.xaml.cs
+Novara.csproj
+ProbeDataSet.json

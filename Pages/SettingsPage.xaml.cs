@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -9,7 +9,6 @@ using Novara.Services;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using Windows.ApplicationModel.DataTransfer;
-using System.Security.Cryptography;
 
 namespace Novara.Pages;
 
@@ -45,11 +44,12 @@ public sealed partial class SettingsPage : Page
 
     private string _currentTheme = App.CurrentTheme;
     private string _pendingTheme = string.Empty;
+    private bool? _pendingAnimationToggle;
     private string _autoStart = "关闭";
     private string _contextMenu = "开启";
     private string _closeBehavior = "直接退出";
     private string _currentLanguage = "";
-    private string _pendingLanguage = string.Empty;
+    private string? _pendingLanguage;
     private bool _restarting;
     private bool _languageRestartAnimating;
     private bool _isPrivacyLockEnabled = false;
@@ -78,6 +78,9 @@ public sealed partial class SettingsPage : Page
 
         FooterBrandText.Text = "Novara";
         FooterVersionText.Text = "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+        UpdateCheckButtonText.Text = App.GetString("Setting_Update_Button");
+        EdgeMenuTitleText.Text = App.GetString("Setting_EdgeMenu_Title");
+        UpdateTitleText.Text = App.GetString("Setting_Update_Title");
 
 
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
@@ -122,12 +125,16 @@ public sealed partial class SettingsPage : Page
         };
         Loaded += (_, _) =>
         {
-            CardsFloatIn.Begin();
+            AnimationTitleText.Text = App.GetString("Setting_Animation_Title");
+
+            if (App.IsAnimationsEnabled) CardsFloatIn.Begin();
+            else App.ShowCardsStatically(Card5, AutoLockCard, QuickCaptureCard, Card2, ContextMenuCard, Card1, Card3, CardAnimation, Card8, Card6, EdgeMenuCard, WelcomeCard, UpdateCard, Card9);
 
             var settings = App.Store?.Database.AppSettings;
             if (settings != null)
             {
                 _currentTheme = string.IsNullOrEmpty(settings.Theme) ? "跟随系统" : settings.Theme;
+                UpdateAnimationButton();
 
                 try { _autoStart = StartupService.IsEnabled() ? "开启" : "关闭"; }
                 catch { _autoStart = settings.AutoStart ? "开启" : "关闭"; }
@@ -141,6 +148,7 @@ public sealed partial class SettingsPage : Page
                 _isPrivacyLockEnabled = settings.PrivacyLockEnabled;
                 _currentLanguage = settings.AppLanguage ?? "";
                 _welcomeOnLaunch = settings.WelcomeOnLaunch;
+                _edgeMenuSide = string.IsNullOrWhiteSpace(settings.EdgeMenuSide) ? "左侧" : settings.EdgeMenuSide;
             }
             else
             {
@@ -154,6 +162,7 @@ public sealed partial class SettingsPage : Page
             UpdateCloseBehaviorButton();
             UpdateLanguageButton();
             UpdateWelcomeButton();
+            UpdateEdgeMenuButton();
             App.MainWindow?.ApplyVisibleTabs(_visibleTabs);
         };
     }
@@ -185,8 +194,8 @@ public sealed partial class SettingsPage : Page
     {
         if (e.Key != Windows.System.VirtualKey.Escape) return;
         if (PrivacyLockWarningOverlay.Visibility == Visibility.Visible) { HidePrivacyLockWarningDialog(); e.Handled = true; return; }
-        if (LanguageRestartOverlay.Visibility == Visibility.Visible) { _pendingLanguage = string.Empty; HideLanguageRestartOverlay(); e.Handled = true; return; }
-        if (ThemeRestartOverlay.Visibility == Visibility.Visible) { _pendingTheme = string.Empty; HideThemeRestartOverlay(); e.Handled = true; return; }
+        if (LanguageRestartOverlay.Visibility == Visibility.Visible) { _pendingLanguage = null; HideLanguageRestartOverlay(); e.Handled = true; return; }
+        if (ThemeRestartOverlay.Visibility == Visibility.Visible) { _pendingTheme = string.Empty; _pendingAnimationToggle = null; HideThemeRestartOverlay(); e.Handled = true; return; }
         if (ChangePasswordOverlay.Visibility == Visibility.Visible) { HideChangePasswordDialog(); e.Handled = true; return; }
         if (ClosePrivacyLockOverlay.Visibility == Visibility.Visible) { HideClosePrivacyLockDialog(); e.Handled = true; return; }
         if (SetPasswordOverlay.Visibility == Visibility.Visible) { HideSetPasswordDialog(); e.Handled = true; return; }
@@ -195,6 +204,8 @@ public sealed partial class SettingsPage : Page
 
         if (QuickCaptureInfoOverlay.Visibility == Visibility.Visible) { HideQuickCaptureInfoDialog(); e.Handled = true; return; }
         if (AutoLockSyncConfirmOverlay.Visibility == Visibility.Visible) { HideAutoLockSyncConfirmDialog(); e.Handled = true; return; }
+        if (UpdateUpToDateOverlay.Visibility == Visibility.Visible) { HideUpdateUpToDateDialog(); e.Handled = true; return; }
+        if (UpdateDialogOverlay.Visibility == Visibility.Visible) { CancelUpdateInteraction(); e.Handled = true; return; }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
@@ -220,7 +231,7 @@ public sealed partial class SettingsPage : Page
         MenuFlyoutItem MakeItem(string text, bool active)
         {
             var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? accentBrush : normalBrush };
-            if (active) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            if (active) item.Icon = new FontIcon { Glyph = "", FontSize = 12, Foreground = accentBrush };
             return item;
         }
 
@@ -228,18 +239,70 @@ public sealed partial class SettingsPage : Page
         var lightItem = MakeItem(App.GetString("Setting_Theme_Light"), _currentTheme == "浅色模式");
         var systemItem = MakeItem(App.GetString("Setting_Theme_System"), _currentTheme == "跟随系统");
 
+        var paperItems = new List<MenuFlyoutItem>();
+        for (var i = 0; i < PaperTheme.Names.Length; i++)
+        {
+            var name = PaperTheme.Names[i];
+            var item = MakeItem(App.GetString(PaperTheme.LabelKeys[i]), _currentTheme == name);
+            item.Click += (_, _) => HandleThemeSelection(name);
+            paperItems.Add(item);
+        }
+
         darkItem.Click += (_, _) => HandleThemeSelection("深色模式");
         lightItem.Click += (_, _) => HandleThemeSelection("浅色模式");
         systemItem.Click += (_, _) => HandleThemeSelection("跟随系统");
 
         menu.Items.Add(darkItem); menu.Items.Add(lightItem); menu.Items.Add(systemItem);
+        foreach (var pi in paperItems) menu.Items.Add(pi);
         menu.ShowAt(ThemeButton, new Windows.Foundation.Point(0, ThemeButton.ActualHeight + 4));
     }
+
+
+
+
+
+
+
+    private void AnimationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+        var current = App.IsAnimationsEnabled;
+
+        MenuFlyoutItem MakeItem(string text, bool active)
+        {
+            var item = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = text, Foreground = active ? accentBrush : normalBrush };
+            if (active) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            return item;
+        }
+        var onItem = MakeItem(App.GetString("Setting_Autostart_On"), current);
+        var offItem = MakeItem(App.GetString("Setting_Autostart_Off"), !current);
+        onItem.Click += (_, _) => RequestAnimationsEnabled(true);
+        offItem.Click += (_, _) => RequestAnimationsEnabled(false);
+        menu.Items.Add(onItem); menu.Items.Add(offItem);
+        menu.ShowAt(AnimationButton, new Windows.Foundation.Point(0, AnimationButton.ActualHeight + 4));
+    }
+
+
+
+    private void RequestAnimationsEnabled(bool enabled)
+    {
+        if (App.IsAnimationsEnabled == enabled) return;
+        if (_themeRestartAnimating) return;
+        _pendingTheme = string.Empty;
+        _pendingAnimationToggle = enabled;
+        ShowThemeRestartOverlay();
+    }
+
+    private void UpdateAnimationButton()
+        => AnimationButtonText.Text = App.GetString(App.IsAnimationsEnabled ? "Setting_Autostart_On" : "Setting_Autostart_Off");
 
     private void HandleThemeSelection(string theme)
     {
         if (theme == _currentTheme) return;
-
+        if (_themeRestartAnimating) return;
+        _pendingAnimationToggle = null;
         _pendingTheme = theme;
         ShowThemeRestartOverlay();
     }
@@ -253,6 +316,11 @@ private void ShowThemeRestartOverlay()
     {
         if (_themeRestartAnimating) return;
         _themeRestartAnimating = true;
+
+
+        bool isAnimation = _pendingAnimationToggle is bool;
+        ThemeRestartTitleText.Text = App.GetString(isAnimation ? "Setting_AnimationRestart_Title" : "Setting_ThemeRestart_Title");
+        ThemeRestartBodyText.Text = App.GetString(isAnimation ? "Setting_AnimationRestart_Tip" : "Theme_Restart_ConfirmTip");
         ThemeRestartScrim.Opacity = 0;
 
 
@@ -309,10 +377,40 @@ private void ShowThemeRestartOverlay()
         sb.Begin();
     }
 
-    private void ThemeRestartConfirm_Click(object sender, RoutedEventArgs e)
+    private async void ThemeRestartConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_restarting) return;
         _restarting = true;
+
+
+
+        await MainWindow.FlushPendingEditorForRestartAsync();
+
+
+        if (ThemeRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; }
+        if (_pendingAnimationToggle is not bool && string.IsNullOrEmpty(_pendingTheme)) { _restarting = false; return; }
+
+
+        if (_pendingAnimationToggle is bool animToggle)
+        {
+            _pendingAnimationToggle = null;
+            HideThemeRestartOverlay();
+            if (App.Store is { } animStore)
+            {
+                animStore.Database.AppSettings.AnimationsEnabled = animToggle;
+                if (!animStore.SaveSync())
+                {
+                    _restarting = false;
+                    animStore.Database.AppSettings.AnimationsEnabled = !animToggle;
+                    UpdateAnimationButton();
+                    return;
+                }
+            }
+            UpdateAnimationButton();
+            RestartAppNow();
+            return;
+        }
+
         var oldTheme = _currentTheme;
         _currentTheme = _pendingTheme;
         UpdateThemeButton();
@@ -332,9 +430,18 @@ private void ShowThemeRestartOverlay()
             }
         }
 
-        string stickyTheme = _currentTheme == "深色模式" ? "dark" : _currentTheme == "浅色模式" ? "light" : Services.StickySync.ResolveTheme();
+        string stickyTheme = _currentTheme == "深色模式" ? "dark" : _currentTheme == "浅色模式" || PaperTheme.IsPaperName(_currentTheme) ? "light" : Services.StickySync.ResolveTheme();
         Services.StickySync.UpdateTheme(stickyTheme);
+        PaperTheme.WriteHint(_currentTheme);
 
+        RestartAppNow();
+    }
+
+
+
+
+    private void RestartAppNow()
+    {
         try
         {
             var exe = Environment.ProcessPath;
@@ -356,18 +463,21 @@ private void ShowThemeRestartOverlay()
     private void ThemeRestartCancel_Click(object sender, RoutedEventArgs e)
     {
         _pendingTheme = string.Empty;
+        _pendingAnimationToggle = null;
         HideThemeRestartOverlay();
     }
 
     private void ThemeRestartClose_Click(object sender, RoutedEventArgs e)
     {
         _pendingTheme = string.Empty;
+        _pendingAnimationToggle = null;
         HideThemeRestartOverlay();
     }
 
     private void ThemeRestartScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
         _pendingTheme = string.Empty;
+        _pendingAnimationToggle = null;
         HideThemeRestartOverlay();
     }
 
@@ -987,13 +1097,21 @@ private void ShowPrivacyLockWarningDialog()
         sb.Begin();
     }
 
-    private void LanguageRestartConfirm_Click(object sender, RoutedEventArgs e)
+    private async void LanguageRestartConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_restarting) return;
         _restarting = true;
+
+
+        await MainWindow.FlushPendingEditorForRestartAsync();
+
+        if (LanguageRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; }
+        if (_pendingLanguage == null) { _restarting = false; return; }
+        var pendingLanguage = _pendingLanguage;
+
         var oldLanguage = _currentLanguage;
-        _currentLanguage = _pendingLanguage;
-        _pendingLanguage = string.Empty;
+        _currentLanguage = pendingLanguage;
+        _pendingLanguage = null;
         UpdateLanguageButton();
         HideLanguageRestartOverlay();
 
@@ -1012,37 +1130,26 @@ private void ShowPrivacyLockWarningDialog()
         Services.StickySync.UpdateLanguage(string.IsNullOrEmpty(_currentLanguage) ? App.ResolveSystemLanguage() : _currentLanguage);
         App.SaveLanguageHint(_currentLanguage);
 
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) { _restarting = false; return; }
-            Novara.MainWindow.ReleaseSingleInstance();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
-        }
-        catch
-        {
-            System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
-            _restarting = false;
-            return;
-        }
-        if (App.MainWindow is { } mw) { mw.SetRestarting(); mw.ExitApp(saveFirst: false); }
+
+
+        RestartAppNow();
     }
 
     private void LanguageRestartCancel_Click(object sender, RoutedEventArgs e)
     {
-        _pendingLanguage = string.Empty;
+        _pendingLanguage = null;
         HideLanguageRestartOverlay();
     }
 
     private void LanguageRestartClose_Click(object sender, RoutedEventArgs e)
     {
-        _pendingLanguage = string.Empty;
+        _pendingLanguage = null;
         HideLanguageRestartOverlay();
     }
 
     private void LanguageRestartScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        _pendingLanguage = string.Empty;
+        _pendingLanguage = null;
         HideLanguageRestartOverlay();
     }
 
@@ -1491,6 +1598,7 @@ private void ShowPrivacyLockWarningDialog()
         "深色模式" => App.GetString("Setting_Theme_Dark"),
         "浅色模式" => App.GetString("Setting_Theme_Light"),
         "跟随系统" => App.GetString("Setting_Theme_System"),
+        _ when PaperTheme.TryGetLabelKey(theme, out var key) => App.GetString(key),
         _ => theme
     };
 
@@ -1527,6 +1635,183 @@ private void ShowPrivacyLockWarningDialog()
             ? App.GetString("Setting_Autostart_On")
             : App.GetString("Setting_Autostart_Off");
         ApplyToggleState(WelcomeOnLaunchButton, _welcomeOnLaunch);
+    }
+
+
+    private string _edgeMenuSide = "左侧";
+
+    private void EdgeMenuSideButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout();
+        menu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
+        void AddItem(string textKey, string side)
+        {
+            bool active = _edgeMenuSide == side;
+            var item = new MenuFlyoutItem
+            {
+                Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+                Text = App.GetString(textKey),
+                Foreground = active ? App.GetBrush("AppTextPrimaryBrush") : App.GetBrush("AppTextSecondaryBrush")
+            };
+            if (active) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush") };
+            item.Click += (_, _) =>
+            {
+                if (_edgeMenuSide == side) return;
+                _edgeMenuSide = side;
+                PersistSetting(s => s.EdgeMenuSide = side);
+                UpdateEdgeMenuButton();
+                App.MainWindow?.ApplyEdgeMenuSide(_edgeMenuSide);
+                App.ShowToast(App.GetString("Common_Toast_Switched"));
+            };
+            menu.Items.Add(item);
+        }
+        AddItem("EdgeMenu_Left", "左侧");
+        AddItem("EdgeMenu_Right", "右侧");
+        menu.ShowAt(EdgeMenuSideButton, new Windows.Foundation.Point(0, EdgeMenuSideButton.ActualHeight + 4));
+    }
+
+    private void UpdateEdgeMenuButton()
+    {
+        EdgeMenuSideText.Text = App.GetString(_edgeMenuSide == "右侧" ? "EdgeMenu_Right" : "EdgeMenu_Left");
+    }
+
+
+
+    private Novara.Services.UpdateService.LatestRelease? _latestRelease;
+    private System.Threading.CancellationTokenSource? _updateDownloadCts;
+    private bool _updateBusy;
+    private bool _updateDownloading;
+
+    private async void UpdateCheckButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateBusy) return;
+        _updateBusy = true;
+        try
+        {
+            var result = await Novara.Services.UpdateService.CheckLatestAsync(System.Threading.CancellationToken.None);
+            if (result.Error != null)
+            {
+                if (result.Error != "cancelled") App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), result.Error));
+                return;
+            }
+            if (result.Latest == null || !result.HasNewer)
+            {
+                UpdateUpToDateTitleText.Text = App.GetString("Update_Latest_Title");
+                UpdateUpToDateBodyText.Text = string.Format(App.GetString("Update_Latest_Body"), Novara.Services.UpdateService.CurrentVersion);
+                UpdateUpToDateCloseText.Text = App.GetString("Update_Btn_Cancel");
+                RegisterDialogClamp(UpdateUpToDateOverlay, UpdateUpToDateDialog);
+                ShowOverlay(UpdateUpToDateOverlay, UpdateUpToDateDialog, UpdateUpToDateDialogTransform);
+                return;
+            }
+            _latestRelease = result.Latest;
+            UpdateNewTitleText.Text = string.Format(App.GetString("Update_New_Title"), _latestRelease.Version);
+            UpdateNewDateText.Text = string.IsNullOrEmpty(_latestRelease.Date) ? "" : string.Format(App.GetString("Update_New_Date"), _latestRelease.Date);
+            var lang = App.CurrentLanguage;
+            var notes = (lang == "zh-CN" || lang == "zh-TW")
+                ? (_latestRelease.NotesZh ?? _latestRelease.NotesEn)
+                : (_latestRelease.NotesEn ?? _latestRelease.NotesZh);
+            UpdateNotesText.Text = notes ?? "";
+            ResetUpdateInstallUi();
+            RegisterDialogClamp(UpdateDialogOverlay, UpdateDialog);
+            ShowOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform);
+        }
+        catch (Exception ex)
+        {
+            App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), ex.Message));
+        }
+        finally
+        {
+            _updateBusy = false;
+        }
+    }
+
+    private async void UpdateUpgrade_Click(object sender, RoutedEventArgs e)
+    {
+        if (_latestRelease == null || _updateBusy) return;
+        _updateBusy = true;
+        UpdateInstallButton.IsEnabled = false;
+        UpdateProgressBar.Visibility = Visibility.Visible;
+        UpdateStatusText.Visibility = Visibility.Visible;
+        UpdateProgressBar.Value = 0;
+        UpdateStatusText.Text = string.Format(App.GetString("Update_Downloading"), 0);
+        _updateDownloadCts = new System.Threading.CancellationTokenSource();
+        _updateDownloading = true;
+        try
+        {
+            var progress = new Progress<double>(v =>
+            {
+                UpdateProgressBar.Value = v;
+                UpdateStatusText.Text = string.Format(App.GetString("Update_Downloading"), v);
+            });
+            var file = await Novara.Services.UpdateService.DownloadAsync(_latestRelease, progress, _updateDownloadCts.Token);
+            _updateDownloading = false;
+            UpdateStatusText.Text = App.GetString("Update_Verifying");
+            var actual = await System.Threading.Tasks.Task.Run(() => Novara.Services.UpdateService.Sha256Hex(file));
+            var expected = _latestRelease.Sha256?.Trim();
+            if (string.IsNullOrEmpty(expected) || !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                try { System.IO.File.Delete(file); } catch { }
+                App.ShowToast(App.GetString("Update_Fail_Hash"));
+                ResetUpdateInstallUi();
+                return;
+            }
+            UpdateStatusText.Text = App.GetString("Update_Launching");
+            await System.Threading.Tasks.Task.Delay(400);
+            if (App.Store != null) App.Store.SaveSync();
+            try
+            {
+                Novara.Services.UpdateService.LaunchInstaller(file);
+            }
+            catch (Exception launchEx)
+            {
+
+                App.ShowToast(string.Format(App.GetString("Update_Fail_Launch"), launchEx.Message));
+                ResetUpdateInstallUi();
+                return;
+            }
+            App.MainWindow?.BeginUpdateExit();
+            App.MainWindow?.Close();
+        }
+        catch (OperationCanceledException)
+        {
+            ResetUpdateInstallUi();
+        }
+        catch (Exception ex)
+        {
+            App.ShowToast(string.Format(App.GetString("Update_Fail_Download"), ex.Message));
+            ResetUpdateInstallUi();
+        }
+        finally
+        {
+            _updateDownloadCts?.Dispose();
+            _updateDownloadCts = null;
+            _updateDownloading = false;
+            _updateBusy = false;
+        }
+    }
+
+    private void UpdateCancel_Click(object sender, RoutedEventArgs e) => CancelUpdateInteraction();
+
+    private void CancelUpdateInteraction()
+    {
+        if (_updateBusy && _updateDownloading) { _updateDownloadCts?.Cancel(); return; }
+        HideUpdateDialog();
+    }
+
+    private void UpdateDialogScrim_Tapped(object sender, TappedRoutedEventArgs e) => UpdateCancel_Click(sender, e);
+    private void UpdateDialogClose_Click(object sender, RoutedEventArgs e) => UpdateCancel_Click(sender, e);
+    private void UpdateUpToDateScrim_Tapped(object sender, TappedRoutedEventArgs e) => HideUpdateUpToDateDialog();
+    private void UpdateUpToDateClose_Click(object sender, RoutedEventArgs e) => HideUpdateUpToDateDialog();
+    private void HideUpdateDialog() => HideOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform, () => { });
+    private void HideUpdateUpToDateDialog() => HideOverlay(UpdateUpToDateOverlay, UpdateUpToDateDialog, UpdateUpToDateDialogTransform, () => { });
+
+    private void ResetUpdateInstallUi()
+    {
+        UpdateProgressBar.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Visibility = Visibility.Collapsed;
+        UpdateCancelText.Text = App.GetString("Update_Btn_Cancel");
+        UpdateInstallButton.IsEnabled = true;
+        UpdateInstallText.Text = App.GetString("Update_Btn_Install");
     }
 
 

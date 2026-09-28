@@ -45,12 +45,14 @@ public sealed partial class DiaryEditorPage : Page
 
 
 
+
+
 private const string EditorHtmlTemplate = @"<!DOCTYPE html>
 <html><head><meta charset='utf-8'><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
-body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{5};border-radius:3px}}
+body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{5};border-radius:2px}}body::-webkit-scrollbar-thumb:hover{{background:{11}}}
 ::selection{{background:{4};color:inherit}}
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title b,#title strong,#title span[style*=bold]{{font-weight:700!important}}
@@ -70,7 +72,7 @@ body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:tr
 #body .ProseMirror code{{font-family:Consolas,Monaco,monospace}}
 #body .ProseMirror blockquote{{border-left:3px solid {3};margin:8px 0;padding-left:14px;color:{2}}}
 #body .ProseMirror hr{{border:none;border-top:1px solid {3};margin:16px 0}}
-#body .ProseMirror a{{color:#8C93FF;text-decoration:underline;cursor:pointer}}
+#body .ProseMirror a{{color:{12};text-decoration:underline;cursor:pointer}}
 img{{max-width:100%;height:auto;display:block;margin:4px 0}}
 </style></head><body>
 <div id='title' contenteditable='true' spellcheck='false'></div>
@@ -94,7 +96,7 @@ var editor=new T.Editor({{
     T.TextAlign.configure({{types:['heading','paragraph','image']}})
   ],
   content:'',
-  onUpdate:function(){{if(window.__mdLoading!==true)window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}, // N5-S7-01: 图片缩放/移除链接等程序化变更不派发 input，onUpdate 全量兜底（__mdLoading 拦截载入 setContent）
+  onUpdate:function(){{if(window.__mdLoading!==true)window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}},
   onSelectionUpdate:function(){{notifyFormatState()}}
 }});
 function notifyFormatState(){{window.chrome.webview.postMessage(JSON.stringify({{action:'formatState',bold:editor.isActive('bold'),italic:editor.isActive('italic'),underline:editor.isActive('underline')}}))}}
@@ -111,13 +113,12 @@ function execAlign(a){{editor.chain().focus().setTextAlign(a).run()}}
 function execCodeBlock(){{editor.chain().focus().toggleCodeBlock().run()}}
 function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}}
 function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
-function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh()}} // N5-S7-01: 载入 setContent 触发的 onUpdate 不算用户编辑
+function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh()}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
-tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // V2-66: 标题编辑同样是「用户改过」——旧实现只更新字距，于是「仅改标题 + 保存失败」连一句提示都没有（正文编辑有 Editor_SaveFail_Toast），口径不一致
-function getTitle(){{return tel.innerHTML}}
-function getBody(){{return editor.getHTML()}}
+tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
+function getTitle(){{return tel.innerHTML}}function getBody(){{return editor.getHTML()}}
 bel.addEventListener('click',function(e){{var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a){{e.preventDefault();var href=a.getAttribute('href');if(href)window.chrome.webview.postMessage(JSON.stringify({{action:'openLink',url:href}}))}}}});
-bel.addEventListener('input',function(){{window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // N3-15: native input fires on user typing/paste only - ProseMirror's programmatic setContent mutates the DOM silently, so this is a reliable 'user touched the body' signal
+bel.addEventListener('input',function(){{window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
 var ctxMenu=document.createElement('div');
 ctxMenu.style.cssText='position:fixed;z-index:9999;background:{10};border:1px solid {3};border-radius:8px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:none;';
 var unlinkItem=document.createElement('div');
@@ -134,7 +135,7 @@ bel.addEventListener('contextmenu',function(e){{var a=e.target&&e.target.closest
 document.addEventListener('click',function(e){{if(!ctxMenu.contains(e.target))hideCtx()}});
 window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setAll':setAll(m.title||'',m.body||'');break;case'insertImage':insertImage(m.base64,m.filename,m.mime);break;case'execBold':execBold();break;case'execItalic':execItalic();break;case'execUnderline':execUnderline();break;case'execForeColor':execForeColor(m.color);break;case'execClear':execClear();break;case'execUndo':execUndo();break;case'execRedo':execRedo();break;case'execAlign':execAlign(m.align);break;case'execCodeBlock':execCodeBlock();break;case'execHorizontalRule':execHorizontalRule();break;}}}}catch(err){{}}}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
-tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}}); // N4D-04: 标题禁止回车（防多行标题拼接）；N5-RC-02: IME 组合态确认候选词不拦（与上方长度拦截同守卫口径）
+tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';var sel=window.getSelection();if(sel&&sel.rangeCount&&tel.contains(sel.anchorNode)){{try{{sel.deleteFromDocument()}}catch(err){{}}}}var t=tel.textContent.replace(/\s/g,'');var rem=120-t.length;if(rem<=0)return;var out='',ns=0;for(var i=0;i<txt.length;i++){{var ch=txt.charAt(i);out+=ch;if(!/\s/.test(ch)){{ns++;if(ns>=rem)break}}}}document.execCommand('insertText',false,out)}});
 notifyFormatState();
 </script></body></html>";
@@ -149,8 +150,15 @@ notifyFormatState();
         string placeholder = isLight ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.4)";
         string sep = isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.2)";
         string selection = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)";
-        string scrollbar = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)";
+        string scrollbar = "rgba(114,118,255,0.45)";
+        string scrollbarHover = "rgba(114,118,255,0.7)";
         string menuBg = isLight ? "#FFFFFF" : "#2A2A2A";
+        string link = "#8C93FF";
+
+        if (PaperTheme.TryGetEditorColors(out var pBg, out var pText, out var pPlaceholder, out var pSep, out var pSelection, out var pScrollbar, out var pScrollbarHover, out var pMenuBg, out var pLink))
+        {
+            bg = pBg; text = pText; placeholder = pPlaceholder; sep = pSep; selection = pSelection; scrollbar = pScrollbar; scrollbarHover = pScrollbarHover; menuBg = pMenuBg; link = pLink;
+        }
 
 
         string bundle;
@@ -158,8 +166,9 @@ notifyFormatState();
         catch { bundle = "window.NovaraTiptap={};"; }
         return string.Format(EditorHtmlTemplate, bg, text, placeholder, sep, selection, scrollbar,
             App.GetString("DiaryEditor_TitlePlaceholder"), App.GetString("DiaryEditor_BodyPlaceholder"),
-            bundle, App.GetString("Menu_Unlink"), menuBg);
+            bundle, App.GetString("Menu_Unlink"), menuBg, scrollbarHover, link);
     }
+
 
 
 
@@ -170,7 +179,7 @@ notifyFormatState();
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
-body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{4};border-radius:3px}}
+body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{4};border-radius:2px}}body::-webkit-scrollbar-thumb:hover{{background:{8}}}
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title:empty::before{{content:'{2}';color:{3};font-weight:normal;letter-spacing:0.18em}}
 #md-editor::placeholder{{color:{3}}}
@@ -186,7 +195,7 @@ body::-webkit-scrollbar{{width:6px}}body::-webkit-scrollbar-track{{background:tr
 #md-preview code{{font-family:Consolas,Monaco,monospace}}
 #md-preview blockquote{{border-left:3px solid {5};margin:8px 0;padding-left:14px;color:{3}}}
 #md-preview hr{{border:none;border-top:1px solid {5};margin:16px 0}}
-#md-preview a{{color:#8C93FF;text-decoration:underline}}
+#md-preview a{{color:{9};text-decoration:underline}}
 #md-preview img{{max-width:100%;height:auto}}
 </style></head><body>
 <div id='title' contenteditable='true' spellcheck='false'></div>
@@ -204,8 +213,9 @@ function autoResize(){{var doc=document.documentElement;var prev=doc.scrollTop;t
 function renderPreview(){{pv.innerHTML=window.NovaraMd.render(ta.value)}}
 function getTitle(){{return tel.innerHTML}}
 function getMd(){{return ta.value}}
-function showWrite(){{ta.style.display='block';pv.style.display='none';autoResize()}}
-function showPreview(){{renderPreview();ta.style.display='none';pv.style.display='block'}}
+function fracOf(el){{var doc=document.documentElement;return (doc.scrollTop-el.offsetTop+8)/Math.max(1,el.scrollHeight)}}
+function showWrite(){{var doc=document.documentElement;var vis=pv.scrollHeight>1;var f=vis?(doc.scrollTop-pv.offsetTop+8)/Math.max(1,pv.scrollHeight):0;ta.style.display='block';pv.style.display='none';autoResize();if(vis)doc.scrollTop=Math.max(0,ta.offsetTop+f*ta.scrollHeight-8)}}
+function showPreview(){{var doc=document.documentElement;var f=(doc.scrollTop-ta.offsetTop+8)/Math.max(1,ta.scrollHeight);renderPreview();ta.style.display='none';pv.style.display='block';doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);var anchored=doc.scrollTop;var imgs=pv.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{imgs[i].addEventListener('load',function(){{if(pv.style.display!=='none'&&doc.scrollTop===anchored){{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);anchored=doc.scrollTop}}}})}}}}
 function wrapSel(before,after,ph){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e)||ph;ta.setRangeText(before+sel+after,s,e,'end');ta.setSelectionRange(s+before.length,s+before.length+sel.length);ta.focus()}}
 function prefixLines(prefix){{var s=ta.selectionStart;var val=ta.value;var ls=val.lastIndexOf('\n',s-1)+1;ta.setRangeText(prefix,ls,ls,'end');ta.focus()}}
 function insertBlock(text){{var s=ta.selectionStart,e=ta.selectionEnd;ta.setRangeText(text,s,e,'end');ta.focus()}}
@@ -226,11 +236,11 @@ function mdClearFormat(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.v
 function mdUndo(){{ta.focus();document.execCommand('undo')}}
 function mdRedo(){{ta.focus();document.execCommand('redo')}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
-tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}}); // V2-66: MD 编辑器同口径
+tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
 ta.addEventListener('input',function(){{autoResize()}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
-tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}}); // N4D-04: 标题禁止回车（防多行标题拼接）；N5-RC-02: IME 组合态确认候选词不拦（与上方长度拦截同守卫口径）
+tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';var sel=window.getSelection();if(sel&&sel.rangeCount&&tel.contains(sel.anchorNode)){{try{{sel.deleteFromDocument()}}catch(err){{}}}}var t=tel.textContent.replace(/\s/g,'');var rem=120-t.length;if(rem<=0)return;var out='',ns=0;for(var i=0;i<txt.length;i++){{var ch=txt.charAt(i);out+=ch;if(!/\s/.test(ch)){{ns++;if(ns>=rem)break}}}}document.execCommand('insertText',false,out)}});
 window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setMd':setMd(m.title||'',m.body||'');break;case'showWrite':showWrite();break;case'showPreview':showPreview();break;case'mdBold':mdBold();break;case'mdItalic':mdItalic();break;case'mdStrike':mdStrike();break;case'mdInlineCode':mdInlineCode();break;case'mdHeading':mdHeading(m.level||1);break;case'mdBullet':mdBullet();break;case'mdOrdered':mdOrdered();break;case'mdQuote':mdQuote();break;case'mdLink':mdLink();break;case'mdImage':mdImage();break;case'mdCodeBlock':mdCodeBlock(m.lang||'');break;case'mdHr':mdHr();break;case'mdTable':mdTable();break;case'mdClearFormat':mdClearFormat();break;case'mdUndo':mdUndo();break;case'mdRedo':mdRedo();break;}}}}catch(err){{}}}});
 </script></body></html>";
@@ -243,12 +253,19 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         string text = isLight ? "rgba(0,0,0,0.87)" : "rgba(255,255,255,0.87)";
         string placeholder = isLight ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.4)";
         string sep = isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.2)";
-        string scrollbar = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.15)";
+        string scrollbar = "rgba(114,118,255,0.45)";
+        string scrollbarHover = "rgba(114,118,255,0.7)";
+        string link = "#8C93FF";
+
+        if (PaperTheme.TryGetEditorColors(out var pBg, out var pText, out var pPlaceholder, out var pSep, out var pSelection, out var pScrollbar, out var pScrollbarHover, out var pMenuBg, out var pLink))
+        {
+            bg = pBg; text = pText; placeholder = pPlaceholder; sep = pSep; scrollbar = pScrollbar; scrollbarHover = pScrollbarHover; link = pLink;
+        }
         string bundle;
         try { bundle = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "md.bundle.js")); }
         catch { bundle = "window.NovaraMd={render:function(t){return (t||'').replace(/</g,'&lt;')}};"; }
         return string.Format(MarkdownHtmlTemplate, bg, text, App.GetString("DiaryEditor_DocumentTitlePlaceholder"), placeholder, scrollbar, sep, bundle,
-            App.GetString("DiaryEditor_DocumentBodyPlaceholder"));
+            App.GetString("DiaryEditor_DocumentBodyPlaceholder"), scrollbarHover, link);
     }
 
 
@@ -1253,7 +1270,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private void UpdateMdViewSwitch(bool write)
     {
-        var sel = new SolidColorBrush(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
+        var sel = new SolidColorBrush(PaperTheme.BrandColor);
         var trans = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         var white = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         var icon = App.GetBrush("IconForegroundBrush");

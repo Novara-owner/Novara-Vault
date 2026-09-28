@@ -53,6 +53,48 @@ public sealed class FileSpaceStore : ISpaceStore
         WriteAtomic(Path.Combine(SpaceDir(space.SpaceId), SpaceFile), JsonSerializer.Serialize(space, Options));
     }
 
+
+
+
+
+
+
+    public IReadOnlyList<SpaceRecord> ListSpaces()
+    {
+        var spacesRoot = BlobLayout.SpacesRoot(_root);
+        if (!Directory.Exists(spacesRoot)) return Array.Empty<SpaceRecord>();
+
+        var spaces = new List<SpaceRecord>();
+        foreach (var dir in EnumerateSpaceDirectories(spacesRoot))
+        {
+            var id = Path.GetFileName(dir);
+            if (!IsSafeId(id)) continue;
+
+            var record = Read<SpaceRecord>(Path.Combine(dir, SpaceFile));
+            if (record is not null) spaces.Add(record);
+        }
+
+        return spaces.OrderBy(s => s.CreatedAt).ThenBy(s => s.SpaceId, StringComparer.Ordinal).ToList();
+    }
+
+
+
+
+
+
+    public void DeleteSpace(string spaceId)
+    {
+        RequireSafeId(spaceId);
+        try { BlobLayout.RemoveSpaceDirectory(_root, spaceId); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+
+
+            throw new SpaceStoreException(
+                $"failed to remove the space directory: {BlobLayout.SpaceDirectory(_root, spaceId)}", e);
+        }
+    }
+
     public IReadOnlyList<DeviceRecord> GetDevices(string spaceId)
         => IsSafeId(spaceId)
             ? Read<List<DeviceRecord>>(Path.Combine(SpaceDir(spaceId), DevicesFile)) ?? new List<DeviceRecord>()
@@ -143,6 +185,19 @@ public sealed class FileSpaceStore : ISpaceStore
     private static void RequireSafeId(string spaceId)
     {
         if (!IsSafeId(spaceId)) throw new SpaceStoreException("space id contains unsupported characters");
+    }
+
+
+
+
+
+    private static IReadOnlyList<string> EnumerateSpaceDirectories(string spacesRoot)
+    {
+        try { return Directory.EnumerateDirectories(spacesRoot).ToList(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw new SpaceStoreException("failed to enumerate the spaces directory", e);
+        }
     }
 
     private static T? Read<T>(string path) where T : class

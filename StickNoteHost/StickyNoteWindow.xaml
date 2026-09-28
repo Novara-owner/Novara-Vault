@@ -5,9 +5,6 @@
     Title="Sticky Note">
     <Border x:Name="RootBorder"
             Background="#FFF2F2F2"
-            BorderBrush="#40000000"
-            BorderThickness="1"
-            CornerRadius="8" MinWidth="300" MinHeight="450"
             RightTapped="RootBorder_RightTapped"
             PointerPressed="RootBorder_PointerPressed"
             PointerMoved="RootBorder_PointerMoved"
@@ -28,7 +25,7 @@
                        Visibility="Collapsed"
                        Margin="0,6,0,0" />
             <ScrollViewer Grid.Row="2" x:Name="NoteScroll"
-                          VerticalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Hidden"
                           HorizontalScrollBarVisibility="Disabled"
                           IsTabStop="False">
                 <TextBlock x:Name="NoteBox" Text="Note content" TextWrapping="Wrap"

@@ -529,6 +529,13 @@ public sealed partial class SearchPage : Page
 
     private void FloatInHint()
     {
+
+        if (!App.IsAnimationsEnabled)
+        {
+            EmptyHintPanel.Opacity = 1;
+            if (EmptyHintPanel.RenderTransform is TranslateTransform st) st.Y = 0;
+            return;
+        }
         EmptyHintPanel.Opacity = 0;
         if (EmptyHintPanel.RenderTransform is not TranslateTransform tt)
         {
@@ -537,7 +544,7 @@ public sealed partial class SearchPage : Page
         }
         else tt.Y = 20;
         var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 0.6, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, EmptyHintPanel); Storyboard.SetTargetProperty(oa, "Opacity");
         sb.Children.Add(oa);
         var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };

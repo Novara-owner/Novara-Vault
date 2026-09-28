@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.BasicMemoPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -381,7 +381,7 @@
                                FontSize="13"
                                FontWeight="Light"
                                Foreground="{ThemeResource AppTextTertiaryBrush}"
-                               Opacity="0.6"
+                               Opacity="1"
                                TextWrapping="NoWrap"
                                MaxWidth="600"
                                Visibility="Collapsed" />
@@ -502,7 +502,7 @@
                                    Margin="0,0,0,8" />
                         <ScrollViewer x:Name="UngroupedEntriesScroll"
                                       Grid.Row="1"
-                                      VerticalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Hidden"
                                       HorizontalScrollBarVisibility="Disabled"
                                       VerticalScrollMode="Enabled"
                                       HorizontalScrollMode="Disabled"
@@ -610,7 +610,7 @@
                         </Button>
                     </Grid>
                     <ScrollViewer Grid.Row="2" Margin="0,16,0,0"
-                                  VerticalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Hidden"
                                   HorizontalScrollBarVisibility="Disabled">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -1522,7 +1522,7 @@
                                    TextWrapping="Wrap" />
                     </StackPanel>
                     <ScrollViewer Grid.Row="2" Margin="0,16,0,0"
-                                  VerticalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Hidden"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Spacing="8">
                             <StackPanel x:Name="RelayProbeReportRows" Spacing="8" />

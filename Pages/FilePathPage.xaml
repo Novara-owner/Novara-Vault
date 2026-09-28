@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="Novara.Pages.FilePathPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -37,7 +37,7 @@
                    FontSize="13"
                    FontWeight="Light"
                    Foreground="{ThemeResource AppTextTertiaryBrush}"
-                   Opacity="0.6"
+                   Opacity="1"
                    TextWrapping="NoWrap"
                    MaxWidth="600"
                    Visibility="Visible" />
@@ -90,9 +90,9 @@
                         </Button>
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="16">
-                    <StackPanel Spacing="6" Margin="0,20,0,0">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16" Margin="0,16,0,0">
+                    <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Common_Label_Name\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -103,60 +103,40 @@
                                  TextChanged="NewPathField_TextChanged" />
                     </StackPanel>
 
-                    <StackPanel Spacing="6" Margin="0,16,0,0">
+                    <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Form_Label_Path\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="PickFileButton"
-                                    Grid.Column="0"
-                                    Style="{StaticResource NovaraOutlineButtonStyle}"
-                                    Height="40"
-                                    HorizontalAlignment="Stretch"
-                                    BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
-                                    CornerRadius="20"
-                                    Click="PickFileButton_Click">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="6"
-                                            VerticalAlignment="Center"
-                                            HorizontalAlignment="Center">
-                                    <Viewbox x:Name="PickFileIcon" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Opacity="0.6" Margin="0,1,0,0">
-                                        <PathIcon x:Name="PickFilePathIcon" Foreground="{ThemeResource IconForegroundBrush}" />
-                                    </Viewbox>
-                                    <TextBlock Text="{x:Bind app:App.GetString(\'Path_SelectFile\')}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="PickFolderButton"
+                            <TextBox x:Name="NewPathInputBox"
+                                     Grid.Column="0"
+                                     Style="{StaticResource NovaraTextBoxStyle}"
+                                     MaxLength="2000"
+                                     PlaceholderText="{x:Bind app:App.GetString(\'Path_New_PathPlaceholder\')}"
+                                     TextChanged="NewPathField_TextChanged" />
+                            <Button x:Name="PickPathButton"
                                     Grid.Column="1"
-                                    Style="{StaticResource NovaraOutlineButtonStyle}"
-                                    Height="40"
-                                    HorizontalAlignment="Stretch"
-                                    BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
-                                    CornerRadius="20"
-                                    Click="PickFolderButton_Click">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="6"
-                                            VerticalAlignment="Center"
-                                            HorizontalAlignment="Center">
-                                    <Viewbox x:Name="PickFolderIcon" Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center" Opacity="0.6" Margin="0,1,0,0">
-                                        <PathIcon x:Name="PickFolderPathIcon" Foreground="{ThemeResource IconForegroundBrush}" />
-                                    </Viewbox>
-                                    <TextBlock Text="{x:Bind app:App.GetString(\'Path_SelectFolder\')}" VerticalAlignment="Center" />
-                                </StackPanel>
+                                    Width="40"
+                                    VerticalAlignment="Stretch"
+                                    Style="{StaticResource NovaraIconButtonStyle}">
+
+                                <Path x:Name="PickPathIcon"
+                                      Data="{x:Null}"
+                                      Stretch="Uniform"
+                                      Width="16" Height="16"
+                                      Fill="{ThemeResource IconForegroundBrush}"
+                                      Opacity="0.6"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Center" />
                             </Button>
                         </Grid>
-                        <TextBox x:Name="NewPathInputBox"
-                                 Style="{StaticResource NovaraTextBoxStyle}"
-                                 MaxLength="2000"
-                                 PlaceholderText="{x:Bind app:App.GetString(\'Path_New_PathPlaceholder\')}"
-                                 TextChanged="NewPathField_TextChanged" />
                     </StackPanel>
 
-                    <StackPanel Spacing="6" Margin="0,16,0,0">
+                    <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Common_Label_Note\')}"
                                    FontSize="12" FontWeight="Medium"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}" />

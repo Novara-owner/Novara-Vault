@@ -1,10 +1,18 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace Novara.Models;
 
 public class AppSettings
 {
-    public string Theme { get; set; } = "跟随系统";
+
+
+
+    public string Theme { get; set; } = "类纸 · 淡杏";
+
+
+
+
+    public bool AnimationsEnabled { get; set; } = true;
     public bool AutoStart { get; set; }
     public bool ContextMenu { get; set; } = true;
     public string CloseBehavior { get; set; } = "直接退出";
@@ -22,6 +30,8 @@ public class AppSettings
     public bool HasCompletedWelcome { get; set; }
     public bool HasCompletedCarousel { get; set; }
     public bool WelcomeOnLaunch { get; set; } = true;
+
+    public string EdgeMenuSide { get; set; } = "左侧";
 
     public bool BackupEnabled { get; set; }
     public bool AutoBackupEnabled { get; set; }

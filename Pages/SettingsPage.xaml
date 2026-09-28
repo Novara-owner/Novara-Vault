@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -24,13 +24,13 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.42">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.48">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.42">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.48">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -48,13 +48,13 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.54">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.66">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.54">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.66">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -108,25 +108,62 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.48">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.54">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.48">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.54">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.74">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.76">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.74">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.76">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.86">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.86">
+
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.42">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.42">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.60">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.60">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -592,6 +629,43 @@
                 </Grid>
             </Border>
 
+            <Border x:Name="CardAnimation" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               x:Name="AnimationTitleText"
+                               FontSize="16"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                    <Button Grid.Column="2"
+                            Width="160" Height="40"
+                            Style="{StaticResource SettingsDropdownButtonStyle}"
+                            Background="{ThemeResource AppSurfaceBrush}"
+                            Foreground="{ThemeResource AppTextSecondaryBrush}"
+                            BorderBrush="{ThemeResource AppBorderBrush}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            Margin="-8,0,0,0"
+                            x:Name="AnimationButton"
+                            Click="AnimationButton_Click">
+                        <TextBlock x:Name="AnimationButtonText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <Border x:Name="Card8" CornerRadius="12" Opacity="0"
                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                     BorderBrush="{ThemeResource AppBorderBrush}"
@@ -666,6 +740,43 @@
                 </Grid>
             </Border>
 
+            <Border x:Name="EdgeMenuCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               x:Name="EdgeMenuTitleText"
+                               FontSize="16"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                    <Button Grid.Column="2"
+                            Width="160" Height="40"
+                            Style="{StaticResource SettingsDropdownButtonStyle}"
+                            Background="{ThemeResource AppSurfaceBrush}"
+                            Foreground="{ThemeResource AppTextSecondaryBrush}"
+                            BorderBrush="{ThemeResource AppBorderBrush}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            Margin="-8,0,0,0"
+                            x:Name="EdgeMenuSideButton"
+                            Click="EdgeMenuSideButton_Click">
+                        <TextBlock x:Name="EdgeMenuSideText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <Border x:Name="WelcomeCard" CornerRadius="12" Opacity="0"
                     Background="{ThemeResource AppSurfaceOverlayBrush}"
                     BorderBrush="{ThemeResource AppBorderBrush}"
@@ -697,6 +808,44 @@
                             x:Name="WelcomeOnLaunchButton"
                             Click="WelcomeOnLaunchButton_Click">
                         <TextBlock Text="{x:Bind app:App.GetString('Setting_Autostart_Off')}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
+
+            <Border x:Name="UpdateCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               x:Name="UpdateTitleText"
+                               FontSize="16"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                    <Button Grid.Column="2"
+                            Width="160" Height="40"
+                            Style="{StaticResource SettingsDropdownButtonStyle}"
+                            Background="{ThemeResource AppSurfaceBrush}"
+                            Foreground="{ThemeResource AppTextSecondaryBrush}"
+                            BorderBrush="{ThemeResource AppBorderBrush}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            Margin="-8,0,0,0"
+                            x:Name="UpdateCheckButton"
+                            Click="UpdateCheckButton_Click">
+                        <TextBlock x:Name="UpdateCheckButtonText"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Button>
@@ -1034,7 +1183,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
-                        <TextBlock Text="{x:Bind app:App.GetString(\'Setting_ThemeRestart_Title\')}"
+                        <TextBlock x:Name="ThemeRestartTitleText"
                                    HorizontalAlignment="Left" VerticalAlignment="Center"
                                    FontSize="18" FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
@@ -1047,8 +1196,8 @@
                                   StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <TextBlock Grid.Row="1"
-                               Text="{x:Bind app:App.GetString(\'Theme_Restart_ConfirmTip\')}"
+                    <TextBlock x:Name="ThemeRestartBodyText"
+                               Grid.Row="1"
                                FontSize="14"
                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                TextWrapping="Wrap"
@@ -1153,6 +1302,68 @@
                             </Button>
                             <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="AutoLockSyncConfirmOk_Click">
                                 <TextBlock x:Name="AutoLockSyncConfirmOkText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+
+            <Grid x:Name="UpdateUpToDateOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="UpdateUpToDateScrim" Background="#2E000000" Tapped="UpdateUpToDateScrim_Tapped" />
+                <Border x:Name="UpdateUpToDateDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="UpdateUpToDateDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <TextBlock x:Name="UpdateUpToDateTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="UpdateUpToDateClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                            <TextBlock x:Name="UpdateUpToDateBodyText" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" />
+                            <HyperlinkButton Content="owner@novara.xin" NavigateUri="mailto:owner@novara.xin" FontSize="14" Margin="0,8,0,0" Padding="0" />
+                        </StackPanel>
+                        <Button Grid.Row="2" HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Margin="0,24,0,0" Click="UpdateUpToDateClose_Click">
+                            <TextBlock x:Name="UpdateUpToDateCloseText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+
+
+
+            <Grid x:Name="UpdateDialogOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="UpdateDialogScrim" Background="#2E000000" Tapped="UpdateDialogScrim_Tapped" />
+                <Border x:Name="UpdateDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform><CompositeTransform x:Name="UpdateDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="UpdateNewTitleText" Grid.Row="0" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <TextBlock x:Name="UpdateNewDateText" Grid.Row="1" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,8,0,0" />
+                        <ScrollViewer Grid.Row="2" MaxHeight="220" Margin="0,14,0,0" VerticalScrollBarVisibility="Hidden">
+                            <TextBlock x:Name="UpdateNotesText" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" />
+                        </ScrollViewer>
+                        <TextBlock x:Name="UpdateStatusText" Grid.Row="3" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,14,0,0" Visibility="Collapsed" />
+                        <ProgressBar x:Name="UpdateProgressBar" Grid.Row="4" Minimum="0" Maximum="100" Foreground="{ThemeResource AppPrimaryButtonBrush}" Height="6" Visibility="Collapsed" Margin="0,10,0,0" />
+                        <Grid Grid.Row="5" Margin="0,24,0,0">
+                            <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="UpdateCancel_Click">
+                                <TextBlock x:Name="UpdateCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button x:Name="UpdateInstallButton" HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="UpdateUpgrade_Click">
+                                <TextBlock x:Name="UpdateInstallText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                         </Grid>
                     </Grid>

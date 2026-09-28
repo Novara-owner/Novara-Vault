@@ -139,6 +139,14 @@ public partial class App : Application
     {
 
 
+
+        if (!IsAnimationsEnabled)
+        {
+            if (fe.RenderTransform is TranslateTransform rest) rest.Y = 0;
+            return;
+        }
+
+
         fe.Opacity = 0;
         if (fe.RenderTransform is not TranslateTransform tt) { tt = new TranslateTransform(); fe.RenderTransform = tt; }
         tt.Y = 18;
@@ -153,6 +161,18 @@ public partial class App : Application
 
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FrameworkElement, Storyboard> _entranceBoards = new();
+
+
+
+    public static void ShowCardsStatically(params FrameworkElement?[] cards)
+    {
+        foreach (var c in cards)
+        {
+            if (c == null) continue;
+            c.Opacity = 1;
+            if (c.RenderTransform is TranslateTransform tt) tt.Y = 0;
+        }
+    }
 
 
     public static void StopCardEntrance(FrameworkElement fe)
@@ -257,6 +277,15 @@ public partial class App : Application
             return;
         }
         if (dragging)
+        {
+            container.Children.Remove(target);
+            onDone?.Invoke();
+            return;
+        }
+
+
+
+        if (!IsAnimationsEnabled)
         {
             container.Children.Remove(target);
             onDone?.Invoke();
@@ -458,12 +487,19 @@ public partial class App : Application
         return "en-US";
     }
 
+
+
+
+    public static bool IsAnimationsEnabled => Store is { IsLoaded: true } ? Store.Database.AppSettings.AnimationsEnabled : true;
+
     public static SolidColorBrush GetBrush(string key)
     {
         string dictKey = CurrentTheme switch
         {
             "浅色模式" => "Light",
             "深色模式" => "Dark",
+
+            var t when t != null && t.StartsWith("类纸", StringComparison.Ordinal) => "Light",
 
             _ => IsSystemLight() ? "Light" : "Dark"
         };
@@ -528,6 +564,9 @@ public partial class App : Application
 
         Services.AuditWriteHealth.OnFailure = msg => Services.CrashLogger.LogNote("AuditWriteFailure", msg);
         Services.Loc.T = GetString;
+        PaperTheme.SeedDefaultHintForFreshInstall();
+        PaperTheme.ApplyIfNeeded();
+        _ = System.Threading.Tasks.Task.Run(() => Services.ImageExportService.SweepStaleTempPdfs());
 
         ParseLaunchArgs();
 
@@ -679,6 +718,11 @@ public partial class App : Application
 
         if (!string.IsNullOrEmpty(settings.AppLanguage)) ApplyLanguage(settings.AppLanguage);
         if (!string.IsNullOrEmpty(settings.Theme)) SetTheme(settings.Theme);
+
+
+
+        if (PaperTheme.SyncHintWith(settings.Theme))
+            PaperTheme.ApplyIfNeeded();
         if (settings.AutoStart) StartupService.Enable();
         else StartupService.Disable();
 
@@ -714,6 +758,10 @@ public partial class App : Application
             case "浅色模式":
                 elementTheme = ElementTheme.Light;
                 break;
+
+            case var t when t != null && t.StartsWith("类纸", StringComparison.Ordinal):
+                elementTheme = ElementTheme.Light;
+                break;
             case "跟随系统":
             default:
                 elementTheme = ElementTheme.Default;
@@ -730,6 +778,11 @@ public partial class App : Application
         {
             root.RequestedTheme = elementTheme;
         }
+
+
+
+
+        MainWindow?.ApplyPaperBrandToNavGlow();
 
         UpdateTitleBarColors();
     }

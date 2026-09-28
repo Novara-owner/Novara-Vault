@@ -260,6 +260,58 @@ public static class SyncHostSetup
 
 
 
+
+
+
+
+    public static string? ValidateDataRoot(string dataRoot)
+    {
+
+
+        var probe = Path.Combine(dataRoot, ".novara-write-probe");
+        try
+        {
+            Directory.CreateDirectory(dataRoot);
+            using (var stream = new FileStream(probe, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                stream.WriteByte(0);
+            }
+        }
+        catch (Exception e)
+        {
+
+
+
+            if (OperatingSystem.IsWindows())
+            {
+                return $"the data directory ({dataRoot}) cannot be written "
+                    + $"({e.GetType().Name}: {e.Message}). Set the NOVARA_SYNC_DATA environment "
+                    + "variable to a writable directory (see the bundled 1-建空间.cmd / 2-启动服务端.cmd scripts)";
+            }
+
+
+            var uid = Environment.GetEnvironmentVariable("APP_UID") ?? "1654";
+            return $"the data directory ({dataRoot}) cannot be written "
+                + $"({e.GetType().Name}: {e.Message}). The container runs as a non-root user, so a "
+                + $"bind-mounted ./data created by the host is owned by another uid - fix it with "
+                + $"`sudo chown -R {uid}:{uid} ./data`, or switch to the named volume shown in the "
+                + "compose file (see deploy/README.md)";
+        }
+
+        try { File.Delete(probe); }
+        catch (Exception) {  }
+
+        return null;
+    }
+
+
+
+
+
+
+
+
+
     public static string? ValidateWebRoot(string webRoot, string dataRoot)
     {
         var web = NormalizedFullPath(webRoot);

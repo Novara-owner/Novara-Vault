@@ -116,29 +116,72 @@ public sealed class SqliteSpaceStore : ISpaceStore
         if (!BlobLayout.IsSafeId(spaceId)) return null;
         using var cn = Open();
         using var cmd = cn.CreateCommand();
-        cmd.CommandText = """
-            SELECT space_id, name, created_at, updated_at, current_version, keywrap_version,
-                   keywrap_blob, enroll_hash, read_token_hash, quota_bytes, max_versions
-            FROM spaces WHERE space_id = $id;
-            """;
+        cmd.CommandText = SpaceSelect + " WHERE space_id = $id;";
         cmd.Parameters.AddWithValue("$id", spaceId);
 
         using var reader = Guarded(() => cmd.ExecuteReader());
-        if (!reader.Read()) return null;
-        return new SpaceRecord
+        return reader.Read() ? ReadSpace(reader) : null;
+    }
+
+
+    public IReadOnlyList<SpaceRecord> ListSpaces()
+    {
+        using var cn = Open();
+        using var cmd = cn.CreateCommand();
+        cmd.CommandText = SpaceSelect + " ORDER BY created_at, space_id;";
+
+        var spaces = new List<SpaceRecord>();
+        using var reader = Guarded(() => cmd.ExecuteReader());
+        while (reader.Read()) spaces.Add(ReadSpace(reader));
+        return spaces;
+    }
+
+
+
+
+
+
+
+
+
+
+    public void DeleteSpace(string spaceId)
+    {
+        RequireSafeId(spaceId);
+
+        using (var cn = Open())
+        using (var tx = cn.BeginTransaction())
         {
-            SpaceId = reader.GetString(0),
-            Name = reader.GetString(1),
-            CreatedAt = ParseTime(reader.GetString(2)),
-            UpdatedAt = ParseTime(reader.GetString(3)),
-            CurrentVersion = reader.GetInt64(4),
-            KeyWrapVersion = reader.GetInt64(5),
-            KeyWrapJson = reader.GetString(6),
-            EnrollmentHash = reader.GetString(7),
-            ReadTokenHash = reader.GetString(8),
-            QuotaBytes = reader.GetInt64(9),
-            MaxVersions = reader.GetInt32(10),
-        };
+            try
+            {
+                using var cmd = cn.CreateCommand();
+                cmd.Transaction = tx;
+
+
+                cmd.CommandText = """
+                    DELETE FROM versions WHERE space_id = $id;
+                    DELETE FROM devices  WHERE space_id = $id;
+                    DELETE FROM spaces   WHERE space_id = $id;
+                    """;
+                cmd.Parameters.AddWithValue("$id", spaceId);
+                cmd.ExecuteNonQuery();
+                tx.Commit();
+            }
+            catch (SqliteException e)
+            {
+                tx.Rollback();
+                throw new SpaceStoreException("failed to delete the space", e);
+            }
+        }
+
+        try { BlobLayout.RemoveSpaceDirectory(_root, spaceId); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+
+
+            throw new SpaceStoreException(
+                $"the space was deleted but its payload files could not be removed: {BlobLayout.SpaceDirectory(_root, spaceId)}", e);
+        }
     }
 
     public void SaveSpace(SpaceRecord space)
@@ -374,6 +417,33 @@ public sealed class SqliteSpaceStore : ISpaceStore
     }
 
 
+
+
+
+
+
+
+    private const string SpaceSelect = """
+        SELECT space_id, name, created_at, updated_at, current_version, keywrap_version,
+               keywrap_blob, enroll_hash, read_token_hash, quota_bytes, max_versions
+        FROM spaces
+        """;
+
+
+    private static SpaceRecord ReadSpace(SqliteDataReader reader) => new()
+    {
+        SpaceId = reader.GetString(0),
+        Name = reader.GetString(1),
+        CreatedAt = ParseTime(reader.GetString(2)),
+        UpdatedAt = ParseTime(reader.GetString(3)),
+        CurrentVersion = reader.GetInt64(4),
+        KeyWrapVersion = reader.GetInt64(5),
+        KeyWrapJson = reader.GetString(6),
+        EnrollmentHash = reader.GetString(7),
+        ReadTokenHash = reader.GetString(8),
+        QuotaBytes = reader.GetInt64(9),
+        MaxVersions = reader.GetInt32(10),
+    };
 
     private SqliteConnection Open()
     {

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.PlanPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -22,7 +22,7 @@
                    TextAlignment="Center"
                    FontSize="13" FontWeight="Light"
                    Foreground="{ThemeResource AppTextTertiaryBrush}"
-                   Opacity="0.6" TextWrapping="NoWrap" MaxWidth="600"
+                   Opacity="1" TextWrapping="NoWrap" MaxWidth="600"
                    Visibility="Visible" />
 
         <Grid x:Name="ReminderOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -82,7 +82,7 @@
                         </Button>
                     </Grid>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" HorizontalScrollMode="Disabled" Margin="0">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" HorizontalScrollMode="Disabled" Margin="0">
                         <StackPanel Spacing="16">
 
                             <Grid>
@@ -149,7 +149,8 @@
                     </Grid>
 
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" HorizontalScrollMode="Disabled" Margin="0,16,0,0">
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" VerticalScrollMode="Enabled" HorizontalScrollMode="Disabled" Margin="0,16,0,0">
                         <StackPanel Spacing="16">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -232,7 +233,7 @@
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Grid.Row="0"><TextBlock x:Name="ReminderDueTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ReminderDueClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,4,0,8"><TextBlock x:Name="ReminderDueContentText" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" /></ScrollViewer>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Margin="0,4,0,8"><TextBlock x:Name="ReminderDueContentText" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" /></ScrollViewer>
                     <Grid Grid.Row="2" Margin="0"><Button HorizontalAlignment="Center" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="ReminderDueConfirm_Click"><TextBlock x:Name="ReminderDueConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button></Grid>
                 </Grid>
             </Border>

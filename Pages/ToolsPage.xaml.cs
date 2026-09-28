@@ -87,7 +87,6 @@ public sealed partial class ToolsPage : Page
     private bool _animEncImportPwd;
     private bool _animConnectPwd;
     private bool _animConnectIntro;
-    private bool _animConnectLockNotice;
     private string? _pendingEncImportPath;
     private bool _pendingDeleteIsClearAll;
     private string? _pendingRestoreSnapshot;
@@ -129,7 +128,9 @@ public sealed partial class ToolsPage : Page
 
         Loaded += (_, _) =>
         {
-            ToolsFloatIn.Begin();
+
+            if (App.IsAnimationsEnabled) ToolsFloatIn.Begin();
+            else App.ShowCardsStatically(StatsCard, SyncCard, McpCard, WorkspaceCard, ConnectCard, NetActivityCard, Card4, Card7, Card10);
 
 
 
@@ -183,7 +184,6 @@ public sealed partial class ToolsPage : Page
             BackupRestoreOverlay.Visibility = Visibility.Collapsed;
             BackupRestoreConfirmOverlay.Visibility = Visibility.Collapsed;
             ConnectIntroOverlay.Visibility = Visibility.Collapsed;
-            ConnectLockNoticeOverlay.Visibility = Visibility.Collapsed;
             ConnectPwdOverlay.Visibility = Visibility.Collapsed;
             CsvExportNoticeOverlay.Visibility = Visibility.Collapsed;
             CsvImportPreviewOverlay.Visibility = Visibility.Collapsed;
@@ -282,7 +282,7 @@ public sealed partial class ToolsPage : Page
 
 
             _animEncExport = _animEncImportPwd = false;
-            _animConnectPwd = _animConnectIntro = _animConnectLockNotice = false;
+            _animConnectPwd = _animConnectIntro = false;
             _animExportPlainWarn = false;
             _animSyncPair = _animSyncUnpair = _animSyncConflict = _animSyncAdopt = false;
             _animSyncKeySaved = _animSyncKeyView = false;
@@ -325,10 +325,6 @@ public sealed partial class ToolsPage : Page
         ConnectPwdStrengthHint.Text = App.GetString("Setting_EncBackup_StrengthHint");
         ConnectPwdCancelText.Text = App.GetString("Common_Button_Cancel");
         ConnectPwdConfirmText.Text = App.GetString("Common_Button_Confirm");
-        ConnectLockNoticeTitle.Text = App.GetString("Connect_LockNotice_Title");
-        ConnectLockNoticeDangerIcon.Data = App.CreateGeometry(IconData.Danger);
-        ConnectLockNoticeDesc.Text = App.GetString("Connect_LockNotice_Desc");
-        ConnectLockNoticeCancelText.Text = App.GetString("Common_Button_Cancel");
 
         ResetDataButtonText.Text = App.GetString("Setting_DataWipe");
         ApplyToggleState(ResetDataButton, false);
@@ -439,7 +435,6 @@ public sealed partial class ToolsPage : Page
         if (PageGroupLossOverlay.Visibility == Visibility.Visible) { HidePageGroupLossDialog(); e.Handled = true; return; }
         if (PageWipeFinalOverlay.Visibility == Visibility.Visible) { HidePageWipeFinalDialog(); e.Handled = true; return; }
         if (PageWipeOverlay.Visibility == Visibility.Visible) { HidePageWipeDialog(); e.Handled = true; return; }
-        if (ConnectLockNoticeOverlay.Visibility == Visibility.Visible) { HideConnectLockNoticeDialog(); e.Handled = true; return; }
         if (ConnectPwdOverlay.Visibility == Visibility.Visible) { HideConnectPwdDialog(); e.Handled = true; return; }
         if (ConnectIntroOverlay.Visibility == Visibility.Visible) { HideConnectIntroDialog(); e.Handled = true; return; }
     }
@@ -1009,11 +1004,16 @@ public sealed partial class ToolsPage : Page
         HideOverlay(ConnectIntroOverlay, ConnectIntroDialog, ConnectIntroDialogTransform, () => { _animConnectIntro = false; after?.Invoke(); });
     }
 
-    private const string SnapshotGuideUrl = "https://novara.xin/snapshot-guide.html";
 
 
 
-    private const string SyncGuideUrl = "https://novara.xin/sync-guide.html";
+    private const string SnapshotGuideUrl = "https://novara.xin/help/snapshot.html";
+
+
+
+
+
+    private const string SyncGuideUrl = "https://novara.xin/help/deploy.html";
 
 
     private const string EasterEggUrl = "https://novara.xin/easteregg.html";
@@ -1035,17 +1035,20 @@ public sealed partial class ToolsPage : Page
     private void ConnectConfirm_Click(object sender, RoutedEventArgs e)
     {
 
-        HideConnectIntroDialog(() =>
-        {
-            if (PrivacyLockEnabledNow) ShowConnectPwdDialog();
-            else ShowConnectLockNoticeDialog();
-        });
+
+
+
+        HideConnectIntroDialog(() => ShowConnectPwdDialog());
     }
 
 
     private void ShowConnectPwdDialog()
     {
         ConnectPwdUseLock.IsChecked = false;
+
+
+
+        ConnectPwdUseLock.Visibility = PrivacyLockEnabledNow ? Visibility.Visible : Visibility.Collapsed;
         ConnectPwdPasswordBox.Text = "";
         ConnectPwdConfirmBox.Text = "";
         ConnectPwdStrengthText.Visibility = Visibility.Collapsed;
@@ -1166,7 +1169,7 @@ public sealed partial class ToolsPage : Page
             if (file == null) return;
 
             var exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "8.0.0";
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "9.0.0";
             var html = template
                 .Replace("__CIPHER_BASE64__", cipher)
                 .Replace("__EXPORTED_AT__", exportedAt)
@@ -1240,25 +1243,6 @@ public sealed partial class ToolsPage : Page
             + openTag + "\n" + File.ReadAllText(assetPath) + "\n  " + closeTag
             + template.Substring(at + marker.Length);
     }
-
-
-    private void ShowConnectLockNoticeDialog()
-    {
-        _animConnectLockNotice = false;
-        ShowOverlay(ConnectLockNoticeOverlay, ConnectLockNoticeDialog, ConnectLockNoticeDialogTransform);
-    }
-
-    private void HideConnectLockNoticeDialog()
-    {
-        if (_animConnectLockNotice) return;
-        _animConnectLockNotice = true;
-        HideOverlay(ConnectLockNoticeOverlay, ConnectLockNoticeDialog, ConnectLockNoticeDialogTransform, () => _animConnectLockNotice = false);
-    }
-
-    private void ConnectLockNoticeClose_Click(object sender, RoutedEventArgs e) => HideConnectLockNoticeDialog();
-    private void ConnectLockNoticeCancel_Click(object sender, RoutedEventArgs e) => HideConnectLockNoticeDialog();
-    private void ConnectLockNoticeScrim_Tapped(object sender, TappedRoutedEventArgs e)
-    { if (ReferenceEquals(e.OriginalSource, ConnectLockNoticeScrim)) HideConnectLockNoticeDialog(); }
 
     private void HideResetConfirmDialog()
     {
@@ -1423,18 +1407,21 @@ private void ShowResetPasswordDialog()
         var csvExportItem = MakeItem(App.GetString("Setting_CsvExport"));
         var htmlExportItem = MakeItem(App.GetString("Setting_ExportHtml"));
         var pdfExportItem = MakeItem(App.GetString("Setting_ExportPdf"));
+        var imageExportItem = MakeItem(App.GetString("Setting_ExportImage"));
         mdItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(ShowExportMdNoticeDialog));
         nativeExportItem.Click += (_, _) => ExportNativeFlow();
         encExportItem.Click += (_, _) => RunPrivacyGated(ShowEncExportDialog);
         csvExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(ShowCsvExportNoticeDialog));
         htmlExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(() => _ = ExportHtmlFlowAsync()));
         pdfExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(() => _ = ExportPdfFlowAsync()));
+        imageExportItem.Click += (_, _) => RunPrivacyGated(() => ShowPlainExportWarn(() => _ = ExportImageCollectionFlowAsync()));
         exportSub.Items.Add(mdItem);
         exportSub.Items.Add(nativeExportItem);
         exportSub.Items.Add(encExportItem);
         exportSub.Items.Add(csvExportItem);
         exportSub.Items.Add(htmlExportItem);
         exportSub.Items.Add(pdfExportItem);
+        exportSub.Items.Add(imageExportItem);
 
         menu.Items.Add(importSub);
         menu.Items.Add(exportSub);
@@ -1637,6 +1624,7 @@ private void ShowResetPasswordDialog()
             if (langChanged) App.ApplyLanguage(lang);
             App.SaveLanguageHint(lang);
         }
+        PaperTheme.SyncHintWith(theme);
         if ((!string.IsNullOrEmpty(theme) && theme != App.CurrentTheme) || langChanged)
         {
             ShowImportResult(App.GetString("Setting_Import_Done"), App.GetString("Setting_Import_Done_ThemeDesc"));
@@ -2168,6 +2156,74 @@ private void ShowResetPasswordDialog()
         {
             ToolsRoot.Children.Remove(webView);
             try { webView.Close(); } catch { }
+        }
+    }
+
+
+
+
+
+
+
+    private async System.Threading.Tasks.Task ExportImageCollectionFlowAsync()
+    {
+        Windows.Storage.StorageFile? picked = null;
+        try
+        {
+            var db = App.Store?.Database;
+            if (db == null) return;
+            var picker = new FileSavePicker();
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+            picker.FileTypeChoices.Add("PNG", new List<string> { ".png" });
+            picker.SuggestedFileName = $"Novara_{App.GetString("Export_Section_Memo")}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            var file = picked = await picker.PickSaveFileAsync();
+            if (file == null) return;
+
+            var logo = ImageExportService.TryReadLogoSvg();
+            var exportedAt = DateTime.Now;
+            string wide = ImageExportTemplates.BuildMemoCollectionHtml(db.MemoGroups, db.MemoEntries,
+                ImageExportTemplates.WideWidth, exportedAt, logo);
+            string narrow = ImageExportTemplates.BuildMemoCollectionHtml(db.MemoGroups, db.MemoEntries,
+                ImageExportTemplates.NarrowWidth, exportedAt, logo);
+
+            var narrowPath = ImageExportService.SiblingPath(file.Path, "_mobile");
+            int wideParts = 0, narrowParts = 0;
+            bool wideDone = false, narrowDone = false;
+            var session = await ImageExportSession.BeginAsync(wide, ImageExportTemplates.WideWidth, ToolsRoot);
+            if (session != null)
+            {
+                try
+                {
+                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(file.Path);
+                    if (wideDone && await session.LoadAsync(narrow, ImageExportTemplates.NarrowWidth))
+                        (narrowParts, narrowDone) = await session.ScreenshotToFileAsync(narrowPath);
+                }
+                finally { session.Close(); }
+            }
+            if (wideDone && narrowDone)
+            {
+                int parts = Math.Max(wideParts, narrowParts);
+                App.ShowToast(parts > 1
+                    ? string.Format(App.GetString("Export_Image_MultiPart"), parts)
+                    : App.GetString("Common_Toast_Exported"));
+            }
+            else
+            {
+                ImageExportService.DeleteGroupFiles(file.Path, wideParts);
+                ImageExportService.DeleteGroupFiles(narrowPath, narrowParts);
+                App.ShowToast(App.GetString("Common_Toast_Failed"));
+            }
+        }
+        catch (Exception ex)
+        {
+
+            System.Diagnostics.Debug.WriteLine($"导出图片合集失败: {ex.Message}");
+            if (picked?.Path != null)
+            {
+                ImageExportService.DeleteGroupFiles(picked.Path, 0);
+                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked.Path, "_mobile"), 0);
+            }
+            App.ShowToast(App.GetString("Common_Toast_Failed"));
         }
     }
 
@@ -3366,7 +3422,7 @@ private void ShowResetPasswordDialog()
             _statsEnabled = true;
             _statsExpanded = true;
             PersistSetting(s => s.StatsEnabled = true);
-            UpdateStatsUI();
+            UpdateStatsUI(animate: true);
             App.ShowToast(App.GetString("Common_Toast_Switched"));
         };
         offItem.Click += (_, _) =>
@@ -3374,7 +3430,7 @@ private void ShowResetPasswordDialog()
             if (!_statsEnabled) return;
             _statsEnabled = false;
             PersistSetting(s => s.StatsEnabled = false);
-            UpdateStatsUI();
+            UpdateStatsUI(animate: true);
             App.ShowToast(App.GetString("Common_Toast_Switched"));
         };
 
@@ -3386,10 +3442,10 @@ private void ShowResetPasswordDialog()
     private void StatsExpandButton_Click(object sender, RoutedEventArgs e)
     {
         _statsExpanded = !_statsExpanded;
-        UpdateStatsUI();
+        UpdateStatsUI(animate: true);
     }
 
-    private void UpdateStatsUI()
+    private void UpdateStatsUI(bool animate = false)
     {
 
         StatsToggleText.Text = _statsEnabled
@@ -3404,21 +3460,24 @@ private void ShowResetPasswordDialog()
             : App.CreateGeometry(IconData.CardExpand);
 
 
+
         if (_statsEnabled && _statsExpanded)
         {
             StatsDetailPanel.Visibility = Visibility.Visible;
             BuildStatsPanel();
-            Services.MeltAnim.Begin(StatsDetailPanel, true, 16.0);
+            if (animate) Services.MeltAnim.Begin(StatsDetailPanel, true, 16.0);
+            else Services.MeltAnim.SetInstant(StatsDetailPanel, true, 16.0);
         }
         else if (_statsEnabled)
         {
-            Services.MeltAnim.Begin(StatsDetailPanel, false, 16.0);
-            StatsGrid.Children.Clear();
+            if (animate) Services.MeltAnim.Begin(StatsDetailPanel, false, 16.0);
+            else Services.MeltAnim.SetInstant(StatsDetailPanel, false, 16.0);
         }
         else
         {
-            StatsDetailPanel.Visibility = Visibility.Collapsed;
-            StatsGrid.Children.Clear();
+
+            if (animate) Services.MeltAnim.Begin(StatsDetailPanel, false, 16.0);
+            else { Services.MeltAnim.SetInstant(StatsDetailPanel, false, 16.0); StatsGrid.Children.Clear(); }
         }
     }
 
@@ -3592,7 +3651,7 @@ private void ShowResetPasswordDialog()
 
 
 
-    private void UpdateMcpUI()
+    private void UpdateMcpUI(bool animate = false)
     {
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) return;
@@ -3619,9 +3678,9 @@ private void ShowResetPasswordDialog()
             : App.CreateGeometry(IconData.CardExpand);
 
 
-        if (enabled && expanded) { BuildMcpAuthorizedList(); Services.MeltAnim.Begin(McpDetailPanel, true, 16.0); }
-        else if (enabled) { Services.MeltAnim.Begin(McpDetailPanel, false, 16.0); }
-        else { McpDetailPanel.Visibility = Visibility.Collapsed; }
+        if (enabled && expanded) { BuildMcpAuthorizedList(); if (animate) Services.MeltAnim.Begin(McpDetailPanel, true, 16.0); else Services.MeltAnim.SetInstant(McpDetailPanel, true, 16.0); }
+        else if (enabled) { if (animate) Services.MeltAnim.Begin(McpDetailPanel, false, 16.0); else Services.MeltAnim.SetInstant(McpDetailPanel, false, 16.0); }
+        else { if (animate) Services.MeltAnim.Begin(McpDetailPanel, false, 16.0); else Services.MeltAnim.SetInstant(McpDetailPanel, false, 16.0); }
 
 
         McpConfigTitleText.Text = App.GetString("Setting_Mcp_Config_Title");
@@ -3699,7 +3758,7 @@ private void ShowResetPasswordDialog()
             settings.McpTokenGeneratedAt = DateTime.Now;
         }
         App.Store?.SaveAsync();
-        UpdateMcpUI();
+        UpdateMcpUI(animate: true);
         App.ShowToast(App.GetString("Common_Toast_Switched"));
     }
 
@@ -3709,7 +3768,7 @@ private void ShowResetPasswordDialog()
         if (settings == null) return;
         settings.McpDetailExpanded = !settings.McpDetailExpanded;
         App.Store?.SaveAsync();
-        UpdateMcpUI();
+        UpdateMcpUI(animate: true);
     }
 
     private void McpConfigButton_Click(object sender, RoutedEventArgs e)
@@ -4382,7 +4441,7 @@ private void ShowResetPasswordDialog()
         });
     }
 
-    private void UpdateSyncUI()
+    private void UpdateSyncUI(bool animate = false)
     {
 
         SyncTitleText.Text = App.GetString("Sync_Card_Title");
@@ -4548,12 +4607,23 @@ private void ShowResetPasswordDialog()
         if (paired)
         {
             BuildSyncDetail(state);
-            if (detailExpanded) Services.MeltAnim.Begin(SyncDetailPanel, true, 16.0);
-            else Services.MeltAnim.Begin(SyncDetailPanel, false, 16.0);
+
+            if (detailExpanded)
+            {
+                if (animate) Services.MeltAnim.Begin(SyncDetailPanel, true, 16.0);
+                else Services.MeltAnim.SetInstant(SyncDetailPanel, true, 16.0);
+            }
+            else
+            {
+                if (animate) Services.MeltAnim.Begin(SyncDetailPanel, false, 16.0);
+                else Services.MeltAnim.SetInstant(SyncDetailPanel, false, 16.0);
+            }
         }
         else
         {
-            SyncDetailPanel.Visibility = Visibility.Collapsed;
+
+            if (animate) Services.MeltAnim.Begin(SyncDetailPanel, false, 16.0);
+            else Services.MeltAnim.SetInstant(SyncDetailPanel, false, 16.0);
         }
 
         RefreshSyncStatus();
@@ -4672,7 +4742,7 @@ private void ShowResetPasswordDialog()
         if (settings == null) return;
         settings.SyncDetailExpanded = !settings.SyncDetailExpanded;
         App.Store?.SaveAsync();
-        UpdateSyncUI();
+        UpdateSyncUI(animate: true);
     }
 
     private async void SyncNowButton_Click(object sender, RoutedEventArgs e)
@@ -4741,9 +4811,9 @@ private void ShowResetPasswordDialog()
         }
 
         menu.Items.Add(MakeItem(App.GetString("Setting_Autostart_On"), enabled,
-            () => { Services.SyncService.SetEnabled(true); UpdateSyncUI(); }));
+            () => { Services.SyncService.SetEnabled(true); UpdateSyncUI(animate: true); }));
         menu.Items.Add(MakeItem(App.GetString("Setting_Autostart_Off"), !enabled,
-            () => { Services.SyncService.SetEnabled(false); UpdateSyncUI(); }));
+            () => { Services.SyncService.SetEnabled(false); UpdateSyncUI(animate: true); }));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(MakeItem(App.GetString("Sync_Button_Unpair"), false, ShowSyncUnpairDialog, danger: true));
         menu.ShowAt(SyncToggleButton, new Windows.Foundation.Point(0, SyncToggleButton.ActualHeight + 4));
@@ -4878,7 +4948,7 @@ private void ShowResetPasswordDialog()
             }
 
             HideSyncPairDialog();
-            UpdateSyncUI();
+            UpdateSyncUI(animate: true);
 
             ShowSyncKeySavedDialog(result.SpaceKeyBase64);
         }
@@ -4916,7 +4986,7 @@ private void ShowResetPasswordDialog()
         _revealedSpaceKey = null;
         _syncKeyShown = false;
         HideSyncUnpairDialog();
-        UpdateSyncUI();
+        UpdateSyncUI(animate: true);
     }
 
 
