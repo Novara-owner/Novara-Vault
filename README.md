@@ -265,14 +265,6 @@ Your data moves with you, freely and without vendor lock-in:
 - **Global right-click menu** — add any folder/file to path backups from Explorer, or open Novara from the desktop
 - **Desktop reminders** — countdown cards keep working even when the app is closed
 
-## Where Novara Is Going
-
-8.0 brought two-way sync, and the roadmap grows from the same foundation — under the same three red lines: **the server never sees plaintext, there is no official cloud, and offline never degrades**.
-
-- **Now — Cross-device sync (8.0)**: end-to-end encrypted synchronization through a server you self-host, with a web reader and limited editor, and conflict handling
-- **Next — One-command deployment**: a Docker image and a compose file, with walkthroughs for NAS and VPS hosts
-- **Later — Native mobile apps**: the same data control layer, as first-class clients on phones
-
 ## Data & Privacy at a Glance
 
 - **Local-first**: everything stays on your machine — no cloud, no telemetry, no account
