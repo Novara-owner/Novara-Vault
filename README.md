@@ -1,4 +1,4 @@
-<h1 align="center">Novara</h1>
+﻿<h1 align="center">Novara</h1>
 
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
 
@@ -32,6 +32,11 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 - **Verify what you run** — each release ships `SHA256SUMS` for the installer, `IMAGES.txt` for the image, and an SBOM; see [docs/VERIFYING.md](docs/VERIFYING.md).
 - **And on the desktop** — export any diary or the whole memo collection as an image, four paper themes with new installs starting on Almond, an app-wide animation toggle, an in-app update checker, and a rebuilt sticky-note card with its own palette.
 
+<p align="center">
+  <img src="images/English-Settings.png" alt="Settings page" width="420" />
+  <img src="images/English-Tools.png" alt="Tools page" width="420" />
+</p>
+
 ## 8.0 — Sync, on a Server You Own
 
 8.0 is where the connected era turns two-way. Novara now **synchronizes across your devices** through a server you run yourself — and that server still never sees your data: it holds versioned ciphertext blobs and knows nothing about their contents. Pairing a second device takes three values (server URL, space id, enrollment secret), and the space key is generated on your first device and never leaves your control. Your PC stays the authority — lose the server and one push from your PC rebuilds it. Offline never degrades: a dead server changes nothing about how Novara works.
@@ -52,7 +57,6 @@ Security is reinforced by a **30-minute lockout after 5 consecutive failed attem
 
 <p align="center">
   <img src="images/English-UnlockPage.png" alt="Privacy lock screen" width="420" />
-  <img src="images/English-LockPage.png" alt="30-minute lockout countdown" width="420" />
 </p>
 
 ## Memo Manager
@@ -127,7 +131,7 @@ Send any note or todo card to your desktop with one click. A dedicated lightweig
 - **Bidirectional todo sync** — checking a todo on the desktop writes back to the main app, which stays the single source of truth
 
 <p align="center">
-  <img src="images/English-DesktopCard.png" alt="Desktop sticky note" width="560" />
+  <img src="images/DesktopCard.png" alt="Desktop sticky note" width="560" />
 </p>
 
 ## Records
@@ -145,8 +149,9 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
 </p>
 
 <p align="center">
-  <img src="images/English-HtmlEditor.png" alt="Rich text HTML editor" width="420" />
+  <img src="images/HtmlEditor.png" alt="Rich text HTML editor" width="420" />
   <img src="images/English-MdEditor-PreviewMode.png" alt="Markdown editor preview" width="420" />
+  <img src="images/English-MdEditor-SourceMode.png" alt="Markdown editor source mode" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -162,10 +167,11 @@ The first step of the connected era. Export your entire database — memos, path
 Host it for yourself, or send the file to someone you trust — file and password travel separately.
 
 <p align="center">
-  <img src="images/English-PC-Snapshot.png" alt="Snapshot viewer on desktop" width="720" />
+  <img src="images/Snapshot-PC.png" alt="Snapshot viewer on desktop" width="720" />
 </p>
 <p align="center">
-  <img src="images/English-Mobile%20-%20Snapshot.png" alt="Snapshot viewer on mobile" width="300" />
+  <img src="images/Snapshot-MB.png" alt="Snapshot viewer on mobile" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC.png" alt="Snapshot unlock page on desktop" width="420" />
 </p>
 
 ## Cross-Device Sync
@@ -191,7 +197,8 @@ Press **Ctrl+K** anywhere to search memos, paths, todos, notes, and records in o
 Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands — create a memo / todo / note / diary, open the recycle bin or settings, lock the vault now.
 
 <p align="center">
-  <img src="images/English-GlobalSearch.png" alt="Global search" width="720" />
+  <img src="images/Search%20Page.png" alt="Global search" width="720" />
+  <img src="images/English-Search%20Page-Command%20Tools.png" alt="Command palette tools" width="720" />
 </p>
 
 ## Recycle Bin
@@ -199,7 +206,7 @@ Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands
 Deleted cards are never lost instantly — they move to a **Recycle Bin** with a **7-day auto-purge**, recoverable for a week before permanent removal on the next startup. Supports restore, permanent delete (red double-confirmation), clear all, and a mixed chronological list. Recycled data is excluded from exports.
 
 <p align="center">
-  <img src="images/English-RecycleBin.png" alt="Recycle bin" width="720" />
+  <img src="images/RecycleBin.png" alt="Recycle bin" width="720" />
 </p>
 
 ## MCP Agent Interface
@@ -230,10 +237,19 @@ Novara ships with **five complete interface languages** — 简体中文, 繁體
 
 ## Theme System
 
-Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog.
+Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog. Since 9.0, four paper palettes — Cream, Almond, Kraft, and Newsprint — recolor the entire app, editors and desktop sticky notes included, and new installs start on Almond.
 
 <p align="center">
-  <img src="images/English-DarkTheme-WelcomePage.png" alt="Dark theme" width="720" />
+  <img src="images/Light%20Mode.png" alt="Light theme" width="420" />
+  <img src="images/Dark%20Mode.png" alt="Dark theme" width="420" />
+</p>
+<p align="center">
+  <img src="images/Paper・Cream.png" alt="Paper theme - Cream" width="420" />
+  <img src="images/Paper・Almond.png" alt="Paper theme - Almond" width="420" />
+</p>
+<p align="center">
+  <img src="images/Paper・Kraft.png" alt="Paper theme - Kraft" width="420" />
+  <img src="images/Paper・Newsprint.png" alt="Paper theme - Newsprint" width="420" />
 </p>
 
 ## Data Import & Export
@@ -273,6 +289,10 @@ Your data moves with you, freely and without vendor lock-in:
 - **Health check**: encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone
 - **Agent-ready without data leaks**: the MCP interface never sends your data anywhere by itself
+
+<p align="center">
+  <img src="images/English-Data%20Overview.png" alt="Data overview" width="720" />
+</p>
 
 ## Privacy & Security
 

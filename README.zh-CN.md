@@ -1,4 +1,4 @@
-<h1 align="center">Novara</h1>
+﻿<h1 align="center">Novara</h1>
 
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
@@ -32,6 +32,11 @@ Novara 是一个**本地优先的个人数据控制层——为你，也为你�
 - **校验你运行的东西** —— 每个版本附带安装包的 `SHA256SUMS`、镜像的 `IMAGES.txt` 与 SBOM；见 [docs/VERIFYING.zh-CN.md](docs/VERIFYING.zh-CN.md)。
 - **桌面端同样在走** —— 日记或全部备忘一键导出为图片，四款类纸主题且全新安装默认淡杏，全程序动效开关，应用内检查更新，以及重做的带独立色板的桌面便签卡。
 
+<p align="center">
+  <img src="images/Chinese-SettingsPage.png" alt="设置页" width="420" />
+  <img src="images/Chinese-Tools.png" alt="工具页" width="420" />
+</p>
+
 ## 8.0 — 同步，跑在你自己的服务器上
 
 8.0 让互联时代变成双向。Novara 现在可以**在你的多台设备之间同步**，经由一台由你自己运行的服务器——而服务器依旧看不到你的数据：它只保管带版本号的密文块，对内容一无所知。配对第二台设备只需三个值（服务器地址、空间 id、注册密钥），而空间密钥在你的第一台设备上生成、永远不离开你的控制。电脑始终是权威副本——服务器丢了，从电脑推一次即可重建。离线能力永不倒退：服务器宕机不影响 Novara 的任何功能。
@@ -52,7 +57,6 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 
 <p align="center">
   <img src="images/Chinese-UnlockPage.png" alt="隐私锁屏" width="420" />
-  <img src="images/Chinese-LockPage.png" alt="30 分钟锁定倒计时" width="420" />
 </p>
 
 ## 备忘管理
@@ -127,7 +131,7 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **待办双向同步**：桌面勾选写回主程序，主程序始终是唯一数据权威
 
 <p align="center">
-  <img src="images/Chinese-DesktopCard.png" alt="桌面便签" width="560" />
+  <img src="images/DesktopCard.png" alt="桌面便签" width="560" />
 </p>
 
 ## 记录页
@@ -145,8 +149,9 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 </p>
 
 <p align="center">
-  <img src="images/Chinese-HtmlEditor.png" alt="富文本 HTML 编辑器" width="420" />
+  <img src="images/HtmlEditor.png" alt="富文本 HTML 编辑器" width="420" />
   <img src="images/Chinese-MdEditor-PreviewMode.png" alt="Markdown 编辑器预览" width="420" />
+  <img src="images/Chinese-MdEditor-SourceMode.png" alt="Markdown 编辑器源码模式" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -162,10 +167,11 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 自己托管，或发给你信任的人——文件和密码分开两条路走。
 
 <p align="center">
-  <img src="images/Chinese-PC-Snapshot.png" alt="Snapshot 电脑端查看器" width="720" />
+  <img src="images/Snapshot-PC.png" alt="Snapshot 电脑端查看器" width="720" />
 </p>
 <p align="center">
-  <img src="images/Chinese-Mobile%20-%20Snapshot.png" alt="Snapshot 手机端查看器" width="300" />
+  <img src="images/Snapshot-MB.png" alt="Snapshot 手机端查看器" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC.png" alt="Snapshot 电脑端解锁页" width="420" />
 </p>
 
 ## 跨设备同步
@@ -191,7 +197,8 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命令模式——新建备忘 / 待办 / 便签 / 日记、打开回收站或设置、立即锁定。
 
 <p align="center">
-  <img src="images/Chinese-GlobalSearch.png" alt="全局搜索" width="720" />
+  <img src="images/Search%20Page.png" alt="全局搜索" width="720" />
+  <img src="images/Chinese-Search%20Page-Command%20Tools.png" alt="命令面板工具" width="720" />
 </p>
 
 ## 回收站
@@ -199,7 +206,7 @@ Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命�
 删除的卡片不会瞬间消失——移入**回收站**并支持 **7 天自动清理**，一周内可恢复，超期后下次启动永久删除。支持恢复、永久删除（红色二次确认）、清空，以及按时间倒序混合展示。回收站数据不参与导出。
 
 <p align="center">
-  <img src="images/Chinese-RecycleBin.png" alt="回收站" width="720" />
+  <img src="images/RecycleBin.png" alt="回收站" width="720" />
 </p>
 
 ## MCP Agent 接口
@@ -230,10 +237,19 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 
 ## 主题系统
 
-浅色、深色、跟随系统三套主题，统一品牌按钮体系（主蓝 / 幽灵描边 / 危险红），全应用每个弹窗保持一致。
+浅色、深色、跟随系统三套主题，统一品牌按钮体系（主蓝 / 幽灵描边 / 危险红），全应用每个弹窗保持一致。9.0 起新增四款类纸主题——Cream、Almond、Kraft、Newsprint——整程序（含编辑器与桌面便签）一并换装，全新安装默认淡杏。
 
 <p align="center">
-  <img src="images/Chinese-DarkTheme-WelcomePage.png" alt="深色主题" width="720" />
+  <img src="images/Light%20Mode.png" alt="浅色主题" width="420" />
+  <img src="images/Dark%20Mode.png" alt="深色主题" width="420" />
+</p>
+<p align="center">
+  <img src="images/Paper・Cream.png" alt="类纸主题 - Cream" width="420" />
+  <img src="images/Paper・Almond.png" alt="类纸主题 - Almond" width="420" />
+</p>
+<p align="center">
+  <img src="images/Paper・Kraft.png" alt="类纸主题 - Kraft" width="420" />
+  <img src="images/Paper・Newsprint.png" alt="类纸主题 - Newsprint" width="420" />
 </p>
 
 ## 数据导入与导出
@@ -273,6 +289,10 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 - **健康检查**：加密状态、最近备份、快照份数、文件完整性与孤儿引用一览无余
 - **可恢复删除**：回收站给你一周时间，任何内容才真正消失
 - **Agent 就绪而不泄密**：MCP 接口自身绝不把你的数据发往任何地方
+
+<p align="center">
+  <img src="images/Chinese-Data%20Overview.png" alt="数据概览" width="720" />
+</p>
 
 ## 隐私与安全
 
