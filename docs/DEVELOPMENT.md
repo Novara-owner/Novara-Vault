@@ -102,7 +102,7 @@ Novara/
 
 - `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
 - The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
-- `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net8.0` and have no WinUI dependency.
+- `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net10.0` (since 9.0) and have no WinUI dependency; the desktop side and `Novara.Core` remain on `net8.0`.
 - `Pages/` contains nine pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage.
 
 **Core decoupling**:
@@ -814,6 +814,8 @@ Novara/
 | 6.2 | 2026-09-07 | Small-window dialog adaptation across all pages; full-page scrolling note dialog; infinite icon-ring pickers; editor body placeholder; region-based memo pinning with ownership-change mark stripping; incremental verification round (4 fixes) |
 | 7.0 | 2026-09-10 | **The connected era begins** — Novara Snapshot: encrypted self-contained HTML viewer export (`.novaenc` v4 container), read-only browser viewer with local TOTP, light/dark theme, mandatory encryption gate, deployment guide (novara.xin) |
 | 8.0 | 2026-09-19 | **Cross-device sync** — end-to-end encrypted sync through a self-hosted server bundled with the installer (versioned ciphertext storage, token auth, device registration and revocation); web reader with limited editing and re-encrypted upload; library-level conflict handling that keeps the overwritten version; device center and local sync audit; multi-round pre-release verification of the whole codebase |
+| 9.0 | 2026-09-28 | **One-command self-hosting** — official Docker image, compose + Caddy automatic HTTPS, ops CLI (space list/show/delete/rotate-secret), server runtime upgraded to .NET 10, desktop sticky-note redesign, in-app update check; two-round pre-release verification |
+| 9.1 | 2026-09-29 | Hotfix — TOTP row freeze root-caused to the WinUI 3 managed-wrapper GC pitfall (registry back to strong references), smoother TOTP progress bar, drag-drop smoothness, cooldown confirm-key first-frame flash, settings-page brand-color states |
 
 ---
 

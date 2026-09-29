@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-19 · **Applies to:** Novara 8.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-29 · **Applies to:** Novara 9.1 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,9 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 8.0 | ✅ Supported | Current release — cross-device sync through a server you host |
+| 9.1 | ✅ Supported | Current release — hotfix line on top of 9.0 |
+| 9.0 | ✅ Supported | First release with one-command self-hosting (official Docker image + compose) |
+| 8.0 | ✅ Supported | First release of cross-device sync through a server you host |
 | 7.0 | ✅ Supported | First release of the connected era (encrypted snapshots) |
 | 6.2 | ✅ Supported | Receives critical fixes where feasible |
 | 6.0 | ✅ Supported | Receives critical fixes where feasible |
@@ -91,7 +93,7 @@ When the privacy lock is enabled, Novara encrypts the entire database:
 The connected era adds a new way for data to leave your machine — and the same bar applies: **everything that leaves is encrypted, or it does not leave.**
 
 - **Same container, same contract** — a snapshot embeds the database as a `.novaenc` v4 ciphertext block (44-byte self-describing header used as AES-GCM additional data, PBKDF2-SHA256 at 3,000,000 iterations, gzip-compressed payload), the identical versioned contract as encrypted backups.
-- **Mandatory gate** — a plaintext vault refuses to export a snapshot; the app guides you to set a privacy lock first. There is no plaintext path.
+- **Mandatory password gate** — every snapshot requires a password at export: your privacy-lock password or an independent one you enter for that export. A plaintext vault takes exactly the same dialog — the exported file is always the encrypted v4 container, so there is no plaintext export path either way.
 - **Credentials never ride along** — MCP tokens and per-client authorization data are stripped from the exported settings before the snapshot is sealed.
 - **Zero network by construction** — the exported viewer file performs no network requests whatsoever: no CDN, no fonts, no telemetry. Decryption happens in your browser via the WebCrypto API; the file never "phones home" because there is no home to phone.
 - **Password is the only key** — the snapshot password is not stored anywhere by Novara and cannot be recovered. Hosting a snapshot publicly is safe only as far as the password is strong; the app and the deployment guide both say so plainly.
@@ -143,7 +145,7 @@ Novara includes several layers to prevent data loss and corruption:
 - **XSS protection in the diary editor** — rich-text HTML is sanitized on load, on save, and after navigation against a strict tag/attribute/URL whitelist, using a real HTML parser (AngleSharp). Script tags, `on*` event attributes (including entity-encoded variants such as `o&#110;load`), and dangerous protocols (`javascript:`, `vbscript:`, non-image `data:`) are stripped. Titles are rendered as plain text.
 - **No code evaluation of untrusted input** — imported HTML and JSON are parsed and normalized, never executed.
 - **Local-only helper process** — the desktop-sticky-note helper communicates with the main app via local files and named events on the same machine; it makes no network requests and opens no listening ports.
-- **Minimal surface** — no listening network ports, no HTTP server, no remote-procedure-call surface exposed to the network. The only outbound network calls are the user-triggered API-key detection tiers (see the Privacy Policy). The optional MCP server is a local named-pipe endpoint only, reachable from the same machine. The exported Snapshot viewer file performs no network requests at all.
+- **Minimal surface** — the Novara desktop app opens no listening ports and exposes no remote-procedure-call surface to the network. Outbound traffic happens only on paths you trigger: the API-key detection tiers, cross-device sync to the self-hosted server you paired (8.0+), and the in-app update check against a static release manifest (9.0+) — each appears in the network activity panel (see the Privacy Policy). The optional MCP server is a local named-pipe endpoint only, reachable from the same machine. The separately installed sync server (`NovaraSync`) does listen for connections — it is a component you choose to run yourself, it handles ciphertext only, and it is not part of the desktop app. The exported Snapshot viewer file performs no network requests at all.
 
 ## 9. Developer commitments
 

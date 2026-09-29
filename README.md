@@ -139,7 +139,7 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
 The first step of the connected era. Export your entire database — memos, paths, todos, notes, records, your choice — as **one self-contained encrypted HTML file**, and read it anywhere:
 
 - **Open anywhere** — double-click the file, or host it on your own NAS / server / any static hosting; the viewer, the decryption, and the data all live inside that one file
-- **End-to-end encryption** — the same `.novaenc` AES-256-GCM container as encrypted backups (PBKDF2-SHA256, 3,000,000 iterations); a plaintext vault is refused export, no exceptions
+- **End-to-end encryption** — the same `.novaenc` AES-256-GCM container as encrypted backups (PBKDF2-SHA256, 3,000,000 iterations); every export requires a password and produces the same encrypted container, whether or not your local vault is encrypted
 - **Your password, your only key** — the password is never stored, never sent, and cannot be recovered; a locked snapshot is just noise to anyone holding the file
 - **Read-only by design** — masked fields with tap-to-reveal, one-tap copy, and live TOTP codes computed locally in the browser; nothing edits, nothing uploads, nothing persists (refresh and the plaintext is gone from memory)
 - **Data-as-of, honestly** — the viewer shows exactly when the snapshot was taken; update by re-exporting
