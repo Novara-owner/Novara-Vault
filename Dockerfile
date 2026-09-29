@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1.7
+# (syntax frontend removed 2026-09-28: every directive here is covered by BuildKit's built-in
+#  frontend, and fetching docker/dockerfile:1.7 requires an auth.docker.io round-trip that is
+#  unreachable from CN networks without a proxy - the image must build offline.)
 #
 # NovaraSync - the server half of Novara Sync, as a container image.
 #
