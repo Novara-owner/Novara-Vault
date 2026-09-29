@@ -22,30 +22,9 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 
 ## 9.0 — Self-Hosting, One Command Away
 
-9.0 is the deployment release: the server you could already run on Windows now ships the way servers actually reach people. One `docker compose up -d` brings up the sync server with automatic HTTPS on hardware you already own. Nothing about the data changes — the server still only ever handles ciphertext, and the red lines did not move.
+9.0 is the deployment release: the server you could already run on Windows now ships the way servers actually reach people. One `docker compose up -d` brings up the sync server with automatic HTTPS on hardware you already own — an official container image, an operations CLI, a 36-page help center and per-release verification assets included. Nothing about the data changes — the server still only ever handles ciphertext, and the red lines did not move. On the desktop, 9.0 adds export-as-image, four paper themes, an animation toggle, an in-app update checker and a rebuilt sticky-note card.
 
-- **Official container image** — `ghcr.io/novara-owner/novara-sync` (mirrored on Docker Hub): multi-stage build, runs as non-root, health-checked, and it refuses to start on an unwritable data directory instead of failing per request. Each release pins the image digest in an `IMAGES.txt` attachment.
-- **Compose + Caddy, one command** — `deploy/compose/` brings up the sync server and an automatic-HTTPS reverse proxy together; no domain? Plain HTTP and a self-signed fallback are one line away.
-- **An operations CLI that answers back** — `NovaraSync space create|list|show|delete|rotate-secret`, JSON output everywhere, deterministic exit codes, no interactive prompts — scriptable into NAS schedulers and cron.
-- **A real help center** — [novara.xin/help/](https://novara.xin/help/) (36 pages) covers first steps, self-hosting on Synology / QNAP / Ubuntu / Windows, and the security boundary; the app's help buttons now point there.
-- **Server runtime on .NET 10 LTS** — the exposed-to-the-world server components move up while the desktop app stays on .NET 8. Same contract, same container format, zero migration.
-- **Verify what you run** — each release ships `SHA256SUMS` for the installer, `IMAGES.txt` for the image, and an SBOM; see [docs/VERIFYING.md](docs/VERIFYING.md).
-- **And on the desktop** — export any diary or the whole memo collection as an image, four paper themes with new installs starting on Almond, an app-wide animation toggle, an in-app update checker, and a rebuilt sticky-note card with its own palette.
-
-<p align="center">
-  <img src="images/English-Settings.png" alt="Settings page" width="420" />
-  <img src="images/English-Tools.png" alt="Tools page" width="420" />
-</p>
-
-## 8.0 — Sync, on a Server You Own
-
-8.0 is where the connected era turns two-way. Novara now **synchronizes across your devices** through a server you run yourself — and that server still never sees your data: it holds versioned ciphertext blobs and knows nothing about their contents. Pairing a second device takes three values (server URL, space id, enrollment secret), and the space key is generated on your first device and never leaves your control. Your PC stays the authority — lose the server and one push from your PC rebuilds it. Offline never degrades: a dead server changes nothing about how Novara works.
-
-- **Cross-device sync** — one encrypted state, converged across every paired device
-- **A self-hosted server in the box** — the installer ships `NovaraSync.exe` (a single self-contained binary, so the server machine needs no .NET runtime) plus two one-click scripts that pin the data directory for you
-- **Web reader, and a limited editor** — the same self-contained viewer as 7.0, now able to load live ciphertext from your server and make limited edits (memos, to-dos, notes) that are re-encrypted before upload
-- **Honest conflict handling** — the later write wins and the earlier one is preserved as a conflict copy you can compare, keep or export
-- **Device center & sync audit** — see every paired device, revoke a lost phone's token, and read a local log of every upload, download and conflict
+Full details: [Release v9.0.0](https://github.com/Novara-owner/Novara-Vault/releases/tag/v9.0.0) · [CHANGELOG](CHANGELOG.md)
 
 ## Security & Privacy Lock
 
@@ -126,6 +105,7 @@ Send any note or todo card to your desktop with one click. A dedicated lightweig
 
 - **Drag & resize** — unlock a note to move it and resize it from any edge
 - **Lock & pin** — fix position, stay on top, survive Win+D
+- **Color palette** — a self-contained 20-color palette with per-note color and size persistence, and context menus that follow the main app
 - **Theme & language sync** — notes follow the app's theme and language instantly
 - **Edit on desktop** — right-click a note and Novara opens its editor automatically
 - **Bidirectional todo sync** — checking a todo on the desktop writes back to the main app, which stays the single source of truth
@@ -237,7 +217,7 @@ Novara ships with **five complete interface languages** — 简体中文, 繁體
 
 ## Theme System
 
-Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog. Since 9.0, four paper palettes — Cream, Almond, Kraft, and Newsprint — recolor the entire app, editors and desktop sticky notes included, and new installs start on Almond.
+Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog. Since 9.0, four paper palettes — Cream, Almond, Kraft, and Newsprint — recolor the entire app, editors and desktop sticky notes included, and new installs start on Almond. Brand accents adapt to the theme as well: dark and light keep the classic brand blue, while each paper theme carries its own softened palette color.
 
 <p align="center">
   <img src="images/Light%20Mode.png" alt="Light theme" width="420" />
@@ -250,6 +230,20 @@ Light, Dark, and Follow System themes with a unified brand-button system (primar
 <p align="center">
   <img src="images/Paper・Kraft.png" alt="Paper theme - Kraft" width="420" />
   <img src="images/Paper・Newsprint.png" alt="Paper theme - Newsprint" width="420" />
+</p>
+
+## Settings, Tools & Data Overview
+
+- **Settings** — every switch in one place: themes (dark, light, paper), the animation toggle, autostart, the privacy lock with Windows Hello and auto-lock, MCP permissions, and the in-app update checker
+- **Tools** — the API connectivity tests for memo entries, with a relay probe and per-endpoint diagnostics, plus the data-overview health card
+- **Data overview** — encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
+
+<p align="center">
+  <img src="images/English-Settings.png" alt="Settings page" width="420" />
+  <img src="images/English-Tools.png" alt="Tools page" width="420" />
+</p>
+<p align="center">
+  <img src="images/English-Data%20Overview.png" alt="Data overview" width="720" />
 </p>
 
 ## Data Import & Export
@@ -289,10 +283,6 @@ Your data moves with you, freely and without vendor lock-in:
 - **Health check**: encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone
 - **Agent-ready without data leaks**: the MCP interface never sends your data anywhere by itself
-
-<p align="center">
-  <img src="images/English-Data%20Overview.png" alt="Data overview" width="720" />
-</p>
 
 ## Privacy & Security
 
