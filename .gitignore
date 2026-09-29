@@ -1,32 +1,27 @@
-# ===== Novara 开发工作区 .gitignore（双仓库方案，2026-08-27 定稿）=====
-# 规则：本仓库=开发全量（源码+中文注释+memory 文档），只进本地/作者私有远端。
-# 公开 Novara-Vault 永不经此目录 push，只收 make-vault.ps1 净化产物。
-
-# --- 构建产物 ---
+# Build outputs
 bin/
 obj/
 [Bb]uild/
 Generated Files/
 
-# --- IDE / 工具本地产物 ---
+# IDE / local tooling
 .vs/
 .vscode/
 *.user
 *.suo
 *.rsuser
 
-# --- JS 编辑器依赖（dist bundle 是成品需入库，node_modules 不入）---
+# JS editor dependencies (the dist bundles are tracked; node_modules is not)
 DiaryEditorJs/node_modules/
 
-# --- 打包产物（可由 setup.iss 重新编译生成，不入库）---
+# Installer output (rebuildable from setup.iss)
 Installer/*.exe
 _publish_tmp/
 
-
-# --- 操作系统垃圾 ---
+# OS noise
 Thumbs.db
 desktop.ini
 
-# --- 日志 ---
+# Logs
 *.log
 logs/
