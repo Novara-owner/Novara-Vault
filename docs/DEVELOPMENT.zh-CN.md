@@ -102,7 +102,7 @@ Novara/
 
 - `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
 - 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
-- `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者都面向 `net8.0`，无 WinUI 依赖。
+- `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者自 9.0 起面向 `net10.0`，无 WinUI 依赖；桌面端与 `Novara.Core` 保持 `net8.0`。
 - `Pages/` 是九大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage。
 
 **核心解耦方式**：
@@ -814,6 +814,8 @@ Novara/
 | 6.2 | 2026-09-07 | 全页面弹窗小窗自适应；便签弹窗整页滚动；图标双向无限环选择器；编辑器正文占位符；备忘页区域化置顶与归属变化剥除；增量核验（4 项修复） |
 | 7.0 | 2026-09-10 | **互联时代开启** —— Novara Snapshot：加密自包含 HTML 查看器导出（`.novaenc` v4 容器）、浏览器只读查看器（本地 TOTP、深浅主题）、强制加密门槛、部署指南（novara.xin） |
 | 8.0 | 2026-09-19 | **跨设备同步** —— 经由随安装包自带的自托管服务端做端到端加密同步（带版本号的密文存储、token 鉴权、设备注册与撤销）；网页阅读器支持受限编辑并重加密上传；库级冲突处理且保留被覆盖的那一版；设备中心与本地同步审计；全仓多轮发布前核验 |
+| 9.0 | 2026-09-28 | **一条命令自托管** —— 官方 Docker 镜像、compose + Caddy 自动 HTTPS、运维命令行（space list/show/delete/rotate-secret）、服务端运行时升至 .NET 10、桌面便签重做、应用内检查更新；两轮发布前核验 |
+| 9.1 | 2026-09-29 | 热修复 —— TOTP 行冻结根因为 WinUI 3 托管壳 GC 暗坑（注册表回强引用）、TOTP 进度条丝滑化、拖拽顺滑化、冷静期确认键首帧闪红、设置页品牌色状态 |
 
 ---
 

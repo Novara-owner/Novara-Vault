@@ -10,7 +10,7 @@
 
 | 工具 | 版本 | 用途 |
 |------|------|------|
-| .NET SDK | **8.0.402**（由 `global.json` 锁定） | 构建所有 C# 工程 |
+| .NET SDK | **10.0.400**（经 `global.json`） | 构建所有 C# 工程——桌面工程保持 `net8.0`，三个服务端工程面向 `net10.0` |
 | Windows SDK | 10.0.26100.0 | WinUI 3 目标（见下方说明） |
 | Node.js + npm | 任意近期 LTS | 构建 `DiaryEditorJs` 编辑器 bundle |
 | Inno Setup | 6+ | 编译安装脚本（`Installer/setup.iss`） |

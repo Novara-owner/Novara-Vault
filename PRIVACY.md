@@ -5,8 +5,8 @@
 ---
 
 **Effective date:** 2026-08-14
-**Last updated:** 2026-09-19
-**Applies to:** Novara 7.0 (and, where the behavior described below already existed, earlier versions)
+**Last updated:** 2026-09-29
+**Applies to:** Novara 9.1 (and, where the behavior described below already existed, earlier versions)
 
 > This policy describes the Novara **desktop application** for Windows. The official website (novara.xin) and the GitHub repository are separate properties; this document focuses on the software you install and run on your machine.
 
@@ -16,8 +16,8 @@
 
 - **Novara keeps your data local.** Your data lives on your computer and never leaves it unless you explicitly make it leave.
 - **We collect nothing.** No account, no telemetry, no usage analytics, no ads, no device fingerprinting.
-- **It works fully offline.** Network activity happens only when you ask for it: the API-key detection you trigger manually (Section 5), the local MCP interface you opt into (Section 6), and — since 8.0 — sync to **your own** server, which you must switch on and pair yourself (Section 5). The exported Snapshot viewer file performs no network requests at all; where you host it and who may reach it is entirely up to you.
-- **Encryption is optional and OFF by default.** Read Section 4 carefully so you know exactly what is and is not protected. Snapshot exports (Section 11) are always encrypted — a plaintext vault refuses to export.
+- **It works fully offline.** Network activity happens only when you ask for it: the API-key detection you trigger manually (Section 5), the local MCP interface you opt into (Section 6), and — since 8.0 — sync to **your own** server, which you must switch on and pair yourself, and — since 9.0 — the in-app update check you click, which talks only to the project's release site (both in Section 5). The exported Snapshot viewer file performs no network requests at all; where you host it and who may reach it is entirely up to you.
+- **Encryption is optional and OFF by default.** Read Section 4 carefully so you know exactly what is and is not protected. Snapshot exports (Section 11) are always encrypted — every export requires a password and produces the same encrypted container, whether or not your local vault is itself encrypted.
 
 ---
 
@@ -85,9 +85,9 @@ Encryption in Novara is **optional and turned OFF by default**.
 
 Novara is designed to be **fully usable offline** and does not phone home.
 
-- **No automatic updates:** Novara does not check for, download, or install updates on its own.
+- **No background updates:** Novara never checks for updates on its own — no startup check, no polling. The in-app update check (since 9.0, see below) runs only when you click it; nothing is downloaded or installed without your explicit confirmation at every step.
 - **No telemetry or analytics:** the application never contacts any server owned by the Novara project.
-- **Network features are all opt-in:** the **API-key detection** in the memo manager (three tiers you trigger explicitly), plus — since 8.0 — sync to a server you configure yourself.
+- **Network features are all opt-in:** the **API-key detection** in the memo manager (three tiers you trigger explicitly), plus — since 8.0 — sync to a server you configure yourself, and — since 9.0 — the in-app update check you click.
 
 ### The three detection tiers
 
@@ -101,7 +101,7 @@ Some memo entries are of type "API Key". If you right-click such an entry, Novar
 
 All three send data **only to the third-party endpoint you configured** — never to the Novara project. Any tier that consumes tokens requires a **separate confirmation** from you before it runs, and Novara shows the actual token total in the report. Your key is masked in the UI and never written to logs or reports.
 
-This is the **only** way any of your data is sent over the network. If you do not use this feature, Novara makes **zero** network requests. Since 6.0, the title bar shows a local-only state and briefly names the endpoint whenever a detection goes out — display only, it adds no new network behavior.
+This is the only feature that sends your **secrets** (API keys) over the network — and only to the endpoint you configured yourself. Sync (below) carries only ciphertext, and the update check (below) sends nothing about you. If you use none of these, Novara makes **zero** network requests. Since 6.0, the title bar shows a local-only state and briefly names the endpoint whenever a detection goes out — display only, it adds no new network behavior.
 
 ### Sync (8.0) — only to a server you run
 
@@ -116,6 +116,10 @@ Sync stays off until you explicitly turn it on, and it only ever talks to a serv
 What never leaves your machine: your password, the space key, and anything derived from them. The server holds no key and cannot decrypt a single entry — which also means it cannot help you recover anything, and neither can we: lose the space key and every paired device, and the server's data is unrecoverable by design.
 
 Turning sync off (or revoking a device) stops the traffic; the server keeps whichever versions it already holds until you delete them from its data directory.
+
+### Update check (9.0) — only to the project's release site
+
+Checking for updates happens only when you click it — there is no startup check and no background polling. The app fetches a static manifest (`latest.json`) from **novara.xin** containing the latest version number, release date, download URL, and SHA-256 hash; the request carries nothing about you. If you choose to upgrade, the installer is downloaded over HTTPS from the same site, and its SHA-256 is verified before anything is allowed to run. The request appears in the network activity panel like every other outbound call.
 
 ## 6. MCP Agent interface — read this carefully
 
@@ -176,6 +180,7 @@ The only data that can ever leave your machine is data you send yourself:
 
 - the API-key detection (to the endpoint you configured, only on your explicit action),
 - data an AI agent reads and sends via **a cloud AI client you chose** (see Section 6),
+- cross-device sync payloads (Section 5) — ciphertext only, to the server you host yourself,
 - a **Novara Snapshot** you exported (Section 11): an always-encrypted file you place wherever you choose — and wherever you host it, the viewer file itself performs no network requests, and
 - files you explicitly export or back up to a location you choose.
 
@@ -185,7 +190,7 @@ You are in full control at all times:
 
 - **Export (native)** — export a complete plaintext backup (`.novabak`) with a SHA-256 integrity header (older MD5-headered files still import via dual-header detection). *Note: exported files are NOT encrypted* — keep them safe. File-path entries are excluded by default (with an option to include them) for moving to a new machine.
 - **Encrypted backup (since 5.2)** — export a `.novaenc` container instead: AES-256-GCM authenticated encryption with a separate backup password that is never stored anywhere and can be set fresh on every export. If that password is lost, the backup cannot be decrypted — there is no recovery.
-- **Novara Snapshot (since 7.0)** — export a self-contained, always-encrypted HTML viewer of your chosen data sections. A plaintext vault refuses to export. The password is never stored and cannot be recovered; refresh the page and the plaintext is gone from memory. The viewer performs no network requests and nothing you view is persisted in the browser. MCP tokens and client-authorization data are stripped from the export before it is sealed.
+- **Novara Snapshot (since 7.0)** — export a self-contained, always-encrypted HTML viewer of your chosen data sections. Every export requires a password and produces the same encrypted v4 container, whether or not your local vault is itself encrypted. The password is never stored and cannot be recovered; refresh the page and the plaintext is gone from memory. The viewer performs no network requests and nothing you view is persisted in the browser. MCP tokens and client-authorization data are stripped from the export before it is sealed.
 - **Cross-device sync (since 8.0)** — keep your devices converged through a server you host yourself. Only ciphertext leaves your machine, and the server holds no key, so it can neither read nor recover your data. Switching sync off, or revoking a device, stops the traffic at once.
 - **CSV export/import** — export memos as CSV, or import CSV from Novara, KeePass, or Bitwarden formats.
 - **PDF / HTML collection** — export all records as a printable HTML or PDF collection.
