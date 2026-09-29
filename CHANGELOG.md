@@ -1,10 +1,24 @@
-# Changelog
+﻿# Changelog
 
 <p align="center"><strong>English</strong> · <a href="CHANGELOG.zh-CN.md">简体中文</a></p>
 
 All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [9.1.0] - 2026-09-29
+
+### Fixed
+
+- **Frozen TOTP live codes** - the two-step-verification row on expanded memo cards (6-digit code, seconds countdown, progress bar) could freeze at its initial value shortly after launch: the managed wrappers of the row's controls were collected by the GC while the on-screen elements kept rendering, and the liveness check misread that as "card removed" and dropped the live row. The registry now holds strong references and liveness is judged by visual-tree reachability, so codes tick, the countdown runs and the bar advances for as long as the card is on screen.
+- **Full-red flash on cooldown dialogs** - the 30-second charging confirm button painted itself fully red for the first 100 ms before the countdown ticked in. The gradient now starts at the zero-charge state, so dialogs open clean.
+- **Card drag stutter** - dragging memo cards re-created the drop indicator and re-laid-out the whole container on every pointer move. The indicator is now reused for the whole drag, is a no-op when the drop slot does not change, and child positions are cached between real layout changes.
+
+### Changed
+
+- **Silky TOTP progress bar** - the progress bar now slides continuously towards the next second instead of stepping once per second; with the animation toggle off it keeps the discrete per-second stepping.
+- **Settings state colors** - the animation toggle, the theme picker (any explicit choice) and the tab-customization card (any non-full selection) light up in the brand color while active; paper themes keep their per-palette brand color. The language card intentionally stays neutral.
+- **Web shell refresh** - the read-only web viewer's demo data no longer contains absolute local paths, and the service-worker cache was bumped (v18) so clients pick up the change.
 
 ## [9.0.0] - 2026-09-28
 

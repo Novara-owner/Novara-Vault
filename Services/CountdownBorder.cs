@@ -80,6 +80,10 @@ public partial class CountdownBorder : Grid
             new GradientStop { Color = dim,   Offset = 1.0 },
             new GradientStop { Color = dim,   Offset = 1.0 },
         };
+
+
+        _stops[1].Offset = Math.Max(0.0, -Motion.CooldownBandHalf);
+        _stops[2].Offset = Math.Min(1.0, Motion.CooldownBandHalf);
         var brush = new LinearGradientBrush { StartPoint = new Windows.Foundation.Point(0, 0), EndPoint = new Windows.Foundation.Point(1, 0) };
         foreach (var s in _stops) brush.GradientStops.Add(s);
         btn.Background = brush;

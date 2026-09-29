@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -94,6 +94,8 @@ public sealed partial class BasicMemoPage : Page
     private Image? _dragGhost;
     private Border? _dropIndicator;
     private int _dropIndex;
+    private List<(FrameworkElement fe, double top, double half)>? _dropCache;
+    private bool _dropCacheDirty;
     private int _dragOriginIndex;
     private Point _lastPointerInRoot;
     private int _autoScrollDir;
@@ -1995,8 +1997,19 @@ private MenuFlyout BuildContextMenu()
 
 
 
-    private sealed record TotpRowRef(WeakReference<FrameworkElement> Root, WeakReference<TextBlock> Code, WeakReference<TextBlock> Seconds,
-        WeakReference<ColumnDefinition> FillCol, WeakReference<ColumnDefinition> RestCol, byte[] Key, string Algorithm, int Digits, int Period);
+
+
+
+    private sealed class TotpRowRef
+    {
+        public TotpRowRef(FrameworkElement root, TextBlock code, TextBlock seconds, ScaleTransform fillScale,
+            byte[] key, string algorithm, int digits, int period)
+        { Root = root; Code = code; Seconds = seconds; FillScale = fillScale; Key = key; Algorithm = algorithm; Digits = digits; Period = period; }
+        public FrameworkElement Root; public TextBlock Code; public TextBlock Seconds; public ScaleTransform FillScale;
+        public byte[] Key; public string Algorithm; public int Digits; public int Period;
+        public int DetachedTicks;
+        public Storyboard? FillAnim;
+    }
     private readonly List<TotpRowRef> _totpRows = new();
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _totpTimer;
 
@@ -2048,21 +2061,16 @@ private MenuFlyout BuildContextMenu()
 
 
 
+
+
             int remain0 = TotpService.RemainingSeconds(cfg.Period, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            var fillCol = new ColumnDefinition { Width = new GridLength(remain0, GridUnitType.Star) };
-            var restCol = new ColumnDefinition { Width = new GridLength(cfg.Period - remain0, GridUnitType.Star) };
-            var fillBorder = new Border { Background = App.GetBrush("AppPrimaryButtonBrush"), CornerRadius = new CornerRadius(1.5) };
-            Grid.SetColumn(fillBorder, 0);
-            var fillGrid = new Grid();
-            fillGrid.ColumnDefinitions.Add(fillCol);
-            fillGrid.ColumnDefinitions.Add(restCol);
-            fillGrid.Children.Add(fillBorder);
-            var barTrack = new Border { Height = 3, CornerRadius = new CornerRadius(1.5), Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 4, 0, 0), Child = fillGrid };
+            var fillScale = new ScaleTransform { ScaleX = Math.Clamp((double)remain0 / cfg.Period, 0, 1) };
+            var fillBorder = new Border { Background = App.GetBrush("AppPrimaryButtonBrush"), CornerRadius = new CornerRadius(1.5), RenderTransform = fillScale, RenderTransformOrigin = new Point(0, 0.5) };
+            var barTrack = new Border { Height = 3, CornerRadius = new CornerRadius(1.5), Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 4, 0, 0), Child = fillBorder };
             Grid.SetRow(barTrack, 1); Grid.SetColumn(barTrack, 0); Grid.SetColumnSpan(barTrack, 3);
             inner.Children.Add(barTrack);
             EnsureTotpTimer();
-            _totpRows.Add(new TotpRowRef(new WeakReference<FrameworkElement>(row), new WeakReference<TextBlock>(code), new WeakReference<TextBlock>(seconds),
-                new WeakReference<ColumnDefinition>(fillCol), new WeakReference<ColumnDefinition>(restCol), cfg.Key, cfg.Algorithm, cfg.Digits, cfg.Period));
+            _totpRows.Add(new TotpRowRef(row, code, seconds, fillScale, cfg.Key, cfg.Algorithm, cfg.Digits, cfg.Period));
         }
         else
         {
@@ -2095,15 +2103,50 @@ private MenuFlyout BuildContextMenu()
             var r = _totpRows[i];
 
 
-            if (!r.Root.TryGetTarget(out _) || !r.Code.TryGetTarget(out var code) || !r.Seconds.TryGetTarget(out var seconds)
-                || !r.FillCol.TryGetTarget(out var fillCol) || !r.RestCol.TryGetTarget(out var restCol))
-            { _totpRows.RemoveAt(i); continue; }
+            if (!TotpRowAttached(r.Root))
+            {
+                if (++r.DetachedTicks < 2) continue;
+                _totpRows.RemoveAt(i); continue;
+            }
+            r.DetachedTicks = 0;
             var remain = TotpService.RemainingSeconds(r.Period, now);
-            code.Text = TotpService.ComputeCode(r.Key, r.Algorithm, now / r.Period, r.Digits);
-            seconds.Text = remain + "s";
-            fillCol.Width = new GridLength(remain, GridUnitType.Star);
-            restCol.Width = new GridLength(Math.Max(0, r.Period - remain), GridUnitType.Star);
+            r.Code.Text = TotpService.ComputeCode(r.Key, r.Algorithm, now / r.Period, r.Digits);
+            r.Seconds.Text = remain + "s";
+            double frac = Math.Clamp((double)remain / r.Period, 0, 1);
+            if (remain >= r.Period) SetTotpFill(r, frac);
+            else if (App.IsAnimationsEnabled) SlideTotpFill(r, frac);
+            else SetTotpFill(r, frac);
         }
+    }
+
+    private static void SetTotpFill(TotpRowRef r, double frac)
+    {
+        r.FillAnim?.Stop(); r.FillAnim = null;
+        r.FillScale.ScaleX = frac;
+    }
+
+    private static void SlideTotpFill(TotpRowRef r, double fromFrac)
+    {
+        r.FillAnim?.Stop();
+        var sb = new Storyboard();
+        var anim = new DoubleAnimation { From = fromFrac, To = Math.Clamp(fromFrac - 1.0 / r.Period, 0, 1), Duration = TimeSpan.FromSeconds(1) };
+        Storyboard.SetTarget(anim, r.FillScale);
+        Storyboard.SetTargetProperty(anim, "ScaleX");
+        sb.Children.Add(anim);
+        r.FillAnim = sb;
+        sb.Begin();
+    }
+
+
+    private bool TotpRowAttached(Microsoft.UI.Xaml.DependencyObject row)
+    {
+        var p = (Microsoft.UI.Xaml.DependencyObject?)row;
+        for (int guard = 0; p != null && guard < 64; guard++)
+        {
+            if (ReferenceEquals(p, this)) return true;
+            p = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(p);
+        }
+        return false;
     }
 
     private TextBox CreateCustomInfoTextBox(int index)
@@ -3820,6 +3863,7 @@ private void ShowApiCheckDialog(Border card)
         _dragContainer = card.Parent as Panel;
         _grabOffset = grabOffset;
         _dropIndex = _dragOriginIndex = _dragContainer != null ? CountVisibleBeforeIn(card, _dragContainer) : 0;
+        _dropCache = null; _dropCacheDirty = true;
 
         App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
@@ -3866,7 +3910,23 @@ private void ShowApiCheckDialog(Border card)
     private int ComputeDropIndex(Point ptInList)
     {
         if (_dragContainer == null) return 0;
+
+
+        if (_dropCache == null || _dropCacheDirty) RebuildDropCache();
+        if (_dropCache == null) return 0;
         int count = 0;
+        foreach (var (_, top, half) in _dropCache)
+        {
+            if (ptInList.Y < top + half) break;
+            count++;
+        }
+        return count;
+    }
+
+    private void RebuildDropCache()
+    {
+        _dropCache = new List<(FrameworkElement fe, double top, double half)>();
+        if (_dragContainer == null) { _dropCacheDirty = false; return; }
         foreach (var child in _dragContainer.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
@@ -3875,11 +3935,10 @@ private void ShowApiCheckDialog(Border card)
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(_dragContainer).TransformPoint(new Point(0, 0)).Y;
-                if (ptInList.Y < top + fe.ActualHeight / 2) break;
-                count++;
+                _dropCache.Add((fe, top, fe.ActualHeight / 2));
             }
         }
-        return count;
+        _dropCacheDirty = false;
     }
 
     private void UpdateDropIndicator(int index)
@@ -3922,13 +3981,16 @@ private void ShowApiCheckDialog(Border card)
         {
             if (_dropIndicator != null) { _dragContainer.Children.Remove(_dropIndicator); _dropIndicator = null; }
             _dropIndex = _dragOriginIndex;
+            _dropCacheDirty = true;
             return;
         }
 
+        if (_dropIndex == index && _dropIndicator != null) return;
         if (_dropIndicator != null) _dragContainer.Children.Remove(_dropIndicator);
-        _dropIndicator = CreateDropIndicator();
+        else _dropIndicator = CreateDropIndicator();
         _dragContainer.Children.Insert(index, _dropIndicator);
         _dropIndex = index;
+        _dropCacheDirty = true;
     }
 
     private Border CreateDropIndicator()
@@ -3953,6 +4015,7 @@ private void ShowApiCheckDialog(Border card)
         else if (pt.Y > MemoScrollViewer.ViewportHeight - bottomZone) dir = 1;
 
         if (dir == 0) { StopAutoScroll(); return; }
+        _dropCacheDirty = true;
         _autoScrollDir = dir;
         StartAutoScroll();
     }
@@ -3998,6 +4061,7 @@ private void ShowApiCheckDialog(Border card)
 
         if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
         if (_dropIndicator != null && container != null) { container.Children.Remove(_dropIndicator); _dropIndicator = null; }
+        _dropCache = null;
         StopAutoScroll();
 
         card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
