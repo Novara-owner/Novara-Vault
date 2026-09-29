@@ -163,6 +163,7 @@ public sealed partial class SettingsPage : Page
             UpdateLanguageButton();
             UpdateWelcomeButton();
             UpdateEdgeMenuButton();
+            UpdateTabsButton();
             App.MainWindow?.ApplyVisibleTabs(_visibleTabs);
         };
     }
@@ -296,7 +297,10 @@ public sealed partial class SettingsPage : Page
     }
 
     private void UpdateAnimationButton()
-        => AnimationButtonText.Text = App.GetString(App.IsAnimationsEnabled ? "Setting_Autostart_On" : "Setting_Autostart_Off");
+    {
+        AnimationButtonText.Text = App.GetString(App.IsAnimationsEnabled ? "Setting_Autostart_On" : "Setting_Autostart_Off");
+        ApplyToggleState(AnimationButton, App.IsAnimationsEnabled);
+    }
 
     private void HandleThemeSelection(string theme)
     {
@@ -486,6 +490,10 @@ private void ShowThemeRestartOverlay()
         ShowTabsMenu();
     }
 
+
+    private void UpdateTabsButton()
+        => ApplyToggleState(CustomizeTabsButton, _visibleTabs.Count < TabNames.Length);
+
     private void ShowTabsMenu()
     {
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
@@ -506,6 +514,7 @@ private void ShowThemeRestartOverlay()
                 else _visibleTabs.Add(name);
                 App.MainWindow?.ApplyVisibleTabs(_visibleTabs);
                 PersistSetting(s => { s.VisibleTabs = _visibleTabs.ToList(); });
+                UpdateTabsButton();
                 DispatcherQueue.TryEnqueue(() => ShowTabsMenu());
             };
             menu.Items.Add(item);
@@ -1605,6 +1614,7 @@ private void ShowPrivacyLockWarningDialog()
     private void UpdateThemeButton()
     {
         ((TextBlock)ThemeButton.Content).Text = ThemeLabel(_currentTheme);
+        ApplyToggleState(ThemeButton, _currentTheme != "跟随系统");
     }
 
     private void WelcomeOnLaunchButton_Click(object sender, RoutedEventArgs e)

@@ -1,5 +1,5 @@
 var CACHE_PREFIX = 'novara-web-shell-';
-var CACHE = CACHE_PREFIX + 'v17';
+var CACHE = CACHE_PREFIX + 'v18';
 var SCOPE = self.registration.scope;
 
 
