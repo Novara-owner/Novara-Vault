@@ -110,6 +110,9 @@ public static class ReminderScheduler
             dynamic definition = svc.NewTask(0);
 
 
+
+            definition.Settings.DisallowStartIfOnBatteries = false;
+            definition.Settings.StopIfGoingOnBatteries = false;
             definition.Settings.StartWhenAvailable = false;
             dynamic trigger = definition.Triggers.Create(1);
 
@@ -119,7 +122,10 @@ public static class ReminderScheduler
             action.Path = GetExecutablePath();
             action.Arguments = "--reminder " + id.ToString("D", CultureInfo.InvariantCulture);
 
-            folder.RegisterTaskDefinition(TaskPrefix + id, definition, 6, null, null, 3, null);
+
+
+            var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
+            folder.RegisterTaskDefinition(TaskPrefix + id, definition, 6, null, null, 3, "D:P(A;OICI;FA;;;" + sid + ")");
         }
         catch (Exception ex)
         {
