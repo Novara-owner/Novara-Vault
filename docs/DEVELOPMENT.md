@@ -25,16 +25,17 @@
 14. [Recycle Bin (TrashPage)](#14-recycle-bin-trashpage)
 15. [Desktop Sticky Notes (StickNoteHost)](#15-desktop-sticky-notes-sticknotehost)
 16. [MCP Agent Interface](#16-mcp-agent-interface)
-17. [Theme & Internationalization](#17-theme--internationalization)
-18. [Reminder System](#18-reminder-system)
-19. [Import & Export](#19-import--export)
-20. [API Connectivity Detection](#20-api-connectivity-detection)
-21. [Window, Tray & Single Instance](#21-window-tray--single-instance)
-22. [Core Services in Depth](#22-core-services-in-depth)
-23. [Build & Release](#23-build--release)
-24. [Testing](#24-testing)
-25. [Directory Structure](#25-directory-structure)
-26. [Version History](#26-version-history)
+17. [Connectivity Era (Snapshot, Sync, Self-Hosting)](#17-connectivity-era-snapshot-sync-self-hosting)
+18. [Theme & Internationalization](#18-theme--internationalization)
+19. [Reminder System](#19-reminder-system)
+20. [Import & Export](#20-import--export)
+21. [API Connectivity Detection](#21-api-connectivity-detection)
+22. [Window, Tray & Single Instance](#22-window-tray--single-instance)
+23. [Core Services in Depth](#23-core-services-in-depth)
+24. [Build & Release](#24-build--release)
+25. [Testing](#25-testing)
+26. [Directory Structure](#26-directory-structure)
+27. [Version History](#27-version-history)
 
 ---
 
@@ -579,19 +580,48 @@ Title + collapse / audit log / configure / master switch buttons + the authoriza
 
 ---
 
-## 17. Theme & Internationalization
+## 17. Connectivity Era (Snapshot, Sync, Self-Hosting)
 
-### 17.1 Theme
+The connected era spans three versions: Novara Snapshot (7.0) → cross-device sync (8.0) → self-hosting productization (9.0). The connected-era contract (`Novara Sync 契约.md`, shipped in this repository) is the single source for keys, envelope, and field whitelist.
 
-- Three themes: follow system / dark / light.
-- Switching goes through a "store + restart" loop (**no runtime hot-swap**).
+### 17.1 Novara Snapshot (7.0)
+- Exports selected sections as one self-contained, always-encrypted HTML viewer, readable on any device.
+- Container = `.novaenc` v4 (44-byte self-describing header as AES-GCM additional data, PBKDF2-SHA256 3,000,000 iterations, gzip payload) — the same versioned contract as encrypted backups.
+- Every export requires a password (the privacy-lock password or an independent one) and always produces the encrypted container, whether or not the local vault is encrypted.
+- Sources: `SnapshotViewer/` — `index.html` template plus `viewer.js` / `viewer.css` single sources, inlined back into one self-contained file on export; stable `decryptSnapshot` / `render` contract; TOTP computed locally in the browser.
+
+### 17.2 Cross-Device Sync (8.0)
+- Engine (`Novara.Core/Services/Sync*.cs`): `SyncEngine` (one-round orchestration), `SyncPlanner` (pure decision: NoOp / Push / Pull / Conflict / WaitUnlocked / RestorePending / RollbackRejected), `SyncApiClient`, `SyncPayloadApplier` (applies remote payloads through the published `ImportBackup` path, machine-local settings retained), `SyncStateStore`.
+- Server: `Novara.Sync.Server` (logic: `SqliteSpaceStore` / `FileSpaceStore`, `TokenAuth`, `RetentionPolicy`) + `Novara.Server` (host, `AssemblyName=NovaraSync`; REST endpoints and the `space` CLI). Ciphertext-only by contract: `If-Match` optimistic concurrency, superseded versions kept as conflict copies, no decryption ever.
+- Web reader/editor: `Novara.Web/` hosted at `/web`; token and passphrase live in memory only, zero persistence.
+- PC wiring: `Services/SyncService.cs` (session, timers, pairing) + device center + local sync audit (`SyncAuditLog`).
+
+### 17.3 Self-Hosting and Update Check (9.0)
+- Official Docker image (multi-stage, non-root, `/data` volume, HEALTHCHECK) with `deploy/compose/` and a parameterized `deploy/Caddyfile` for automatic HTTPS.
+- Server projects target **net10.0**; the desktop side stays on net8.0 (`Novara.Core` is the only shared layer).
+- Ops CLI: `NovaraSync space create|list|show|delete|rotate-secret` (`--json` supported, exit codes 0 / 1 / 2).
+- In-app update check (user-clicked only): fetches a static `latest.json` manifest from novara.xin and verifies the SHA-256 before anything is installed.
+
+### 17.4 What Syncs and What Never Leaves
+- `SyncFieldPolicy.CloneForSync` whitelist: the five data partitions + workspaces + language/theme roam; MCP credentials, machine behavior, and one-time flags never sync.
+
+---
+
+## 18. Theme & Internationalization
+
+### 18. Theme
+
+- Theme tiers: **follow system / dark / light**, plus the **Paper tier (since 9.0)** with four paper color schemes — **Cream / Almond / Kraft / Newsprint**; fresh installs default to Almond.
+- Paper implementation: locks the light layout and rewrites the Paper palette into the in-memory Light theme dictionary at startup (`Themes/PaperTheme.cs`, `App.xaml` untouched). The stored literal is the Chinese string 类纸 · 〈款名〉 (inside the existing Chinese-literal storage family); a version that reads an unknown literal falls back safely to follow-system. A plaintext `paper.dat` hint carries paper colors to the pre-unlock lock screen. The implementation scales to N schemes (palette = data).
+- All switching goes through a "store + restart" loop (**no runtime hot-swap**).
+- `AnimationsEnabled` (animation toggle) and `EdgeMenuSide` (edge-menu side) are 9.0 machine-local preference fields — never in the sync whitelist; the animation toggle follows a "confirm dialog + save + restart" loop.
 - Dynamic color must go through `App.GetBrush(key)` (manually selects a dictionary by program theme); direct indexing of `Application.Current.Resources` is forbidden; caching Brush references is forbidden.
 - Unified brand color `#7276FF` (`AppPrimaryButtonBrush` / `AppAccentBrush` / `AppDialogBorderBrush` same value in the three theme dictionaries).
 - Three-tier button system: primary action blue (`#7276FF` → hover `#8C93FF` → pressed `#5855FF`), secondary outline, destructive red (`#CCFF4545` → `#FFFF4545` → `#CC3A3A`).
 - Dialog buttons come in only three kinds: cancel (outline) / confirm blue / confirm red.
 - Follow-system real-time linkage: `UISettings.ColorValuesChanged` + 500ms debounce + UiQueue marshal.
 
-### 17.2 Internationalization (i18n)
+### 18. Internationalization (i18n)
 
 - **C# static dictionary `AppResources.cs`** (5 languages, 5 dictionaries, keys fully aligned).
 - `x:Bind` static method binding; MainWindow (does not support x:Bind) uses the Chinese original text + `Tag="Key"` runtime ApplyLocalizedTexts.
@@ -602,7 +632,7 @@ Title + collapse / audit log / configure / master switch buttons + the authoriza
 
 ---
 
-## 18. Reminder System
+## 19. Reminder System
 
 Three-layer reminder:
 
@@ -622,7 +652,7 @@ Data: `TodoCard` / `NoteCard` add `ReminderAt` (due time) + `ReminderSetAt` (set
 
 ---
 
-## 19. Import & Export
+## 20. Import & Export
 
 | Format | Purpose | Notes |
 |------|------|------|
@@ -640,7 +670,7 @@ Data: `TodoCard` / `NoteCard` add `ReminderAt` (due time) + `ReminderSetAt` (set
 
 ---
 
-## 20. API Three-Tier Detection
+## 21. API Three-Tier Detection
 
 Memo-page API Key entries expose a three-tier detection system via right-click. Core logic lives entirely in `Novara.Core/Services/` (pure, unit-testable): `ApiProbeService` (tier 1, original) / `ApiChatClient` (shared chat client) / `ApiDiagnoseService` (tier 2) / `RelayProbeService` (tier 3) / `ProbeDataSetLoader` (probe dataset).
 
@@ -670,7 +700,7 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 
 ---
 
-## 21. Window, Tray & Single Instance
+## 22. Window, Tray & Single Instance
 
 - Default "exit directly"; tray-resident is optional (settings page dropdown).
 - `AppWindow.Closing` interception: resident → Cancel + Hide; exit directly → save editor dirty content + SaveSync then release.
@@ -681,7 +711,7 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 
 ---
 
-## 22. Core Services in Depth
+## 23. Core Services in Depth
 
 ### Novara.Core (pure logic)
 
@@ -721,7 +751,7 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 
 ---
 
-## 23. Build & Release
+## 24. Build & Release
 
 Release chain:
 
@@ -744,7 +774,7 @@ Key pitfalls (must follow):
 
 ---
 
-## 24. Testing
+## 25. Testing
 
 `Novara.Tests` (xUnit) references `Novara.Core`, covering:
 
@@ -758,7 +788,7 @@ The pure-logic layer (`Novara.Core`) has no WinUI dependency, guaranteeing indep
 
 ---
 
-## 25. Directory Structure
+## 26. Directory Structure
 
 ```
 Novara/
@@ -798,7 +828,7 @@ Novara/
 
 ---
 
-## 26. Version History
+## 27. Version History
 
 | Version | Date | Content |
 |------|------|------|
