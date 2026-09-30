@@ -1301,7 +1301,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var kdf = _migrateIsKdf;
         MigrateFormatTitle.Text = App.GetString(kdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
         MigrateFormatMessage.Text = App.GetString("Security_Migrate_Failed");
-        MigrateFormatMessage.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        MigrateFormatMessage.Foreground = App.GetBrush("AppDangerTextBrush");
         MigrateLaterButton.Visibility = Visibility.Collapsed;
         MigrateConfirmText.Text = App.GetString("Common_Button_GotIt");
     }
@@ -3424,7 +3424,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         StoreCorruptTitleText.Text = App.GetString("Store_Corrupt_Title");
         StoreCorruptDetailText.Text = App.GetString("Store_Corrupt_Detail");
         StoreCorruptConfirmText.Text = App.GetString("Store_Corrupt_RebuildButton");
-        StoreCorruptConfirmButton.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0x45, 0x45));
+        StoreCorruptConfirmButton.Background = App.GetBrush("AppDangerBrush");
         StoreCorruptConfirmButton.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         ShowCorruptDialogCore();
     }

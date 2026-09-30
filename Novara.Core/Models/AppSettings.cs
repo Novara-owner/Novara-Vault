@@ -13,6 +13,10 @@ public class AppSettings
 
 
     public bool AnimationsEnabled { get; set; } = true;
+
+
+
+    public string UpdatePendingVersion { get; set; } = "";
     public bool AutoStart { get; set; }
     public bool ContextMenu { get; set; } = true;
     public string CloseBehavior { get; set; } = "直接退出";

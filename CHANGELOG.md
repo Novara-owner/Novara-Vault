@@ -6,6 +6,22 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.2.0] - 2026-09-30
+
+### Fixed
+
+- **Reminders never fired while the app was closed** - setting a reminder and closing Novara meant the system-level scheduled task was never created: the start date was formatted with the OS locale's short date, which schtasks rejects on Chinese-locale systems (an unpadded 2026/9/30), and the failure was silently swallowed. Tasks are now registered through the Task Scheduler COM API with a locale-independent start boundary, scheduling failures are reported locally instead of vanishing, and a due reminder launches the app and shows its dialog again. While the app is open everything worked as before - only the closed-app path was broken.
+- **Silent partial paper-theme apply** - the paper-theme color parser only accepted 8-digit hex values, so the first 6-digit palette entry aborted the whole apply mid-table: the first half of the palette went live and the rest kept the plain light values, without any message. The parser now accepts 6- and 8-digit values, and a bad key only skips that key.
+- **Hardcoded danger reds across the UI** - danger dialog titles, danger confirm buttons, red characters, trash-bin icons, the cooldown charge effect and probe verdict reds were literal hex values scattered across the interface, so paper themes could not soften them. They now flow from a single AppDanger source: paper themes soften the family per palette while light/dark keep the classic values.
+
+### Changed
+
+- **Reminder border gradient reworked** - the border now blends from the theme's brand blue into a dark red in RGB space and refreshes every second; the old green-to-red hue sweep stepped once every 30 seconds, which read as visible jumps. Paper themes start from their softened per-palette brand blue.
+- **Urgent reminders rise in the list** - once a card enters the last 15% of its reminder window it moves directly below the pinned section, sorted by deadline, until the reminder is handled. This is display-only: manual ordering is never rewritten.
+- **Breathing border on the reminder-due dialog** - the dialog now carries a soft brand-blue border that gently breathes while it is open, setting it apart from ordinary dialogs; it goes static when the animation toggle is off.
+- **Path validity colors follow the theme** - existing paths now use the theme's brand blue and invalid paths the danger red, per theme (previously a fixed green/red pair).
+- **Update button reminder dot** - when a check finds a new version and the upgrade dialog is dismissed, the check-update button shows a small brand-blue dot that persists across restarts until the update is installed or a fresh check reports up to date.
+
 ## [9.1.0] - 2026-09-29
 
 ### Fixed

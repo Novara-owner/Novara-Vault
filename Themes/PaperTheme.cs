@@ -69,6 +69,7 @@ public static class PaperTheme
 
 
 
+
     public static void ApplyIfNeeded()
     {
         try
@@ -81,19 +82,27 @@ public static class PaperTheme
 
             foreach (var (key, value) in table)
             {
-                var current = dict[key];
-                switch (current)
+                try
                 {
-                    case LinearGradientBrush:
-                        var parts = value.Split(' ');
-                        dict[key] = MakeVerticalGradient(parts[0], parts[1]);
-                        break;
-                    case Windows.UI.Color:
-                        dict[key] = ParseColor(value);
-                        break;
-                    case SolidColorBrush:
-                        dict[key] = new SolidColorBrush(ParseColor(value));
-                        break;
+                    var current = dict[key];
+                    switch (current)
+                    {
+                        case LinearGradientBrush:
+                            var parts = value.Split(' ');
+                            dict[key] = MakeVerticalGradient(parts[0], parts[1]);
+                            break;
+                        case Windows.UI.Color:
+                            dict[key] = ParseColor(value);
+                            break;
+                        case SolidColorBrush:
+                            dict[key] = new SolidColorBrush(ParseColor(value));
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+
+                    System.Diagnostics.Debug.WriteLine($"PaperTheme key {key} apply failed: {ex.Message}");
                 }
             }
         }
@@ -212,7 +221,10 @@ public static class PaperTheme
     private static Windows.UI.Color ParseColor(string hex)
     {
 
+
+
         var v = hex.TrimStart('#');
+        if (v.Length == 6) v = "FF" + v;
         return Windows.UI.Color.FromArgb(
             Convert.ToByte(v.Substring(0, 2), 16),
             Convert.ToByte(v.Substring(2, 2), 16),
@@ -227,6 +239,7 @@ public static class PaperTheme
         b.GradientStops.Add(new GradientStop { Color = ParseColor(bottomHex), Offset = 1 });
         return b;
     }
+
 
 
 
@@ -253,6 +266,10 @@ public static class PaperTheme
             ["AppPrimaryButtonHoverBrush"] = "#FF8588C4",
             ["AppPrimaryButtonPressedBrush"] = "#FF5A5DA0",
             ["AppDialogBorderBrush"] = "#FF6E72B4",
+            ["AppDangerTextBrush"] = "#FFA34747",
+            ["AppDangerBrush"] = "#CC9E4444",
+            ["AppDangerHoverBrush"] = "#FFB65656",
+            ["AppDangerPressedBrush"] = "#CC813939",
             ["AppDialogBgBrush"] = "#FFFDFAF2 #FFF3EEDF",
             ["CarouselFadeColor"] = "#FFFAF5E8",
             ["CarouselFadeColorTransparent"] = "#00FAF5E8",
@@ -278,6 +295,10 @@ public static class PaperTheme
             ["AppPrimaryButtonHoverBrush"] = "#FF878AC6",
             ["AppPrimaryButtonPressedBrush"] = "#FF5C5EA8",
             ["AppDialogBorderBrush"] = "#FF7072BC",
+            ["AppDangerTextBrush"] = "#FFA04545",
+            ["AppDangerBrush"] = "#CC9A4242",
+            ["AppDangerHoverBrush"] = "#FFB05252",
+            ["AppDangerPressedBrush"] = "#CC7D3636",
             ["AppDialogBgBrush"] = "#FFFEFBF5 #FFF4EFE3",
             ["CarouselFadeColor"] = "#FFFAF6EC",
             ["CarouselFadeColorTransparent"] = "#00FAF6EC",
@@ -303,6 +324,10 @@ public static class PaperTheme
             ["AppPrimaryButtonHoverBrush"] = "#FF7B7EB8",
             ["AppPrimaryButtonPressedBrush"] = "#FF525494",
             ["AppDialogBorderBrush"] = "#FF6669A8",
+            ["AppDangerTextBrush"] = "#FFAC4B4B",
+            ["AppDangerBrush"] = "#CCA54848",
+            ["AppDangerHoverBrush"] = "#FFBD5757",
+            ["AppDangerPressedBrush"] = "#CC863B3B",
             ["AppDialogBgBrush"] = "#FFFBF6E9 #FFEFE7D2",
             ["CarouselFadeColor"] = "#FFF7F1E0",
             ["CarouselFadeColorTransparent"] = "#00F7F1E0",
@@ -328,6 +353,10 @@ public static class PaperTheme
             ["AppPrimaryButtonHoverBrush"] = "#FF7F83C8",
             ["AppPrimaryButtonPressedBrush"] = "#FF565AB0",
             ["AppDialogBorderBrush"] = "#FF6A6EB8",
+            ["AppDangerTextBrush"] = "#FF9C4242",
+            ["AppDangerBrush"] = "#CC944044",
+            ["AppDangerHoverBrush"] = "#FFAA4F4F",
+            ["AppDangerPressedBrush"] = "#CC773535",
             ["AppDialogBgBrush"] = "#FFFBFAF4 #FFEFEDE1",
             ["CarouselFadeColor"] = "#FFF5F3EA",
             ["CarouselFadeColorTransparent"] = "#00F5F3EA",

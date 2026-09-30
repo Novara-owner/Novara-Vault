@@ -966,11 +966,11 @@ public sealed partial class DiaryPage : Page
         {
             Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
             Text = App.GetString("Menu_Delete"),
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+            Foreground = App.GetBrush("AppDangerTextBrush"),
             Icon = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.SoftDelete),
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+                Foreground = App.GetBrush("AppDangerTextBrush")
             }
         };
         deleteItem.Click += (s, _) => { if (_currentMenuTarget != null) OpenDeleteConfirmDialog(); };

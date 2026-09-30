@@ -21,10 +21,17 @@ public static class Motion
     public const double CooldownDisabledOpacity = 0.45;
 
 
-    public static Windows.UI.Color CooldownFilledColor { get; } = Windows.UI.Color.FromArgb(0xCC, 0xFF, 0x45, 0x45);
+    public static Windows.UI.Color CooldownFilledColor => App.GetBrush("AppDangerBrush").Color;
 
 
-    public static Windows.UI.Color CooldownRestColor { get; } = Windows.UI.Color.FromArgb(0x33, 0xFF, 0x45, 0x45);
+    public static Windows.UI.Color CooldownRestColor
+    {
+        get
+        {
+            var c = App.GetBrush("AppDangerTextBrush").Color;
+            return Windows.UI.Color.FromArgb(0x33, c.R, c.G, c.B);
+        }
+    }
 
 
 

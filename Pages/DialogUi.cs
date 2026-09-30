@@ -168,7 +168,8 @@ internal static class DialogUi
 
         var orig = originalBgs.TryGetValue(tb, out var existing) ? existing : tb.Background;
         originalBgs[tb] = orig;
-        tb.Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0x45, 0x45));
+        var dgc = ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color;
+        tb.Background = new SolidColorBrush(Color.FromArgb(0x33, dgc.R, dgc.G, dgc.B));
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {

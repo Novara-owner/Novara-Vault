@@ -6,7 +6,7 @@
     <RootNamespace>Novara.Core</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>9.1.0</Version>
+    <Version>9.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

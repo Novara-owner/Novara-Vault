@@ -222,7 +222,7 @@
 
 
         <Style x:Key="McpDangerButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#CCFF4545" />
+            <Setter Property="Background" Value="{ThemeResource AppDangerBrush}" />
             <Setter Property="Foreground" Value="#FFFFFFFF" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
@@ -235,14 +235,14 @@
                                     <VisualState x:Name="PointerOver">
                                         <Storyboard>
                                             <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                             </ObjectAnimationUsingKeyFrames>
                                         </Storyboard>
                                     </VisualState>
                                     <VisualState x:Name="Pressed">
                                         <Storyboard>
                                             <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                             </ObjectAnimationUsingKeyFrames>
                                         </Storyboard>
                                     </VisualState>
@@ -377,7 +377,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                         <Button MinWidth="160" Height="40"
-                                Background="#CCFF4545" Foreground="#FFFFFFFF"
+                                Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 BorderThickness="0"
                                 x:Name="DisablePrivacyLockButton"
@@ -391,14 +391,14 @@
                                                 <VisualState x:Name="PointerOver">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
                                                 <VisualState x:Name="Pressed">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
@@ -845,9 +845,17 @@
                             Margin="-8,0,0,0"
                             x:Name="UpdateCheckButton"
                             Click="UpdateCheckButton_Click">
-                        <TextBlock x:Name="UpdateCheckButtonText"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
+                        <Grid Width="152" Height="32">
+                            <TextBlock x:Name="UpdateCheckButtonText"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+
+                            <Ellipse x:Name="UpdateAttentionDot"
+                                     Width="8" Height="8"
+                                     Fill="{ThemeResource AppAccentBrush}"
+                                     HorizontalAlignment="Right" VerticalAlignment="Top"
+                                     Visibility="Collapsed" />
+                        </Grid>
                     </Button>
                 </Grid>
             </Border>
@@ -1122,12 +1130,12 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                             <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
-                                <PathIcon x:Name="CloseLockDangerIcon" Foreground="#FF4545" />
+                                <PathIcon x:Name="CloseLockDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                             </Viewbox>
                             <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
                                        VerticalAlignment="Center"
                                        FontSize="18" FontWeight="SemiBold"
-                                       Foreground="#FF4545" />
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
@@ -1419,12 +1427,12 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                             <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
-                                <PathIcon x:Name="PrivacyLockWarnDangerIcon" Foreground="#FF4545" />
+                                <PathIcon x:Name="PrivacyLockWarnDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                             </Viewbox>
                             <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_Disable\')}"
                                        VerticalAlignment="Center"
                                        FontSize="18" FontWeight="SemiBold"
-                                       Foreground="#FFFF4545" />
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
@@ -1438,20 +1446,20 @@
                     <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="8">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_DisableWarning\')}"
                                    FontSize="14"
-                                   Foreground="#FFFF4545"
+                                   Foreground="{ThemeResource AppDangerTextBrush}"
                                    TextWrapping="Wrap"
                                    LineHeight="22" />
                         <TextBlock x:Name="PrivacyLockWarningErrorText"
                                    Text="{x:Bind app:App.GetString(\'Store_SaveFail_Detail\')}"
                                    FontSize="13"
-                                   Foreground="#FFFF4545"
+                                   Foreground="{ThemeResource AppDangerTextBrush}"
                                    TextWrapping="Wrap"
                                    Visibility="Collapsed" />
 
 
                         <TextBlock x:Name="PrivacyLockWarningSyncLossText"
                                    FontSize="13"
-                                   Foreground="#FFFF4545"
+                                   Foreground="{ThemeResource AppDangerTextBrush}"
                                    TextWrapping="Wrap"
                                    LineHeight="20"
                                    Visibility="Collapsed" />
@@ -1464,7 +1472,7 @@
                             <TextBlock Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_KeepButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                         <Button HorizontalAlignment="Right" Width="160" Height="36"
-                                Background="#CCFF4545" Foreground="#FFFFFFFF"
+                                Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 BorderThickness="0"
                                 Click="PrivacyLockWarningConfirm_Click">
@@ -1477,14 +1485,14 @@
                                                 <VisualState x:Name="PointerOver">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
                                                 <VisualState x:Name="Pressed">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
