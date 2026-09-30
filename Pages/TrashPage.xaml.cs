@@ -256,7 +256,7 @@ public sealed partial class TrashPage : Page
         };
 
         var brandBlue = App.GetBrush("AppPrimaryButtonBrush");
-        var dangerRed = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        var dangerRed = App.GetBrush("AppDangerTextBrush");
         var restoreBtn = MakeIconButton(IconData.RestoreTrash, (_, _) => Restore(row.Entity), brandBlue, brandBlue, bold: true);
         var delBtn = MakeIconButton(IconData.Delete, (_, _) =>
         {

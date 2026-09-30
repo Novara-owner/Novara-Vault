@@ -507,7 +507,7 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                         <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
-                            <PathIcon x:Name="StoreCorruptDangerIcon" Foreground="#FF4545" />
+                            <PathIcon x:Name="StoreCorruptDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Viewbox>
                         <TextBlock x:Name="StoreCorruptTitleText" Text="资料库文件校验失败" Tag="Store_Corrupt_Title"
                                    VerticalAlignment="Center"
@@ -523,7 +523,7 @@
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
                         <Button x:Name="StoreCorruptConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
-                                Background="#CCFF4545" Foreground="#FFFFFFFF"
+                                Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 BorderThickness="0"
                                 Click="StoreCorruptConfirm_Click">
@@ -536,14 +536,14 @@
                                                 <VisualState x:Name="PointerOver">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
                                                 <VisualState x:Name="Pressed">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>

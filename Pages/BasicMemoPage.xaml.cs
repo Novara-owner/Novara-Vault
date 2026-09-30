@@ -212,8 +212,8 @@ private MenuFlyout BuildContextMenu()
         {
             Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
             Text = App.GetString("Menu_Delete"),
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
-            Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)) }
+            Foreground = App.GetBrush("AppDangerTextBrush"),
+            Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = App.GetBrush("AppDangerTextBrush") }
         };
         deleteItem.Click += (s, e) => OpenDeleteConfirmDialog(isGroup: true);
 
@@ -1410,7 +1410,7 @@ private MenuFlyout BuildContextMenu()
             }
 
             var sep = new MenuFlyoutSeparator();
-            var delMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Delete"), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)), Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)) } };
+            var delMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Delete"), Foreground = App.GetBrush("AppDangerTextBrush"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = App.GetBrush("AppDangerTextBrush") } };
             delMi.Click += (s2, e2) => { _currentEntryCard = card; OpenDeleteConfirmDialog(isGroup: false); };
 
             m.Items.Add(pinMi);
@@ -1476,7 +1476,8 @@ private MenuFlyout BuildContextMenu()
 
         var orig = _flashOriginalBgs.TryGetValue(tb, out var existing) ? existing : tb.Background;
         _flashOriginalBgs[tb] = orig;
-        tb.Background = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0x45, 0x45));
+        var dgc = ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color;
+        tb.Background = new SolidColorBrush(Color.FromArgb(0x33, dgc.R, dgc.G, dgc.B));
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {
@@ -2029,7 +2030,7 @@ private MenuFlyout BuildContextMenu()
         else
         {
             TotpStatus.Text = App.GetString("Totp_Bad");
-            TotpStatus.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+            TotpStatus.Foreground = App.GetBrush("AppDangerTextBrush");
         }
         TotpStatus.Visibility = Visibility.Visible;
     }
@@ -2697,11 +2698,11 @@ private MenuFlyout BuildContextMenu()
             : App.GetString("Memo_Delete_ConfirmTip");
 
         DeleteConfirmTitleText.Foreground = isGroup
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+            ? App.GetBrush("AppDangerTextBrush")
             : App.GetBrush("AppPrimaryButtonBrush");
 
         DeleteConfirmMessageText.Foreground = isGroup
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+            ? App.GetBrush("AppDangerTextBrush")
             : App.GetBrush("AppTextPrimaryBrush");
         DeleteConfirmButton.Visibility = isGroup ? Visibility.Collapsed : Visibility.Visible;
         DeleteConfirmRedButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
@@ -2982,7 +2983,7 @@ private void ShowApiCheckDialog(Border card)
         ApiCheckStatusText.Foreground = kind switch
         {
             "success" => new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)),
-            "fail" => new SolidColorBrush(warn ? Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00) : Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+            "fail" => new SolidColorBrush(warn ? Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00) : ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color),
             _ => App.GetBrush("AppTextPrimaryBrush")
         };
         ApiCheckAdvancedButton.Visibility = kind == "fail" ? Visibility.Visible : Visibility.Collapsed;
@@ -3252,7 +3253,7 @@ private void ShowApiCheckDialog(Border card)
             {
                 "pass" => Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50),
                 "warn" => Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00),
-                "fail" => Color.FromArgb(0xFF, 0xFF, 0x45, 0x45),
+                "fail" => ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color,
                 _ => Color.FromArgb(0xFF, 0x90, 0x90, 0x90),
             };
             var glyph = status switch
@@ -3326,7 +3327,7 @@ private void ShowApiCheckDialog(Border card)
         ApiDiagStatusText.Foreground = kind switch
         {
             "success" => new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)),
-            "fail" => new SolidColorBrush(warn ? Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00) : Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+            "fail" => new SolidColorBrush(warn ? Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00) : ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color),
             _ => App.GetBrush("AppTextPrimaryBrush")
         };
     }
@@ -3508,7 +3509,7 @@ private void ShowApiCheckDialog(Border card)
             {
                 Novara.Services.ProbeVerdict.Pass => (Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50), "\uE73E"),
                 Novara.Services.ProbeVerdict.Warn => (Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00), "\uE7BA"),
-                Novara.Services.ProbeVerdict.Fail => (Color.FromArgb(0xFF, 0xFF, 0x45, 0x45), "\uE783"),
+                Novara.Services.ProbeVerdict.Fail => (((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color, "\uE783"),
                 _ => (Color.FromArgb(0xFF, 0x90, 0x90, 0x90), "\uE72A"),
             };
             var card = new Border { Background = App.GetBrush("AppSurfaceOverlayBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 10, 12, 10) };
@@ -3548,7 +3549,7 @@ private void ShowApiCheckDialog(Border card)
             "trusted" => Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50),
             "mostly-trusted" => Color.FromArgb(0xFF, 0x8B, 0xC3, 0x4A),
             "suspicious" => Color.FromArgb(0xFF, 0xFF, 0xB3, 0x00),
-            "high-risk" => Color.FromArgb(0xFF, 0xFF, 0x45, 0x45),
+            "high-risk" => ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color,
             _ => Color.FromArgb(0xFF, 0x90, 0x90, 0x90),
         };
         RelayProbeVerdictText.Text = verdictText;
@@ -3570,7 +3571,7 @@ private void ShowApiCheckDialog(Border card)
         RelayProbeVerdictText.Text = title;
         RelayProbeStatusText.Text = detail;
         RelayProbeVerdictText.Foreground = kind == "fail"
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+            ? App.GetBrush("AppDangerTextBrush")
             : App.GetBrush("AppTextPrimaryBrush");
     }
 

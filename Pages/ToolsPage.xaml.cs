@@ -483,7 +483,7 @@ public sealed partial class ToolsPage : Page
             {
                 Text = it.Time.ToString("HH:mm:ss") + "  " + (it.Success ? "✓" : "✗"),
                 FontSize = 12,
-                Foreground = it.Success ? App.GetBrush("AppTextTertiaryBrush") : new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+                Foreground = it.Success ? App.GetBrush("AppTextTertiaryBrush") : App.GetBrush("AppDangerTextBrush"),
                 VerticalAlignment = VerticalAlignment.Center,
             };
             Grid.SetColumn(meta, 1);
@@ -755,7 +755,7 @@ public sealed partial class ToolsPage : Page
     private void ResetDataButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
-        var dangerBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        var dangerBrush = App.GetBrush("AppDangerTextBrush");
         var normalBrush = App.GetBrush("AppTextSecondaryBrush");
         MenuFlyoutItem MakeItem(string text, bool danger = false)
         {
@@ -1102,7 +1102,7 @@ public sealed partial class ToolsPage : Page
                     break;
                 default:
                     ConnectPwdStrengthText.Text = App.GetString("Setting_EncBackup_StrengthWeak");
-                    ConnectPwdStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+                    ConnectPwdStrengthText.Foreground = App.GetBrush("AppDangerTextBrush");
                     break;
             }
         }
@@ -1830,7 +1830,7 @@ private void ShowResetPasswordDialog()
                     break;
                 default:
                     EncStrengthText.Text = App.GetString("Setting_EncBackup_StrengthWeak");
-                    EncStrengthText.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+                    EncStrengthText.Foreground = App.GetBrush("AppDangerTextBrush");
                     break;
             }
         }
@@ -3629,7 +3629,7 @@ private void ShowResetPasswordDialog()
                 FontSize = 22,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = warn
-                    ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+                    ? App.GetBrush("AppDangerTextBrush")
                     : App.GetBrush("AppPrimaryButtonBrush"),
             };
             var labelText = new TextBlock
@@ -4345,7 +4345,7 @@ private void ShowResetPasswordDialog()
             ? (Style)Resources["McpDangerButtonStyle"]
             : (Style)Application.Current.Resources["NovaraOutlineButtonStyle"];
         McpDeletePermissionButton.Background = on
-            ? new SolidColorBrush(Color.FromArgb(204, 255, 69, 69))
+            ? App.GetBrush("AppDangerBrush")
             : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         McpDeletePermissionButton.Foreground = on
             ? new SolidColorBrush(Color.FromArgb(255, 255, 255, 255))
@@ -4794,7 +4794,7 @@ private void ShowResetPasswordDialog()
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
         var accentBrush = App.GetBrush("AppTextPrimaryBrush");
         var normalBrush = App.GetBrush("AppTextSecondaryBrush");
-        var dangerBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+        var dangerBrush = App.GetBrush("AppDangerTextBrush");
         var enabled = Services.SyncService.State.Enabled;
 
         MenuFlyoutItem MakeItem(string text, bool isCurrent, Action action, bool danger = false)

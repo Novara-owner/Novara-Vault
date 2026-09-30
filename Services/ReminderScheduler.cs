@@ -100,41 +100,59 @@ public static class ReminderScheduler
 
     public static void Schedule(Guid id, DateTime due)
     {
-        var taskName = TaskPrefix + id;
+        try
+        {
+            var svcType = Type.GetTypeFromProgID("Schedule.Service")
+                ?? throw new InvalidOperationException("Schedule.Service COM class is not registered.");
+            dynamic svc = Activator.CreateInstance(svcType)!;
+            svc.Connect();
+            dynamic folder = svc.GetFolder("\\");
+            dynamic definition = svc.NewTask(0);
+
+
+            definition.Settings.StartWhenAvailable = false;
+            dynamic trigger = definition.Triggers.Create(1);
+
+            trigger.StartBoundary = due.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
+            trigger.Enabled = true;
+            dynamic action = definition.Actions.Create(0);
+            action.Path = GetExecutablePath();
+            action.Arguments = "--reminder " + id.ToString("D", CultureInfo.InvariantCulture);
+
+            folder.RegisterTaskDefinition(TaskPrefix + id, definition, 6, null, null, 3, null);
+        }
+        catch (Exception ex)
+        {
 
 
 
-        var st = due.ToString("t", CultureInfo.CurrentCulture);
-        var sd = due.ToString("d", CultureInfo.CurrentCulture);
-        var tr = "\\\"" + GetExecutablePath() + "\\\" --reminder " + id;
-        var args = "/create /tn \"" + taskName + "\" /tr \"" + tr + "\" /sc once /st " + st + " /sd " + sd + " /f";
-        Run(args);
+            Debug.WriteLine("ReminderScheduler.Schedule 失败: " + ex.Message);
+            CrashLogger.LogNote("ReminderScheduler.Schedule", ex.ToString());
+        }
     }
 
 
     public static void Cancel(Guid id)
     {
-        Run("/delete /tn \"" + TaskPrefix + id + "\" /f");
-    }
-
-    private static void Run(string args)
-    {
         try
         {
-            using var p = Process.Start(new ProcessStartInfo("schtasks", args)
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            });
-            p?.WaitForExit(5000);
+            var svcType = Type.GetTypeFromProgID("Schedule.Service")
+                ?? throw new InvalidOperationException("Schedule.Service COM class is not registered.");
+            dynamic svc = Activator.CreateInstance(svcType)!;
+            svc.Connect();
+            dynamic folder = svc.GetFolder("\\");
+            folder.DeleteTask(TaskPrefix + id, 0);
+        }
+        catch (Exception ex) when (ex.HResult == unchecked((int)0x80070002))
+        {
 
 
-            if (p is { HasExited: true } && p.ExitCode != 0)
-                Debug.WriteLine($"ReminderScheduler 失败(exit {p.ExitCode}): schtasks {args}");
+
         }
         catch (Exception ex)
         {
-            Debug.WriteLine("ReminderScheduler 失败: " + ex.Message);
+            Debug.WriteLine("ReminderScheduler.Cancel 失败: " + ex.Message);
+            CrashLogger.LogNote("ReminderScheduler.Cancel", ex.ToString());
         }
     }
 }

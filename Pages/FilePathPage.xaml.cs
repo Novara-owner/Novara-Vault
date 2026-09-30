@@ -827,7 +827,8 @@ public sealed partial class FilePathPage : Page
 
         var orig = _flashOriginalBgs.TryGetValue(tb, out var existing) ? existing : tb.Background;
         _flashOriginalBgs[tb] = orig;
-        tb.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0x45, 0x45));
+        var dgc = ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color;
+        tb.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, dgc.R, dgc.G, dgc.B));
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {
@@ -1270,9 +1271,10 @@ public sealed partial class FilePathPage : Page
 
     private void SetPathStatus(Border card, bool isValid)
     {
+
         var color = isValid
-            ? Windows.UI.Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)
-            : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45);
+            ? PaperTheme.BrandColor
+            : ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color;
         _cardBaseBorderColor[card] = color;
         card.BorderBrush = new SolidColorBrush(color);
 
@@ -1409,11 +1411,11 @@ public sealed partial class FilePathPage : Page
         {
             Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
             Text = App.GetString("Menu_Delete"),
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)),
+            Foreground = App.GetBrush("AppDangerTextBrush"),
             Icon = new PathIcon
             {
                 Data = App.CreateGeometry(IconData.SoftDelete),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x45, 0x45))
+                Foreground = App.GetBrush("AppDangerTextBrush")
             }
         };
         deleteItem.Click += (_, _) =>

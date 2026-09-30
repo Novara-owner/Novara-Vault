@@ -99,6 +99,7 @@ public sealed partial class PlanPage : Page
             _dueReminderCard = null;
         }
         SetReminderOverlay.Visibility = Visibility.Collapsed; CancelReminderOverlay.Visibility = Visibility.Collapsed; ReminderDueOverlay.Visibility = Visibility.Collapsed;
+        StopDueBreath();
         DialogDepth.VeilClear();
         _editingTodoCard = null; _editingNoteCard = null; _pendingDeleteCard = null; _editingReminderId = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; } _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll();
         _reminderTimer?.Stop(); _reminderTimer = null;
@@ -1267,7 +1268,7 @@ PersistOrderAndSave(); };
             m.Items.Add(remI);
         }
         m.Items.Add(ei);
-        var di = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Delete"), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)), Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45)) } }; di.Click += (_, _) => { _pendingDeleteCard = card; ShowDeleteConfirmDialog(); };
+        var di = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Delete"), Foreground = App.GetBrush("AppDangerTextBrush"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = App.GetBrush("AppDangerTextBrush") } }; di.Click += (_, _) => { _pendingDeleteCard = card; ShowDeleteConfirmDialog(); };
         m.Items.Add(new MenuFlyoutSeparator()); m.Items.Add(di); return m;
     }
 
@@ -1426,33 +1427,28 @@ PersistOrderAndSave(); };
     }
 
 
+
+
     private static Color ReminderColor(DateTime setAt, DateTime dueAt)
     {
         double total = (dueAt - setAt).TotalSeconds;
         double elapsed = (DateTime.Now - setAt).TotalSeconds;
         double p = total <= 0 ? 1 : Math.Clamp(elapsed / total, 0, 1);
-        double h = 130 * (1 - p);
-        double s = 1.0 - 0.154 * p;
-        double v = 0.8 + 0.067 * p;
-        return HsvToRgb(h, s, v);
-    }
-
-    private static Color HsvToRgb(double h, double s, double v)
-    {
-        double c = v * s;
-        double x = c * (1 - Math.Abs((h / 60) % 2 - 1));
-        double m = v - c;
-        double r, g, b;
-        if (h < 60) { r = c; g = x; b = 0; }
-        else if (h < 120) { r = x; g = c; b = 0; }
-        else if (h < 180) { r = 0; g = c; b = x; }
-        else if (h < 240) { r = 0; g = x; b = c; }
-        else if (h < 300) { r = x; g = 0; b = c; }
-        else { r = c; g = 0; b = x; }
-        return Color.FromArgb(0xFF, (byte)Math.Round((r + m) * 255), (byte)Math.Round((g + m) * 255), (byte)Math.Round((b + m) * 255));
+        Color start = PaperTheme.BrandColor;
+        bool isLight = App.CurrentTheme == "浅色模式" || App.CurrentTheme.StartsWith("类纸", StringComparison.Ordinal)
+            || (App.MainWindow?.Content is FrameworkElement root && root.ActualTheme == ElementTheme.Light);
+        Color end = isLight
+            ? Color.FromArgb(0xFF, 0x8F, 0x3B, 0x3B)
+            : Color.FromArgb(0xFF, 0xA0, 0x43, 0x43);
+        return Color.FromArgb(0xFF,
+            (byte)Math.Round(start.R + (end.R - start.R) * p),
+            (byte)Math.Round(start.G + (end.G - start.G) * p),
+            (byte)Math.Round(start.B + (end.B - start.B) * p));
     }
 
     private DispatcherTimer? _reminderTimer;
+    private const double ReminderUrgentFraction = 0.15;
+    private List<Guid>? _lastUrgentOrder;
     private readonly HashSet<Border> _dueShown = new();
     private bool _deleteConfirming;
 
@@ -1460,7 +1456,7 @@ PersistOrderAndSave(); };
     private void StartReminderRefresh()
     {
         if (_reminderTimer != null) return;
-        _reminderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _reminderTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _reminderTimer.Tick += (_, _) => RefreshAllReminderBorders();
         _reminderTimer.Start();
     }
@@ -1480,16 +1476,46 @@ PersistOrderAndSave(); };
         if (anyReminder) StartReminderRefresh();
 
         if (dueCard != null && ReminderDueOverlay.Visibility != Visibility.Visible && _dueShown.Add(dueCard)) ShowReminderDueDialog(dueCard);
+
+        if (!_bulkLoading)
+        {
+            var urgentNow = _cardIds.Select(kv => (Id: kv.Value, Span: GetCardReminderSpan(kv.Key)))
+                .Where(x => x.Span is { } sp && IsCardUrgent(sp.SetAt, sp.Due))
+                .OrderBy(x => x.Span!.Value.Due).Select(x => x.Id).ToList();
+            if (_lastUrgentOrder == null || !_lastUrgentOrder.SequenceEqual(urgentNow))
+            {
+                _lastUrgentOrder = urgentNow;
+                ReorderCards();
+            }
+        }
+    }
+
+
+    private (DateTime Due, DateTime SetAt)? GetCardReminderSpan(Border card)
+    {
+        var db = App.Store?.Database;
+        if (db == null || !_cardIds.TryGetValue(card, out var id)) return null;
+        if (card.Tag is string tg && tg == "note")
+        {
+            var n = db.NoteCards.FirstOrDefault(x => x.Id == id);
+            return n is { ReminderAt: { } d, ReminderSetAt: { } s } ? (d, s) : null;
+        }
+        var t = db.TodoCards.FirstOrDefault(x => x.Id == id);
+        return t is { ReminderAt: { } d2, ReminderSetAt: { } s2 } ? (d2, s2) : null;
+    }
+
+
+
+    private static bool IsCardUrgent(DateTime setAt, DateTime due)
+    {
+        double total = (due - setAt).TotalSeconds;
+        if (total <= 0) return true;
+        return (DateTime.Now - setAt).TotalSeconds >= total * (1 - ReminderUrgentFraction);
     }
 
     private bool IsReminderDue(Border card)
     {
-        var db = App.Store?.Database;
-        if (db == null || !_cardIds.TryGetValue(card, out var id)) return false;
-        DateTime? at = card.Tag is string tg && tg == "note"
-            ? db.NoteCards.FirstOrDefault(n => n.Id == id)?.ReminderAt
-            : db.TodoCards.FirstOrDefault(t => t.Id == id)?.ReminderAt;
-        return at != null && at.Value <= DateTime.Now;
+        return GetCardReminderSpan(card) is { } s && s.Due <= DateTime.Now;
     }
 
     private Border? _dueReminderCard;
@@ -1521,10 +1547,38 @@ PersistOrderAndSave(); };
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, ReminderDueDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
         Motion.AddDialogShowTransform(sb, ReminderDueDialogTransform);
         sb.Begin();
+        StartDueBreath();
+    }
+
+    private Storyboard? _dueBreathStoryboard;
+
+
+
+
+    private void StartDueBreath()
+    {
+        StopDueBreath();
+        ReminderDueBreathBorder.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
+        if (!App.IsAnimationsEnabled) { ReminderDueBreathBorder.Opacity = 0.35; return; }
+        _dueBreathStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+        var breath = new DoubleAnimation { From = 0.15, To = 0.55, Duration = TimeSpan.FromMilliseconds(1100), AutoReverse = true, EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut } };
+        Storyboard.SetTarget(breath, ReminderDueBreathBorder);
+        Storyboard.SetTargetProperty(breath, "Opacity");
+        _dueBreathStoryboard.Children.Add(breath);
+        ReminderDueBreathBorder.Opacity = 0.15;
+        _dueBreathStoryboard.Begin();
+    }
+
+    private void StopDueBreath()
+    {
+        _dueBreathStoryboard?.Stop();
+        _dueBreathStoryboard = null;
+        ReminderDueBreathBorder.Opacity = 0;
     }
 
     private void HideReminderDueDialog()
     {
+        StopDueBreath();
         DialogDepth.VeilHideImmediate();
         ReminderDueOverlay.Visibility = Visibility.Collapsed;
         if (_dueReminderCard != null) { ClearReminderOnCard(_dueReminderCard); _dueReminderCard = null; }
@@ -1616,9 +1670,16 @@ PersistOrderAndSave(); };
             unpinned = unpinned.OrderByDescending(c => _createdAt.GetValueOrDefault((Border)c, DateTime.MinValue)).ToList();
         }
 
+
+
+        var urgent = unpinned.Where(c => GetCardReminderSpan((Border)c) is { } sp && IsCardUrgent(sp.SetAt, sp.Due))
+                             .OrderBy(c => GetCardReminderSpan((Border)c)!.Value.Due).ToList();
+        var rest = unpinned.Except(urgent).ToList();
+
         CardList.Children.Clear();
         foreach (var c in pinned) CardList.Children.Add(c);
-        foreach (var c in unpinned) CardList.Children.Add(c);
+        foreach (var c in urgent) CardList.Children.Add(c);
+        foreach (var c in rest) CardList.Children.Add(c);
     }
 
     private string GetRandomIconKey() => $"Group{_iconRandom.Next(1, IconData.GroupIconCount + 1):D2}";
@@ -1630,7 +1691,8 @@ PersistOrderAndSave(); };
 
         var orig = _flashOriginalBgs.TryGetValue(tb, out var existing) ? existing : tb.Background;
         _flashOriginalBgs[tb] = orig;
-        tb.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0x45, 0x45));
+        var dgc = ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color;
+        tb.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, dgc.R, dgc.G, dgc.B));
         try { await System.Threading.Tasks.Task.Delay(600, cts.Token); }
         catch (System.Threading.Tasks.TaskCanceledException)
         {

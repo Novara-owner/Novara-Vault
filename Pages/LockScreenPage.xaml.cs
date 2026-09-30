@@ -17,7 +17,7 @@ public sealed partial class LockScreenPage : Page
 
     private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(30);
 
-    private static readonly SolidColorBrush ErrorBrush = new(Color.FromArgb(0xFF, 0xFF, 0x45, 0x45));
+    private static SolidColorBrush ErrorBrush => (SolidColorBrush)App.GetBrush("AppDangerTextBrush");
     private static readonly Thickness StateBorderThickness = new(2);
 
     private SolidColorBrush _normalBorderBrush = null!;

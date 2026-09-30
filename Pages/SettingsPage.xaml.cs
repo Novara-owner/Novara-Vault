@@ -164,6 +164,7 @@ public sealed partial class SettingsPage : Page
             UpdateWelcomeButton();
             UpdateEdgeMenuButton();
             UpdateTabsButton();
+            RefreshUpdateDot();
             App.MainWindow?.ApplyVisibleTabs(_visibleTabs);
         };
     }
@@ -1706,6 +1707,7 @@ private void ShowPrivacyLockWarningDialog()
             }
             if (result.Latest == null || !result.HasNewer)
             {
+                RefreshUpdateDot();
                 UpdateUpToDateTitleText.Text = App.GetString("Update_Latest_Title");
                 UpdateUpToDateBodyText.Text = string.Format(App.GetString("Update_Latest_Body"), Novara.Services.UpdateService.CurrentVersion);
                 UpdateUpToDateCloseText.Text = App.GetString("Update_Btn_Cancel");
@@ -1812,7 +1814,35 @@ private void ShowPrivacyLockWarningDialog()
     private void UpdateDialogClose_Click(object sender, RoutedEventArgs e) => UpdateCancel_Click(sender, e);
     private void UpdateUpToDateScrim_Tapped(object sender, TappedRoutedEventArgs e) => HideUpdateUpToDateDialog();
     private void UpdateUpToDateClose_Click(object sender, RoutedEventArgs e) => HideUpdateUpToDateDialog();
-    private void HideUpdateDialog() => HideOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform, () => { });
+    private void HideUpdateDialog()
+    {
+
+
+        var rel = _latestRelease;
+        if (App.Store is { IsLoaded: true } store)
+        {
+            store.Database.AppSettings.UpdatePendingVersion = rel.Version;
+            _ = store.SaveAsync();
+        }
+        HideOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform, () => { });
+        RefreshUpdateDot();
+    }
+
+
+
+    private void RefreshUpdateDot()
+    {
+        var db = App.Store?.Database;
+        if (db == null) return;
+        var pending = db.AppSettings.UpdatePendingVersion;
+        if (!string.IsNullOrEmpty(pending) && !Novara.Services.UpdateService.IsNewer(pending, Novara.Services.UpdateService.CurrentVersion))
+        {
+            db.AppSettings.UpdatePendingVersion = "";
+            _ = App.Store.SaveAsync();
+            pending = "";
+        }
+        UpdateAttentionDot.Visibility = string.IsNullOrEmpty(pending) ? Visibility.Collapsed : Visibility.Visible;
+    }
     private void HideUpdateUpToDateDialog() => HideOverlay(UpdateUpToDateOverlay, UpdateUpToDateDialog, UpdateUpToDateDialogTransform, () => { });
 
     private void ResetUpdateInstallUi()

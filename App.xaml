@@ -25,6 +25,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />
+                    <SolidColorBrush x:Key="AppDangerHoverBrush" Color="#FFFF4545" />
+                    <SolidColorBrush x:Key="AppDangerPressedBrush" Color="#CC3A3A" />
+                    <SolidColorBrush x:Key="AppDangerTextBrush" Color="#FF4545" />
                     <LinearGradientBrush x:Key="AppDialogBgBrush" StartPoint="0,0" EndPoint="0,1">
                         <GradientStop Color="#FF34343C" Offset="0" />
                         <GradientStop Color="#FF27272E" Offset="1" />
@@ -67,6 +72,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />
+                    <SolidColorBrush x:Key="AppDangerHoverBrush" Color="#FFFF4545" />
+                    <SolidColorBrush x:Key="AppDangerPressedBrush" Color="#CC3A3A" />
+                    <SolidColorBrush x:Key="AppDangerTextBrush" Color="#FF4545" />
                     <LinearGradientBrush x:Key="AppDialogBgBrush" StartPoint="0,0" EndPoint="0,1">
                         <GradientStop Color="#FFFFFFFF" Offset="0" />
                         <GradientStop Color="#FFF1F1F7" Offset="1" />
@@ -108,6 +118,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />
+                    <SolidColorBrush x:Key="AppDangerHoverBrush" Color="#FFFF4545" />
+                    <SolidColorBrush x:Key="AppDangerPressedBrush" Color="#CC3A3A" />
+                    <SolidColorBrush x:Key="AppDangerTextBrush" Color="#FF4545" />
                     <LinearGradientBrush x:Key="AppDialogBgBrush" StartPoint="0,0" EndPoint="0,1">
                         <GradientStop Color="#FF34343C" Offset="0" />
                         <GradientStop Color="#FF27272E" Offset="1" />

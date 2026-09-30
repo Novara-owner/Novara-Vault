@@ -68,7 +68,7 @@
 
             <Button x:Name="ClearAllButton"
                     MinWidth="132" Height="40" Padding="14,0"
-                    Background="#CCFF4545" Foreground="#FFFFFFFF"
+                    Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
                     CornerRadius="10" FontSize="13" FontWeight="SemiBold" BorderThickness="0"
                     Click="ClearAllButton_Click">
                 <Button.Template>
@@ -80,14 +80,14 @@
                                     <VisualState x:Name="PointerOver">
                                         <Storyboard>
                                             <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                             </ObjectAnimationUsingKeyFrames>
                                         </Storyboard>
                                     </VisualState>
                                     <VisualState x:Name="Pressed">
                                         <Storyboard>
                                             <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                             </ObjectAnimationUsingKeyFrames>
                                         </Storyboard>
                                     </VisualState>
@@ -132,21 +132,21 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                             <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
-                                <PathIcon x:Name="DeleteForeverDangerIcon" Foreground="#FF4545" />
+                                <PathIcon x:Name="DeleteForeverDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                             </Viewbox>
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_DeleteForever\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_DeleteForever\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppDangerTextBrush}" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="DeleteForeverClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Trash_DeleteForever_ConfirmTip\')}" FontSize="14" Foreground="#FFFF4545" TextWrapping="Wrap" Margin="0,20,0,0" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Trash_DeleteForever_ConfirmTip\')}" FontSize="14" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Margin="0,20,0,0" />
                     <Grid Grid.Row="2" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteForeverCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                         <services:CountdownBorder x:Name="DeleteForeverCd" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="DeleteForeverConfirmButton" Click="DeleteForeverConfirm_Click">
+                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="DeleteForeverConfirmButton" Click="DeleteForeverConfirm_Click">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
@@ -156,14 +156,14 @@
                                                 <VisualState x:Name="PointerOver">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
                                                 <VisualState x:Name="Pressed">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
@@ -198,21 +198,21 @@
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                             <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
-                                <PathIcon x:Name="ClearAllDangerIcon" Foreground="#FF4545" />
+                                <PathIcon x:Name="ClearAllDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                             </Viewbox>
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#FFFF4545" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppDangerTextBrush}" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ClearAllClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTip\')}" FontSize="14" Foreground="#FFFF4545" TextWrapping="Wrap" Margin="0,20,0,0" />
+                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Trash_ClearAll_ConfirmTip\')}" FontSize="14" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Margin="0,20,0,0" />
                     <Grid Grid.Row="2" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="ClearAllCancel_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                         <services:CountdownBorder x:Name="ClearAllCd" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="#CCFF4545" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="ClearAllConfirmButton" Click="ClearAllConfirm_Click">
+                        <Button HorizontalAlignment="Center" Width="160" Height="36" Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" x:Name="ClearAllConfirmButton" Click="ClearAllConfirm_Click">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
@@ -222,14 +222,14 @@
                                                 <VisualState x:Name="PointerOver">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#FFFF4545" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
                                                 <VisualState x:Name="Pressed">
                                                     <Storyboard>
                                                         <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="#CC3A3A" />
+                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
                                                         </ObjectAnimationUsingKeyFrames>
                                                     </Storyboard>
                                                 </VisualState>
