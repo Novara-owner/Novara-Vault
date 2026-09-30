@@ -25,16 +25,17 @@
 14. [回收站（TrashPage）](#14-回收站trashpage)
 15. [桌面便签（StickNoteHost）](#15-桌面便签sticknotehost)
 16. [MCP Agent 接口](#16-mcp-agent-接口)
-17. [主题与国际化](#17-主题与国际化)
-18. [提醒系统](#18-提醒系统)
-19. [导入与导出](#19-导入与导出)
-20. [API 连通性检测](#20-api-连通性检测)
-21. [窗口、托盘与单实例](#21-窗口托盘与单实例)
-22. [底层服务详解](#22-底层服务详解)
-23. [构建与发布](#23-构建与发布)
-24. [测试](#24-测试)
-25. [目录结构](#25-目录结构)
-26. [版本历史](#26-版本历史)
+17. [互联时代：快照、同步与自托管](#17-互联时代快照同步与自托管)
+18. [主题与国际化](#18-主题与国际化)
+19. [提醒系统](#19-提醒系统)
+20. [导入与导出](#20-导入与导出)
+21. [API 连通性检测](#21-api-连通性检测)
+22. [窗口、托盘与单实例](#22-窗口托盘与单实例)
+23. [底层服务详解](#23-底层服务详解)
+24. [构建与发布](#24-构建与发布)
+25. [测试](#25-测试)
+26. [目录结构](#26-目录结构)
+27. [版本历史](#27-版本历史)
 
 ---
 
@@ -579,19 +580,48 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 17. 主题与国际化
+## 17. 互联时代：快照、同步与自托管
 
-### 17.1 主题
+互联时代跨三个版本：Novara Snapshot（7.0）→ 跨设备同步（8.0）→ 自托管产品化（9.0）。互联契约（《Novara Sync 契约.md》，随本仓库分发）是密钥、信封与字段白名单的唯一来源。
 
-- 三种主题：跟随系统 / 深色 / 浅色。
-- 切换走「存储 + 重启」闭环（**不做运行时热切换**）。
+### 17.1 Novara Snapshot（7.0）
+- 将勾选的数据分区导出为一个自包含、永远加密的 HTML 查看器，任何设备可读。
+- 容器 = `.novaenc` v4（44 字节自描述头作为 AES-GCM 附加数据、PBKDF2-SHA256 3,000,000 次迭代、gzip 载荷）——与加密备份完全同一份版本化契约。
+- 每次导出都必须输入密码（隐私锁密码或独立密码），且恒产出加密容器，与本机库自身是否加密无关。
+- 源码：`SnapshotViewer/`——`index.html` 模板 + `viewer.js` / `viewer.css` 单一来源，导出时内联回自包含单文件；`decryptSnapshot` / `render` 稳定契约；TOTP 在浏览器本地实时计算。
+
+### 17.2 跨设备同步（8.0）
+- 引擎（`Novara.Core/Services/Sync*.cs`）：`SyncEngine`（一轮编排）、`SyncPlanner`（纯决策：NoOp / Push / Pull / Conflict / WaitUnlocked / RestorePending / RollbackRejected）、`SyncApiClient`、`SyncPayloadApplier`（经已发布的 `ImportBackup` 链路落地远端载荷，本机设置保留）、`SyncStateStore`。
+- 服务端：`Novara.Sync.Server`（逻辑：`SqliteSpaceStore` / `FileSpaceStore`、`TokenAuth`、`RetentionPolicy`）+ `Novara.Server`（宿主，`AssemblyName=NovaraSync`；REST 端点与 `space` 命令行）。契约上只经手密文：`If-Match` 乐观并发、被覆盖版本保留为冲突副本、永不解密。
+- 网页阅读器/编辑器：`Novara.Web/` 托管于 `/web`；令牌与口令只在内存，零持久化。
+- PC 侧接线：`Services/SyncService.cs`（会话、定时器、配对）+ 设备中心 + 本地同步审计（`SyncAuditLog`）。
+
+### 17.3 自托管与检查更新（9.0）
+- 官方 Docker 镜像（多阶段、非 root、`/data` 卷、HEALTHCHECK），配 `deploy/compose/` 与参数化的 `deploy/Caddyfile` 实现自动 HTTPS。
+- 服务端工程面向 **net10.0**；桌面端保持 net8.0（`Novara.Core` 是唯一共享层）。
+- 运维命令行：`NovaraSync space create|list|show|delete|rotate-secret`（支持 `--json`，退出码 0 / 1 / 2）。
+- 应用内检查更新（仅用户点击触发）：拉取 novara.xin 上的静态 `latest.json` 清单，安装前先校验 SHA-256。
+
+### 17.4 同步什么、什么永不离开
+- `SyncFieldPolicy.CloneForSync` 白名单：五大数据分区 + 工作区 + 语言/主题；MCP 凭证、本机行为与一次性标记永不同步。
+
+---
+
+## 18. 主题与国际化
+
+### 18. 主题
+
+- 主题档位：**跟随系统 / 深色 / 浅色**，另有**「类纸」档（9.0 起）**四款纸色——**Cream（米黄）/ Almond（淡杏）/ Kraft（牛皮）/ Newsprint（冷灰）**；全新安装默认淡杏（9.0 起）。
+- 类纸实现：锁定浅色布局 + 启动时把 Paper 色表改写进内存 Light 槽（`Themes/PaperTheme.cs`，`App.xaml` 原值零改动）。存储字面量为中文「类纸 · 〈款名〉」（属既有中文字面量存储族）；读到未知字面量的旧版本按 switch default 安全降级为跟随系统。明文 `paper.dat` 提示让锁屏在解锁前即可取纸色。同一实现可扩展 N 款（色表 = 数据）。
+- 档位切换一律走「存储 + 重启」闭环（**不做运行时热切换**）。
+- `AnimationsEnabled`（动效开关）与 `EdgeMenuSide`（停靠边侧）为 9.0 新增**本机偏好**字段——永不进入同步白名单；动效开关走「确认弹窗 + 保存 + 重启」闭环。
 - 动态取色必须走 `App.GetBrush(key)`（按程序主题手动选字典），禁止直接索引 `Application.Current.Resources`，禁止缓存 Brush 引用。
 - 品牌色统一 `#7276FF`（`AppPrimaryButtonBrush` / `AppAccentBrush` / `AppDialogBorderBrush` 三主题字典同值）。
 - 按钮三级体系：主操作蓝（`#7276FF` → hover `#8C93FF` → pressed `#5855FF`）、次操作描边、危险红（`#CCFF4545` → `#FFFF4545` → `#CC3A3A`）。
 - 弹窗按钮只三种：取消（描边）/ 确认蓝 / 确认红。
 - 跟随系统实时联动：`UISettings.ColorValuesChanged` + 500ms 去抖 + UiQueue 封送。
 
-### 17.2 国际化（i18n）
+### 18. 国际化（i18n）
 
 - **C# 静态字典 `AppResources.cs`**（5 语言 5 本字典，Key 全对齐）。
 - `x:Bind` 静态方法绑定；MainWindow（不支持 x:Bind）用中文原文 + `Tag="Key"` 运行时 ApplyLocalizedTexts。
@@ -602,7 +632,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 18. 提醒系统
+## 19. 提醒系统
 
 三层提醒：
 
@@ -622,7 +652,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 19. 导入与导出
+## 20. 导入与导出
 
 | 格式 | 用途 | 说明 |
 |------|------|------|
@@ -640,7 +670,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 20. API 三入口检测
+## 21. API 三入口检测
 
 备忘页 API Key 条目右键，从单一「检测连通性」扩展为三入口，核心逻辑全在 `Novara.Core/Services/`（纯逻辑、可单测）：`ApiProbeService`（入口一，原有）/ `ApiChatClient`（共享聊天客户端）/ `ApiDiagnoseService`（入口二）/ `RelayProbeService`（入口三）/ `ProbeDataSetLoader`（探针数据集）。
 
@@ -670,7 +700,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 21. 窗口、托盘与单实例
+## 22. 窗口、托盘与单实例
 
 - 默认「直接退出」，托盘驻留可选（设置页下拉）。
 - `AppWindow.Closing` 拦截：驻留 → Cancel + Hide；直接退出 → 保存编辑器脏内容 + SaveSync 后放行。
@@ -681,7 +711,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 22. 底层服务详解
+## 23. 底层服务详解
 
 ### Novara.Core（纯逻辑）
 
@@ -721,7 +751,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ---
 
-## 23. 构建与发布
+## 24. 构建与发布
 
 发布链路：
 
@@ -744,7 +774,7 @@ dotnet publish -r win-x64 --self-contained
 
 ---
 
-## 24. 测试
+## 25. 测试
 
 `Novara.Tests`（xUnit）引用 `Novara.Core`，覆盖：
 
@@ -758,7 +788,7 @@ dotnet publish -r win-x64 --self-contained
 
 ---
 
-## 25. 目录结构
+## 26. 目录结构
 
 ```
 Novara/
@@ -798,7 +828,7 @@ Novara/
 
 ---
 
-## 26. 版本历史
+## 27. 版本历史
 
 | 版本 | 日期 | 内容 |
 |------|------|------|
