@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-09-30 · **Applies to:** Novara 9.2 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-07 · **Applies to:** Novara 9.3 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 9.2 | ✅ Supported | Current release — reminder reliability (closed-app scheduling, battery behavior) and visual refinements |
+| 9.3 | ✅ Supported | Current release — rebuilt first-run wizard, editor failure diagnostics, editor initialization hardening |
+| 9.2 | ✅ Supported | Hotfix line on top of 9.1 |
 | 9.1 | ✅ Supported | Hotfix line on top of 9.0 |
 | 9.0 | ✅ Supported | First release with one-command self-hosting (official Docker image + compose) |
 | 8.0 | ✅ Supported | First release of cross-device sync through a server you host |

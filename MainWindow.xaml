@@ -253,7 +253,8 @@
         <Grid Grid.Row="2">
             <Frame x:Name="RootFrame" />
 
-            <Grid x:Name="WelcomeOverlay" Visibility="Visible" Background="Transparent" Tapped="WelcomeOverlay_Tapped">
+            <Grid x:Name="WelcomeOverlay" Visibility="Visible" Background="{ThemeResource AppSurfaceBrush}" Tapped="WelcomeOverlay_Tapped">
+
                 <Grid.Resources>
 
                     <Storyboard x:Name="WelcomeEntryAnimation">
@@ -686,152 +687,175 @@
         <Grid x:Name="ToastHost" Grid.RowSpan="3" IsHitTestVisible="False" />
 
 
-        <Grid x:Name="WelcomeCarousel" Visibility="Collapsed" Grid.RowSpan="4"
+
+
+        <Grid x:Name="WelcomeMeltLayer" Grid.RowSpan="4" IsHitTestVisible="False" Visibility="Collapsed">
+            <Ellipse x:Name="WelcomeMeltBlob0" Width="160" Height="160" Opacity="0"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" />
+            <Ellipse x:Name="WelcomeMeltBlob1" Width="160" Height="160" Opacity="0"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" />
+            <Ellipse x:Name="WelcomeMeltBlob2" Width="160" Height="160" Opacity="0"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" />
+        </Grid>
+
+<Grid x:Name="WelcomeCarousel" Visibility="Collapsed" Grid.RowSpan="4"
               Background="Transparent"
               PointerWheelChanged="WelcomeCarousel_WheelChanged">
 
 
 
 
+
+
             <Grid x:Name="CarouselBlurHost" IsHitTestVisible="False" Visibility="Collapsed" />
             <Border x:Name="CarouselTint" Background="{ThemeResource AppSurfaceBrush}" Opacity="0.3" IsHitTestVisible="False" />
-            <StackPanel x:Name="CarouselHost" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Border x:Name="CarouselCard" Width="680" Height="430" CornerRadius="20"
-                        Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
-                        BorderThickness="2">
-                    <Grid>
-                        <Grid x:Name="CarouselPages">
-                        <Grid x:Name="CarouselPage0" Visibility="Visible">
-                            <StackPanel Margin="30,30,30,0">
-                                <TextBlock x:Name="CarouselP0Title"
-                                           FontSize="20" FontWeight="SemiBold"
-                                           Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                           HorizontalAlignment="Center" />
-                            </StackPanel>
+            <Border x:Name="CarouselFullBg" Background="{ThemeResource AppSurfaceBrush}" Opacity="0.94" IsHitTestVisible="False" />
 
-
-                            <Border x:Name="CarouselMenuMemo" MinWidth="230" CornerRadius="16" Padding="6"
-                                    Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-208,40,0,0"
-                                    RenderTransformOrigin="0.5,0.5" Tag="0"
-                                    PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
-                                <Border.RenderTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform x:Name="CarouselMenuScale0" />
-                                        <RotateTransform Angle="-8" />
-                                        <TranslateTransform x:Name="CarouselFloatT0" />
-                                    </TransformGroup>
-                                </Border.RenderTransform>
-                            </Border>
-                            <Border x:Name="CarouselMenuPath" MinWidth="230" CornerRadius="16" Padding="6"
-                                    Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-69,26,0,0"
-                                    RenderTransformOrigin="0.5,0.5" Tag="1"
-                                    PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
-                                <Border.RenderTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform x:Name="CarouselMenuScale1" />
-                                        <RotateTransform Angle="-3" />
-                                        <TranslateTransform x:Name="CarouselFloatT1" />
-                                    </TransformGroup>
-                                </Border.RenderTransform>
-                            </Border>
-                            <Border x:Name="CarouselMenuPlan" MinWidth="230" CornerRadius="16" Padding="6"
-                                    Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="69,16,0,0"
-                                    RenderTransformOrigin="0.5,0.5" Tag="2"
-                                    PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
-                                <Border.RenderTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform x:Name="CarouselMenuScale2" />
-                                        <RotateTransform Angle="3" />
-                                        <TranslateTransform x:Name="CarouselFloatT2" />
-                                    </TransformGroup>
-                                </Border.RenderTransform>
-                            </Border>
-                            <Border x:Name="CarouselMenuDiary" MinWidth="230" CornerRadius="16" Padding="6"
-                                    Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="208,30,0,0"
-                                    RenderTransformOrigin="0.5,0.5" Tag="3"
-                                    PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
-                                <Border.RenderTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform x:Name="CarouselMenuScale3" />
-                                        <RotateTransform Angle="8" />
-                                        <TranslateTransform x:Name="CarouselFloatT3" />
-                                    </TransformGroup>
-                                </Border.RenderTransform>
-                            </Border>
-                        </Grid>
-                            <Grid x:Name="CarouselPage1" Visibility="Collapsed">
-                                <StackPanel Margin="30,30,30,0">
-                                    <TextBlock x:Name="CarouselP1Title"
-                                               FontSize="20" FontWeight="SemiBold"
-                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                               HorizontalAlignment="Center" />
-                                </StackPanel>
+            <Grid x:Name="CarouselLayout">
+                <Grid x:Name="CarouselPages" MaxWidth="880" Margin="56,64,56,132"
+                      HorizontalAlignment="Center" VerticalAlignment="Stretch">
 
 
 
-                                <Border x:Name="CarouselP1ShadowReceiver" IsHitTestVisible="False" />
-                                <Button x:Name="CarouselP1BtnMemo" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Memo"
-                                        Width="200" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-160,-54,0,0"
-                                        Click="CarouselP1Tab_Click">
-                                    <Button.RenderTransform>
-                                        <TransformGroup>
-                                            <RotateTransform Angle="-5" />
-                                            <TranslateTransform x:Name="CarouselP1FloatT0" />
-                                        </TransformGroup>
-                                    </Button.RenderTransform>
-                                </Button>
-                                <Button x:Name="CarouselP1BtnFile" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Path"
-                                        Width="200" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="160,-18,0,0"
-                                        Click="CarouselP1Tab_Click">
-                                    <Button.RenderTransform>
-                                        <TransformGroup>
-                                            <RotateTransform Angle="-2" />
-                                            <TranslateTransform x:Name="CarouselP1FloatT1" />
-                                        </TransformGroup>
-                                    </Button.RenderTransform>
-                                </Button>
-                                <Button x:Name="CarouselP1BtnPlan" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Plan"
-                                        Width="200" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="-95,18,0,0"
-                                        Click="CarouselP1Tab_Click">
-                                    <Button.RenderTransform>
-                                        <TransformGroup>
-                                            <RotateTransform Angle="2" />
-                                            <TranslateTransform x:Name="CarouselP1FloatT2" />
-                                        </TransformGroup>
-                                    </Button.RenderTransform>
-                                </Button>
-                                <Button x:Name="CarouselP1BtnDiary" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Diary"
-                                        Width="200" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="215,54,0,0"
-                                        Click="CarouselP1Tab_Click">
-                                    <Button.RenderTransform>
-                                        <TransformGroup>
-                                            <RotateTransform Angle="5" />
-                                            <TranslateTransform x:Name="CarouselP1FloatT3" />
-                                        </TransformGroup>
-                                    </Button.RenderTransform>
-                                </Button>
 
-                                <TextBlock x:Name="CarouselP1Intro" FontSize="14"
-                                           Foreground="{ThemeResource AppTextSecondaryBrush}"
-                                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"
-                                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                           Margin="40,0,40,40" Height="42" />
-                            </Grid>
-                            <Grid x:Name="CarouselPage2" Visibility="Collapsed">
-                                <StackPanel Margin="30,30,30,0">
-                                    <TextBlock x:Name="CarouselP2Title"
-                                               FontSize="20" FontWeight="SemiBold"
-                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                               HorizontalAlignment="Center" />
-                                </StackPanel>
+                    <Grid x:Name="CarouselPage0" Visibility="Visible">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP0Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Border x:Name="CarouselMenuMemo" Grid.Row="1" MinWidth="240" CornerRadius="16" Padding="6"
+                                Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-320,28,0"
+                                RenderTransformOrigin="0.5,0.5" Tag="0"
+                                PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="CarouselMenuScale0" />
+                                    <RotateTransform Angle="-4" />
+                                    <TranslateTransform x:Name="CarouselFloatT0" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                        </Border>
+                        <Border x:Name="CarouselMenuPath" Grid.Row="1" MinWidth="240" CornerRadius="16" Padding="6"
+                                Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20,-116,0,0"
+                                RenderTransformOrigin="0.5,0.5" Tag="1"
+                                PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="CarouselMenuScale1" />
+                                    <RotateTransform Angle="2" />
+                                    <TranslateTransform x:Name="CarouselFloatT1" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                        </Border>
+                        <Border x:Name="CarouselMenuPlan" Grid.Row="1" MinWidth="240" CornerRadius="16" Padding="6"
+                                Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,120,20,0"
+                                RenderTransformOrigin="0.5,0.5" Tag="2"
+                                PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="CarouselMenuScale2" />
+                                    <RotateTransform Angle="-2" />
+                                    <TranslateTransform x:Name="CarouselFloatT2" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                        </Border>
+                        <Border x:Name="CarouselMenuDiary" Grid.Row="1" MinWidth="240" CornerRadius="16" Padding="6"
+                                Background="{ThemeResource AppSurfaceElevatedBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="28,352,0,0"
+                                RenderTransformOrigin="0.5,0.5" Tag="3"
+                                PointerEntered="CarouselMenu_PointerEntered" PointerExited="CarouselMenu_PointerExited">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="CarouselMenuScale3" />
+                                    <RotateTransform Angle="4" />
+                                    <TranslateTransform x:Name="CarouselFloatT3" />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                        </Border>
+                    </Grid>
+
+
+
+
+                    <Grid x:Name="CarouselPage1" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP1Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+
+                        <Border x:Name="CarouselP1ShadowReceiver" Grid.Row="1" IsHitTestVisible="False" />
+                        <StackPanel Orientation="Horizontal" Spacing="48" Grid.Row="1"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button x:Name="CarouselP1BtnMemo" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Memo"
+                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
+                                <Button.RenderTransform>
+                                    <TranslateTransform x:Name="CarouselP1FloatT0" />
+                                </Button.RenderTransform>
+                            </Button>
+                            <Button x:Name="CarouselP1BtnFile" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Path"
+                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
+                                <Button.RenderTransform>
+                                    <TranslateTransform x:Name="CarouselP1FloatT1" />
+                                </Button.RenderTransform>
+                            </Button>
+                            <Button x:Name="CarouselP1BtnPlan" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Plan"
+                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
+                                <Button.RenderTransform>
+                                    <TranslateTransform x:Name="CarouselP1FloatT2" />
+                                </Button.RenderTransform>
+                            </Button>
+                            <Button x:Name="CarouselP1BtnDiary" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Diary"
+                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
+                                <Button.RenderTransform>
+                                    <TranslateTransform x:Name="CarouselP1FloatT3" />
+                                </Button.RenderTransform>
+                            </Button>
+                        </StackPanel>
+
+                        <TextBlock x:Name="CarouselP1Intro" Grid.Row="2" FontSize="15"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="560"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,30" Height="46" />
+                    </Grid>
+
+
+
+                    <Grid x:Name="CarouselPage2" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP2Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Grid MaxWidth="800" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,8,0,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid x:Name="CarouselDemoStage" Width="300" Height="260"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+
 
 
                                 <Grid x:Name="CarouselDemoToolbar" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                                      Margin="0,0,0,115" Width="130" Height="170">
+                                      Margin="0,0,0,70" Width="130" Height="170">
                                     <Border x:Name="CarouselDemoSidePanel" Width="118" VerticalAlignment="Bottom"
                                             Background="{ThemeResource AppPrimaryButtonBrush}" CornerRadius="0,12,12,0" Padding="10,8">
                                         <Border.RenderTransform>
@@ -868,134 +892,262 @@
                                       Data="M0,0 L0,16.9 L4.6,13 L7.5,19.2 L10.3,18 L7.4,11.7 L12.8,11.7 Z"
                                       HorizontalAlignment="Left" VerticalAlignment="Top">
                                     <Path.RenderTransform>
-                                        <TranslateTransform x:Name="CarouselDemoCursorTranslate" X="140" Y="150" />
+                                        <TranslateTransform x:Name="CarouselDemoCursorTranslate" X="240" Y="50" />
                                     </Path.RenderTransform>
                                 </Path>
-
-                                <TextBlock x:Name="CarouselP2Intro" FontSize="14"
-                                           Foreground="{ThemeResource AppTextSecondaryBrush}"
-                                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"
-                                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                           Margin="40,0,40,40" Height="42" />
                             </Grid>
-                            <Grid x:Name="CarouselPage3" Visibility="Collapsed">
-                                <StackPanel Margin="30,30,30,0">
-                                    <TextBlock x:Name="CarouselP3Title"
-                                               FontSize="20" FontWeight="SemiBold"
-                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                               HorizontalAlignment="Center" />
+                            <Border Grid.Column="1" Width="1" Margin="28,0" Height="216"
+                                    Background="{ThemeResource AppBorderBrush}" Opacity="0.7"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="20" Margin="4,0,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <Border CornerRadius="8" Padding="12,6" VerticalAlignment="Center"
+                                            Background="{ThemeResource AppSurfaceElevatedBrush}"
+                                            BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                        <TextBlock x:Name="CarouselHotkey1Chip" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                                    </Border>
+                                    <TextBlock x:Name="CarouselHotkey1Desc" FontSize="14" MaxWidth="230"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" />
                                 </StackPanel>
-
-
-
-
-
-
-                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" Height="110">
-
-                                    <Grid Width="400" Height="38" VerticalAlignment="Top" Margin="0,72,0,0">
-                                        <Viewbox Width="400" Height="38" Stretch="Uniform">
-                                            <Border Width="800" Height="76" CornerRadius="12"
-                                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
-                                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock x:Name="CarouselArchiveTitle" FontSize="16"
-                                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                                               VerticalAlignment="Center" Margin="4,0,0,0" />
-                                                    <Button Grid.Column="2" Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselArchiveButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                </Grid>
-                                            </Border>
-                                        </Viewbox>
-                                        <Border Height="20" VerticalAlignment="Bottom">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="{ThemeResource CarouselFadeColorTransparent}" Offset="0" />
-                                                    <GradientStop Color="{ThemeResource CarouselFadeColor}" Offset="1" />
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                        </Border>
-                                    </Grid>
-
-                                    <Viewbox Width="440" Height="41.8" Stretch="Uniform" VerticalAlignment="Top" Margin="0,38,0,0">
-                                        <Border Width="800" Height="76" CornerRadius="12"
-                                                Background="{ThemeResource AppSurfaceOverlayBrush}"
-                                                BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="CarouselMcpTitle" FontSize="16"
-                                                           Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                                           VerticalAlignment="Center" Margin="4,0,0,0" />
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselMcpAuditText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselMcpConfigText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                    <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselMcpToggleText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </Viewbox>
-
-                                    <Viewbox Width="480" Height="45.6" Stretch="Uniform" VerticalAlignment="Top">
-                                        <Border Width="800" Height="76" CornerRadius="12"
-                                                Background="{ThemeResource AppSurfaceOverlayBrush}"
-                                                BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="CarouselLockTitle" FontSize="16" FontWeight="SemiBold"
-                                                           Foreground="{ThemeResource AppTextPrimaryBrush}"
-                                                           VerticalAlignment="Center" Margin="4,0,0,0" />
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                                    <Button Style="{StaticResource NovaraPrimaryButtonStyle}" Width="160" Height="40" CornerRadius="10" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselLockHelloText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                    <Button Style="{StaticResource NovaraPrimaryButtonStyle}" Width="160" Height="40" CornerRadius="10" IsTabStop="False" IsHitTestVisible="False">
-                                                        <TextBlock x:Name="CarouselLockSetupText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                    </Button>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </Viewbox>
-                                </Grid>
-
-                                <TextBlock x:Name="CarouselP3Intro" FontSize="14"
-                                           Foreground="{ThemeResource AppTextSecondaryBrush}"
-                                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="500"
-                                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                           Margin="40,0,40,40" Height="42" />
-                            </Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <Border CornerRadius="8" Padding="12,6" VerticalAlignment="Center"
+                                            Background="{ThemeResource AppSurfaceElevatedBrush}"
+                                            BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                        <TextBlock x:Name="CarouselHotkey2Chip" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                                    </Border>
+                                    <TextBlock x:Name="CarouselHotkey2Desc" FontSize="14" MaxWidth="230"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <Border CornerRadius="8" Padding="12,6" VerticalAlignment="Center"
+                                            Background="{ThemeResource AppSurfaceElevatedBrush}"
+                                            BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                        <TextBlock x:Name="CarouselHotkey3Chip" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                                    </Border>
+                                    <TextBlock x:Name="CarouselHotkey3Desc" FontSize="14" MaxWidth="230"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock x:Name="CarouselHotkeyNote" FontSize="12.5"
+                                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                           TextWrapping="Wrap" MaxWidth="260" Margin="2,4,0,0" />
+                            </StackPanel>
                         </Grid>
-                        <Button x:Name="CarouselCloseButton" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                Width="28" Height="28" Margin="0,12,12,0" Style="{StaticResource NovaraIconButtonStyle}"
-                                Visibility="Collapsed"
-                                Click="CarouselClose_Click">
-                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
-                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
-                        </Button>
+                        <TextBlock x:Name="CarouselP2Intro" Grid.Row="2" FontSize="15"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="560"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,30" Height="46" />
                     </Grid>
-                </Border>
-                <StackPanel x:Name="CarouselDots" Orientation="Horizontal" Spacing="10"
-                            HorizontalAlignment="Center" Margin="0,18,0,0" />
-            </StackPanel>
+
+
+                    <Grid x:Name="CarouselPage3" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP3Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Viewbox Width="640" Height="60.8" Stretch="Uniform" Grid.Row="1"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Width="800" Height="76" CornerRadius="12"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CarouselLockTitle" FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                               VerticalAlignment="Center" Margin="4,0,0,0" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource NovaraPrimaryButtonStyle}" Width="160" Height="40" CornerRadius="10" IsTabStop="False" IsHitTestVisible="False">
+                                            <TextBlock x:Name="CarouselLockHelloText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button Style="{StaticResource NovaraPrimaryButtonStyle}" Width="160" Height="40" CornerRadius="10" IsTabStop="False" IsHitTestVisible="False">
+                                            <TextBlock x:Name="CarouselLockSetupText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Viewbox>
+                        <TextBlock x:Name="CarouselP3Body" Grid.Row="2" FontSize="15"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="640"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,34" />
+                    </Grid>
+
+
+                    <Grid x:Name="CarouselPage4" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP4Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Viewbox Width="640" Height="60.8" Stretch="Uniform" Grid.Row="1"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Width="800" Height="76" CornerRadius="12"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1" Padding="20,18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CarouselMcpTitle" FontSize="16"
+                                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                               VerticalAlignment="Center" Margin="4,0,0,0" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                            <TextBlock x:Name="CarouselMcpAuditText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                            <TextBlock x:Name="CarouselMcpConfigText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button Style="{StaticResource CarouselDemoDropdownButtonStyle}" Width="160" Height="40" IsTabStop="False" IsHitTestVisible="False">
+                                            <TextBlock x:Name="CarouselMcpToggleText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Viewbox>
+                        <StackPanel Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                    MaxWidth="680" Spacing="10" Margin="0,0,0,28">
+                            <TextBlock x:Name="CarouselP4B1" FontSize="14.5"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center" />
+                            <TextBlock x:Name="CarouselP4B2" FontSize="14.5"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center" />
+                            <TextBlock x:Name="CarouselP4B3" FontSize="14.5"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+
+
+                    <Grid x:Name="CarouselPage5" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="CarouselP5Title" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="28" Grid.Row="1"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Width="330" CornerRadius="14" Padding="22,18"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP5SnapIcon" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP5SnapTitle" FontSize="17" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP5SnapDesc" FontSize="13.5"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Width="330" CornerRadius="14" Padding="22,18"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP5SyncIcon" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP5SyncTitle" FontSize="17" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP5SyncDesc" FontSize="13.5"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock x:Name="CarouselP5Body" Grid.Row="2" FontSize="15"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="660"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,34" />
+                    </Grid>
+
+
+
+                    <Grid x:Name="CarouselPage6" Visibility="Collapsed">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="680">
+                            <Image Source="ms-appx:///Assets/Novara-R.png" Width="92" Height="92" Stretch="Uniform"
+                                   HorizontalAlignment="Center" Margin="0,0,0,26" />
+                            <TextBlock x:Name="CarouselP6B1" FontSize="21" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,0,0,14" />
+                            <TextBlock x:Name="CarouselP6B2" FontSize="15"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center"
+                                       HorizontalAlignment="Center" Margin="0,0,0,10" />
+                            <TextBlock x:Name="CarouselP6B3" FontSize="14"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" TextAlignment="Center"
+                                       HorizontalAlignment="Center" Margin="0,0,0,26" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="40">
+                                <HyperlinkButton x:Name="CarouselP6GitHubLink"
+                                                 NavigateUri="https://github.com/Novara-owner/Novara-Vault"
+                                                 Foreground="{ThemeResource AppPrimaryButtonBrush}" FontSize="14" />
+                                <HyperlinkButton NavigateUri="mailto:owner@novara.xin" Content="owner@novara.xin"
+                                                 Foreground="{ThemeResource AppPrimaryButtonBrush}" FontSize="14" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+
+                <TextBlock x:Name="CarouselSkipButton" FontSize="14"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="48,0,0,44"
+                           Tapped="CarouselSkip_Tapped" />
+                <Button x:Name="CarouselNextButton" Style="{StaticResource NovaraPrimaryButtonStyle}"
+                        MinWidth="300" Height="54" FontSize="16" CornerRadius="16"
+                        HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,36"
+                        Click="CarouselNext_Click">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="Enter" />
+                    </Button.KeyboardAccelerators>
+                </Button>
+            </Grid>
+
+
+
+
+            <Grid x:Name="CarouselMeltLayer" IsHitTestVisible="False" Visibility="Collapsed">
+                <Ellipse x:Name="CarouselMeltBlob0" Width="160" Height="160" Opacity="0"
+                         HorizontalAlignment="Left" VerticalAlignment="Top" />
+                <Ellipse x:Name="CarouselMeltBlob1" Width="160" Height="160" Opacity="0"
+                         HorizontalAlignment="Left" VerticalAlignment="Top" />
+                <Ellipse x:Name="CarouselMeltBlob2" Width="160" Height="160" Opacity="0"
+                         HorizontalAlignment="Left" VerticalAlignment="Top" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

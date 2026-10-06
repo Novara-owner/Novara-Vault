@@ -1819,7 +1819,7 @@ private void ShowPrivacyLockWarningDialog()
 
 
         var rel = _latestRelease;
-        if (App.Store is { IsLoaded: true } store)
+        if (App.Store is { IsLoaded: true } store && rel is not null)
         {
             store.Database.AppSettings.UpdatePendingVersion = rel.Version;
             _ = store.SaveAsync();
@@ -1838,7 +1838,7 @@ private void ShowPrivacyLockWarningDialog()
         if (!string.IsNullOrEmpty(pending) && !Novara.Services.UpdateService.IsNewer(pending, Novara.Services.UpdateService.CurrentVersion))
         {
             db.AppSettings.UpdatePendingVersion = "";
-            _ = App.Store.SaveAsync();
+            _ = App.Store!.SaveAsync();
             pending = "";
         }
         UpdateAttentionDot.Visibility = string.IsNullOrEmpty(pending) ? Visibility.Collapsed : Visibility.Visible;

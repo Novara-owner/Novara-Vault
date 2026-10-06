@@ -6,6 +6,19 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.0] - 2026-10-07
+
+### Added
+
+- **Full-screen first-run wizard** - the welcome wizard is rebuilt as a full-screen seven-page tour with a fixed bottom button, wheel and Enter navigation, and a low-key skip link. The first page shows the four right-click menus as a stacked, slowly floating fan that switches between vertical and horizontal layouts with the window size; later pages show the four tabs as icon capsules, an animated edge-handle demo beside the shortcut list, privacy lock, MCP, connectivity and credits. The finale spreads an ink drop from the button to the far corner and dissolves into the main app.
+- **The welcome screen dissolves the same way** - clicking anywhere on the welcome screen spreads ink from that exact point, fills the window, and reveals the app underneath with no blank frame.
+
+### Fixed
+
+- **The editor no longer fails silently** - previously, if the WebView2 runtime was absent, damaged, or its data folder unwritable, the diary and document editors opened with controls but no icons and reported nothing at all. The editor now separates the causes (runtime missing / runtime damaged / data folder unwritable / bundle incomplete), keeps its toolbar and icons intact regardless of the outcome, shows an in-page notice with a copyable technical detail, a retry button and - when the runtime is the problem - a link to obtain it, records the failure in the log, and falls back to a working alternate data folder automatically.
+- **Editor initialization could raise a WebView2 environment error** - opening a diary could surface `WebView2 was already initialized with a different CoreWebView2Environment`. A directory-switch retry violated the control's contract, and re-entering the cached editor page could start a second concurrent initialization. Retries now reuse a single cached environment object and a re-entrancy guard prevents a concurrent second initialization.
+- **Mixed-language wizard on non-Chinese systems** - wizard text was fetched during construction, before the interface language was resolved, so on an English system only the first page was English. Text is now fetched when the wizard is shown, so all pages follow the system language.
+
 ## [9.2.0] - 2026-09-30
 
 ### Fixed

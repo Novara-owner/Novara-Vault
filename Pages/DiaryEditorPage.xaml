@@ -242,6 +242,29 @@
                       Margin="48,12,40,8"
                       DefaultBackgroundColor="Transparent" />
 
+
+
+            <Grid x:Name="EditorFailNotice" Visibility="Collapsed" Background="{ThemeResource AppSurfaceBrush}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="540" Spacing="14">
+                    <TextBlock x:Name="EditorFailTitle" FontSize="20" FontWeight="SemiBold"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               TextWrapping="Wrap" TextAlignment="Center" />
+                    <TextBlock x:Name="EditorFailBody" FontSize="14"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               TextWrapping="Wrap" TextAlignment="Center" />
+                    <TextBlock x:Name="EditorFailDetail" FontSize="12"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               TextWrapping="Wrap" TextAlignment="Center" IsTextSelectionEnabled="True" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+                        <Button x:Name="EditorFailRetryButton" Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                MinWidth="140" Height="40" CornerRadius="10" Click="EditorFailRetry_Click" />
+                        <HyperlinkButton x:Name="EditorFailHelpLink" FontSize="14"
+                                         NavigateUri="https://developer.microsoft.com/microsoft-edge/webview2/"
+                                         Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
             <Grid x:Name="ToolbarContainer" Margin="0,0,0,20" HorizontalAlignment="Center" VerticalAlignment="Bottom">
                 <Grid.RenderTransform>
                     <CompositeTransform x:Name="ToolbarTranslate" TranslateX="0" TranslateY="0" ScaleX="1" ScaleY="1" />

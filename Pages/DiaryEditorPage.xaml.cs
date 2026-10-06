@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
@@ -29,6 +29,13 @@ public sealed partial class DiaryEditorPage : Page
     private string? _navigatingFormat;
     private bool _isBold, _isItalic, _isUnderline;
     private bool _webViewReady;
+
+
+
+    private bool _editorInitInFlight;
+
+
+    private Microsoft.Web.WebView2.Core.CoreWebView2Environment? _editorEnv;
     private string _loadedFormat = "html";
     private string? _initialTitle;
     private string? _initialContent;
@@ -163,7 +170,7 @@ notifyFormatState();
 
         string bundle;
         try { bundle = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "tiptap.bundle.js")); }
-        catch { bundle = "window.NovaraTiptap={};"; }
+        catch (Exception ex) { Services.CrashLogger.LogNote("EditorBundleMissing", "tiptap: " + ex.Message); bundle = "window.NovaraTiptap={};"; }
         return string.Format(EditorHtmlTemplate, bg, text, placeholder, sep, selection, scrollbar,
             App.GetString("DiaryEditor_TitlePlaceholder"), App.GetString("DiaryEditor_BodyPlaceholder"),
             bundle, App.GetString("Menu_Unlink"), menuBg, scrollbarHover, link);
@@ -480,22 +487,85 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     {
 
 
+        BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
+        InitializeToolbarIcons();
+
+
+
         if (_webViewReady) return;
+        EditorFailNotice.Visibility = Visibility.Collapsed;
+        await RunEditorInitOrFailUiAsync("");
+    }
+
+    private async System.Threading.Tasks.Task RunEditorInitOrFailUiAsync(string attemptTag)
+    {
+
+
+        if (_editorInitInFlight || _webViewReady) return;
+        _editorInitInFlight = true;
+        string? err;
+        try
+        {
+            err = await InitEditorWebViewAsync();
+        }
+        finally
+        {
+            _editorInitInFlight = false;
+        }
+        if (err == null) return;
+
+        Services.CrashLogger.LogNote("EditorWebViewInitFailed", attemptTag + err);
+        ShowEditorFailNotice(err);
+    }
+
+
+
+
+
+
+    private async System.Threading.Tasks.Task<Microsoft.Web.WebView2.Core.CoreWebView2Environment> GetOrCreateEditorEnvAsync(string udf)
+    {
+        if (_editorEnv == null)
+            _editorEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, udf, null);
+        return _editorEnv;
+    }
+
+
+    private async System.Threading.Tasks.Task<string?> InitEditorWebViewAsync()
+    {
+
+        try { _ = Microsoft.Web.WebView2.Core.CoreWebView2Environment.GetAvailableBrowserVersionString(); }
+        catch (Exception ex) { return "runtime-missing: " + ex.Message; }
+
+
+
+
+        var primary = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Novara.Services.CoreEnv.DataDirName, "Webview2");
+        string udf = primary;
+        if (!ProbeWritable(primary))
+        {
+            var alt = primary + "-alt";
+            if (!ProbeWritable(alt)) return "udf-unwritable: " + primary;
+            udf = alt;
+            Services.CrashLogger.LogNote("EditorWebViewUdfFallback", "primary UDF not writable, using " + alt);
+        }
+
         try
         {
 
 
-            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(
-                null,
-                System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    Novara.Services.CoreEnv.DataDirName, "Webview2"),
-                null);
+            var env = await GetOrCreateEditorEnvAsync(udf);
             await ContentWebView.EnsureCoreWebView2Async(env);
-            BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
-            InitializeToolbarIcons();
+
+
+            var bundlePath = System.IO.Path.Combine(AppContext.BaseDirectory, _loadedFormat == "markdown" ? "md.bundle.js" : "tiptap.bundle.js");
+            if (!System.IO.File.Exists(bundlePath) || new System.IO.FileInfo(bundlePath).Length < 1024)
+                return "bundle-missing: " + bundlePath;
+
             var cv = ContentWebView.CoreWebView2;
-            if (cv == null) return;
+            if (cv == null) return "null-core";
             cv.Settings.IsScriptEnabled = true;
             cv.Settings.AreDefaultScriptDialogsEnabled = false;
             cv.Settings.IsWebMessageEnabled = true;
@@ -518,11 +588,46 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
             ContentWebView.NavigateToString(_loadedFormat == "markdown" ? GetMarkdownHtml() : GetEditorHtml());
             _navigatingFormat = _loadedFormat;
+            return null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"日记编辑器初始化失败: {ex}");
+
+
+            return ex.ToString();
         }
+    }
+
+    private static bool ProbeWritable(string dir)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(dir);
+            var probe = System.IO.Path.Combine(dir, "novara-probe.tmp");
+            System.IO.File.WriteAllText(probe, "1");
+            System.IO.File.Delete(probe);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private void ShowEditorFailNotice(string err)
+    {
+        bool runtimeMissing = err.StartsWith("runtime-missing", StringComparison.Ordinal);
+        EditorFailTitle.Text = App.GetString("Editor_Fail_Title");
+        EditorFailBody.Text = App.GetString(runtimeMissing ? "Editor_Fail_Runtime" : "Editor_Fail_Generic");
+        EditorFailDetail.Text = err;
+        EditorFailRetryButton.Content = App.GetString("Editor_Fail_Retry");
+        EditorFailHelpLink.Content = App.GetString("Editor_Fail_Help");
+        EditorFailHelpLink.Visibility = runtimeMissing ? Visibility.Visible : Visibility.Collapsed;
+        EditorFailNotice.Visibility = Visibility.Visible;
+    }
+
+    private async void EditorFailRetry_Click(object sender, RoutedEventArgs e)
+    {
+        EditorFailNotice.Visibility = Visibility.Collapsed;
+        if (_webViewReady) return;
+        await RunEditorInitOrFailUiAsync("retry: ");
     }
 
     public void LoadDiary(DiaryEntry? diary, string? newFormat = null)

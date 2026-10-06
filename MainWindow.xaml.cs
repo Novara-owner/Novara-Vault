@@ -177,11 +177,8 @@ public sealed partial class MainWindow : Window
         {
             WelcomeSubtitle.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa");
         }
-        CarouselPageList = new[] { CarouselPage0, CarouselPage1, CarouselPage2, CarouselPage3 };
-        BuildCarouselMenus();
-        BuildCarouselPage1();
-        BuildCarouselPage2();
-        BuildCarouselPage3();
+        CarouselPageList = new[] { CarouselPage0, CarouselPage1, CarouselPage2, CarouselPage3, CarouselPage4, CarouselPage5, CarouselPage6 };
+        BuildCarouselChrome();
 
 
 
@@ -1806,30 +1803,28 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void ShowWelcomeCarousel()
     {
         _carouselPage = 0;
-        BuildCarouselDots();
-        SetCarouselPage(0);
+        ApplyCarouselTexts();
+        UpdateCarouselMetrics();
+        SetCarouselPage(0, animate: false);
         EnsureCarouselBlur();
+        ResetCarouselMeltLayer();
         CarouselBlurHost.Visibility = Visibility.Visible;
         WelcomeCarousel.Visibility = Visibility.Visible;
+        WelcomeCarousel.UpdateLayout();
         WelcomeCarousel.Opacity = 0;
-
-
-        var contentH = (Content as FrameworkElement)?.ActualHeight ?? 0;
-        var s = contentH > 120 ? Math.Max(0.5, Math.Min(1.0, (contentH - 80) / 465.0)) : 1.0;
-        CarouselHost.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
-        CarouselHost.RenderTransform = new Microsoft.UI.Xaml.Media.ScaleTransform { ScaleX = s, ScaleY = s };
         var sb = new Storyboard();
-        var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        var oi = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(150) };
         Storyboard.SetTarget(oi, WelcomeCarousel); Storyboard.SetTargetProperty(oi, "Opacity"); sb.Children.Add(oi);
         sb.Begin();
-        CarouselCard.Focus(FocusState.Programmatic);
-        CarouselP0Title.Text = App.GetString("Carousel_P0_Title");
         StartCarouselFloat();
     }
 
     private void CloseWelcomeCarousel()
     {
         StopCarouselFloat();
+        _pageSb?.Stop(); _pageSb = null;
+        _meltSb?.Stop(); _meltSb = null;
+        _pageAnimLock = false;
         CarouselBlurHost.Visibility = Visibility.Collapsed;
         WelcomeCarousel.Opacity = 0;
         WelcomeCarousel.Visibility = Visibility.Collapsed;
@@ -1840,8 +1835,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             _ = App.Store?.SaveAsync();
         }
     }
-
-    private void CarouselClose_Click(object sender, RoutedEventArgs e) => CloseWelcomeCarousel();
 
 
 
@@ -1945,8 +1938,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 Optimization = Microsoft.Graphics.Canvas.Effects.EffectOptimization.Balanced,
                 Source = new Microsoft.UI.Composition.CompositionEffectSourceParameter("Backdrop"),
             };
-            var factory = compositor.CreateEffectFactory(blur);
+
+            var factory = compositor.CreateEffectFactory(blur, new[] { "Blur.BlurAmount" });
             var brush = factory.CreateBrush();
+            _carouselBlurBrush = brush;
             brush.SetSourceParameter("Backdrop", compositor.CreateBackdropBrush());
             _carouselBlurVisual = compositor.CreateSpriteVisual();
             _carouselBlurVisual.Brush = brush;
@@ -2016,35 +2011,43 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (_floatPhases == null)
         {
             _floatPhases = new[] { 0.0, Math.PI / 2, Math.PI, Math.PI * 3 / 2 };
+            _floatPeriods = new[] { 3.0, 3.7, 4.3, 4.9 };
+            _floatAmps = new[] { 5.0, 6.0, 5.0, 7.0 };
             _floatTransforms = new[] { CarouselFloatT0, CarouselFloatT1, CarouselFloatT2, CarouselFloatT3 };
             _floatScales = new[] { CarouselMenuScale0, CarouselMenuScale1, CarouselMenuScale2, CarouselMenuScale3 };
             _floatTabPhases = new[] { Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4 };
             _floatTabTransforms = new[] { CarouselP1FloatT0, CarouselP1FloatT1, CarouselP1FloatT2, CarouselP1FloatT3 };
         }
         var t = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency - _carouselFloatStart;
-        var phases = _floatPhases;
-        var transforms = _floatTransforms!;
-        var scales = _floatScales!;
-        for (int i = 0; i < 4; i++)
+
+        if (App.IsAnimationsEnabled)
         {
+            var phases = _floatPhases;
+            var transforms = _floatTransforms!;
+            var scales = _floatScales!;
+            for (int i = 0; i < 4; i++)
+            {
 
 
 
-            _menuHoverLift[i] += (_menuHoverLiftTarget[i] - _menuHoverLift[i]) * 0.18;
-            _menuHoverScale[i] += (_menuHoverScaleTarget[i] - _menuHoverScale[i]) * 0.18;
-            transforms[i].Y = 5 * Math.Sin(2 * Math.PI * t / 3.0 + phases[i]) + _menuHoverLift[i];
-            scales[i].ScaleX = scales[i].ScaleY = _menuHoverScale[i];
+                _menuHoverLift[i] += (_menuHoverLiftTarget[i] - _menuHoverLift[i]) * 0.18;
+                _menuHoverScale[i] += (_menuHoverScaleTarget[i] - _menuHoverScale[i]) * 0.18;
+                transforms[i].Y = _floatAmps![i] * Math.Sin(2 * Math.PI * t / _floatPeriods![i] + phases[i]) + _menuHoverLift[i];
+                scales[i].ScaleX = scales[i].ScaleY = _menuHoverScale[i];
+            }
+
+            var tabPhases = _floatTabPhases!;
+            var tabTransforms = _floatTabTransforms!;
+            for (int i = 0; i < 4; i++)
+                tabTransforms[i].Y = 6 * Math.Sin(2 * Math.PI * t / 3.0 + tabPhases[i]);
         }
-
-        var tabPhases = _floatTabPhases!;
-        var tabTransforms = _floatTabTransforms!;
-        for (int i = 0; i < 4; i++)
-            tabTransforms[i].Y = 6 * Math.Sin(2 * Math.PI * t / 3.0 + tabPhases[i]);
         ApplyCarouselDemo(t - _carouselDemoStart);
     }
 
 
     private double[]? _floatPhases;
+    private double[]? _floatPeriods;
+    private double[]? _floatAmps;
     private Microsoft.UI.Xaml.Media.TranslateTransform[]? _floatTransforms;
     private Microsoft.UI.Xaml.Media.ScaleTransform[]? _floatScales;
     private double[]? _floatTabPhases;
@@ -2114,37 +2117,25 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-
-
     private void BuildCarouselPage1()
     {
-        CarouselP1Title.Text = App.GetString("Carousel_P1_Title");
-        BuildCarouselP1Tab(CarouselP1BtnMemo, IconData.NavMemo, "Nav_Tab_Memo");
-        BuildCarouselP1Tab(CarouselP1BtnFile, IconData.NavFile, "Nav_Tab_File");
-        BuildCarouselP1Tab(CarouselP1BtnPlan, IconData.NavPlan, "Nav_Tab_Plan");
-        BuildCarouselP1Tab(CarouselP1BtnDiary, IconData.NavDiary, "Nav_Tab_Diary");
-        SetCarouselP1Selection(CarouselP1BtnMemo, "Carousel_P1_Memo");
+        BuildCarouselP1Tab(CarouselP1BtnMemo, IconData.NavMemo);
+        BuildCarouselP1Tab(CarouselP1BtnFile, IconData.NavFile);
+        BuildCarouselP1Tab(CarouselP1BtnPlan, IconData.NavPlan);
+        BuildCarouselP1Tab(CarouselP1BtnDiary, IconData.NavDiary);
     }
 
 
-    private static void BuildCarouselP1Tab(Button btn, string iconPath, string textKey)
+    private static void BuildCarouselP1Tab(Button btn, string iconPath)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        panel.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+        btn.Content = new Microsoft.UI.Xaml.Shapes.Path
         {
-            Width = 20,
-            Height = 20,
+            Width = 24,
+            Height = 24,
             Stretch = Stretch.Uniform,
             Data = App.CreateGeometry(iconPath),
             Fill = App.GetBrush("IconForegroundBrush"),
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = App.GetString(textKey),
-            FontSize = 14,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        btn.Content = panel;
+        };
     }
 
     private void CarouselP1Tab_Click(object sender, RoutedEventArgs e)
@@ -2184,7 +2175,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             b.Foreground = sel ? brandBrush : dimBrush;
             b.Translation = sel ? new System.Numerics.Vector3(0f, 0f, 20f) : System.Numerics.Vector3.Zero;
             SetNavOpacity(b, sel ? 1.0 : 0.6, NavBar.IsLoaded);
-            if (b.Content is StackPanel sp && sp.Children.Count > 0 && sp.Children[0] is Microsoft.UI.Xaml.Shapes.Path icon)
+            if (b.Content is Microsoft.UI.Xaml.Shapes.Path icon)
                 icon.Fill = sel ? brandBrush : iconBrush;
         }
 
@@ -2199,18 +2190,19 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+
     private void BuildCarouselPage2()
     {
-        CarouselPage2.SizeChanged += (_, _) => CarouselPage2.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, CarouselPage2.ActualWidth, CarouselPage2.ActualHeight) };
-        CarouselP2Title.Text = App.GetString("Carousel_P2_Title");
-        CarouselP2Intro.Text = App.GetString("Carousel_P2_Desc");
+
+
+        CarouselDemoStage.SizeChanged += (_, _) => CarouselDemoStage.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(0, -600, CarouselDemoStage.ActualWidth, 1600) };
     }
 
 
 
-    private const double DemoCursorStartX = 620, DemoCursorStartY = 150;
-    private const double DemoCursorEndX = 74, DemoCursorEndY = 309;
-    private const double DemoCursorPanelX = 128, DemoCursorPanelY = 252;
+    private const double DemoCursorStartX = 240, DemoCursorStartY = 30;
+    private const double DemoCursorEndX = 8, DemoCursorEndY = 158;
+    private const double DemoCursorPanelX = 34, DemoCursorPanelY = 103;
 
     private static double DemoEaseInOut(double t) => t < 0.5 ? 2 * t * t : 1 - Math.Pow(-2 * t + 2, 2) / 2;
     private static double DemoCubicOut(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 3);
@@ -2272,19 +2264,129 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-    private void BuildCarouselPage3()
+    private void BuildCarouselChrome()
     {
+        _pageTrans = new Microsoft.UI.Xaml.Media.TranslateTransform[CarouselPageList.Length];
+        for (int i = 0; i < CarouselPageList.Length; i++)
+        {
+            var tt = new Microsoft.UI.Xaml.Media.TranslateTransform();
+            CarouselPageList[i].RenderTransform = tt;
+            _pageTrans[i] = tt;
+        }
+
+
+        CarouselPages.SizeChanged += (_, _) =>
+        {
+            CarouselPages.Clip = new Microsoft.UI.Xaml.Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(-60, -24, CarouselPages.ActualWidth + 120, CarouselPages.ActualHeight + 48) };
+            UpdateCarouselMetrics();
+        };
+        BuildCarouselPage1();
+        BuildCarouselPage2();
+        CarouselHotkey1Chip.Text = "Ctrl + K";
+        CarouselHotkey2Chip.Text = "Ctrl + Shift + N";
+        CarouselHotkey3Chip.Text = "Ctrl + Shift + L";
+        CarouselP5SnapIcon.Data = App.CreateGeometry(IconData.Document);
+        CarouselP5SyncIcon.Data = App.CreateGeometry(IconData.MdLink);
+    }
+
+
+
+
+
+    private Microsoft.UI.Xaml.Media.ScaleTransform? _carouselPagesScale;
+    private bool _carouselPage0Horizontal;
+    private double _carouselMetricsLast = -1.0;
+
+    private static readonly Thickness[] CarouselMenuMarginVertical =
+    {
+        new Thickness(0, -320, 28, 0), new Thickness(20, -116, 0, 0), new Thickness(0, 120, 20, 0), new Thickness(28, 352, 0, 0),
+    };
+    private static readonly Thickness[] CarouselMenuMarginHorizontal =
+    {
+
+        new Thickness(0, -60, 500, 0), new Thickness(166, 36, 0, 0), new Thickness(0, -36, 166, 0), new Thickness(500, 60, 0, 0),
+    };
+
+    private void UpdateCarouselMetrics()
+    {
+
+
+
+        double avail = Math.Max(320.0, ((CarouselPages.Parent as FrameworkElement)?.ActualWidth ?? 992.0) - 112.0);
+        CarouselPages.Width = Math.Min(880.0, avail);
+        if (CarouselPages.ActualWidth < 50 || CarouselPages.ActualHeight < 50) return;
+        bool horizontal = CarouselPages.ActualHeight < 600;
+        if (horizontal != _carouselPage0Horizontal)
+        {
+            _carouselPage0Horizontal = horizontal;
+            Border[] shells = { CarouselMenuMemo, CarouselMenuPath, CarouselMenuPlan, CarouselMenuDiary };
+            var margins = horizontal ? CarouselMenuMarginHorizontal : CarouselMenuMarginVertical;
+            for (int i = 0; i < 4; i++) shells[i].Margin = margins[i];
+        }
+        double designH = _carouselPage0Horizontal ? 440 : 620;
+        double s = Math.Min(1.0, Math.Min(CarouselPages.ActualWidth / 880.0, CarouselPages.ActualHeight / designH));
+        if (_carouselPagesScale == null)
+        {
+            _carouselPagesScale = new Microsoft.UI.Xaml.Media.ScaleTransform();
+            CarouselPages.RenderTransform = _carouselPagesScale;
+        }
+        if (Math.Abs(s - _carouselMetricsLast) < 0.002) return;
+        _carouselMetricsLast = s;
+        _carouselPagesScale.ScaleX = _carouselPagesScale.ScaleY = s;
+        _carouselPagesScale.CenterX = CarouselPages.ActualWidth / 2;
+        _carouselPagesScale.CenterY = CarouselPages.ActualHeight / 2;
+    }
+
+
+
+
+
+
+
+    private void ApplyCarouselTexts()
+    {
+        CarouselP0Title.Text = App.GetString("Carousel_P0_Title");
+        BuildCarouselMenus();
+        CarouselP1Title.Text = App.GetString("Carousel_P1_Title");
+        SetCarouselP1Selection(CarouselP1BtnMemo, "Carousel_P1_Memo");
+        CarouselP2Title.Text = App.GetString("Carousel_P2_Title");
+        CarouselP2Intro.Text = App.GetString("Carousel_P2_Desc");
+        CarouselHotkey1Desc.Text = App.GetString("Carousel_Hotkey_Search_Desc");
+        CarouselHotkey2Desc.Text = App.GetString("Carousel_Hotkey_Capture_Desc");
+        CarouselHotkey3Desc.Text = App.GetString("Carousel_Hotkey_Lock_Desc");
+        CarouselHotkeyNote.Text = App.GetString("Carousel_Hotkey_More");
         CarouselP3Title.Text = App.GetString("Carousel_P3_Title");
-        CarouselP3Intro.Text = App.GetString("Carousel_P3_Desc");
+        CarouselP3Body.Text = App.GetString("Carousel_P3_Body");
+        CarouselLockTitle.Text = App.GetString("Setting_PrivacyLock_Title");
+        CarouselLockHelloText.Text = App.GetString("Setting_WinHello_Title");
+        CarouselLockSetupText.Text = App.GetString("Setting_PrivacyLock_Setup");
+        CarouselP4Title.Text = App.GetString("Carousel_P4_Title");
+        CarouselP4B1.Text = App.GetString("Carousel_P4_B1");
+        CarouselP4B2.Text = App.GetString("Carousel_P4_B2");
+        CarouselP4B3.Text = App.GetString("Carousel_P4_B3");
         CarouselMcpTitle.Text = App.GetString("Setting_Mcp_Title");
         CarouselMcpAuditText.Text = App.GetString("Setting_Mcp_Audit_Button");
         CarouselMcpConfigText.Text = App.GetString("Setting_Mcp_Config");
         CarouselMcpToggleText.Text = App.GetString("Setting_Autostart_Off");
-        CarouselArchiveTitle.Text = App.GetString("Setting_Archive_Title");
-        CarouselArchiveButtonText.Text = App.GetString("Setting_Archive_ImportExport");
-        CarouselLockTitle.Text = App.GetString("Setting_PrivacyLock_Title");
-        CarouselLockHelloText.Text = App.GetString("Setting_WinHello_Title");
-        CarouselLockSetupText.Text = App.GetString("Setting_PrivacyLock_Setup");
+        CarouselP5Title.Text = App.GetString("Carousel_P5_Title");
+        CarouselP5SnapTitle.Text = App.GetString("Setting_Connect_Title");
+        CarouselP5SnapDesc.Text = App.GetString("Carousel_P5_SnapDesc");
+        CarouselP5SyncTitle.Text = App.GetString("Sync_Card_Title");
+        CarouselP5SyncDesc.Text = App.GetString("Carousel_P5_SyncDesc");
+        CarouselP5Body.Text = App.GetString("Carousel_P5_Body");
+        CarouselP6B1.Text = App.GetString("Carousel_P6_B1");
+        CarouselP6B2.Text = App.GetString("Carousel_P6_B2");
+        CarouselP6B3.Text = App.GetString("Carousel_P6_B3");
+        CarouselP6GitHubLink.Content = App.GetString("Carousel_P6_GitHub");
+        CarouselSkipButton.Text = App.GetString("Carousel_Skip");
+        UpdateCarouselBottomBar();
+    }
+
+    private void UpdateCarouselBottomBar()
+    {
+        bool last = _carouselPage == CarouselPageList.Length - 1;
+        CarouselNextButton.Content = App.GetString(last ? "Carousel_Begin" : "Carousel_Next");
+        CarouselSkipButton.Visibility = last ? Visibility.Collapsed : Visibility.Visible;
     }
 
 
@@ -2292,60 +2394,278 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private Grid[] CarouselPageList = System.Array.Empty<Grid>();
 
-    private void BuildCarouselDots()
-    {
-        CarouselDots.Children.Clear();
-        for (int i = 0; i < CarouselPageList.Length; i++)
-        {
-            var idx = i;
 
+    private Microsoft.UI.Xaml.Media.TranslateTransform[]? _pageTrans;
+    private bool _pageAnimLock;
+    private bool _carouselMelting;
+    private Storyboard? _pageSb;
+    private Storyboard? _meltSb;
+    private Microsoft.UI.Composition.CompositionBrush? _carouselBlurBrush;
 
-            var dot = new Border
-            {
-                CornerRadius = new CornerRadius(5),
-                Height = 10,
-                Width = idx == 0 ? 26 : 10,
-                Background = idx == 0 ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush"),
-                Margin = new Thickness(5, 5, 5, 5),
-            };
-            dot.Tapped += (_, _) => SetCarouselPage(idx);
-            CarouselDots.Children.Add(dot);
-        }
-    }
-
-    private void SetCarouselPage(int index)
+    private void SetCarouselPage(int index, bool animate = true)
     {
 
 
         Array.Fill(_menuHoverLiftTarget, 0);
         Array.Fill(_menuHoverScaleTarget, 1.0);
         if (index < 0 || index >= CarouselPageList.Length) return;
+        if (_pageAnimLock || _carouselMelting) return;
+        int old = _carouselPage;
+        if (old == index) { UpdateCarouselBottomBar(); return; }
         _carouselPage = index;
         if (index == 2) _carouselDemoStart = CarouselClockSeconds();
-        for (int i = 0; i < CarouselPageList.Length; i++)
-            CarouselPageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
-
-        CarouselCloseButton.Visibility = index == CarouselPageList.Length - 1 ? Visibility.Visible : Visibility.Collapsed;
-
-        int dotIdx = 0;
-        foreach (var child in CarouselDots.Children)
+        UpdateCarouselBottomBar();
+        var oldPage = CarouselPageList[old];
+        var newPage = CarouselPageList[index];
+        if (!animate || !App.IsAnimationsEnabled || _pageTrans == null || CarouselPages.ActualWidth < 50)
         {
-            if (child is Border dot)
+            for (int i = 0; i < CarouselPageList.Length; i++)
             {
-                bool sel = dotIdx == index;
-                dot.Width = sel ? 26 : 10;
-                dot.Background = sel ? App.GetBrush("AppPrimaryButtonBrush") : App.GetBrush("AppBorderBrush");
-                dotIdx++;
+                CarouselPageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+                if (_pageTrans != null) _pageTrans[i].X = 0;
+                CarouselPageList[i].Opacity = 1;
             }
+            return;
         }
+
+        _pageAnimLock = true;
+        double w = CarouselPages.ActualWidth;
+        double dir = index > old ? 1.0 : -1.0;
+        oldPage.Visibility = Visibility.Visible;
+        newPage.Visibility = Visibility.Visible;
+        newPage.Opacity = 0;
+        _pageTrans[old].X = 0;
+        _pageTrans[index].X = dir * w;
+        var sb = new Storyboard();
+        _pageSb = sb;
+        var ox = new DoubleAnimation { From = 0, To = -dir * w, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = Motion.Accelerate() };
+        Storyboard.SetTarget(ox, _pageTrans[old]); Storyboard.SetTargetProperty(ox, "X");
+        var oo = new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(210) };
+        Storyboard.SetTarget(oo, oldPage); Storyboard.SetTargetProperty(oo, "Opacity");
+        var nx = new DoubleAnimation { From = dir * w, To = 0, Duration = TimeSpan.FromMilliseconds(360), EasingFunction = Motion.Decelerate(), BeginTime = TimeSpan.FromMilliseconds(30) };
+        Storyboard.SetTarget(nx, _pageTrans[index]); Storyboard.SetTargetProperty(nx, "X");
+        var no = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(200), BeginTime = TimeSpan.FromMilliseconds(30) };
+        Storyboard.SetTarget(no, newPage); Storyboard.SetTargetProperty(no, "Opacity");
+        sb.Children.Add(ox); sb.Children.Add(oo); sb.Children.Add(nx); sb.Children.Add(no);
+        sb.Completed += (_, _) =>
+        {
+            sb.Stop();
+            oldPage.Visibility = Visibility.Collapsed;
+            oldPage.Opacity = 1;
+            _pageTrans[old].X = 0;
+            newPage.Opacity = 1;
+            _pageTrans[index].X = 0;
+            _pageAnimLock = false;
+        };
+        sb.Begin();
     }
 
     private void WelcomeCarousel_WheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
+        if (_carouselMelting || _pageAnimLock) { e.Handled = true; return; }
         var delta = e.GetCurrentPoint(WelcomeCarousel).Properties.MouseWheelDelta;
         if (delta < 0) SetCarouselPage(_carouselPage + 1);
         else if (delta > 0) SetCarouselPage(_carouselPage - 1);
         e.Handled = true;
+    }
+
+
+
+    private void CarouselNext_Click(object sender, RoutedEventArgs e)
+    {
+        if (_carouselMelting || _pageAnimLock) return;
+        if (_carouselPage >= CarouselPageList.Length - 1) BeginUseCarouselMelt();
+        else SetCarouselPage(_carouselPage + 1);
+    }
+
+    private void CarouselSkip_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        if (_carouselMelting) return;
+        CloseWelcomeCarousel();
+    }
+
+
+
+
+
+
+
+    private void BeginUseCarouselMelt()
+    {
+        if (_carouselMelting) return;
+
+        _carouselMelting = true;
+        CarouselNextButton.IsEnabled = false;
+        StopCarouselFloat();
+        var brand = App.GetBrush("AppPrimaryButtonBrush").Color;
+        var pt = CarouselNextButton.TransformToVisual(WelcomeCarousel)
+                    .TransformPoint(new Windows.Foundation.Point(CarouselNextButton.ActualWidth / 2, CarouselNextButton.ActualHeight / 2));
+        PaintMeltBlob(CarouselMeltBlob0, pt, brand, 0.88f, 0.42f);
+        PaintMeltBlob(CarouselMeltBlob1, pt, brand, 0.62f, 0.28f);
+        PaintMeltBlob(CarouselMeltBlob2, pt, brand, 0.45f, 0.20f);
+
+        double far = MeltFarRadius(pt, WelcomeCarousel.ActualWidth, WelcomeCarousel.ActualHeight);
+
+
+        try
+        {
+            CarouselMeltLayer.Visibility = Visibility.Visible;
+
+
+            SpreadBlob(CarouselMeltBlob0, far * 1.55, 0, 1650);
+            SpreadBlob(CarouselMeltBlob1, far * 1.40, 180, 1850);
+            SpreadBlob(CarouselMeltBlob2, far * 1.75, 360, 2050);
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("CarouselMelt", "spread composition failed: " + ex.Message);
+            InstantCoverBlob(CarouselMeltBlob0, far * 1.30);
+            InstantCoverBlob(CarouselMeltBlob1, far * 1.18);
+            InstantCoverBlob(CarouselMeltBlob2, far * 1.45);
+            CarouselMeltLayer.Visibility = Visibility.Visible;
+        }
+
+
+        var sb = new Storyboard();
+        _meltSb = sb;
+        AddMeltDouble(sb, CarouselNextButton, "Opacity", 1, 0, 180, Motion.Accelerate());
+        AddMeltDouble(sb, CarouselMeltBlob0, "Opacity", 0, 1.0, 240, null, 0);
+        AddMeltDouble(sb, CarouselMeltBlob1, "Opacity", 0, 0.9, 240, null, 150);
+        AddMeltDouble(sb, CarouselMeltBlob2, "Opacity", 0, 0.8, 240, null, 300);
+
+        AddMeltDouble(sb, CarouselLayout, "Opacity", 1, 0, 700, Motion.Decelerate(), 200);
+
+        AddMeltDouble(sb, CarouselMeltLayer, "Opacity", 1, 0, 420, Motion.Standard(), 1800);
+        AddMeltDouble(sb, CarouselFullBg, "Opacity", 0.94, 0, 420, Motion.Standard(), 1800);
+        AddMeltDouble(sb, CarouselTint, "Opacity", 0.3, 0, 420, Motion.Standard(), 1800);
+        try
+        {
+            if (_carouselBlurBrush != null)
+            {
+                var blur = _carouselBlurBrush.Compositor.CreateScalarKeyFrameAnimation();
+                blur.DelayBehavior = Microsoft.UI.Composition.AnimationDelayBehavior.SetInitialValueBeforeDelay;
+                blur.DelayTime = TimeSpan.FromMilliseconds(1800);
+                blur.Duration = TimeSpan.FromMilliseconds(420);
+                blur.InsertKeyFrame(0f, 6f);
+                blur.InsertKeyFrame(1f, 0f);
+                _carouselBlurBrush.Properties.StartAnimation("Blur.BlurAmount", blur);
+            }
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("CarouselMelt", "blur reveal failed: " + ex.Message);
+        }
+        sb.Completed += (_, _) =>
+        {
+            sb.Stop();
+            FinishCarouselMelt();
+        };
+        sb.Begin();
+    }
+
+
+
+    private static void SpreadBlob(Microsoft.UI.Xaml.Shapes.Ellipse blob, double radiusTarget, int delayMs, int durationMs)
+    {
+        var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(blob);
+        visual.CenterPoint = new System.Numerics.Vector3(80, 80, 0);
+        var comp = visual.Compositor;
+        var scale = comp.CreateScalarKeyFrameAnimation();
+        scale.DelayBehavior = Microsoft.UI.Composition.AnimationDelayBehavior.SetInitialValueBeforeDelay;
+        scale.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+        scale.Duration = TimeSpan.FromMilliseconds(durationMs);
+        scale.InsertKeyFrame(0f, 0.35f);
+        scale.InsertKeyFrame(1f, (float)(radiusTarget / 80.0),
+            Microsoft.UI.Composition.CompositionEasingFunction.CreateCubicBezierEasingFunction(
+                comp, new System.Numerics.Vector2(0.33f, 0.6f), new System.Numerics.Vector2(0.6f, 1f)));
+        visual.StartAnimation("Scale.X", scale);
+        visual.StartAnimation("Scale.Y", scale);
+    }
+
+
+    private static void InstantCoverBlob(Microsoft.UI.Xaml.Shapes.Ellipse blob, double radiusTarget)
+    {
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(blob);
+            visual.StopAnimation("Scale.X");
+            visual.StopAnimation("Scale.Y");
+            visual.CenterPoint = new System.Numerics.Vector3(80, 80, 0);
+            visual.Scale = new System.Numerics.Vector3((float)(radiusTarget / 80.0), (float)(radiusTarget / 80.0), 1);
+        }
+        catch { }
+    }
+
+    private void FinishCarouselMelt()
+    {
+        ResetCarouselMeltLayer();
+        CloseWelcomeCarousel();
+    }
+
+
+
+    private void ResetCarouselMeltLayer()
+    {
+        _carouselMelting = false;
+        CarouselMeltLayer.Visibility = Visibility.Collapsed;
+        ResetMeltVisual(CarouselMeltBlob0);
+        ResetMeltVisual(CarouselMeltBlob1);
+        ResetMeltVisual(CarouselMeltBlob2);
+        CarouselMeltLayer.Opacity = 1;
+        CarouselFullBg.Opacity = 0.94;
+        CarouselTint.Opacity = 0.3;
+        CarouselLayout.Opacity = 1;
+        CarouselNextButton.Opacity = 1;
+        CarouselNextButton.IsEnabled = true;
+        if (_carouselBlurBrush != null)
+        {
+            _carouselBlurBrush.Properties.StopAnimation("Blur.BlurAmount");
+            _carouselBlurBrush.Properties.InsertScalar("Blur.BlurAmount", 6f);
+        }
+    }
+
+    private static void ResetMeltVisual(Microsoft.UI.Xaml.Shapes.Ellipse blob)
+    {
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(blob);
+            visual.StopAnimation("Scale.X");
+            visual.StopAnimation("Scale.Y");
+            visual.Scale = new System.Numerics.Vector3(1, 1, 1);
+        }
+        catch { }
+        blob.Opacity = 0;
+    }
+
+
+    private static double MeltFarRadius(Windows.Foundation.Point pt, double w, double h)
+        => Math.Sqrt(Math.Max(
+            Math.Max(pt.X * pt.X + pt.Y * pt.Y, (w - pt.X) * (w - pt.X) + pt.Y * pt.Y),
+            Math.Max(pt.X * pt.X + (h - pt.Y) * (h - pt.Y), (w - pt.X) * (w - pt.X) + (h - pt.Y) * (h - pt.Y))));
+
+    private static void PaintMeltBlob(Microsoft.UI.Xaml.Shapes.Ellipse blob, Windows.Foundation.Point center, Windows.UI.Color brand, float coreAlpha, float midAlpha)
+    {
+        blob.Margin = new Thickness(center.X - 80, center.Y - 80, 0, 0);
+        var fill = new Microsoft.UI.Xaml.Media.RadialGradientBrush();
+        fill.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = WithAlpha(brand, coreAlpha), Offset = 0 });
+        fill.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = WithAlpha(brand, midAlpha), Offset = 0.55 });
+        fill.GradientStops.Add(new Microsoft.UI.Xaml.Media.GradientStop { Color = WithAlpha(brand, 0f), Offset = 1 });
+        blob.Fill = fill;
+    }
+
+    private static Windows.UI.Color WithAlpha(Windows.UI.Color c, float alpha)
+        => Windows.UI.Color.FromArgb((byte)Math.Clamp((int)Math.Round(alpha * 255f), 0, 255), c.R, c.G, c.B);
+
+    private static void AddMeltDouble(Storyboard sb, DependencyObject target, string prop, double from, double to, int ms,
+        Microsoft.UI.Xaml.Media.Animation.EasingFunctionBase? ease = null, int beginMs = 0)
+    {
+
+        var da = new DoubleAnimation { From = from, To = to, Duration = TimeSpan.FromMilliseconds(ms) };
+        if (ease != null) da.EasingFunction = ease;
+        if (beginMs > 0) da.BeginTime = TimeSpan.FromMilliseconds(beginMs);
+        Storyboard.SetTarget(da, target);
+        Storyboard.SetTargetProperty(da, prop);
+        sb.Children.Add(da);
     }
 
     private void ShowMainContent()
@@ -2418,8 +2738,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _welcomeFading = true;
         WelcomeHintBreathing.Pause();
 
+
+        if (App.IsAnimationsEnabled && BeginWelcomeMelt(e.GetPosition((FrameworkElement)Content)))
+            return;
+        WelcomeExitSimple();
+    }
+
+
+    private void WelcomeExitSimple()
+    {
         var fadeOut = new Storyboard();
-        var oa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400) };
+        var oa = new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(400) };
         Storyboard.SetTarget(oa, WelcomeOverlay);
         Storyboard.SetTargetProperty(oa, "Opacity");
         fadeOut.Children.Add(oa);
@@ -2427,23 +2756,101 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         {
             _welcomeFading = false;
             WelcomeOverlay.Visibility = Visibility.Collapsed;
-
-            if (App.Store != null)
-            {
-                App.Store.Database.AppSettings.HasCompletedWelcome = true;
-                App.Store.SaveSync();
-            }
+            WelcomeExitCommit();
             ShowMainContent();
             MaybeShowWelcomeCarousel();
             NavBar.Opacity = 0;
             var fadeIn = new Storyboard();
-            var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var oi = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
             Storyboard.SetTarget(oi, NavBar);
             Storyboard.SetTargetProperty(oi, "Opacity");
             fadeIn.Children.Add(oi);
             fadeIn.Begin();
         };
         fadeOut.Begin();
+    }
+
+
+
+
+    private bool BeginWelcomeMelt(Windows.Foundation.Point pt)
+    {
+        var root = (FrameworkElement)Content;
+        if (root == null || root.ActualWidth < 50 || root.ActualHeight < 50) return false;
+        try
+        {
+            var brand = App.GetBrush("AppPrimaryButtonBrush").Color;
+            double far = MeltFarRadius(pt, root.ActualWidth, root.ActualHeight);
+            PaintMeltBlob(WelcomeMeltBlob0, pt, brand, 0.88f, 0.42f);
+            PaintMeltBlob(WelcomeMeltBlob1, pt, brand, 0.62f, 0.28f);
+            PaintMeltBlob(WelcomeMeltBlob2, pt, brand, 0.45f, 0.20f);
+            WelcomeMeltLayer.Visibility = Visibility.Visible;
+            SpreadBlob(WelcomeMeltBlob0, far * 1.55, 0, 1650);
+            SpreadBlob(WelcomeMeltBlob1, far * 1.40, 180, 1850);
+            SpreadBlob(WelcomeMeltBlob2, far * 1.75, 360, 2050);
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("WelcomeMelt", "spread failed: " + ex.Message);
+            return false;
+        }
+        NavigateToPage(FirstVisibleTab().Tab);
+        var sb = new Storyboard();
+
+        AddMeltDouble(sb, WelcomeMeltBlob0, "Opacity", 0, 1.0, 240, null, 0);
+        AddMeltDouble(sb, WelcomeMeltBlob1, "Opacity", 0, 0.9, 240, null, 180);
+        AddMeltDouble(sb, WelcomeMeltBlob2, "Opacity", 0, 0.8, 240, null, 360);
+
+        AddMeltDouble(sb, WelcomeLogo, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeTitleGroup, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeSubtitle, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeHint, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeMeltLayer, "Opacity", 1, 0, 300, Motion.Decelerate(), 1600);
+
+
+        var prep = DispatcherQueue.CreateTimer();
+        prep.Interval = TimeSpan.FromMilliseconds(1600);
+        prep.IsRepeating = false;
+        prep.Tick += (_, _) =>
+        {
+            prep.Stop();
+            WelcomeExitCommit();
+            WelcomeOverlay.Visibility = Visibility.Collapsed;
+            ShowMainContent();
+            MaybeShowWelcomeCarousel();
+            NavBar.Opacity = 0;
+            var fadeIn = new Storyboard();
+            var oi = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(oi, NavBar);
+            Storyboard.SetTargetProperty(oi, "Opacity");
+            fadeIn.Children.Add(oi);
+            fadeIn.Begin();
+        };
+        prep.Start();
+        sb.Completed += (_, _) =>
+        {
+            sb.Stop();
+            WelcomeMeltLayer.Visibility = Visibility.Collapsed;
+            WelcomeMeltLayer.Opacity = 1;
+            ResetMeltVisual(WelcomeMeltBlob0);
+            ResetMeltVisual(WelcomeMeltBlob1);
+            ResetMeltVisual(WelcomeMeltBlob2);
+            WelcomeLogo.Opacity = 1;
+            WelcomeTitleGroup.Opacity = 1;
+            WelcomeSubtitle.Opacity = 1;
+            WelcomeHint.Opacity = 1;
+
+        };
+        sb.Begin();
+        return true;
+    }
+
+
+    private void WelcomeExitCommit()
+    {
+        if (App.Store == null) return;
+        App.Store.Database.AppSettings.HasCompletedWelcome = true;
+        App.Store.SaveSync();
     }
 
     private void NavButton_Click(object sender, RoutedEventArgs e)
