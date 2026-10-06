@@ -582,7 +582,7 @@ Title + collapse / audit log / configure / master switch buttons + the authoriza
 
 ## 17. Connectivity Era (Snapshot, Sync, Self-Hosting)
 
-The connected era spans three versions: Novara Snapshot (7.0) → cross-device sync (8.0) → self-hosting productization (9.0). The connected-era contract (`Novara Sync 契约.md`, shipped in this repository) is the single source for keys, envelope, and field whitelist.
+The connected era spans three versions: Novara Snapshot (7.0) → cross-device sync (8.0) → self-hosting productization (9.0). The connected-era contract is the single source for keys, envelope, and field whitelist.
 
 ### 17.1 Novara Snapshot (7.0)
 - Exports selected sections as one self-contained, always-encrypted HTML viewer, readable on any device.

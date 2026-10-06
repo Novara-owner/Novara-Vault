@@ -25,7 +25,6 @@ Tools/
 deploy/
 
 
-
 *.md
 *.slnx
 app.manifest

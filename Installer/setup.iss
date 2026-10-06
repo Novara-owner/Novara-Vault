@@ -15,7 +15,7 @@
 
 #define ClientFileVersion GetVersionNumbersString(PublishDir + "\Novara.dll")
 #if ClientFileVersion == ""
-  #error PublishDir has no Novara.dll - run the publish step (see 工程设计 5.5) first.
+  #error PublishDir has no Novara.dll - run the publish step first.
 #endif
 #if Copy(ClientFileVersion, 1, Len(MyAppVersion)) != MyAppVersion
   #error PublishDir holds a stale client: Novara.dll version differs from MyAppVersion. Empty Novara_Publish and re-publish from scratch - never build on the previous release tree.
