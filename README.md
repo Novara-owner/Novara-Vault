@@ -105,7 +105,7 @@ Send any note or todo card to your desktop with one click. A dedicated lightweig
 
 - **Drag & resize** — unlock a note to move it and resize it from any edge
 - **Lock & pin** — fix position, stay on top, survive Win+D
-- **Color palette** — a self-contained 20-color palette with per-note color and size persistence, and context menus that follow the main app
+- **Color palette** — a self-contained 24-color palette with per-note color and size persistence, and context menus that follow the main app
 - **Theme & language sync** — notes follow the app's theme and language instantly
 - **Edit on desktop** — right-click a note and Novara opens its editor automatically
 - **Bidirectional todo sync** — checking a todo on the desktop writes back to the main app, which stays the single source of truth

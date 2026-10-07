@@ -20,7 +20,7 @@
 9. [路径备份页（FilePathPage）](#9-路径备份页filepathpage)
 10. [计划页（PlanPage）](#10-计划页planpage)
 11. [记录页与编辑器（DiaryPage / DiaryEditorPage）](#11-记录页与编辑器diarypage--diaryeditorpage)
-12. [设置页（SettingsPage）](#12-设置页settingspage)
+12. [设置页与工具页（SettingsPage / ToolsPage）](#12-设置页与工具页settingspage--toolspage)
 13. [全局搜索（SearchPage）](#13-全局搜索searchpage)
 14. [回收站（TrashPage）](#14-回收站trashpage)
 15. [桌面便签（StickNoteHost）](#15-桌面便签sticknotehost)
@@ -29,7 +29,7 @@
 18. [主题与国际化](#18-主题与国际化)
 19. [提醒系统](#19-提醒系统)
 20. [导入与导出](#20-导入与导出)
-21. [API 连通性检测](#21-api-连通性检测)
+21. [API 三入口检测](#21-api-三入口检测)
 22. [窗口、托盘与单实例](#22-窗口托盘与单实例)
 23. [底层服务详解](#23-底层服务详解)
 24. [构建与发布](#24-构建与发布)
@@ -58,7 +58,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 - **可选加密**：AES-256-GCM + PBKDF2，隐私锁开启时整库加密。
 - **隐私锁**：可选，锁屏密码 + 5 次失败锁定时长递增；支持 Windows Hello 解锁。
 - **五语言**：中文简体 / 中文繁体 / English / 한국어 / 日本語。
-- **主题**：浅色 / 深色 / 跟随系统。
+- **主题**：浅色 / 深色 / 跟随系统 + 类纸档（四款纸色，自 9.0 起）。
 - **桌面便签**：独立进程 `StickNoteHost`，主程序「发送到桌面」联动。
 - **MCP 接口**：对外提供 14 个工具的本地 MCP 服务，供 AI Agent 读写数据。
 - **单文件分发**：.NET 自包含 + Inno Setup 安装向导。
@@ -77,7 +77,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 | 存储 | 单文件 JSON（`NovaraStore`），可选 AES-GCM 加密 |
 | 桌面便签 | 独立进程 `StickNoteHost`（FileSystemWatcher 同步） |
 | MCP | `NovaraMCP.exe`（stdio 前端）+ 命名管道 |
-| 同步服务端 | ASP.NET Core 8 minimal API（`Novara.Server`，单文件自包含；SQLite + 文件系统存 blob） |
+| 同步服务端 | ASP.NET Core 10 minimal API（`Novara.Server`，单文件自包含；SQLite + 文件系统存 blob） |
 | HTML 解析 / 净化 | AngleSharp |
 | 测试 | xUnit（`Novara.Tests`，引用纯逻辑库 `Novara.Core`） |
 | 构建 | MSBuild / `dotnet publish` 自包含；安装包 Inno Setup |
@@ -104,7 +104,7 @@ Novara/
 - `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
 - 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
 - `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者自 9.0 起面向 `net10.0`，无 WinUI 依赖；桌面端与 `Novara.Core` 保持 `net8.0`。
-- `Pages/` 是九大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage。
+- `Pages/` 是十大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage。
 
 **核心解耦方式**：
 
@@ -320,7 +320,7 @@ Novara/
 ### 9.1 功能
 
 - 路径卡片：名称 / 路径 / 备注三行。
-- 路径有效性检测：绿色（`#4CAF50`）/ 红色（`#FF4545`）边框。
+- 路径有效性检测：有效 = 品牌色（深浅主题 `#7276FF`，类纸主题随款）/ 失效 = 主题危险红 `AppDangerTextBrush`。
 - 检测五触发：创建 / 编辑验证、30 分钟定时、启动检测、空白区全量检测、单卡右键检测。
 - 复制路径 Toast「已复制」2 秒消失；一键打开 `explorer /select` 高亮。
 - 新建 / 编辑弹窗有「选择文件 / 选择文件夹」双按钮（Picker，`InitializeWithWindow` 绑主窗口句柄）。
@@ -368,7 +368,7 @@ Novara/
 
 ### 10.3 时间提醒
 
-待办 / 便签卡右键「设置提醒」→ 卡片边框渐变（绿→红 HSV 插值）+ 系统级提醒 + Toast + 桌面提醒卡（详见 18）。
+待办 / 便签卡右键「设置提醒」→ 卡片边框渐变（绿→红 HSV 插值）+ 系统级提醒 + Toast + 桌面提醒卡（详见 19）。
 
 ### 10.4 筛选与排序
 
@@ -404,11 +404,11 @@ Novara/
 **编辑器分流**（都是 WebView2 承载）：
 
 - `format=html` → WebView2 + Tiptap 富文本编辑器（一字不动）。
-- `format=markdown` → WebView2 + markdown-it 渲染（`html:false` 防 XSS），GitHub 式 Write ↔ Preview 切换。
+- `format=markdown` → WebView2 + markdown-it 渲染（`html:false` 防 XSS），GitHub 式 Write / Preview 两种视图（两个独立切换钮）。
 
-**HTML 富文本工具栏**：加粗 / 斜体 / 下划线 / 删除线 / 颜色 / 对齐 / 标题 / 列表 / 引用 / 链接 / 代码块 / 图片插入等（胶囊悬浮工具栏）。
+**HTML 富文本工具栏**（11 按钮）：撤销 / 重做 / 加粗 / 斜体 / 下划线 / 文字颜色 / 对齐 / 代码块 / 水平分隔线 / 插入图片 / 收起（胶囊悬浮工具栏）。
 
-**MD 工具栏**（16 按钮）：标题 H1-H4 / 粗体 / 斜体 / 列表 / 引用 / 链接 / 代码块 / 行内代码 / 分隔线 / 表格 / 清除格式 / 撤销 / 重做 + Write/Preview 切换。
+**MD 工具栏**（17 按钮：16 命令 + 收起）：撤销 / 重做 / 加粗 / 斜体 / 删除线 / 行内代码 / 标题（单钮 + 弹层选择器，含 H1–H4）/ 无序列表 / 有序列表 / 引用 / 链接 / 图片 / 代码块 / 水平分隔线 / 表格 / 清除格式 / 收起。
 
 **安全**：
 
@@ -425,14 +425,14 @@ Novara/
 
 ---
 
-## 12. 设置页（SettingsPage）
+## 12. 设置页与工具页（SettingsPage / ToolsPage）
 
-设置页是卡片式布局，主要卡片：
+设置面分为两个卡片式页面：设置页（偏好项）与工具页（数据 / 互联 / 维护）。
+
+**设置页卡片**：
 
 | 卡片 | 功能 |
 |------|------|
-| 数据概览 | 条目 / 分组 / 待办完成率 / 存储占用 + 数据库健康指标（加密状态 / 最近备份 / 快照份数 / 完整性 / 孤儿引用）（默认关，开启后默认展开） |
-| MCP 接口 | 总开关 + 逐客户端权限矩阵 + 审计日志查看 + 配置（详见 16） |
 | 显示模式（主题） | 浅色 / 深色 / 跟随系统（存储 + 重启闭环） |
 | 语言 | 五语言切换（存储 + 重启闭环） |
 | 自定义选项卡 | 勾选 / 取消四标签页显示（至少保留 1 个） |
@@ -441,11 +441,26 @@ Novara/
 | 窗口退出行为 | 直接退出 / 托盘驻留 |
 | 隐私访问锁 | 设密 / 改密 / 关锁 / 警告四弹窗 |
 | 自动锁定 | 空闲计时（5 / 10 / 30 / 60 分钟 / 从不）+ Windows 锁屏联动 + 立即锁定热键 |
+| 快速捕获 | 全局热键（Ctrl+Shift+N）+ 启用开关 |
+| 动效 | 动效开关（确认弹窗 + 保存 + 重启） |
+| 边缘菜单 | 边缘菜单停靠边侧 |
+| 欢迎页展示 | 每次启动都展示欢迎页 |
+| 检查更新 | 用户点击触发的更新检查（比对 `latest.json` 清单） |
+| Novara 官网 | 打开 novara.xin |
+
+**工具页卡片**：
+
+| 卡片 | 功能 |
+|------|------|
+| 数据概览 | 条目 / 分组 / 待办完成率 / 存储占用 + 数据库健康指标（加密状态 / 最近备份 / 快照份数 / 完整性 / 孤儿引用）（默认关，开启后默认展开） |
+| MCP 接口 | 总开关 + 逐客户端权限矩阵 + 审计日志查看 + 配置（详见 16） |
+| 互联同步 | 跨设备配对 / 立即同步 / 设备中心 / 本地同步审计（详见 17.2） |
+| 安全快照 | 导出加密自包含 HTML 查看器（详见 17.1） |
+| 工作空间 | 管理工作空间 |
 | 网络活动 | 本地活动流水；发起 API 检测调用时显示目标端点 |
 | 数据备份 | 快照 / 恢复 / 自动备份 / 加密 `.novaenc` 导出与导入 |
 | 数据归档与还原 | 导入 / 导出（原生 / CSV / MD / HTML / PDF） |
 | 资料库重置 | 高危确认 → 删三文件重建 |
-| 官网 | 打开 novara.xin |
 
 **隐私锁四弹窗**：
 
@@ -609,7 +624,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ## 18. 主题与国际化
 
-### 18. 主题
+### 18.1 主题
 
 - 主题档位：**跟随系统 / 深色 / 浅色**，另有**「类纸」档（9.0 起）**四款纸色——**Cream（米黄）/ Almond（淡杏）/ Kraft（牛皮）/ Newsprint（冷灰）**；全新安装默认淡杏（9.0 起）。
 - 类纸实现：锁定浅色布局 + 启动时把 Paper 色表改写进内存 Light 槽（`Themes/PaperTheme.cs`，`App.xaml` 原值零改动）。存储字面量为中文「类纸 · 〈款名〉」（属既有中文字面量存储族）；读到未知字面量的旧版本按 switch default 安全降级为跟随系统。明文 `paper.dat` 提示让锁屏在解锁前即可取纸色。同一实现可扩展 N 款（色表 = 数据）。
@@ -621,7 +636,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 - 弹窗按钮只三种：取消（描边）/ 确认蓝 / 确认红。
 - 跟随系统实时联动：`UISettings.ColorValuesChanged` + 500ms 去抖 + UiQueue 封送。
 
-### 18. 国际化（i18n）
+### 18.2 国际化（i18n）
 
 - **C# 静态字典 `AppResources.cs`**（5 语言 5 本字典，Key 全对齐）。
 - `x:Bind` 静态方法绑定；MainWindow（不支持 x:Bind）用中文原文 + `Tag="Key"` 运行时 ApplyLocalizedTexts。
@@ -718,10 +733,10 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 - **NovaraStore**：`Load` / `LoadWithPassword` / `SaveAsync`（SemaphoreSlim 串行 + 快照合并 + 300ms 去抖）/ `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt`（失败回滚）/ `ExportBackup`（恒明文 + 软删过滤）/ `ImportBackup`（校验 + 回滚 + 归一化 + Id 去重）/ `ResetDatabase`；写盘 tmp+Move 原子替换 + Flush(true)。
 - **CryptoService**：`Encrypt`（v1 CBC）/ `Decrypt` + `EncryptGcm` / `DecryptGcm`（v2/v3 GCM）；格式 v3 起为 PBKDF2-SHA256 3,000,000 次迭代。另有 `ExportBackup`（明文）、`ExportBackupEncrypted`（`.novaenc` v4 容器）与 GZip 解压炸弹防护。
 - **PasswordService**：`security.dat` 双盐 + 版本化密码哈希（V1 加盐 SHA256 → V2 PBKDF2-SHA256 3M）固定时间比较；`lockout.dat`（FailCount/Until/Enabled）；`SetBaseDir` 路径注入。
-- **ApiProbeService**：入口一，厂商识别 + 协议矩阵 + 错误分类 + 脱敏（见 20）。
+- **ApiProbeService**：入口一，厂商识别 + 协议矩阵 + 错误分类 + 脱敏（见 21）。
 - **ApiChatClient**：共享聊天客户端（OpenAI/Anthropic/Gemini 三协议 + 流式 + usage/TTFT + chat 端点推导）。
-- **ApiDiagnoseService**：入口二，可达性 + 余额推断 + 元数据 + 延迟（见 20）。
-- **RelayProbeService**：入口三，8 探针 + 加权评分 + 四级判定 + 抗作弊（见 20）。
+- **ApiDiagnoseService**：入口二，可达性 + 余额推断 + 元数据 + 延迟（见 21）。
+- **RelayProbeService**：入口三，8 探针 + 加权评分 + 四级判定 + 抗作弊（见 21）。
 - **ProbeDataSetLoader**：探针数据集加载 + 校验 + 内置兜底。
 - **McpLogic**：14 工具纯逻辑（token 鉴权 / 脱敏 / CRUD），可单测。
 - **CsvImportExportService**：导出 + 解析（自动识别三种方言表头 + 按类型模板建字段）。
@@ -818,9 +833,17 @@ Novara/
 │   ├── SettingsPage          设置页
 │   ├── LockScreenPage        锁屏页
 │   ├── SearchPage            全局搜索页
-│   └── TrashPage             回收站页
+│   ├── TrashPage             回收站页
+│   └── ToolsPage             工具页（数据概览 / MCP / 同步 / 快照 / 备份 / 归档 / 重置）
 ├── StickNoteHost/             桌面便签独立进程
 ├── NovaraMCP/                 MCP stdio 前端（单文件发布）
+├── Novara.Server/             自托管同步服务端宿主（ASP.NET Core，单文件发布）
+├── Novara.Sync.Server/        同步服务端逻辑库
+├── Novara.Web/                网页阅读器/编辑器（托管于 /web）
+├── SnapshotViewer/            快照 HTML 查看器源码（index.html + viewer.js/css）
+├── deploy/                    部署文件（Docker compose + Caddy）
+├── docs/                      公开文档
+├── .github/                   GitHub 元数据（issue / PR 模板）
 ├── DiaryEditorJs/             WebView2 编辑器 bundle（Tiptap + markdown-it）
 ├── Installer/                 Inno Setup 安装脚本
 └── Assets/                    图标（ico / png / svg logo）
@@ -846,9 +869,9 @@ Novara/
 | 8.0 | 2026-09-19 | **跨设备同步** —— 经由随安装包自带的自托管服务端做端到端加密同步（带版本号的密文存储、token 鉴权、设备注册与撤销）；网页阅读器支持受限编辑并重加密上传；库级冲突处理且保留被覆盖的那一版；设备中心与本地同步审计；全仓多轮发布前核验 |
 | 9.0 | 2026-09-28 | **一条命令自托管** —— 官方 Docker 镜像、compose + Caddy 自动 HTTPS、运维命令行（space list/show/delete/rotate-secret）、服务端运行时升至 .NET 10、桌面便签重做、应用内检查更新；两轮发布前核验 |
 | 9.1 | 2026-09-29 | 热修复 —— TOTP 行冻结根因为 WinUI 3 托管壳 GC 暗坑（注册表回强引用）、TOTP 进度条丝滑化、拖拽顺滑化、冷静期确认键首帧闪红、设置页品牌色状态 |
+| 9.2 | 2026-09-30 | 热修复 —— 关闭程序后提醒照常触发（任务计划程序 COM、区域无关开始边界、关闭电池门、任务写显式用户 SD）；提醒边框品牌蓝→暗红每秒平滑渐变；临期卡上移置顶区下方；到期弹窗呼吸边框；危险红单一来源类纸按款柔化；检查更新按钮提醒点 |
 | 9.3 | 2026-10-07 | 热修复 —— 首启向导重做为全屏七页导览（墨滴终章；欢迎页从点击位置化开）；日记/文档编辑器失败诊断（成因分派、可复制细节、重试、获取运行时链接、全链路日志），WebView2 运行时缺失或损坏不再静默失败；编辑器初始化加固（环境对象缓存 + 防重入旗标，根除「already initialized with a different CoreWebView2Environment」报错）；非中文系统下向导混语修复 |
 | 9.4 | 2026-10-08 | 性能与加固 —— PBKDF2 派生密钥缓存（加密库保存从约 330 ms 降到毫秒以下）；移除三条中低端机型热路径（逐卡读注册表、每秒画刷重建、密码操作移出 UI 线程）；密码弹窗在飞全程锁定；提醒边框拖拽后保持；自托管服务端写路径栅栏防跨进程删除竞态 + CLI 修复（接受 `-` 开头空间 id、退出码契约、误拼子命令拒绝）；compose 默认标签回到 latest |
-| 9.2 | 2026-09-30 | 热修复 —— 关闭程序后提醒照常触发（任务计划程序 COM、区域无关开始边界、关闭电池门、任务写显式用户 SD）；提醒边框品牌蓝→暗红每秒平滑渐变；临期卡上移置顶区下方；到期弹窗呼吸边框；危险红单一来源类纸按款柔化；检查更新按钮提醒点 |
 
 ---
 

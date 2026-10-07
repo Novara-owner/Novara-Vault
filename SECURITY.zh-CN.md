@@ -1,4 +1,4 @@
-# Novara 安全说明
+﻿# Novara 安全说明
 
 <p align="center"><a href="SECURITY.md">English</a> · <strong>简体中文</strong></p>
 

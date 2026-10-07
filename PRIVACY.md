@@ -5,8 +5,8 @@
 ---
 
 **Effective date:** 2026-08-14
-**Last updated:** 2026-09-29
-**Applies to:** Novara 9.1 (and, where the behavior described below already existed, earlier versions)
+**Last updated:** 2026-10-08
+**Applies to:** Novara 9.4 (and, where the behavior described below already existed, earlier versions)
 
 > This policy describes the Novara **desktop application** for Windows. The official website (novara.xin) and the GitHub repository are separate properties; this document focuses on the software you install and run on your machine.
 

@@ -1,4 +1,6 @@
-# 校验你的下载
+﻿# 校验你的下载
+
+<p align="center"><a href="VERIFYING.md">English</a> · <strong>简体中文</strong></p>
 
 本页的每一句话都不需要你「相信我们」——每个发布版本都附带让你自行核验的材料。
 

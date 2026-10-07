@@ -79,7 +79,7 @@ Each mechanism, what it is actually for, and what it does not cover:
 | Recycle bin and rolling local backups | Accidental deletion | Deliberate destruction of the machine |
 | `.novaenc` v4 container, a mandatory password on every export, credentials stripped before sealing | Plaintext leaving the machine; snapshot leakage (A3) | A weak export password; a copied file with a guessable password |
 | Server stores ciphertext only, key separation, device tokens kept as SHA-256 and compared in constant time with rate limiting | A curious or compromised server (A4) | A deployment without TLS; the server's own availability |
-| Browser reader keeps plaintext in memory only: nothing persisted, clipboard cleared after 30 seconds, memory cleared after 5 minutes idle | Data lingering on a shared browser | A compromised browser or extension |
+| Browser reader keeps decrypted data in JS memory only; nothing is persisted to the browser | Data lingering on a shared browser | A compromised browser or extension |
 | MCP off by default, unlock gate, per-client approval, permission matrix, deletion master switch, field redaction, local audit log | An over-broad or curious agent client (A5) | A vendor's handling of data a client legitimately reads |
 | Import and editor sanitization against a strict whitelist (AngleSharp), no evaluation of untrusted input | Injection through imported content | Malicious content rendered inside an already-compromised renderer |
 | No listening ports in the desktop app, outbound traffic only on paths you trigger, a local-only sticky-note helper | Remote attack surface (A4) | Your own decisions about what to connect |

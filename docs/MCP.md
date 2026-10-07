@@ -103,7 +103,7 @@ Defense-in-depth, enabled in Settings → MCP card:
 4. **Per-client approval & permission matrix** — every process needs your explicit first approval; each approved client then holds its own 20-bit permission grid (read / create / update / delete × five data types). A mixed (all-types) listing never leaks partitions the client cannot read.
 5. **Deletion master switch** — the delete column requires both the client's own bit and a global toggle, AND-ed together.
 6. **Audit log** — every call, including denied attempts, is recorded locally: process, time, tool, target, result. Fields are length-capped and credential-shaped values are masked.
-7. **Sensitive-field redaction** — fields whose label matches `密码`, `password`, `密钥`, `secret`, `token`, `key`, `api key`, `apikey`, `api_key`, or `passwd` are returned as `****`, excluded from search results, and protected against relabeling-based extraction.
+7. **Sensitive-field redaction** — fields whose label matches `密码`, `邮箱密码`, `CVV`, `API Key`, `卡号`, `证件号`, `password`, `passwd`, `apikey`, `api_key`, `api key`, `密钥`, `secret`, `token`, `key`, `cvv`, or `totp` are returned as `****`, excluded from search results, and protected against relabeling-based extraction.
 
 > **Data boundary:** `NovaraMCP.exe` never transmits data anywhere. If you connect a **cloud-hosted** AI client, the AI client itself may send data the agent reads to the AI provider you chose — that is controlled by the AI client, not by Novara. See the [Privacy Policy](../PRIVACY.md) for details.
 

@@ -1,4 +1,4 @@
-# Novara Security Policy
+﻿# Novara Security Policy
 
 <p align="center"><strong>English</strong> · <a href="SECURITY.zh-CN.md">简体中文</a></p>
 

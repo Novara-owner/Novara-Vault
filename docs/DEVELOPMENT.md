@@ -20,7 +20,7 @@
 9. [File Path Backup Page (FilePathPage)](#9-file-path-backup-page-filepathpage)
 10. [Plan Page (PlanPage)](#10-plan-page-planpage)
 11. [Records Page & Editor (DiaryPage / DiaryEditorPage)](#11-records-page--editor-diarypage--diaryeditorpage)
-12. [Settings Page (SettingsPage)](#12-settings-page-settingspage)
+12. [Settings & Tools Pages (SettingsPage / ToolsPage)](#12-settings--tools-pages-settingspage--toolspage)
 13. [Global Search (SearchPage)](#13-global-search-searchpage)
 14. [Recycle Bin (TrashPage)](#14-recycle-bin-trashpage)
 15. [Desktop Sticky Notes (StickNoteHost)](#15-desktop-sticky-notes-sticknotehost)
@@ -29,7 +29,7 @@
 18. [Theme & Internationalization](#18-theme--internationalization)
 19. [Reminder System](#19-reminder-system)
 20. [Import & Export](#20-import--export)
-21. [API Connectivity Detection](#21-api-connectivity-detection)
+21. [API Three-Tier Detection](#21-api-three-tier-detection)
 22. [Window, Tray & Single Instance](#22-window-tray--single-instance)
 23. [Core Services in Depth](#23-core-services-in-depth)
 24. [Build & Release](#24-build--release)
@@ -58,7 +58,7 @@ Core design principles:
 - **Optional encryption**: AES-256-GCM + PBKDF2; the whole database is encrypted when the privacy lock is on.
 - **Privacy lock**: optional; lock-screen password + lockout duration that increases after 5 failures; supports Windows Hello unlock.
 - **Five languages**: Simplified Chinese / Traditional Chinese / English / 한국어 / 日本語.
-- **Theme**: light / dark / follow system.
+- **Theme**: light / dark / follow system + Paper tier (four paper color schemes, since 9.0).
 - **Desktop sticky note**: a standalone `StickNoteHost` process, linked with the main app's "Send to desktop".
 - **MCP interface**: exposes a local MCP service with 14 tools for AI agents to read and write data.
 - **Single-file distribution**: .NET self-contained + Inno Setup installer.
@@ -77,7 +77,7 @@ Core design principles:
 | Storage | single-file JSON (`NovaraStore`), optional AES-GCM encryption |
 | Desktop sticky note | standalone `StickNoteHost` process (FileSystemWatcher sync) |
 | MCP | `NovaraMCP.exe` (stdio front end) + named pipe |
-| Sync server | ASP.NET Core 8 minimal API (`Novara.Server`, single-file self-contained; SQLite + filesystem blobs) |
+| Sync server | ASP.NET Core 10 minimal API (`Novara.Server`, single-file self-contained; SQLite + filesystem blobs) |
 | HTML parsing / sanitization | AngleSharp |
 | Testing | xUnit (`Novara.Tests`, referencing the pure-logic library `Novara.Core`) |
 | Build | MSBuild / `dotnet publish` self-contained; Inno Setup installer |
@@ -104,7 +104,7 @@ Novara/
 - `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
 - The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
 - `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net10.0` (since 9.0) and have no WinUI dependency; the desktop side and `Novara.Core` remain on `net8.0`.
-- `Pages/` contains nine pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage.
+- `Pages/` contains ten pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage.
 
 **Core decoupling**:
 
@@ -320,7 +320,7 @@ Tab 2, registers local file / folder paths.
 ### 9.1 Features
 
 - Path card: name / path / note three lines.
-- Path validity detection: green (`#4CAF50`) / red (`#FF4545`) border.
+- Path validity detection: valid = brand color (deep / light theme `#7276FF`, paper themes follow their scheme) / invalid = the theme's danger red `AppDangerTextBrush`.
 - Five detection triggers: create / edit validation, 30-minute timer, startup detection, full scan from the empty area, single-card right-click detection.
 - Copy path Toast "Copied" disappears in 2 seconds; one-click open with `explorer /select` to highlight.
 - New / edit dialog has "Select file / Select folder" dual buttons (Picker, `InitializeWithWindow` binds the main window handle).
@@ -368,7 +368,7 @@ Tab 3, todo + note cards.
 
 ### 10.3 Timed reminder
 
-Todo / note card right-click "Set reminder" → card border gradient (green→red HSV interpolation) + system-level reminder + Toast + desktop reminder card (see 18).
+Todo / note card right-click "Set reminder" → card border gradient (green→red HSV interpolation) + system-level reminder + Toast + desktop reminder card (see 19).
 
 ### 10.4 Filtering & sorting
 
@@ -401,14 +401,14 @@ Tab 4 ("Records"), hosting "HTML rich-text diary" + "Markdown document" dual for
 
 ### 11.2 Editor (DiaryEditorPage)
 
-**Editor split** (both hosted by WebView2):
+**Editor routing** (both hosted by WebView2):
 
 - `format=html` → WebView2 + Tiptap rich-text editor (verbatim, untouched).
-- `format=markdown` → WebView2 + markdown-it rendering (`html:false` against XSS), GitHub-style Write ↔ Preview toggle.
+- `format=markdown` → WebView2 + markdown-it rendering (`html:false` against XSS), GitHub-style Write / Preview views (two independent switch buttons).
 
-**HTML rich-text toolbar**: bold / italic / underline / strikethrough / color / alignment / heading / list / quote / link / code block / image insertion, etc. (floating capsule toolbar).
+**HTML rich-text toolbar** (11 buttons): undo / redo / bold / italic / underline / text color / alignment / code block / horizontal rule / insert image / collapse (floating capsule toolbar).
 
-**MD toolbar** (16 buttons): headings H1-H4 / bold / italic / list / quote / link / code block / inline code / divider / table / clear formatting / undo / redo + Write/Preview toggle.
+**MD toolbar** (17 buttons: 16 commands + collapse): undo / redo / bold / italic / strikethrough / inline code / heading (a single button with a popup selector, H1–H4) / bullet list / ordered list / quote / link / image / code block / divider / table / clear formatting / collapse.
 
 **Security**:
 
@@ -425,14 +425,14 @@ Tab 4 ("Records"), hosting "HTML rich-text diary" + "Markdown document" dual for
 
 ---
 
-## 12. Settings Page (SettingsPage)
+## 12. Settings & Tools Pages (SettingsPage / ToolsPage)
 
-The settings page is a card-based layout, with these main cards:
+The settings surface is divided across two card-based pages: the settings page (preferences) and the tools page (data / connectivity / maintenance).
+
+**Settings page cards**:
 
 | Card | Function |
 |------|------|
-| Data overview | entries / groups / todo completion rate / storage usage + database health indicators (encryption status, latest backup, snapshot count, integrity, orphan references) (off by default; default-expanded once enabled) |
-| MCP interface | master switch + per-client permission matrices + audit log viewer + configuration (see 16) |
 | Display mode (theme) | light / dark / follow system (storage + restart loop) |
 | Language | five-language switch (storage + restart loop) |
 | Custom tabs | check/uncheck the four tabs (keep at least 1) |
@@ -441,11 +441,26 @@ The settings page is a card-based layout, with these main cards:
 | Window exit behavior | exit directly / tray-resident |
 | Privacy lock | set password / change password / turn off lock / warning — four dialogs |
 | Auto-lock | idle timeout (5 / 10 / 30 / 60 minutes / never) + lock on Windows session lock + Lock Now hotkey |
+| Quick Capture | global hotkey (Ctrl+Shift+N) + enable switch |
+| Animations | animation toggle (confirm dialog + save + restart) |
+| Edge menu | edge-menu side |
+| Show welcome page | show the welcome page on every launch |
+| Check for updates | user-clicked update check against the `latest.json` manifest |
+| Official site | open novara.xin |
+
+**Tools page cards**:
+
+| Card | Function |
+|------|------|
+| Data overview | entries / groups / todo completion rate / storage usage + database health indicators (encryption status, latest backup, snapshot count, integrity, orphan references) (off by default; default-expanded once enabled) |
+| MCP interface | master switch + per-client permission matrices + audit log viewer + configuration (see 16) |
+| Sync | cross-device pairing / sync now / device center / local sync audit (see 17.2) |
+| Snapshot | export the encrypted self-contained HTML viewer (see 17.1) |
+| Workspaces | manage workspaces |
 | Network activity | local-activity trail; shows the endpoint whenever an API-detection call goes out |
 | Data backup | snapshot / restore / auto backup / encrypted `.novaenc` export & import |
 | Data archive & restore | import / export (native / CSV / MD / HTML / PDF) |
 | Reset vault | high-risk confirmation → delete three files & rebuild |
-| Official site | open novara.xin |
 
 **Privacy lock four dialogs**:
 
@@ -609,7 +624,7 @@ The connected era spans three versions: Novara Snapshot (7.0) → cross-device s
 
 ## 18. Theme & Internationalization
 
-### 18. Theme
+### 18.1 Theme
 
 - Theme tiers: **follow system / dark / light**, plus the **Paper tier (since 9.0)** with four paper color schemes — **Cream / Almond / Kraft / Newsprint**; fresh installs default to Almond.
 - Paper implementation: locks the light layout and rewrites the Paper palette into the in-memory Light theme dictionary at startup (`Themes/PaperTheme.cs`, `App.xaml` untouched). The stored literal is the Chinese string 类纸 · 〈款名〉 (inside the existing Chinese-literal storage family); a version that reads an unknown literal falls back safely to follow-system. A plaintext `paper.dat` hint carries paper colors to the pre-unlock lock screen. The implementation scales to N schemes (palette = data).
@@ -621,7 +636,7 @@ The connected era spans three versions: Novara Snapshot (7.0) → cross-device s
 - Dialog buttons come in only three kinds: cancel (outline) / confirm blue / confirm red.
 - Follow-system real-time linkage: `UISettings.ColorValuesChanged` + 500ms debounce + UiQueue marshal.
 
-### 18. Internationalization (i18n)
+### 18.2 Internationalization (i18n)
 
 - **C# static dictionary `AppResources.cs`** (5 languages, 5 dictionaries, keys fully aligned).
 - `x:Bind` static method binding; MainWindow (does not support x:Bind) uses the Chinese original text + `Tag="Key"` runtime ApplyLocalizedTexts.
@@ -718,10 +733,10 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 - **NovaraStore**: `Load` / `LoadWithPassword` / `SaveAsync` (SemaphoreSlim serialization + snapshot merge + 300ms debounce) / `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt` (rollback on failure) / `ExportBackup` (always plaintext + soft-delete filter) / `ImportBackup` (validate + rollback + normalize + Id dedup) / `ResetDatabase`; writes use tmp+Move atomic replacement + Flush(true).
 - **CryptoService**: `Encrypt` (v1 CBC) / `Decrypt` + `EncryptGcm` / `DecryptGcm` (v2/v3 GCM); PBKDF2-SHA256 3,000,000 iterations since format v3. Also `ExportBackup` (plaintext), `ExportBackupEncrypted` (`.novaenc` v4 container), and GZip decompression-bomb protection.
 - **PasswordService**: `security.dat` dual salt + versioned password hash (V1 salted SHA256 → V2 PBKDF2-SHA256 3M) with constant-time comparison; `lockout.dat` (FailCount/Until/Enabled); `SetBaseDir` path injection.
-- **ApiProbeService**: tier 1 — vendor identification + protocol matrix + error classification + redaction (see 20).
+- **ApiProbeService**: tier 1 — vendor identification + protocol matrix + error classification + redaction (see 21).
 - **ApiChatClient**: shared chat client (OpenAI/Anthropic/Gemini protocols + streaming + usage/TTFT + chat-endpoint derivation).
-- **ApiDiagnoseService**: tier 2 — reachability + balance inference + metadata + latency (see 20).
-- **RelayProbeService**: tier 3 — 8 probes + weighted scoring + 4-tier verdict + anti-cheat (see 20).
+- **ApiDiagnoseService**: tier 2 — reachability + balance inference + metadata + latency (see 21).
+- **RelayProbeService**: tier 3 — 8 probes + weighted scoring + 4-tier verdict + anti-cheat (see 21).
 - **ProbeDataSetLoader**: probe dataset loading + validation + built-in fallback.
 - **McpLogic**: 14-tool pure logic (token auth / redaction / CRUD), unit-testable.
 - **CsvImportExportService**: export + parse (auto-detect three dialect headers + build fields by type template).
@@ -818,9 +833,17 @@ Novara/
 │   ├── SettingsPage          settings page
 │   ├── LockScreenPage        lock screen page
 │   ├── SearchPage            global search page
-│   └── TrashPage             recycle bin page
+│   ├── TrashPage             recycle bin page
+│   └── ToolsPage             tools page (data overview / MCP / sync / snapshot / backup / archive / reset)
 ├── StickNoteHost/             desktop sticky note standalone process
 ├── NovaraMCP/                 MCP stdio front end (single-file publish)
+├── Novara.Server/             self-hosted sync server host (ASP.NET Core, single-file publish)
+├── Novara.Sync.Server/        sync server logic library
+├── Novara.Web/                web reader/editor (hosted at /web)
+├── SnapshotViewer/            snapshot HTML viewer source (index.html + viewer.js/css)
+├── deploy/                    Docker compose + Caddy deployment files
+├── docs/                      public documentation
+├── .github/                   GitHub metadata (issue / PR templates)
 ├── DiaryEditorJs/             WebView2 editor bundle (Tiptap + markdown-it)
 ├── Installer/                 Inno Setup install script
 └── Assets/                    icons (ico / png / svg logo)
@@ -846,9 +869,9 @@ Novara/
 | 8.0 | 2026-09-19 | **Cross-device sync** — end-to-end encrypted sync through a self-hosted server bundled with the installer (versioned ciphertext storage, token auth, device registration and revocation); web reader with limited editing and re-encrypted upload; library-level conflict handling that keeps the overwritten version; device center and local sync audit; multi-round pre-release verification of the whole codebase |
 | 9.0 | 2026-09-28 | **One-command self-hosting** — official Docker image, compose + Caddy automatic HTTPS, ops CLI (space list/show/delete/rotate-secret), server runtime upgraded to .NET 10, desktop sticky-note redesign, in-app update check; two-round pre-release verification |
 | 9.1 | 2026-09-29 | Hotfix — TOTP row freeze root-caused to the WinUI 3 managed-wrapper GC pitfall (registry back to strong references), smoother TOTP progress bar, drag-drop smoothness, cooldown confirm-key first-frame flash, settings-page brand-color states |
+| 9.2 | 2026-09-30 | Hotfix — reminders fire with the app closed (Task Scheduler COM, locale-independent start boundary, battery gate off, explicit per-user task SD), reminder border gradient reworked (brand-blue to dark red, per-second), urgent reminders rise below pinned, breathing border on the due dialog, danger-red single source with per-palette softening on paper themes, update-button reminder dot |
 | 9.3 | 2026-10-07 | Hotfix — first-run wizard rebuilt as a full-screen seven-page tour (ink-drop finale; the welcome screen dissolves from the clicked point), diary/document editor failure diagnostics (cause classification, copyable detail, retry, runtime link, logging) so a missing or damaged WebView2 runtime no longer fails silently, editor initialization hardened (cached environment object plus a re-entrancy guard, ending the "already initialized with a different CoreWebView2Environment" error), wizard mixed-language fix on non-Chinese systems |
 | 9.4 | 2026-10-08 | Performance and hardening — PBKDF2 key-derivation cache (encrypted-library saves drop from ~330 ms to sub-millisecond), three low-end-machine hot paths removed (registry reads per card, per-second brush rebuilds, password operations off the UI thread), password dialogs locked while in flight, reminder border kept across drags, self-hosted server write-fence against cross-process delete races plus CLI fixes (dash-leading space ids, exit-code contract, unknown-command rejection), compose default tag back to latest |
-| 9.2 | 2026-09-30 | Hotfix — reminders fire with the app closed (Task Scheduler COM, locale-independent start boundary, battery gate off, explicit per-user task SD), reminder border gradient reworked (brand-blue to dark red, per-second), urgent reminders rise below pinned, breathing border on the due dialog, danger-red single source with per-palette softening on paper themes, update-button reminder dot |
 
 ---
 

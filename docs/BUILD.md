@@ -15,8 +15,6 @@ How to build, publish, and package Novara from source.
 | Node.js + npm | any recent LTS | Build the `DiaryEditorJs` editor bundles |
 | Inno Setup | 6+ | Compile the installer (`Installer/setup.iss`) |
 
-> **Windows SDK path note:** `Novara.csproj` pins `AppxMSBuildToolsPath` to a machine-specific Visual Studio path. If you build on a different machine, update or remove that property to match your local Visual Studio / Windows SDK layout.
-
 > **Windows SDK path note:** `AppxMSBuildToolsPath` points at the Appx package MSBuild tasks used by the WinUI PRI generation step. This repository does **not** ship the property — it is a build-machine setting, not a project setting — so the build falls back to the .NET SDK's own path. If your SDK lacks `Microsoft.Build.Packaging.Pri.Tasks.dll` you will see `MSB4062 ... ExpandPriContent`; in that case pass the property on the command line (or set it in the environment) to point at your Visual Studio installation's `AppxPackage` folder.
 
 ## Project layout

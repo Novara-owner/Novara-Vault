@@ -76,10 +76,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Space administration CLI** — `NovaraSync space create|list|show|delete|rotate-secret`: `--json` on every command, exit codes 0 (success) / 1 (business failure) / 2 (command-line error), fully non-interactive. Deletion is a local CLI operation by design — the server API exposes no delete endpoint, by contract.
 - **Per-release verification attachments** — `SHA256SUMS` for the installer, `IMAGES.txt` pinning the image digests, and an SBOM (SPDX, Syft-generated); how to use them is documented in [docs/VERIFYING.md](docs/VERIFYING.md).
 - **Export as image** — a diary entry or the whole memo collection as crisp PNG long-images in two widths (820px desktop, 420px mobile), rendered off-screen and sliced automatically for very long content; sensitive exports are gated behind the privacy lock and a plain-text warning.
-- **Paper themes** — four reading-friendly paper palettes (Cream / Almond / Kraft / Cold Grey) that recolor the app, the editors and the desktop sticky notes, with softened brand accents; every hard-coded brand blue in the UI now follows one source.
+- **Paper themes** — four reading-friendly paper palettes (Cream / Almond / Kraft / Newsprint) that recolor the app, the editors and the desktop sticky notes, with softened brand accents; every hard-coded brand blue in the UI now follows one source.
 - **Animation toggle** — one switch turns motion off app-wide (card entrances, page transitions, hover lifts) for accessibility and low-end hardware; dialogs, press feedback and the collapse animations keep their feedback role.
 - **Check for updates** — a click in Settings fetches a static manifest, downloads the installer with a progress bar, verifies its SHA-256 and hands off to a silent install. No background polling, and every request shows up in the network activity panel.
-- **Desktop sticky notes, rebuilt** — frameless pure-color cards with system rounded corners, a 20-color self-contained palette, per-note color and size persistence, and context menus that follow the main app.
+- **Desktop sticky notes, rebuilt** — frameless pure-color cards with system rounded corners, a 24-color self-contained palette, per-note color and size persistence, and context menus that follow the main app.
 - **Edge menu** — the hamburger handle moves to the screen edge as a two-stage slide-out panel; the docking side is configurable in Settings.
 
 ### Changed

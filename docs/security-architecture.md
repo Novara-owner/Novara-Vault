@@ -1,5 +1,7 @@
 # Security Architecture
 
+<p align="center"><strong>English</strong> · <a href="security-architecture.zh-CN.md">简体中文</a></p>
+
 Novara is a local-first personal data control layer — for you, and for your AI agents. Four independent trust chains protect it: your data at rest, your AI agent's access, your data wherever you take it (7.0), and your data moving between your own devices (8.0). This page gives a one-glance map of what protects what, and how to verify your download.
 
 ## 1. Data at rest — the privacy-lock chain
@@ -62,7 +64,7 @@ flowchart LR
 - **The server is a blind store.** It holds one ciphertext blob per version plus a small plaintext envelope: container / crypto / sync version numbers, the base version the payload was built on, a device id and a timestamp. It has no key, no user accounts, performs no decryption and writes no plaintext logs.
 - **Key separation is the whole design.** The space key is generated on the first device and never leaves the paired devices. The server prints a space id and an enrollment secret exactly once; afterwards each device authenticates with its own token, stored server-side only as a SHA-256, compared in constant time, with failure rate limiting. Revoking a device therefore costs nothing — whatever it downloaded stays unreadable to it.
 - **Same container, same contract.** Every payload is the `.novaenc` v4 container, re-sealed with a fresh random salt on each push. An upload declares the version it is based on; a mismatch becomes a conflict instead of a silent overwrite, and the superseded version stays on the server for rollback.
-- **Plaintext is memory-only on the web side.** The browser reader/editor keeps decrypted data in JS memory: nothing is persisted, the clipboard is cleared after 30 seconds, and memory is cleared after 5 minutes idle.
+- **Plaintext is memory-only on the web side.** The browser reader/editor keeps decrypted data in JS memory: nothing is persisted.
 - **Local audit.** Uploads, downloads, conflict detections and conflict resolutions are recorded locally, and the device center shows each paired device's trust state and last sync.
 
 ## Trust boundaries
