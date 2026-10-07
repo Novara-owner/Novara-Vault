@@ -6,6 +6,7 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -173,3 +174,56 @@ jobs:
         with:
           name: novarasync
           path: publish/sync/NovaraSync.exe
+
+  sign:
+    name: Sign release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: sigstore/cosign-installer@v4
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Download release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          for attempt in $(seq 1 40); do
+            if gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                 --pattern IMAGES.txt --pattern 'Novara_Setup_*.exe' --dir assets --clobber; then
+              ls -l assets
+              exit 0
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "Release assets were not available in time." >&2
+              exit 1
+            fi
+            sleep 30
+          done
+      - name: Sign container image
+        shell: bash
+        run: |
+          set -euo pipefail
+          reference="$(grep -m1 '^ghcr\.io/' assets/IMAGES.txt)"
+          cosign sign --yes "$reference"
+      - name: Sign installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          installer="$(ls assets/Novara_Setup_*.exe)"
+          cosign sign-blob --yes --bundle signature.bundle "$installer"
+      - name: Attach signature bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" signature.bundle --clobber
