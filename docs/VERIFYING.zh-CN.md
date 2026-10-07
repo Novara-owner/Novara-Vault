@@ -2,6 +2,8 @@
 
 <p align="center"><a href="VERIFYING.md">English</a> · <strong>简体中文</strong></p>
 
+> 另见：[构建溯源](PROVENANCE.zh-CN.md)——一个版本究竟是怎么被生产出来的，以及我们不声称什么。
+
 本页的每一句话都不需要你「相信我们」——每个发布版本都附带让你自行核验的材料。
 
 ## Windows 安装包（Novara_Setup_x.y.z.exe）

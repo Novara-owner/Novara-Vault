@@ -2,6 +2,8 @@
 
 <p align="center"><strong>English</strong> · <a href="VERIFYING.zh-CN.md">简体中文</a></p>
 
+> See also: [Build Provenance](PROVENANCE.md) — how a release is actually produced, and what we do not claim.
+
 You never need to take our word for anything on this page — every release ships the material to check it yourself.
 
 ## Windows installer (Novara_Setup_x.y.z.exe)

@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0-windows10.0.26100": {
+      "AngleSharp": {
+        "type": "Direct",
+        "requested": "[1.5.0, )",
+        "resolved": "1.5.0",
+        "contentHash": "REAdFOAlTxr6yqmxWFFLLMB/+uvIS3N6tXXUAWjoexA0LsQB/CfZYadg+z+DkcpAwJk8gF1VF4YLsq4U1Gficg=="
+      },
+      "H.NotifyIcon.WinUI": {
+        "type": "Direct",
+        "requested": "[2.3.0, )",
+        "resolved": "2.3.0",
+        "contentHash": "+v1J8W2uEfkT57SqFph/bqReruxWu4kT/komQ1014JhzhYZQT8KAlChVuFUarxtl5bE13wHf+B410obkikT4lA==",
+        "dependencies": {
+          "H.NotifyIcon": "2.3.0",
+          "Microsoft.WindowsAppSDK": "1.6.250108002",
+          "System.Collections.Immutable": "9.0.1",
+          "System.Reflection.Metadata": "9.0.1"
+        }
+      },
+      "Microsoft.Graphics.Win2D": {
+        "type": "Direct",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "7bAo8ObjCy/br0eW0nONRfVKehJu5aDe/KQekWeNXslwTOO2rhrIfWaVGepsXyVqmqwHoLJ31g1HsT7FLdBCoQ==",
+        "dependencies": {
+          "Microsoft.WindowsAppSDK": "1.5.240227000"
+        }
+      },
+      "Microsoft.Web.WebView2": {
+        "type": "Direct",
+        "requested": "[1.0.2903.40, )",
+        "resolved": "1.0.2903.40",
+        "contentHash": "THrzYAnJgE3+cNH+9Epr44XjoZoRELdVpXlWGPs6K9C9G6TqyDfVCeVAR/Er8ljLitIUX5gaSkPsy9wRhD1sgQ=="
+      },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Direct",
+        "requested": "[9.0.1, )",
+        "resolved": "9.0.1",
+        "contentHash": "OxjcwJqBW/5A1111+vL9d+5KYTvOzeCTJY9zHZ0kpQI4wX075p6L7inHPSYuf0MGakVjUvaShvw9e9pfbInU2Q=="
+      },
+      "Microsoft.Windows.CsWinRT": {
+        "type": "Direct",
+        "requested": "[2.2.0, )",
+        "resolved": "2.2.0",
+        "contentHash": "R8MDVawukHrKgYCFgYaoLfbAna/FrImEFRxDK9k8ITbrXv3KLE5uN6tRqrNV83H4MFdqJ/uiA/hg1cSsXkl0vw=="
+      },
+      "Microsoft.WindowsAppSDK": {
+        "type": "Direct",
+        "requested": "[1.6.250108002, )",
+        "resolved": "1.6.250108002",
+        "contentHash": "dOJ3oFeHnehVBAR98lR6YfX0JgDJkrehLqwZQqQE/iZgyye1c1TZu9oj3MBbgWP9xFApWUrb0G49KKnQWEZLtA==",
+        "dependencies": {
+          "Microsoft.Web.WebView2": "1.0.2651.64",
+          "Microsoft.Windows.SDK.BuildTools": "10.0.22621.756"
+        }
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "Direct",
+        "requested": "[8.0.0, )",
+        "resolved": "8.0.0",
+        "contentHash": "+TUFINV2q2ifyXauQXRwy4CiBhqvDEDZeVJU7qfxya4aRYOKzVBpN+4acx25VcPB9ywUN6C0n8drWl110PhZEg=="
+      },
+      "H.GeneratedIcons.System.Drawing": {
+        "type": "Transitive",
+        "resolved": "2.3.0",
+        "contentHash": "3iI+3gy0VJNfXpMCJTHDfqOtVPCp4oXz9jlphtnG3s3dWo/jx1y1N6vuFiKdbzKElztPE+W5nM+7KHBEEyr8zg==",
+        "dependencies": {
+          "System.Drawing.Common": "9.0.1"
+        }
+      },
+      "H.NotifyIcon": {
+        "type": "Transitive",
+        "resolved": "2.3.0",
+        "contentHash": "nmxzTPfYzwusJkfTapccqvv2SDQr1cOpIXkPnPiFhmux3X79n+gWkoBuKyA2zyE86FFRVoKfc6TklK0RLCjnRw==",
+        "dependencies": {
+          "H.GeneratedIcons.System.Drawing": "2.3.0"
+        }
+      },
+      "Microsoft.Windows.SDK.BuildTools": {
+        "type": "Transitive",
+        "resolved": "10.0.22621.756",
+        "contentHash": "7ZL2sFSioYm1Ry067Kw1hg0SCcW5kuVezC2SwjGbcPE61Nn+gTbH86T73G3LcEOVj0S3IZzNuE/29gZvOLS7VA=="
+      },
+      "System.Collections.Immutable": {
+        "type": "Transitive",
+        "resolved": "9.0.1",
+        "contentHash": "qt4+ClsZYKzar/Rw1zbt0t9iuBUCLVNsjXicEuVQyKL7143CwhWzI2gTwzz8AhSaFYVHnpcb8SBGA+zaY4weUg=="
+      },
+      "System.Drawing.Common": {
+        "type": "Transitive",
+        "resolved": "9.0.1",
+        "contentHash": "TTPkCqSMyMaG8BXlBKYTTJFtLV0SvjjsvgUN598hYgHaX/5B7tdUc2JhQF9vwrYmlzxId+gwFnKYuxQ2XsSz2g==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "9.0.1"
+        }
+      },
+      "System.Reflection.Metadata": {
+        "type": "Transitive",
+        "resolved": "9.0.1",
+        "contentHash": "XGkA0wiS4vbZu708VtlgSh40stW2ucDriDItkiJUnnp867x5HaBfmoTqdA00DYG0Ld7Kg0cLvEPkUEUxputgzQ==",
+        "dependencies": {
+          "System.Collections.Immutable": "9.0.1"
+        }
+      },
+      "novara.core": {
+        "type": "Project"
+      }
+    },
+    "net8.0-windows10.0.26100/win-x64": {
+      "Microsoft.Graphics.Win2D": {
+        "type": "Direct",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "7bAo8ObjCy/br0eW0nONRfVKehJu5aDe/KQekWeNXslwTOO2rhrIfWaVGepsXyVqmqwHoLJ31g1HsT7FLdBCoQ==",
+        "dependencies": {
+          "Microsoft.WindowsAppSDK": "1.5.240227000"
+        }
+      },
+      "Microsoft.Web.WebView2": {
+        "type": "Direct",
+        "requested": "[1.0.2903.40, )",
+        "resolved": "1.0.2903.40",
+        "contentHash": "THrzYAnJgE3+cNH+9Epr44XjoZoRELdVpXlWGPs6K9C9G6TqyDfVCeVAR/Er8ljLitIUX5gaSkPsy9wRhD1sgQ=="
+      },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Direct",
+        "requested": "[9.0.1, )",
+        "resolved": "9.0.1",
+        "contentHash": "OxjcwJqBW/5A1111+vL9d+5KYTvOzeCTJY9zHZ0kpQI4wX075p6L7inHPSYuf0MGakVjUvaShvw9e9pfbInU2Q=="
+      },
+      "Microsoft.WindowsAppSDK": {
+        "type": "Direct",
+        "requested": "[1.6.250108002, )",
+        "resolved": "1.6.250108002",
+        "contentHash": "dOJ3oFeHnehVBAR98lR6YfX0JgDJkrehLqwZQqQE/iZgyye1c1TZu9oj3MBbgWP9xFApWUrb0G49KKnQWEZLtA==",
+        "dependencies": {
+          "Microsoft.Web.WebView2": "1.0.2651.64",
+          "Microsoft.Windows.SDK.BuildTools": "10.0.22621.756"
+        }
+      }
+    }
+  }
+}

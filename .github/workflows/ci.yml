@@ -28,7 +28,7 @@ jobs:
         with:
           dotnet-version: '10.0.400'
       - name: Restore
-        run: dotnet restore Novara.slnx
+        run: dotnet restore Novara.slnx -p:RestoreLockedMode=true
       - name: Build
         run: |
           dotnet build Novara.Core/Novara.Core.csproj -c Release --no-restore
@@ -46,7 +46,7 @@ jobs:
         with:
           dotnet-version: '10.0.400'
       - name: Restore
-        run: dotnet restore Novara.slnx
+        run: dotnet restore Novara.slnx -p:RestoreLockedMode=true
       - name: Audit dependency vulnerabilities
         shell: pwsh
         run: |
@@ -143,7 +143,7 @@ jobs:
           "AppxMSBuildToolsPath=$appx\" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "AppxMSBuildToolsPath set to $appx"
       - name: Restore
-        run: dotnet restore Novara.csproj
+        run: dotnet restore Novara.csproj -p:RestoreLockedMode=true
       - name: Build
         run: dotnet build Novara.csproj -c Release --no-restore
       - name: Upload desktop build
@@ -167,7 +167,7 @@ jobs:
         run: >
           dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:IncludeNativeLibrariesForSelfExtract=true -p:RestoreLockedMode=true
           -o publish/sync
       - name: Upload sync server
         uses: actions/upload-artifact@v7
