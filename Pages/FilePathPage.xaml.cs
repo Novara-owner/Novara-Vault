@@ -33,6 +33,7 @@ public sealed partial class FilePathPage : Page
     private bool _storeLoaded;
     private Novara.Models.NovaraDatabase? _loadedDb;
     private bool _confirming;
+    private int _newPathGen;
     private bool _entrancePlayed;
     private bool _renderInProgress;
     private System.Threading.CancellationTokenSource? _renderCts;
@@ -319,7 +320,7 @@ public sealed partial class FilePathPage : Page
     }
 
     private void ShowNewPathDialog(bool isEdit = false)
-    {        _confirming = false;
+    {        _confirming = false; _newPathGen++;
         if (!isEdit)
         {
             _editingPathCard = null;
@@ -363,6 +364,7 @@ public sealed partial class FilePathPage : Page
 
     private void HideNewPathDialog()
     {
+        _newPathGen++;
         _editingPathCard = null;
         var sb = new Storyboard();
         var scrimOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
@@ -506,9 +508,10 @@ public sealed partial class FilePathPage : Page
         UpdateNewPathConfirmState();
     }
 
-    private void NewPathConfirm_Click(object sender, RoutedEventArgs e)
+    private async void NewPathConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_confirming) return; _confirming = true;
+        var gen = _newPathGen;
         bool isEdit = _editingPathCard != null;
         var name = NewPathNameBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -521,11 +524,39 @@ public sealed partial class FilePathPage : Page
         var path = NewPathInputBox.Text.Trim().Trim('"');
 
 
-        if (string.IsNullOrWhiteSpace(path) || (!isEdit && !Directory.Exists(path) && !File.Exists(path)))
+
+
+        if (string.IsNullOrWhiteSpace(path))
         {
             _confirming = false;
             FlashTextBox(NewPathInputBox);
             return;
+        }
+        if (!isEdit)
+        {
+            bool exists;
+            try
+            {
+                exists = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    try { return Directory.Exists(path) || File.Exists(path); }
+                    catch { return false; }
+                });
+            }
+            catch { exists = false; }
+
+
+
+            if (gen != _newPathGen || NewPathOverlay.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+            if (!exists)
+            {
+                _confirming = false;
+                FlashTextBox(NewPathInputBox);
+                return;
+            }
         }
         var note = NewPathNoteBox.Text.Trim();
         Border card;
@@ -581,7 +612,13 @@ public sealed partial class FilePathPage : Page
         }
         ApplyCardFilters();
 
-        if (!string.IsNullOrWhiteSpace(path)) { ClaimPathStatusGen(card); SetPathStatus(card, Directory.Exists(path) || File.Exists(path)); }
+
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            SetPathStatus(card, true);
+            ProbePathStatusAsync(card, path);
+        }
         PersistOrderAndSave();
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
         HideNewPathDialog();
@@ -742,9 +779,24 @@ public sealed partial class FilePathPage : Page
                 Foreground = App.GetBrush("IconForegroundBrush")
             }
         };
-        openBtn.Click += (_, _) =>
+        openBtn.Click += async (_, _) =>
         {
-            if (Directory.Exists(path))
+
+
+
+
+            bool isDir;
+            try
+            {
+                isDir = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    try { return Directory.Exists(path); }
+                    catch { return false; }
+                });
+            }
+            catch { isDir = false; }
+
+            if (isDir)
             {
                 try
                 {
@@ -1375,9 +1427,9 @@ public sealed partial class FilePathPage : Page
         checkItem.Click += (_, _) =>
         {
             if (!_pathCardData.TryGetValue(card, out var data) || string.IsNullOrWhiteSpace(data.path)) return;
-            var isValid = Directory.Exists(data.path) || File.Exists(data.path);
-            ClaimPathStatusGen(card);
-            SetPathStatus(card, isValid);
+
+
+            ProbePathStatusAsync(card, data.path);
             App.ShowToast(App.GetString("Common_Toast_Detected"));
         };
 
@@ -1490,6 +1542,37 @@ public sealed partial class FilePathPage : Page
 
     private bool IsPathStatusCurrent(Border card, long gen)
         => _pathStatusGens.TryGetValue(card, out var current) && current == gen;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private async void ProbePathStatusAsync(Border card, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var gen = ClaimPathStatusGen(card);
+        bool isValid;
+        try
+        {
+            isValid = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try { return Directory.Exists(path) || File.Exists(path); }
+                catch { return false; }
+            });
+        }
+        catch { return; }
+        if (!PathList.Children.Contains(card) || !IsPathStatusCurrent(card, gen)) return;
+        SetPathStatus(card, isValid);
+    }
 
     private async void CheckAllPaths()
     {

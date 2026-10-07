@@ -211,6 +211,10 @@ public class SyncEditorDeviceTests
         {
             var spaceId = "MIGRATIONTESTSPACE01";
             var first = new SqliteSpaceStore(root);
+
+
+            first.SaveSpace(new SpaceRecord
+            { SpaceId = spaceId, Name = "mig", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
             first.SaveDevice(spaceId, new DeviceRecord
             { DeviceId = "dev-old", Name = "old", TokenHash = "hash", CreatedAt = DateTime.UtcNow });
 

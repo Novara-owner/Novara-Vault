@@ -101,6 +101,13 @@ public sealed class SpaceService
     public SyncServerOptions Options => _options;
 
 
+
+
+
+
+    public static bool IsSafeSpaceId(string? id) => Storage.BlobLayout.IsSafeId(id);
+
+
     public DeviceRecord? DeviceOf(string spaceId, string deviceId) => _store.GetDevice(spaceId, deviceId);
 
 
@@ -198,7 +205,7 @@ public sealed class SpaceService
             var enrollmentSecret = TokenAuth.NewEnrollmentSecret();
             fresh.EnrollmentHash = TokenAuth.Hash(enrollmentSecret);
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh);
+            _store.SaveSpace(fresh, requireExisting: true);
 
             return SyncResult<NewSpaceCredentials>.Ok(new NewSpaceCredentials(fresh.SpaceId, enrollmentSecret));
         }
@@ -429,7 +436,7 @@ public sealed class SpaceService
 
             fresh.ReadTokenHash = TokenAuth.Hash(token);
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh);
+            _store.SaveSpace(fresh, requireExisting: true);
             return SyncResult<string>.Ok(token);
         }
         finally { gate.Release(); }
@@ -449,7 +456,7 @@ public sealed class SpaceService
 
             fresh.ReadTokenHash = "";
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh);
+            _store.SaveSpace(fresh, requireExisting: true);
             return SyncResult<bool>.Ok(true);
         }
         finally { gate.Release(); }
@@ -560,7 +567,7 @@ public sealed class SpaceService
             {
                 fresh.CurrentVersion = highestStored;
                 fresh.UpdatedAt = DateTime.UtcNow;
-                _store.SaveSpace(fresh);
+                _store.SaveSpace(fresh, requireExisting: true);
             }
 
             if (baseVersion != fresh.CurrentVersion)
@@ -639,7 +646,7 @@ public sealed class SpaceService
             _store.SaveVersions(space.SpaceId, versions);
             fresh.CurrentVersion = newVersion;
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh);
+            _store.SaveSpace(fresh, requireExisting: true);
 
             return SyncResult<long>.Ok(newVersion);
         }
@@ -734,7 +741,7 @@ public sealed class SpaceService
             fresh.KeyWrapJson = keyWrapJson;
             fresh.KeyWrapVersion = fresh.KeyWrapVersion + 1;
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh);
+            _store.SaveSpace(fresh, requireExisting: true);
             return SyncResult<long>.Ok(fresh.KeyWrapVersion);
         }
         finally { gate.Release(); }

@@ -523,7 +523,34 @@ public partial class App : Application
         return null!;
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private static volatile int _systemLightCached = -1;
+
+
+    public static void InvalidateSystemLightCache() => _systemLightCached = -1;
+
     private static bool IsSystemLight()
+    {
+        var cached = _systemLightCached;
+        if (cached >= 0) return cached != 0;
+        var value = ReadSystemLightFromRegistry();
+        _systemLightCached = value ? 1 : 0;
+        return value;
+    }
+
+    private static bool ReadSystemLightFromRegistry()
     {
 
 
@@ -684,6 +711,11 @@ public partial class App : Application
             _systemThemeUISettings = new Windows.UI.ViewManagement.UISettings();
             _systemThemeUISettings.ColorValuesChanged += (_, _) =>
             {
+
+
+
+
+                InvalidateSystemLightCache();
                 if (CurrentTheme != "跟随系统") return;
                 var now = DateTime.Now;
                 if ((now - _lastSystemThemeSync).TotalMilliseconds < 500) return;
@@ -697,6 +729,9 @@ public partial class App : Application
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"系统主题监听初始化失败: {ex.Message}");
+
+
+            Services.CrashLogger.LogNote("SystemThemeWatcher", "init failed: " + ex.Message);
         }
 
 
@@ -748,6 +783,9 @@ public partial class App : Application
     public static void SetTheme(string theme)
     {
         CurrentTheme = theme;
+
+
+        InvalidateSystemLightCache();
 
         ElementTheme elementTheme;
         switch (theme)

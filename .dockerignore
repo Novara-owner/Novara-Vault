@@ -1,6 +1,5 @@
 **/bin/
 **/obj/
-_publish_tmp/
 Novara_Publish/
 .vs/
 .vscode/
@@ -9,6 +8,11 @@ Novara_Publish/
 *.user
 **/__pycache__/
 node_modules/
+
+
+
+
+desktop.ini
 
 
 
@@ -21,7 +25,6 @@ Themes/
 Assets/
 DiaryEditorJs/
 Installer/
-Tools/
 deploy/
 
 

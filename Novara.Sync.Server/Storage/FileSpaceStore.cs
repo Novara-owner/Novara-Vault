@@ -45,10 +45,15 @@ public sealed class FileSpaceStore : ISpaceStore
     public SpaceRecord? GetSpace(string spaceId)
         => IsSafeId(spaceId) ? Read<SpaceRecord>(Path.Combine(SpaceDir(spaceId), SpaceFile)) : null;
 
-    public void SaveSpace(SpaceRecord space)
+    public void SaveSpace(SpaceRecord space, bool requireExisting = false)
     {
         ArgumentNullException.ThrowIfNull(space);
         RequireSafeId(space.SpaceId);
+
+
+
+        if (requireExisting && !SpaceExists(space.SpaceId))
+            throw new SpaceStoreException($"space no longer exists: {space.SpaceId}");
         Directory.CreateDirectory(SpaceDir(space.SpaceId));
         WriteAtomic(Path.Combine(SpaceDir(space.SpaceId), SpaceFile), JsonSerializer.Serialize(space, Options));
     }
@@ -82,16 +87,36 @@ public sealed class FileSpaceStore : ISpaceStore
 
 
 
+
+
+
+
+
+
+
+
     public void DeleteSpace(string spaceId)
     {
         RequireSafeId(spaceId);
-        try { BlobLayout.RemoveSpaceDirectory(_root, spaceId); }
+        var dir = BlobLayout.SpaceDirectory(_root, spaceId);
+        if (!Directory.Exists(dir)) return;
+
+        var parked = dir + ".deleting";
+        try
+        {
+            if (Directory.Exists(parked)) Directory.Delete(parked, recursive: true);
+            Directory.Move(dir, parked);
+            Directory.Delete(parked, recursive: true);
+        }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
 
 
+            if (!Directory.Exists(dir))
+                throw new SpaceStoreException(
+                    $"the space was deleted but its parked tree could not be removed: {parked}", e);
             throw new SpaceStoreException(
-                $"failed to remove the space directory: {BlobLayout.SpaceDirectory(_root, spaceId)}", e);
+                $"failed to remove the space directory: {dir}", e);
         }
     }
 
@@ -103,10 +128,12 @@ public sealed class FileSpaceStore : ISpaceStore
     public DeviceRecord? GetDevice(string spaceId, string deviceId)
         => GetDevices(spaceId).FirstOrDefault(d => string.Equals(d.DeviceId, deviceId, StringComparison.Ordinal));
 
-    public void SaveDevice(string spaceId, DeviceRecord device)
+    public void SaveDevice(string spaceId, DeviceRecord device, bool requireExisting = true)
     {
         ArgumentNullException.ThrowIfNull(device);
         RequireSafeId(spaceId);
+        if (requireExisting && !SpaceExists(spaceId))
+            throw new SpaceStoreException($"space no longer exists: {spaceId}");
 
         var devices = GetDevices(spaceId).ToList();
         var index = devices.FindIndex(d => string.Equals(d.DeviceId, device.DeviceId, StringComparison.Ordinal));
@@ -139,10 +166,12 @@ public sealed class FileSpaceStore : ISpaceStore
             ? Read<List<VersionRecord>>(Path.Combine(SpaceDir(spaceId), VersionsFile)) ?? new List<VersionRecord>()
             : new List<VersionRecord>();
 
-    public void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions)
+    public void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions, bool requireExisting = true)
     {
         ArgumentNullException.ThrowIfNull(versions);
         RequireSafeId(spaceId);
+        if (requireExisting && !SpaceExists(spaceId))
+            throw new SpaceStoreException($"space no longer exists: {spaceId}");
 
         var ordered = versions.OrderBy(v => v.Version).ToList();
         Directory.CreateDirectory(SpaceDir(spaceId));

@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -112,6 +112,10 @@ public sealed partial class SettingsPage : Page
 
             QuickCaptureInfoOverlay.Visibility = Visibility.Collapsed;
 
+
+            UpdateDialogOverlay.Visibility = Visibility.Collapsed;
+            UpdateUpToDateOverlay.Visibility = Visibility.Collapsed;
+
             _animSetPwd = _animChangePwd = _animCloseLock = _animWarn = false;
             _themeRestartAnimating = _languageRestartAnimating = false;
             _animAutoLockSync = false;
@@ -200,7 +204,7 @@ public sealed partial class SettingsPage : Page
         if (ThemeRestartOverlay.Visibility == Visibility.Visible) { _pendingTheme = string.Empty; _pendingAnimationToggle = null; HideThemeRestartOverlay(); e.Handled = true; return; }
         if (ChangePasswordOverlay.Visibility == Visibility.Visible) { HideChangePasswordDialog(); e.Handled = true; return; }
         if (ClosePrivacyLockOverlay.Visibility == Visibility.Visible) { HideClosePrivacyLockDialog(); e.Handled = true; return; }
-        if (SetPasswordOverlay.Visibility == Visibility.Visible) { HideSetPasswordDialog(); e.Handled = true; return; }
+        if (SetPasswordOverlay.Visibility == Visibility.Visible) { if (_setPwdInFlight) { e.Handled = true; return; } HideSetPasswordDialog(); e.Handled = true; return; }
 
         if (WindowsHelloOverlay.Visibility == Visibility.Visible) { HideWindowsHelloDialog(); e.Handled = true; return; }
 
@@ -685,10 +689,15 @@ private void ShowSetPasswordDialog()
         sb.Begin();
     }
 
-    private void SetPasswordClose_Click(object sender, RoutedEventArgs e) => HideSetPasswordDialog();
+    private void SetPasswordClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_setPwdInFlight) return;
+        HideSetPasswordDialog();
+    }
 
     private void SetPasswordScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
+        if (_setPwdInFlight) return;
         if (ReferenceEquals(e.OriginalSource, SetPasswordScrim)) HideSetPasswordDialog();
     }
 
@@ -1552,7 +1561,7 @@ private void ShowPrivacyLockWarningDialog()
         catch { }
     }
 
-    private void SetPasswordConfirm_Click(object sender, RoutedEventArgs e)
+    private async void SetPasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
         var pw = SetPasswordBox.Text.Trim();
         var confirm = SetPasswordConfirmBox.Text.Trim();
@@ -1573,9 +1582,39 @@ private void ShowPrivacyLockWarningDialog()
             return;
         }
 
-        if (!PasswordService.Create(pw)) { FlashTextBox(SetPasswordBox); return; }
+
+
+
+
+
+
+
+        if (_setPwdInFlight) return;
+        _setPwdInFlight = true;
+        SetPasswordConfirmButton.IsEnabled = false;
+        SetPasswordCancelButton.IsEnabled = false;
+        bool created, encrypted;
+        try
+        {
+            var outcome = await System.Threading.Tasks.Task.Run(() =>
+            {
+                if (!PasswordService.Create(pw)) return (Created: false, Encrypted: false);
+                return (Created: true, Encrypted: App.Store?.EnableEncryption(pw) == true);
+            });
+            created = outcome.Created;
+            encrypted = outcome.Encrypted;
+        }
+        catch { created = false; encrypted = false; }
+        finally
+        {
+            _setPwdInFlight = false;
+            SetPasswordConfirmButton.IsEnabled = true;
+            SetPasswordCancelButton.IsEnabled = true;
+        }
+
+        if (!created) { FlashTextBox(SetPasswordBox); return; }
         PasswordService.SetLockoutEnabled(SetPasswordLockoutCheckBox.IsChecked == true);
-        if (App.Store?.EnableEncryption(pw) != true)
+        if (!encrypted)
         {
 
 
@@ -1597,6 +1636,7 @@ private void ShowPrivacyLockWarningDialog()
     }
 
     private bool _animSetPwd;
+    private bool _setPwdInFlight;
     private bool _animChangePwd;
     private bool _animCloseLock;
     private bool _animWarn;

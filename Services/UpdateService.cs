@@ -88,7 +88,14 @@ public static class UpdateService
             {
                 try { File.Delete(stale); } catch { }
             }
-            var dest = Path.Combine(dir, Path.GetFileName(rel.Url.Split('?', '#')[0]));
+
+
+
+            if (!Uri.TryCreate(rel.Url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
+                throw new InvalidOperationException("update manifest url must be an absolute https url: " + rel.Url);
+            var fileName = Path.GetFileName(uri.LocalPath);
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = "Novara_Setup.exe";
+            var dest = Path.Combine(dir, fileName);
             try
             {
                 using var resp = await DownloadHttp.GetAsync(rel.Url, HttpCompletionOption.ResponseHeadersRead, ct);

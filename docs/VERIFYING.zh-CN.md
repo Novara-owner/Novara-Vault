@@ -1,4 +1,4 @@
-# 校验你的下载
+﻿# 校验你的下载
 
 本页的每一句话都不需要你「相信我们」——每个发布版本都附带让你自行核验的材料。
 
@@ -8,7 +8,7 @@
 2. 比对哈希。在 PowerShell 中：
 
    ```powershell
-   Get-FileHash .\Novara_Setup_9.3.0.exe -Algorithm SHA256
+   Get-FileHash .\Novara_Setup_9.4.0.exe -Algorithm SHA256
    ```
 
    结果必须与 `SHA256SUMS` 中的那一行一致。如果你有 `sha256sum`（Git Bash、Linux），把安装包放到 `SHA256SUMS` 旁边，一条命令完成校验：
@@ -28,7 +28,7 @@ docker pull ghcr.io/novara-owner/novara-sync@sha256:<IMAGES.txt 中的 digest>
 校验已经拉到本地的镜像：
 
 ```bash
-docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:9.3.0
+docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:9.4.0
 ```
 
 digest 必须与 `IMAGES.txt` 一致。同一 digest 也会发布到 Docker Hub，两个来源解析到的是同一份字节。
@@ -38,7 +38,7 @@ digest 必须与 `IMAGES.txt` 一致。同一 digest 也会发布到 Docker Hub�
 发布附件中包含软件物料清单（SPDX JSON，用 Syft 生成），列出产品中的每一个组件。用任意 SPDX 查看器打开，或直接列出包名：
 
 ```bash
-jq -r '.packages[].name' novara-sync-9.3.0.spdx.json | sort -u
+jq -r '.packages[].name' novara-sync-9.4.0.spdx.json | sort -u
 ```
 
 ## OpenSSF Scorecard

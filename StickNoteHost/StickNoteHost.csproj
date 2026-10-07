@@ -5,7 +5,7 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>StickNoteHost</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>9.3.0</Version>
+    <Version>9.4.0</Version>
     <Platforms>x64</Platforms>
 
 

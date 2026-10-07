@@ -12,7 +12,7 @@
 #                                              for NOVARA_DOMAIN and terminates TLS itself.
 #
 # TLS is not optional for the API. The server refuses plain-HTTP API requests that did not arrive
-# from a trusted proxy (), so a bare `http://<nas>:5180` answers 403 to every /api call. That
+# from a trusted proxy, so a bare `http://<nas>:5180` answers 403 to every /api call. That
 # is the rule working, not a misconfiguration to route around - the desktop client and the reader
 # both refuse plain http off loopback for the same reason.
 
@@ -20,10 +20,10 @@ name: novara-sync
 
 services:
   novara-sync:
-    # Pin a digest in production (docker inspect --format '{{index .RepoDigests 0}}'), or set
-    # NOVARA_IMAGE in .env. The tag is what a first run needs; the digest is what an upgrade
-    # review needs.
-    image: ${NOVARA_IMAGE:-ghcr.io/novara-owner/novara-sync:9.0.0}
+    # The default tag follows the newest published image (a pinned version tag made the documented
+    # "compose pull" upgrade a no-op). Pin a digest or an exact tag in production
+    # (docker inspect --format '{{index .RepoDigests 0}}'), or set NOVARA_IMAGE in .env.
+    image: ${NOVARA_IMAGE:-ghcr.io/novara-owner/novara-sync:latest}
     restart: unless-stopped
     environment:
       NOVARA_SYNC_DATA: /data

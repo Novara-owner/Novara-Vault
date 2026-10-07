@@ -54,9 +54,8 @@
 - `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` / `X-Robots-Tag` / CSP 由**服务端**
   对**每个**响应发出（`SyncHostSetup`），与 `Caddyfile` 里那一份并存（纵深防御）——
   经 Cloudflare 临时隧道等**不经反代**的路径同样受保护（）。两份**必须保持一致**；
-  改一处就改另一处，`Tools/web_selfcheck.py` 的 F 组会核对服务端这一份。
-  （ 订正：F 组只拿**自身常量**比对服务端响应，**不读 `Caddyfile`** —— 反代侧两份头的一致性
-  目前靠运维纪律维持，删掉 Caddyfile 中的指令不会让任何自检变红。）
+  改一处就改另一份 —— 自动自检只比对服务端这份的自身常量，**不读 `Caddyfile`**，反代侧两份头的
+  一致性目前靠运维纪律维持（删掉 Caddyfile 中的指令不会让任何自检变红）。
 - CSP 里的两个 `'unsafe-inline'` 是必需的（`index.html` 有一处解析期定语言的内联脚本 + 两处
   `style=""`）；真正防注入的指令（`default-src` / `connect-src` / `base-uri` / `form-action` /
   `frame-ancestors` / `object-src`）全部关闭。
@@ -64,7 +63,7 @@
 ## 6. 存储边界
 
 - space_id 高熵（128-bit）且落盘前经文件系统安全校验（`BlobLayout.IsSafeId`），两存储实现一致。
-- blob 与元数据的布局见契约 §9；服务端对 blob 字节不可解释、不校验内容（客户端 GCM tag 负责完整性）。
+- blob 与元数据的布局由两存储实现共享且相互一致（SQLite 删行在事务内、文件后端整目录原子改名后删）；服务端对 blob 字节不可解释、不校验内容（客户端 GCM tag 负责完整性）。
 - **站点目录绝不包含数据目录**（）：`NOVARA_SYNC_WEB_ROOT` 指向的路径里若有 `NOVARA_SYNC_DATA`
   的数据（keywrap 记录、密文 blob、SQLite 元数据），静态托管就等于把它们公开在 `/web/...` 下。
   服务端启动时校验并**拒绝启动**（`SyncHostSetup.ValidateWebRoot`）；只有"数据在站点目录之下"

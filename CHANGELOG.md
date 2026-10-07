@@ -6,6 +6,22 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.4.0] - 2026-10-08
+
+### Changed
+
+- **Faster saves on encrypted libraries** - every save used to re-run the full 3,000,000-iteration PBKDF2 key derivation. Derived keys are now cached per (password, salt, iteration count), cutting a typical save from roughly 330 ms to well under a millisecond. The cache is cleared whenever the vault locks or the password changes, and the on-disk format is untouched.
+- **Smoother low-end machines** - three hot paths were removed: theme brushes no longer re-read the registry on every card build, the plan page's per-second reminder sweep no longer rebuilds a brush for every card, and password operations (setting a privacy lock, format/KDF migration) run off the UI thread instead of freezing the window for seconds on slower hardware.
+
+### Fixed
+
+- **Password dialogs can no longer be double-submitted** - after the threading rework, setting a privacy lock or confirming a format/KDF migration accepted a second click while the first was still running, which could write the password file and re-encrypt the library concurrently. Both dialogs are now locked while in flight and cannot be cancelled mid-run.
+- **Reminder cards keep their urgency border after a drag** - reordering a card with a reminder left it with the plain 1 px border until the gradient color changed again; the drag reset now re-applies the 3 px gradient immediately.
+- **Self-hosted server hardening** - deleting a space from the CLI while the server was running could be silently undone by a device write that was still in flight; mutating writes now re-verify that the space still exists (the SQLite default fences this inside its transaction). The CLI also accepts space ids that begin with a dash, maps storage failures to exit code 1, and rejects mistyped subcommands instead of silently starting the server. The compose default image tag follows `latest` again, so the documented `docker compose pull` upgrade actually upgrades.
+- **Update download validates the manifest** - the download target must be an https URL with a usable file name; malformed manifests fail fast instead of after a full download.
+- **Lock screen during the first-run wizard** - hard-locking while the wizard was open closed it and replays it after unlock, instead of leaving an interactive wizard floating above the lock screen.
+- **Smaller UI fixes** - update dialogs now close when leaving the settings page; a cancelled new-path dialog can no longer create the entry when its slow probe returns late; restored sticky-note sizes are clamped to the current screen; image export slices are built from the original template instead of accumulating per-slice CSS; the system-theme watcher logs its failures instead of failing silently.
+
 ## [9.3.0] - 2026-10-07
 
 ### Added

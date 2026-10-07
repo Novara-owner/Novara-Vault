@@ -972,13 +972,13 @@
                                   FontSize="13"
                                   Content="{x:Bind app:App.GetString(\'Setting_PrivacyLock_LockoutLabel\')}" />
                         <Grid Margin="0,8,0,0">
-                            <Button HorizontalAlignment="Left" Width="160" Height="36"
+                            <Button x:Name="SetPasswordCancelButton" HorizontalAlignment="Left" Width="160" Height="36"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="SetPasswordClose_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
-                            <Button HorizontalAlignment="Right" Width="160" Height="36"
+                            <Button x:Name="SetPasswordConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
                                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="SetPasswordConfirm_Click">

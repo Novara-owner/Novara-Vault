@@ -100,6 +100,7 @@ public class NovaraStore
         _suppressSave = true;
         _loaded = false;
         _password = null;
+        CryptoService.ClearKeyCache();
 
 
         Database = null!;
@@ -301,6 +302,7 @@ public class NovaraStore
                 Database = new NovaraDatabase();
                 _encryptionFlag = FlagPlain;
                 _password = null;
+                CryptoService.ClearKeyCache();
                 _loaded = true;
                 SaveSync();
                 return new LoadResult(LoadStatus.EmptyCreated);
@@ -456,6 +458,7 @@ public class NovaraStore
                 _encryptionFlag = FlagPlain;
                 _fileVersion = FileVersionLegacy;
                 _password = null;
+                CryptoService.ClearKeyCache();
                 return false;
             }
             return true;
@@ -507,6 +510,7 @@ public class NovaraStore
                 return false;
             }
             _password = null;
+            CryptoService.ClearKeyCache();
             _needsFormatMigration = false;
             return true;
         }
@@ -1091,6 +1095,7 @@ public class NovaraStore
             _encryptionFlag = FlagPlain;
             _needsFormatMigration = false;
             _password = null;
+            CryptoService.ClearKeyCache();
             _fileVersion = FileVersionLegacy;
             _loaded = true;
             _suppressSave = false;

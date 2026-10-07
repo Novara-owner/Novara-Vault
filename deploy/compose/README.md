@@ -27,6 +27,8 @@ docker compose run --rm novara-sync space create --name 我的空间
 
 > **为什么用 `run --rm` 而不是 `exec`**：这一步不需要服务端在跑，`run` 起一个一次性容器，挂的是同一个 `./data`，写完即退。凭据落在 `./data/novara-sync.db` 里，与服务端同源。
 
+> **删除 / 轮换空间（`space delete` / `space rotate-secret`）建议先 `docker compose stop novara-sync`。** 删除与在跑服务端的在途写入之间存在竞态：默认 SQLite 后端已在写路径加了存在性栅栏（9.4 起，被删空间**不可能**被在途写复活），`NOVARA_SYNC_STORE=file` 的备选后端窗口更窄但依然存在。停服再删最稳，也顺手满足「删前备份」（§3）。
+
 ### 第二步：起服务
 
 ```bash

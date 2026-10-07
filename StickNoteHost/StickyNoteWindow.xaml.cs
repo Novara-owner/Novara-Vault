@@ -500,9 +500,6 @@ public sealed partial class StickyNoteWindow : Window
 
 
 
-
-
-
     private void RootBorder_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         var menu = new MenuFlyout
@@ -646,6 +643,10 @@ public sealed partial class StickyNoteWindow : Window
         {
             w = Math.Max((int)(pw * scale), (int)(NoteMinW * scale));
             h = Math.Max((int)(ph * scale), (int)(NoteMinH * scale));
+
+
+            if (w > waW - 48) w = Math.Max((int)(NoteMinW * scale), waW - 48);
+            if (h > waH - 48) h = Math.Max((int)(NoteMinH * scale), waH - 48);
         }
         else
         {

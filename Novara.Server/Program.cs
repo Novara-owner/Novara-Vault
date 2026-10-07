@@ -37,6 +37,15 @@ if (args.Length > 0 && args[0].Equals("space", StringComparison.OrdinalIgnoreCas
 
 
 
+if (args.Length > 0 && !args[0].StartsWith('-'))
+{
+    Console.Error.WriteLine($"unknown command: {args[0]} - expected 'space <create|list|show|delete|rotate-secret>', or no arguments to run the server.");
+    return 2;
+}
+
+
+
+
 
 var webRoot = Environment.GetEnvironmentVariable("NOVARA_SYNC_WEB_ROOT")
     ?? Path.Combine(AppContext.BaseDirectory, "Novara.Web");

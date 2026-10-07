@@ -8,13 +8,13 @@
 # static reader: the runtime stage carries only what the process actually loads. The runtime base is
 # Debian (glibc), not Alpine (musl) - SQLite's native library has linux-x64/arm64 builds for glibc
 # and musl has never been measured in this project, so the smaller image would be an untested
-# variable for no operational gain (V3 plan, C10).
+# variable for no operational gain.
 #
 # The image and the bare binary are the same code with the same environment variables; "the Docker
-# image and a bare binary behave identically" is a standing requirement (C5), and the M3 runtime
-# checks assert the same status codes against both.
+# image and a bare binary behave identically" is a standing requirement, and the integration checks
+# assert the same status codes against both.
 #
-# Build (amd64; arm64 is deliberately not a gate - V3 plan, P0-5 / R5):
+# Build (amd64; arm64 is deliberately not built or tested here):
 #   docker buildx build --platform linux/amd64 -t novara-sync:9.0.0 .
 #
 # Behind a proxy, the two predefined build args are honoured by the restore and publish steps:
@@ -81,25 +81,25 @@ ENV NOVARA_SYNC_DATA=/data \
 # the named-volume path work with no manual step: Docker seeds a fresh named volume from the image's
 # directory, ownership included. A bind mount is the other documented shape, and there the host's
 # ownership wins - which is exactly the trap the startup check in SyncHostSetup.ValidateDataRoot
-# reports as a sentence instead of letting SQLite fail on every write (V3 plan, P0-4 / R3).
+# reports as a sentence instead of letting SQLite fail on every write.
 RUN mkdir -p /data && chown "$APP_UID":"$APP_UID" /data
 VOLUME /data
 
-# Non-root by default (V3 plan, P0-4). APP_UID is set by the .NET base image and is also what the
+# Non-root by default. APP_UID is set by the .NET base image and is also what the
 # startup check names in its chown hint, so the two cannot drift.
 USER $APP_UID
 
 EXPOSE 5180
 
-# Probing /healthz needs no extra binary: the .NET runtime images ship no curl or wget, and the plan
-# rules out adding diagnostic tooling to the image (V3 plan, 10.6). Bash is in every Debian/Ubuntu
+# Probing /healthz needs no extra binary: the .NET runtime images ship no curl or wget, and the
+# project deliberately ships no diagnostic tooling in the image. Bash is in every Debian/Ubuntu
 # base, and /dev/tcp is enough to read one status line. A health check that reported "the process is
 # alive" instead would pass while the API answered nothing, which is the failure mode that matters.
 #
 # The Host header is not decoration. As soon as the operator sets NOVARA_SYNC_ALLOWED_HOSTS, host
 # filtering turns on with AllowEmptyHosts=false, and a header-less probe is rejected by the server's
-# own filter - the container reports unhealthy while the service is perfectly fine (found by the M4
-# compose integration test, invisible in the M3 run because no allow-list was set there). The value
+# own filter - the container reports unhealthy while the service is perfectly fine (observed in
+# practice before the probe derived its Host header from the allow-list). The value
 # is derived from the operator's own allow-list, so the probe answers to the same name the service
 # does; with no allow-list there is no filter and the fallback is accepted too. Stripping the spaces
 # keeps a comma-separated list from producing an invalid header.

@@ -184,41 +184,57 @@ public sealed class SqliteSpaceStore : ISpaceStore
         }
     }
 
-    public void SaveSpace(SpaceRecord space)
+    public void SaveSpace(SpaceRecord space, bool requireExisting = false)
     {
         ArgumentNullException.ThrowIfNull(space);
         RequireSafeId(space.SpaceId);
 
         using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO spaces (space_id, name, created_at, updated_at, current_version,
-                                keywrap_version, keywrap_blob, enroll_hash, read_token_hash,
-                                quota_bytes, max_versions)
-            VALUES ($id, $name, $created, $updated, $version, $kwv, $kwb, $enroll, $read, $quota, $max)
-            ON CONFLICT(space_id) DO UPDATE SET
-                name = excluded.name,
-                updated_at = excluded.updated_at,
-                current_version = excluded.current_version,
-                keywrap_version = excluded.keywrap_version,
-                keywrap_blob = excluded.keywrap_blob,
-                enroll_hash = excluded.enroll_hash,
-                read_token_hash = excluded.read_token_hash,
-                quota_bytes = excluded.quota_bytes,
-                max_versions = excluded.max_versions;
-            """;
-        cmd.Parameters.AddWithValue("$id", space.SpaceId);
-        cmd.Parameters.AddWithValue("$name", space.Name);
-        cmd.Parameters.AddWithValue("$created", FormatTime(space.CreatedAt));
-        cmd.Parameters.AddWithValue("$updated", FormatTime(space.UpdatedAt));
-        cmd.Parameters.AddWithValue("$version", space.CurrentVersion);
-        cmd.Parameters.AddWithValue("$kwv", space.KeyWrapVersion);
-        cmd.Parameters.AddWithValue("$kwb", space.KeyWrapJson);
-        cmd.Parameters.AddWithValue("$enroll", space.EnrollmentHash);
-        cmd.Parameters.AddWithValue("$read", space.ReadTokenHash);
-        cmd.Parameters.AddWithValue("$quota", space.QuotaBytes);
-        cmd.Parameters.AddWithValue("$max", space.MaxVersions);
-        Guarded(cmd.ExecuteNonQuery);
+        using var tx = cn.BeginTransaction();
+        try
+        {
+
+
+            if (requireExisting && !SpaceRowExists(cn, tx, space.SpaceId))
+                throw new SpaceStoreException($"space no longer exists: {space.SpaceId}");
+
+            using var cmd = cn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO spaces (space_id, name, created_at, updated_at, current_version,
+                                    keywrap_version, keywrap_blob, enroll_hash, read_token_hash,
+                                    quota_bytes, max_versions)
+                VALUES ($id, $name, $created, $updated, $version, $kwv, $kwb, $enroll, $read, $quota, $max)
+                ON CONFLICT(space_id) DO UPDATE SET
+                    name = excluded.name,
+                    updated_at = excluded.updated_at,
+                    current_version = excluded.current_version,
+                    keywrap_version = excluded.keywrap_version,
+                    keywrap_blob = excluded.keywrap_blob,
+                    enroll_hash = excluded.enroll_hash,
+                    read_token_hash = excluded.read_token_hash,
+                    quota_bytes = excluded.quota_bytes,
+                    max_versions = excluded.max_versions;
+                """;
+            cmd.Parameters.AddWithValue("$id", space.SpaceId);
+            cmd.Parameters.AddWithValue("$name", space.Name);
+            cmd.Parameters.AddWithValue("$created", FormatTime(space.CreatedAt));
+            cmd.Parameters.AddWithValue("$updated", FormatTime(space.UpdatedAt));
+            cmd.Parameters.AddWithValue("$version", space.CurrentVersion);
+            cmd.Parameters.AddWithValue("$kwv", space.KeyWrapVersion);
+            cmd.Parameters.AddWithValue("$kwb", space.KeyWrapJson);
+            cmd.Parameters.AddWithValue("$enroll", space.EnrollmentHash);
+            cmd.Parameters.AddWithValue("$read", space.ReadTokenHash);
+            cmd.Parameters.AddWithValue("$quota", space.QuotaBytes);
+            cmd.Parameters.AddWithValue("$max", space.MaxVersions);
+            cmd.ExecuteNonQuery();
+            tx.Commit();
+        }
+        catch (SqliteException e)
+        {
+            tx.Rollback();
+            throw new SpaceStoreException("failed to persist the space", e);
+        }
     }
 
 
@@ -255,32 +271,47 @@ public sealed class SqliteSpaceStore : ISpaceStore
     public DeviceRecord? GetDevice(string spaceId, string deviceId)
         => GetDevices(spaceId).FirstOrDefault(d => string.Equals(d.DeviceId, deviceId, StringComparison.Ordinal));
 
-    public void SaveDevice(string spaceId, DeviceRecord device)
+    public void SaveDevice(string spaceId, DeviceRecord device, bool requireExisting = true)
     {
         ArgumentNullException.ThrowIfNull(device);
         RequireSafeId(spaceId);
 
         using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO devices (space_id, device_id, name, token_hash, created_at, last_seen_at, revoked, kind)
-            VALUES ($space, $id, $name, $hash, $created, $seen, $revoked, $kind)
-            ON CONFLICT(space_id, device_id) DO UPDATE SET
-                name = excluded.name,
-                token_hash = excluded.token_hash,
-                last_seen_at = excluded.last_seen_at,
-                revoked = excluded.revoked,
-                kind = excluded.kind;
-            """;
-        cmd.Parameters.AddWithValue("$space", spaceId);
-        cmd.Parameters.AddWithValue("$id", device.DeviceId);
-        cmd.Parameters.AddWithValue("$name", device.Name);
-        cmd.Parameters.AddWithValue("$hash", device.TokenHash);
-        cmd.Parameters.AddWithValue("$created", FormatTime(device.CreatedAt));
-        cmd.Parameters.AddWithValue("$seen", device.LastSeenAt is null ? DBNull.Value : FormatTime(device.LastSeenAt.Value));
-        cmd.Parameters.AddWithValue("$revoked", device.Revoked ? 1 : 0);
-        cmd.Parameters.AddWithValue("$kind", (long)device.Kind);
-        Guarded(cmd.ExecuteNonQuery);
+        using var tx = cn.BeginTransaction();
+        try
+        {
+
+            if (requireExisting && !SpaceRowExists(cn, tx, spaceId))
+                throw new SpaceStoreException($"space no longer exists: {spaceId}");
+
+            using var cmd = cn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO devices (space_id, device_id, name, token_hash, created_at, last_seen_at, revoked, kind)
+                VALUES ($space, $id, $name, $hash, $created, $seen, $revoked, $kind)
+                ON CONFLICT(space_id, device_id) DO UPDATE SET
+                    name = excluded.name,
+                    token_hash = excluded.token_hash,
+                    last_seen_at = excluded.last_seen_at,
+                    revoked = excluded.revoked,
+                    kind = excluded.kind;
+                """;
+            cmd.Parameters.AddWithValue("$space", spaceId);
+            cmd.Parameters.AddWithValue("$id", device.DeviceId);
+            cmd.Parameters.AddWithValue("$name", device.Name);
+            cmd.Parameters.AddWithValue("$hash", device.TokenHash);
+            cmd.Parameters.AddWithValue("$created", FormatTime(device.CreatedAt));
+            cmd.Parameters.AddWithValue("$seen", device.LastSeenAt is null ? DBNull.Value : FormatTime(device.LastSeenAt.Value));
+            cmd.Parameters.AddWithValue("$revoked", device.Revoked ? 1 : 0);
+            cmd.Parameters.AddWithValue("$kind", (long)device.Kind);
+            cmd.ExecuteNonQuery();
+            tx.Commit();
+        }
+        catch (SqliteException e)
+        {
+            tx.Rollback();
+            throw new SpaceStoreException("failed to persist the device", e);
+        }
     }
 
 
@@ -336,7 +367,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
     }
 
 
-    public void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions)
+    public void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions, bool requireExisting = true)
     {
         ArgumentNullException.ThrowIfNull(versions);
         RequireSafeId(spaceId);
@@ -345,6 +376,10 @@ public sealed class SqliteSpaceStore : ISpaceStore
         using var tx = cn.BeginTransaction();
         try
         {
+
+            if (requireExisting && !SpaceRowExists(cn, tx, spaceId))
+                throw new SpaceStoreException($"space no longer exists: {spaceId}");
+
             using (var delete = cn.CreateCommand())
             {
                 delete.Transaction = tx;
@@ -450,6 +485,22 @@ public sealed class SqliteSpaceStore : ISpaceStore
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
         return connection;
+    }
+
+
+
+
+
+
+
+
+    private static bool SpaceRowExists(SqliteConnection cn, SqliteTransaction tx, string spaceId)
+    {
+        using var cmd = cn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE spaces SET space_id = space_id WHERE space_id = $id;";
+        cmd.Parameters.AddWithValue("$id", spaceId);
+        return cmd.ExecuteNonQuery() == 1;
     }
 
     private void Initialize()

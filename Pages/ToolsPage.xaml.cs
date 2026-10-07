@@ -1169,7 +1169,7 @@ public sealed partial class ToolsPage : Page
             if (file == null) return;
 
             var exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "9.0.0";
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "9.4.0";
             var html = template
                 .Replace("__CIPHER_BASE64__", cipher)
                 .Replace("__EXPORTED_AT__", exportedAt)

@@ -1,4 +1,4 @@
-# Novara Development Manual
+﻿# Novara Development Manual
 
 <p align="center"><strong>English</strong> · <a href="DEVELOPMENT.zh-CN.md">简体中文</a></p>
 
@@ -847,6 +847,7 @@ Novara/
 | 9.0 | 2026-09-28 | **One-command self-hosting** — official Docker image, compose + Caddy automatic HTTPS, ops CLI (space list/show/delete/rotate-secret), server runtime upgraded to .NET 10, desktop sticky-note redesign, in-app update check; two-round pre-release verification |
 | 9.1 | 2026-09-29 | Hotfix — TOTP row freeze root-caused to the WinUI 3 managed-wrapper GC pitfall (registry back to strong references), smoother TOTP progress bar, drag-drop smoothness, cooldown confirm-key first-frame flash, settings-page brand-color states |
 | 9.3 | 2026-10-07 | Hotfix — first-run wizard rebuilt as a full-screen seven-page tour (ink-drop finale; the welcome screen dissolves from the clicked point), diary/document editor failure diagnostics (cause classification, copyable detail, retry, runtime link, logging) so a missing or damaged WebView2 runtime no longer fails silently, editor initialization hardened (cached environment object plus a re-entrancy guard, ending the "already initialized with a different CoreWebView2Environment" error), wizard mixed-language fix on non-Chinese systems |
+| 9.4 | 2026-10-08 | Performance and hardening — PBKDF2 key-derivation cache (encrypted-library saves drop from ~330 ms to sub-millisecond), three low-end-machine hot paths removed (registry reads per card, per-second brush rebuilds, password operations off the UI thread), password dialogs locked while in flight, reminder border kept across drags, self-hosted server write-fence against cross-process delete races plus CLI fixes (dash-leading space ids, exit-code contract, unknown-command rejection), compose default tag back to latest |
 | 9.2 | 2026-09-30 | Hotfix — reminders fire with the app closed (Task Scheduler COM, locale-independent start boundary, battery gate off, explicit per-user task SD), reminder border gradient reworked (brand-blue to dark red, per-second), urgent reminders rise below pinned, breathing border on the due dialog, danger-red single source with per-palette softening on paper themes, update-button reminder dot |
 
 ---

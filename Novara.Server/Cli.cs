@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Novara.Sync.Server;
+using Novara.Sync.Server.Storage;
 
 namespace Novara.Server;
 
@@ -34,15 +35,26 @@ public static class Cli
         }
 
         var rest = args[2..];
-        return args[1].ToLowerInvariant() switch
+        try
         {
-            "create" => Create(service, rest),
-            "list" => List(service, rest),
-            "show" => Show(service, rest),
-            "delete" => Delete(service, rest),
-            "rotate-secret" => RotateSecret(service, rest),
-            _ => UnknownCommand(args[1]),
-        };
+            return args[1].ToLowerInvariant() switch
+            {
+                "create" => Create(service, rest),
+                "list" => List(service, rest),
+                "show" => Show(service, rest),
+                "delete" => Delete(service, rest),
+                "rotate-secret" => RotateSecret(service, rest),
+                _ => UnknownCommand(args[1]),
+            };
+        }
+
+
+
+        catch (SpaceStoreException e)
+        {
+            Console.Error.WriteLine($"store error: {e.Message}");
+            return 1;
+        }
     }
 
 
@@ -263,6 +275,12 @@ public static class Cli
                 yes = true;
             else if (lower == "--name" && i + 1 < args.Length)
                 name = args[++i];
+
+
+
+
+            else if (positional is null && args[i].StartsWith('-') && args[i].Length >= 20 && SpaceService.IsSafeSpaceId(args[i]))
+                positional = args[i];
             else if (args[i].StartsWith("--", StringComparison.Ordinal) || positional is not null)
                 unknown.Add(args[i]);
             else

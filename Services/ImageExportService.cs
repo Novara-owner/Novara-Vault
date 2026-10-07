@@ -113,12 +113,14 @@ public sealed class ImageExportSession
 
             try
             {
+                var baseHtml = _currentHtml;
+
                 for (int y = 0; y < total; y += ImageExportTemplates.MaxSliceHeight)
                 {
                     var h = Math.Min(ImageExportTemplates.MaxSliceHeight, total - y);
 
 
-                    if (!await LoadAsync(InjectSliceCss(_currentHtml, y, h), width)) return (slice, false);
+                    if (!await LoadAsync(InjectSliceCss(baseHtml, y, h), width)) return (slice, false);
 
                     var ps = cv.Environment.CreatePrintSettings();
                     ps.PageWidth = width / 96.0;

@@ -161,6 +161,52 @@ public class SpaceAdminTests : IDisposable
     [Theory]
     [InlineData("file")]
     [InlineData("sqlite")]
+    public void WritePaths_RefuseToResurrectADeletedSpace(string backend)
+    {
+        var store = NewStore(backend);
+        store.SaveSpace(Space("gone", "gone", 1));
+        store.SaveVersions("gone", Array.Empty<VersionRecord>());
+        store.DeleteSpace("gone");
+
+
+
+
+        Assert.Throws<SpaceStoreException>(() => store.SaveSpace(Space("gone", "gone", 1), requireExisting: true));
+        Assert.Throws<SpaceStoreException>(() => store.SaveVersions("gone", new List<VersionRecord>
+            { new() { Version = 1, CreatedAt = DateTime.UtcNow, DeviceId = "d", Sha256 = "x", Size = 1 } }));
+        Assert.Throws<SpaceStoreException>(() => store.SaveDevice("gone",
+            new DeviceRecord { DeviceId = "d", Name = "n", CreatedAt = DateTime.UtcNow }));
+        Assert.Null(store.GetSpace("gone"));
+        Assert.DoesNotContain(store.ListSpaces(), s => s.SpaceId == "gone");
+
+
+        store.SaveSpace(Space("gone2", "gone2", 2));
+        Assert.NotNull(store.GetSpace("gone2"));
+    }
+
+    [Theory]
+    [InlineData("file")]
+    [InlineData("sqlite")]
+    public void Cli_AcceptsSpaceIdsWithLeadingDash(string backend)
+    {
+
+
+        var store = NewStore(backend);
+        var id = "--" + new string('a', 20);
+        store.SaveSpace(Space(id, "dash", 1));
+
+        var (showCode, showOut, _) = RunCli(NewService(backend), "space", "show", id);
+        Assert.Equal(0, showCode);
+        Assert.Contains("dash", showOut);
+
+        var (delCode, _, _) = RunCli(NewService(backend), "space", "delete", id, "--yes");
+        Assert.Equal(0, delCode);
+        Assert.Null(store.GetSpace(id));
+    }
+
+    [Theory]
+    [InlineData("file")]
+    [InlineData("sqlite")]
     public void ListSpaces_IgnoresDirectoriesThatAreNotSpaces(string backend)
     {
         var store = NewStore(backend);

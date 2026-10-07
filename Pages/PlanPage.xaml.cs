@@ -101,7 +101,7 @@ public sealed partial class PlanPage : Page
         SetReminderOverlay.Visibility = Visibility.Collapsed; CancelReminderOverlay.Visibility = Visibility.Collapsed; ReminderDueOverlay.Visibility = Visibility.Collapsed;
         StopDueBreath();
         DialogDepth.VeilClear();
-        _editingTodoCard = null; _editingNoteCard = null; _pendingDeleteCard = null; _editingReminderId = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; } _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll();
+        _editingTodoCard = null; _editingNoteCard = null; _pendingDeleteCard = null; _editingReminderId = null; foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear(); if (_dragCard != null) { ResetCardBorder(_dragCard); _dragCard.Opacity = 1; } _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { CardList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll();
         _reminderTimer?.Stop(); _reminderTimer = null;
 
 
@@ -607,6 +607,7 @@ public sealed partial class PlanPage : Page
                 if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
+            _lastReminderColor.Remove(old);
             ReorderCards();
             PersistOrderAndSave();
         } else {
@@ -1144,8 +1145,10 @@ private void OnTodoRowCheckedChanged(Border card, List<bool> states, int changed
         StopAutoScroll();
 
 
-        card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
-        card.BorderThickness = new Thickness(1);
+
+
+
+        ResetCardBorder(card);
         card.Opacity = 1;
         _ = RefreshReminderBorder(card);
 
@@ -1398,23 +1401,42 @@ PersistOrderAndSave(); };
     }
 
 
-    private bool RefreshReminderBorder(Border card)
+    private bool RefreshReminderBorder(Border card, Dictionary<Guid, NoteCard>? notes = null, Dictionary<Guid, TodoCard>? todos = null)
     {
         var db = App.Store?.Database;
         if (db == null || !_cardIds.TryGetValue(card, out var id)) return false;
+
+
         DateTime? at = null, setAt = null;
         if (card.Tag is string tg && tg == "note")
         {
-            var n = db.NoteCards.FirstOrDefault(x => x.Id == id);
+            var n = notes != null
+                ? (notes.TryGetValue(id, out var hit) ? hit : null)
+                : db.NoteCards.FirstOrDefault(x => x.Id == id);
             at = n?.ReminderAt; setAt = n?.ReminderSetAt;
         }
         else
         {
-            var t = db.TodoCards.FirstOrDefault(x => x.Id == id);
+            var t = todos != null
+                ? (todos.TryGetValue(id, out var hit) ? hit : null)
+                : db.TodoCards.FirstOrDefault(x => x.Id == id);
             at = t?.ReminderAt; setAt = t?.ReminderSetAt;
         }
-        if (at == null || setAt == null) { ResetCardBorder(card); _reminderCards.Remove(card); return false; }
-        card.BorderBrush = new SolidColorBrush(ReminderColor(setAt.Value, at.Value));
+        if (at == null || setAt == null)
+        {
+            if (_lastReminderColor.Remove(card)) ResetCardBorderCore(card);
+            _reminderCards.Remove(card);
+            return false;
+        }
+        var color = ReminderColor(setAt.Value, at.Value);
+
+        if (_lastReminderColor.TryGetValue(card, out var last) && last == color)
+        {
+            _reminderCards.Add(card);
+            return true;
+        }
+        _lastReminderColor[card] = color;
+        card.BorderBrush = new SolidColorBrush(color);
         card.BorderThickness = new Thickness(3);
         _reminderCards.Add(card);
         return true;
@@ -1422,7 +1444,17 @@ PersistOrderAndSave(); };
 
     private void ResetCardBorder(Border card)
     {
-        card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
+        _lastReminderColor.Remove(card);
+        ResetCardBorderCore(card);
+    }
+
+
+    private static void ResetCardBorderCore(Border card)
+    {
+        var target = App.GetBrush("AppBorderBrush").Color;
+
+        if (card.BorderBrush is SolidColorBrush sb && sb.Color == target && card.BorderThickness.Top == 1) return;
+        card.BorderBrush = new SolidColorBrush(target);
         card.BorderThickness = new Thickness(1);
     }
 
@@ -1447,6 +1479,11 @@ PersistOrderAndSave(); };
     }
 
     private DispatcherTimer? _reminderTimer;
+
+
+
+
+    private readonly Dictionary<Border, Color> _lastReminderColor = new();
     private const double ReminderUrgentFraction = 0.15;
     private List<Guid>? _lastUrgentOrder;
     private readonly HashSet<Border> _dueShown = new();
@@ -1465,13 +1502,18 @@ PersistOrderAndSave(); };
     {
         bool anyReminder = false;
         Border? dueCard = null;
+
+
+        var db = App.Store?.Database;
+        var notesById = db?.NoteCards.ToDictionary(x => x.Id);
+        var todosById = db?.TodoCards.ToDictionary(x => x.Id);
         foreach (var (card, _) in _cardIds)
         {
             if (card.Tag is not string tg || (tg != "note" && tg != "todo")) continue;
 
 
-            if (dueCard == null && IsReminderDue(card)) { dueCard = card; if (RefreshReminderBorder(card)) anyReminder = true; }
-            else if (RefreshReminderBorder(card)) anyReminder = true;
+            if (dueCard == null && IsReminderDue(card, notesById, todosById)) { dueCard = card; if (RefreshReminderBorder(card, notesById, todosById)) anyReminder = true; }
+            else if (RefreshReminderBorder(card, notesById, todosById)) anyReminder = true;
         }
         if (anyReminder) StartReminderRefresh();
 
@@ -1479,7 +1521,7 @@ PersistOrderAndSave(); };
 
         if (!_bulkLoading)
         {
-            var urgentNow = _cardIds.Select(kv => (Id: kv.Value, Span: GetCardReminderSpan(kv.Key)))
+            var urgentNow = _cardIds.Select(kv => (Id: kv.Value, Span: GetCardReminderSpan(kv.Key, notesById, todosById)))
                 .Where(x => x.Span is { } sp && IsCardUrgent(sp.SetAt, sp.Due))
                 .OrderBy(x => x.Span!.Value.Due).Select(x => x.Id).ToList();
             if (_lastUrgentOrder == null || !_lastUrgentOrder.SequenceEqual(urgentNow))
@@ -1491,16 +1533,21 @@ PersistOrderAndSave(); };
     }
 
 
-    private (DateTime Due, DateTime SetAt)? GetCardReminderSpan(Border card)
+
+    private (DateTime Due, DateTime SetAt)? GetCardReminderSpan(Border card, Dictionary<Guid, NoteCard>? notes = null, Dictionary<Guid, TodoCard>? todos = null)
     {
         var db = App.Store?.Database;
         if (db == null || !_cardIds.TryGetValue(card, out var id)) return null;
         if (card.Tag is string tg && tg == "note")
         {
-            var n = db.NoteCards.FirstOrDefault(x => x.Id == id);
+            var n = notes != null
+                ? (notes.TryGetValue(id, out var hit) ? hit : null)
+                : db.NoteCards.FirstOrDefault(x => x.Id == id);
             return n is { ReminderAt: { } d, ReminderSetAt: { } s } ? (d, s) : null;
         }
-        var t = db.TodoCards.FirstOrDefault(x => x.Id == id);
+        var t = todos != null
+            ? (todos.TryGetValue(id, out var th) ? th : null)
+            : db.TodoCards.FirstOrDefault(x => x.Id == id);
         return t is { ReminderAt: { } d2, ReminderSetAt: { } s2 } ? (d2, s2) : null;
     }
 
@@ -1513,9 +1560,9 @@ PersistOrderAndSave(); };
         return (DateTime.Now - setAt).TotalSeconds >= total * (1 - ReminderUrgentFraction);
     }
 
-    private bool IsReminderDue(Border card)
+    private bool IsReminderDue(Border card, Dictionary<Guid, NoteCard>? notes = null, Dictionary<Guid, TodoCard>? todos = null)
     {
-        return GetCardReminderSpan(card) is { } s && s.Due <= DateTime.Now;
+        return GetCardReminderSpan(card, notes, todos) is { } s && s.Due <= DateTime.Now;
     }
 
     private Border? _dueReminderCard;
@@ -1713,6 +1760,7 @@ PersistOrderAndSave(); };
     private void DeleteConfirmScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog(); }
     private void DeleteConfirmButton_Click(object s, RoutedEventArgs e) { if (_pendingDeleteCard == null) { HideDeleteConfirmDialog(); return; } if (_deleteConfirming) return; _deleteConfirming = true; { bool isNote = _pendingDeleteCard.Tag is string tg && tg == "note"; _starredCards.Remove(_pendingDeleteCard); _pinnedCards.Remove(_pendingDeleteCard); _pinIcons.Remove(_pendingDeleteCard); _starIcons.Remove(_pendingDeleteCard); _todoData.Remove(_pendingDeleteCard); _todoCollapsed.Remove(_pendingDeleteCard); _todoCompletedBadges.Remove(_pendingDeleteCard); _noteData.Remove(_pendingDeleteCard); _noteExpanded.Remove(_pendingDeleteCard); _cardExpandBtns.Remove(_pendingDeleteCard); _todoRowPanels.Remove(_pendingDeleteCard); _todoSubPanels.Remove(_pendingDeleteCard); _createdAt.Remove(_pendingDeleteCard); _reminderCards.Remove(_pendingDeleteCard); _dueShown.Remove(_pendingDeleteCard);
 
+            _lastReminderColor.Remove(_pendingDeleteCard);
             if (_cardIds.Remove(_pendingDeleteCard, out var delId))
             {
                 var db = App.Store?.Database;
@@ -1945,6 +1993,7 @@ PersistOrderAndSave(); };
                 if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
+            _lastReminderColor.Remove(old);
             ReorderCards();
             PersistOrderAndSave();
         } else {

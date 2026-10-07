@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
@@ -1043,6 +1043,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void OnStoreSaveFailed(string message) => DispatcherQueue.TryEnqueue(ShowSaveFailedDialog);
 
     private bool _lockInProgress;
+    private bool _carouselInterruptedByLock;
 
 
 
@@ -1060,6 +1061,26 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             App.RelockStore();
             relocked = true;
             BindStoreSaveFailed();
+
+
+
+
+            if (WelcomeCarousel.Visibility == Visibility.Visible)
+            {
+                StopCarouselFloat();
+                _pageSb?.Stop(); _pageSb = null;
+                _meltSb?.Stop(); _meltSb = null;
+                ResetCarouselMeltLayer();
+                _pageAnimLock = false;
+                CarouselBlurHost.Visibility = Visibility.Collapsed;
+                WelcomeCarousel.Opacity = 0;
+                WelcomeCarousel.Visibility = Visibility.Collapsed;
+                _carouselInterruptedByLock = true;
+            }
+            WelcomeMeltLayer.Visibility = Visibility.Collapsed;
+            ResetMeltVisual(WelcomeMeltBlob0);
+            ResetMeltVisual(WelcomeMeltBlob1);
+            ResetMeltVisual(WelcomeMeltBlob2);
             ShowLockScreen();
 
 
@@ -1162,6 +1183,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
         ApplyQuickCaptureHotkey();
+
+
+        if (_carouselInterruptedByLock)
+        {
+            _carouselInterruptedByLock = false;
+            WelcomeOverlay.Visibility = Visibility.Collapsed;
+            CustomTitleBar.Visibility = Visibility.Visible;
+            BottomToolbarPanel.Visibility = Visibility.Visible;
+            ShowMainContent();
+            MaybeShowWelcomeCarousel();
+        }
     }
 
 
@@ -1227,6 +1259,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
     private bool _migrateFailed;
+    private bool _migrateInFlight;
     private bool _migrateIsKdf;
 
     public void ShowMigrateFormatDialog()
@@ -1276,10 +1309,30 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         HideMigrateFormatDialog();
     }
 
-    private void MigrateConfirm_Click(object sender, RoutedEventArgs e)
+    private async void MigrateConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_migrateFailed) { HideMigrateFormatDialog(); return; }
-        var ok = _migrateIsKdf ? App.Store?.MigrateKdf() == true : App.Store?.MigrateFormat() == true;
+        if (_migrateInFlight) return;
+
+
+
+
+        _migrateInFlight = true;
+        MigrateConfirmButton.IsEnabled = false;
+        MigrateLaterButton.IsEnabled = false;
+        bool ok;
+        try
+        {
+            ok = await System.Threading.Tasks.Task.Run(() =>
+                _migrateIsKdf ? App.Store?.MigrateKdf() == true : App.Store?.MigrateFormat() == true);
+        }
+        catch { ok = false; }
+        finally
+        {
+            _migrateInFlight = false;
+            MigrateConfirmButton.IsEnabled = true;
+            MigrateLaterButton.IsEnabled = true;
+        }
         if (ok)
         {
             _settingsPage?.UpdatePrivacyLockUI();
@@ -2754,6 +2807,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         fadeOut.Children.Add(oa);
         fadeOut.Completed += (s, ev) =>
         {
+
+            if (LockScreenFrame.Visibility == Visibility.Visible)
+            {
+                _welcomeFading = false;
+                WelcomeOverlay.Visibility = Visibility.Collapsed;
+                return;
+            }
             _welcomeFading = false;
             WelcomeOverlay.Visibility = Visibility.Collapsed;
             WelcomeExitCommit();
@@ -2792,6 +2852,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         catch (Exception ex)
         {
             Services.CrashLogger.LogNote("WelcomeMelt", "spread failed: " + ex.Message);
+
+
+            WelcomeMeltLayer.Visibility = Visibility.Collapsed;
+            ResetMeltVisual(WelcomeMeltBlob0);
+            ResetMeltVisual(WelcomeMeltBlob1);
+            ResetMeltVisual(WelcomeMeltBlob2);
             return false;
         }
         NavigateToPage(FirstVisibleTab().Tab);
@@ -2814,6 +2880,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         prep.Tick += (_, _) =>
         {
             prep.Stop();
+
+
+            if (LockScreenFrame.Visibility == Visibility.Visible)
+            {
+                _welcomeFading = false;
+                return;
+            }
             WelcomeExitCommit();
             WelcomeOverlay.Visibility = Visibility.Collapsed;
             ShowMainContent();

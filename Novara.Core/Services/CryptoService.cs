@@ -49,8 +49,97 @@ public static class CryptoService
         return Decompress(compressed);
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private static readonly object KeyCacheLock = new();
+    private const int KeyCacheCapacity = 4;
+    private static readonly string[] CacheKeys = new string[KeyCacheCapacity];
+    private static readonly byte[]?[] CacheValues = new byte[]?[KeyCacheCapacity];
+    private static int CacheCount;
+    private static readonly string[] HitLog = new string[256];
+    private static readonly string[] MissLog = new string[64];
+    private static int HitCount, MissCount;
+
+
+    public static (string[] Hits, string[] Misses) CacheCounters()
+    {
+        lock (KeyCacheLock)
+        {
+            var hits = new string[HitCount];
+            for (var i = 0; i < HitCount; i++) hits[i] = HitLog[i];
+            var misses = new string[MissCount];
+            for (var i = 0; i < MissCount; i++) misses[i] = MissLog[i];
+            return (hits, misses);
+        }
+    }
+
+
+
+    public static void ClearKeyCache()
+    {
+        lock (KeyCacheLock)
+        {
+            for (var i = 0; i < KeyCacheCapacity; i++) { CacheKeys[i] = null!; CacheValues[i] = null; }
+            CacheCount = 0;
+        }
+    }
+
+    private static string CacheKey(string password, byte[] salt, int iterations)
+        => string.Concat(iterations.ToString(), ":", Convert.ToBase64String(salt), ":", password);
+
     private static byte[] DeriveKey(string password, byte[] salt, int iterations = LegacyIterations)
-        => Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
+    {
+        var cacheKey = CacheKey(password, salt, iterations);
+        lock (KeyCacheLock)
+        {
+            for (var i = 0; i < CacheCount; i++)
+            {
+                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal))
+                {
+                    if (HitCount < HitLog.Length) HitLog[HitCount++] = iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
+                    return CacheValues[i]!;
+                }
+            }
+        }
+
+        var derived = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, KeySize);
+        lock (KeyCacheLock)
+        {
+            if (MissCount < MissLog.Length) MissLog[MissCount++] = iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
+
+            for (var i = 0; i < CacheCount; i++)
+                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal)) return CacheValues[i]!;
+            if (CacheCount >= KeyCacheCapacity)
+            {
+                for (var i = 1; i < KeyCacheCapacity; i++) { CacheKeys[i - 1] = CacheKeys[i]; CacheValues[i - 1] = CacheValues[i]; }
+                CacheCount = KeyCacheCapacity - 1;
+            }
+            CacheKeys[CacheCount] = cacheKey;
+            CacheValues[CacheCount] = derived;
+            CacheCount++;
+        }
+        return derived;
+    }
 
 
 

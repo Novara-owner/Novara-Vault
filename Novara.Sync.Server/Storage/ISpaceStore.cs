@@ -10,7 +10,15 @@ public interface ISpaceStore
 {
     bool SpaceExists(string spaceId);
     SpaceRecord? GetSpace(string spaceId);
-    void SaveSpace(SpaceRecord space);
+
+
+
+
+
+
+
+
+    void SaveSpace(SpaceRecord space, bool requireExisting = false);
 
 
 
@@ -36,11 +44,22 @@ public interface ISpaceStore
 
 
 
+
+
+
+
+
+
+
+
     void DeleteSpace(string spaceId);
 
     IReadOnlyList<DeviceRecord> GetDevices(string spaceId);
     DeviceRecord? GetDevice(string spaceId, string deviceId);
-    void SaveDevice(string spaceId, DeviceRecord device);
+
+
+
+    void SaveDevice(string spaceId, DeviceRecord device, bool requireExisting = true);
 
 
 
@@ -51,7 +70,11 @@ public interface ISpaceStore
     void TouchDevice(string spaceId, string deviceId, DateTime lastSeenAt);
 
     IReadOnlyList<VersionRecord> GetVersions(string spaceId);
-    void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions);
+
+
+
+
+    void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions, bool requireExisting = true);
 
     void WriteBlob(string spaceId, VersionRecord version, byte[] payload);
     byte[]? ReadBlob(string spaceId, VersionRecord version);
