@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_ROLL_FORWARD: LatestMajor
+
+jobs:
+
+  build-test:
+    name: Build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.400'
+      - name: Restore
+        run: dotnet restore Novara.slnx
+      - name: Build
+        run: |
+          dotnet build Novara.Core/Novara.Core.csproj -c Release --no-restore
+          dotnet build Novara.Sync.Server/Novara.Sync.Server.csproj -c Release --no-restore
+          dotnet build Novara.Server/Novara.Server.csproj -c Release --no-restore
+      - name: Test
+        run: dotnet test Novara.Tests/Novara.Tests.csproj -c Release --no-restore
+
+  scan:
+    name: Dependency and license audit
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.400'
+      - name: Restore
+        run: dotnet restore Novara.slnx
+      - name: Audit dependency vulnerabilities
+        shell: pwsh
+        run: |
+          $data = dotnet list Novara.slnx package --vulnerable --include-transitive --format json | ConvertFrom-Json
+          $critical = @()
+          $high = @()
+          $recorded = @()
+          foreach ($project in @($data.projects)) {
+            foreach ($framework in @($project.frameworks)) {
+              foreach ($package in (@($framework.topLevelPackages) + @($framework.transitivePackages))) {
+                if ($null -eq $package) { continue }
+                foreach ($v in @($package.vulnerabilities)) {
+                  if ($null -eq $v) { continue }
+                  $line = "$($package.id) $($package.resolvedVersion) [$($v.severity)] $($v.advisoryurl)"
+                  if ($v.severity -eq 'Critical') { $critical += $line }
+                  elseif ($v.severity -eq 'High') { $high += $line }
+                  else { $recorded += $line }
+                }
+              }
+            }
+          }
+          if ($recorded.Count -gt 0) {
+            Write-Host 'Moderate and low severity advisories (recorded):'
+            $recorded | ForEach-Object { Write-Host "  $_" }
+          }
+          if ($high.Count -gt 0) {
+            Write-Warning 'High severity advisories require manual review:'
+            $high | ForEach-Object { Write-Warning "  $_" }
+          }
+          if ($critical.Count -gt 0) {
+            Write-Error ("Critical vulnerabilities found:`n  " + ($critical -join "`n  "))
+            exit 1
+          }
+          Write-Host 'No critical dependency vulnerabilities.'
+      - name: Record outdated packages
+        continue-on-error: true
+        run: dotnet list Novara.slnx package --outdated
+      - name: Generate license inventory
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-project-licenses
+          $dir = Join-Path $env:RUNNER_TEMP 'licenses'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          dotnet-project-licenses -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
+          $generated = ([IO.File]::ReadAllText((Join-Path $dir 'THIRD_PARTY_LICENSES.md'))) -replace "`r`n", "`n"
+          $header = "# Third-Party Licenses`n`nThis file lists the third-party NuGet packages used to build Novara, together with their license types and license links.`n`nIt is generated automatically by the dotnet-project-licenses tool and verified in CI. Do not edit it by hand.`n`n"
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'THIRD_PARTY_LICENSES.md'), ($header + $generated), (New-Object System.Text.UTF8Encoding($false)))
+      - name: Verify license inventory is current
+        shell: pwsh
+        run: |
+          git diff --exit-code --ignore-cr-at-eol -- THIRD_PARTY_LICENSES.md
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error 'THIRD_PARTY_LICENSES.md is out of date. Regenerate it and commit the result.'
+            exit 1
+          }
+          Write-Host 'THIRD_PARTY_LICENSES.md is current.'
+
+  desktop:
+    name: Desktop build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.400'
+      - name: Configure Windows App SDK MSBuild tasks
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path $vswhere)) {
+            Write-Error 'vswhere.exe was not found on this runner.'
+            exit 1
+          }
+          $vsPath = @(& $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath)[0]
+          if (-not $vsPath) {
+            Write-Error 'No Visual Studio installation was found on this runner.'
+            exit 1
+          }
+          $appx = Get-ChildItem -Path (Join-Path $vsPath 'MSBuild\Microsoft\VisualStudio') -Directory -Filter 'v*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'AppxPackage' } |
+            Where-Object { Test-Path (Join-Path $_ 'Microsoft.Build.Packaging.Pri.Tasks.dll') } |
+            Select-Object -First 1
+          if (-not $appx) {
+            Write-Error 'Microsoft.Build.Packaging.Pri.Tasks.dll is not present in the Visual Studio installation.'
+            exit 1
+          }
+          "AppxMSBuildToolsPath=$appx\" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "AppxMSBuildToolsPath set to $appx"
+      - name: Restore
+        run: dotnet restore Novara.csproj
+      - name: Build
+        run: dotnet build Novara.csproj -c Release --no-restore
+      - name: Upload desktop build
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: novara-desktop
+          path: bin/x64/Release/*/win-x64/
+
+  release:
+    name: Release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-test, scan, desktop]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.400'
+      - name: Publish sync server
+        run: >
+          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/sync
+      - name: Upload sync server
+        uses: actions/upload-artifact@v4
+        with:
+          name: novarasync
+          path: publish/sync/NovaraSync.exe
