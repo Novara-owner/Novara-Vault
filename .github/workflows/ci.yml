@@ -153,6 +153,168 @@ jobs:
           name: novara-desktop
           path: bin/x64/Release/*/win-x64/
 
+  package:
+    name: Package installer
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build-test, scan, desktop]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.400'
+      - name: Configure Windows App SDK MSBuild tasks
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path $vswhere)) {
+            Write-Error 'vswhere.exe was not found on this runner.'
+            exit 1
+          }
+          $vsPath = @(& $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath)[0]
+          if (-not $vsPath) {
+            Write-Error 'No Visual Studio installation was found on this runner.'
+            exit 1
+          }
+          $appx = Get-ChildItem -Path (Join-Path $vsPath 'MSBuild\Microsoft\VisualStudio') -Directory -Filter 'v*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'AppxPackage' } |
+            Where-Object { Test-Path (Join-Path $_ 'Microsoft.Build.Packaging.Pri.Tasks.dll') } |
+            Select-Object -First 1
+          if (-not $appx) {
+            Write-Error 'Microsoft.Build.Packaging.Pri.Tasks.dll is not present in the Visual Studio installation.'
+            exit 1
+          }
+          "AppxMSBuildToolsPath=$appx\" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "AppxMSBuildToolsPath set to $appx"
+      - name: Restore
+        run: dotnet restore Novara.slnx -p:RestoreLockedMode=true
+      - name: Publish main app pass A
+        run: >
+          dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
+          -p:RestoreLockedMode=true -o publish/a
+      - name: Snapshot pass A pri
+        shell: pwsh
+        run: |
+          $pri = Get-ChildItem -Path 'bin/x64/Release' -Recurse -Filter 'Novara.pri' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $pri) {
+            Write-Error 'Novara.pri was not produced by the build.'
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path 'pri/a' | Out-Null
+          Copy-Item -Path $pri.FullName -Destination 'pri/a/Novara.pri' -Force
+      - name: Publish main app pass B
+        run: >
+          dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
+          -p:RestoreLockedMode=true -o publish/b
+      - name: Snapshot pass B pri
+        shell: pwsh
+        run: |
+          $pri = Get-ChildItem -Path 'bin/x64/Release' -Recurse -Filter 'Novara.pri' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $pri) {
+            Write-Error 'Novara.pri was not produced by the build.'
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path 'pri/b' | Out-Null
+          Copy-Item -Path $pri.FullName -Destination 'pri/b/Novara.pri' -Force
+      - name: Publish helper processes
+        run: |
+          dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-contained -p:RestoreLockedMode=true -o publish/host
+          dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained -p:RestoreLockedMode=true -o publish/mcp
+          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:RestoreLockedMode=true -o publish/sync
+      - name: Assemble package trees
+        shell: pwsh
+        run: |
+          foreach ($pass in @('a', 'b')) {
+            $stage = Join-Path 'stage' $pass
+            New-Item -ItemType Directory -Force -Path $stage | Out-Null
+            Copy-Item -Path "publish/$pass/*" -Destination $stage -Recurse -Force
+            Copy-Item -Path "pri/$pass/Novara.pri" -Destination (Join-Path $stage 'Novara.pri') -Force
+            $hostDir = Join-Path $stage 'Host'
+            New-Item -ItemType Directory -Force -Path $hostDir | Out-Null
+            Copy-Item -Path 'publish/host/*' -Destination $hostDir -Recurse -Force
+            $hostAssets = Join-Path $hostDir 'Assets'
+            New-Item -ItemType Directory -Force -Path $hostAssets | Out-Null
+            Copy-Item -Path 'StickNoteHost/Assets/128.ico' -Destination (Join-Path $hostAssets '128.ico') -Force
+            Copy-Item -Path 'publish/mcp/NovaraMCP.exe' -Destination (Join-Path $stage 'NovaraMCP.exe') -Force
+            $syncDir = Join-Path $stage 'Sync'
+            New-Item -ItemType Directory -Force -Path $syncDir | Out-Null
+            Copy-Item -Path 'publish/sync/*' -Destination $syncDir -Recurse -Force
+            Copy-Item -Path 'Installer/Sync/*.cmd' -Destination $syncDir -Force
+          }
+          Write-Host 'Package trees assembled.'
+      - name: Compare the two package trees
+        shell: pwsh
+        run: |
+          function Get-TreeHashes([string]$Root) {
+            $base = (Resolve-Path $Root).Path
+            Get-ChildItem -Path $Root -Recurse -File |
+              ForEach-Object {
+                [pscustomobject]@{
+                  Path = $_.FullName.Substring($base.Length).TrimStart('\')
+                  Hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+                }
+              } |
+              Sort-Object -Property Path
+          }
+          $treeA = Get-TreeHashes 'stage/a'
+          $treeB = Get-TreeHashes 'stage/b'
+          $delta = Compare-Object -ReferenceObject $treeA -DifferenceObject $treeB -Property Path, Hash
+          if ($delta) {
+            $delta | ForEach-Object { Write-Host "$($_.SideIndicator) $($_.Path) $($_.Hash)" }
+            Write-Error "Package tree mismatch: $($delta.Count) entries differ between the two publishes."
+            exit 1
+          }
+          Write-Host "Both package trees are byte-identical: $($treeA.Count) files compared."
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Novara_Publish'
+          if (Test-Path $publishDir) { Remove-Item -Path $publishDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+          Copy-Item -Path 'stage/a/*' -Destination $publishDir -Recurse -Force
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            $found = Get-ChildItem -Path 'C:\Program Files (x86)', 'C:\Program Files' -Directory -Filter 'Inno Setup*' -ErrorAction SilentlyContinue |
+              ForEach-Object { Join-Path $_.FullName 'ISCC.exe' } |
+              Where-Object { Test-Path $_ } |
+              Select-Object -First 1
+            if ($found) { $iscc = $found }
+          }
+          if (-not (Test-Path $iscc)) {
+            Write-Error 'ISCC.exe was not found on this runner.'
+            exit 1
+          }
+          Write-Host "Using $iscc"
+          & $iscc 'Installer\setup.iss'
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup compilation failed with exit code $LASTEXITCODE."
+            exit $LASTEXITCODE
+          }
+          $outputDir = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Novara Release'
+          $installer = Get-ChildItem -Path $outputDir -Filter 'Novara_Setup_*.exe' -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $installer) {
+            Write-Error 'The installer was not produced.'
+            exit 1
+          }
+          Write-Host "Installer: $($installer.FullName)"
+          Write-Host "Size: $($installer.Length) bytes"
+          Write-Host "SHA256: $((Get-FileHash -Path $installer.FullName -Algorithm SHA256).Hash)"
+          New-Item -ItemType Directory -Force -Path 'artifacts' | Out-Null
+          Copy-Item -Path $installer.FullName -Destination 'artifacts' -Force
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: novara-installer
+          path: artifacts/Novara_Setup_*.exe
+          if-no-files-found: error
+
   release:
     name: Release artifacts
     if: startsWith(github.ref, 'refs/tags/v')
