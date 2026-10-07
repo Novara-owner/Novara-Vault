@@ -4,6 +4,8 @@ This file lists the third-party NuGet packages used to build Novara, together wi
 
 It is generated automatically by the dotnet-project-licenses tool and verified in CI. Do not edit it by hand.
 
+Packages that the .NET SDK injects for build tooling are excluded from the CI comparison because their versions follow the build environment rather than this repository.
+
  | Reference                                  | Version         | License Type | License                                                                      | 
  | ------------------------------------------ | --------------- | ------------ | ---------------------------------------------------------------------------- | 
  | AngleSharp                                 | 1.5.0           | MIT          | https://licenses.nuget.org/MIT                                               | 
@@ -14,7 +16,7 @@ It is generated automatically by the dotnet-project-licenses tool and verified i
  | Microsoft.Data.Sqlite                      | 8.0.8           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | Microsoft.Data.Sqlite.Core                 | 8.0.8           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | Microsoft.Graphics.Win2D                   | 1.2.0           |              | http://www.microsoft.com/web/webpi/eula/eula_win2d_10012014.htm              | 
- | Microsoft.NET.ILLink.Tasks                 | 8.0.30          | MIT          | https://licenses.nuget.org/MIT                                               | 
+ | Microsoft.NET.ILLink.Tasks                 | 8.0.31          | MIT          | https://licenses.nuget.org/MIT                                               | 
  | Microsoft.NET.Test.Sdk                     | 17.11.1         | MIT          | https://licenses.nuget.org/MIT                                               | 
  | Microsoft.TestPlatform.ObjectModel         | 17.11.1         | MIT          | https://licenses.nuget.org/MIT                                               | 
  | Microsoft.TestPlatform.TestHost            | 17.11.1         | MIT          | https://licenses.nuget.org/MIT                                               | 

@@ -95,6 +95,7 @@ jobs:
               Where-Object { $_ -match '^\s*\|' } |
               Where-Object { $_ -notmatch '^\s*\|\s*(Reference|-+)' } |
               ForEach-Object { ($_ -replace '\s+', ' ').Trim() } |
+              Where-Object { $_ -notmatch 'Microsoft\.NET\.ILLink\.Tasks' } |
               Sort-Object
           }
           $generated = [IO.File]::ReadAllText((Join-Path $dir 'THIRD_PARTY_LICENSES.md'))
