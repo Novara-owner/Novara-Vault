@@ -1,8 +1,8 @@
-﻿# Novara 安全说明
+# Novara 安全说明
 
 <p align="center"><a href="SECURITY.md">English</a> · <strong>简体中文</strong></p>
 
-> 另见：[安全架构](docs/security-architecture.zh-CN.md)——两条信任链（静态数据 / Agent 访问）一图速览，以及如何校验你的下载。 · [Security Architecture (English)](docs/security-architecture.md)
+> 另见：[威胁模型](docs/threat-model.zh-CN.md)——保护资产、攻击者、安全假设、非目标与缓解措施全量版。 · [安全架构](docs/security-architecture.zh-CN.md)——四条信任链（静态数据 / Agent 访问 / 快照 / 同步）一图速览，以及如何校验你的下载。 · [Security Architecture (English)](docs/security-architecture.md) · [Threat Model (English)](docs/threat-model.md)
 
 ---
 
@@ -76,6 +76,8 @@
 - **内存提取**——应用解锁期间加密密钥驻留内存；具备相应工具的高水平本地攻击者可能将其提取。
 
 > **结论：** Novara 的加密保护的是**磁盘上的静止数据**。它不能替代一台健康、无恶意软件、物理环境安全的电脑。
+
+> **完整模型。** 本节是摘要。保护资产、攻击者类别、我们依赖但不掌控的安全假设、我们刻意不保护的部分，以及每条边界背后的缓解措施，全部写在**[威胁模型](docs/threat-model.zh-CN.md)**里。
 
 ## 4. 加密体系
 

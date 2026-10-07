@@ -1,8 +1,8 @@
-﻿# Novara Security Policy
+# Novara Security Policy
 
 <p align="center"><strong>English</strong> · <a href="SECURITY.zh-CN.md">简体中文</a></p>
 
-> See also: [Security Architecture](docs/security-architecture.md) — the two trust chains (data at rest / agent access) at a glance, and how to verify your download. · [安全架构（中文）](docs/security-architecture.zh-CN.md)
+> See also: [Threat Model](docs/threat-model.md) — assets, adversaries, assumptions, non-goals and mitigations, in full. · [Security Architecture](docs/security-architecture.md) — the four trust chains (data at rest / agent access / snapshots / sync) at a glance, and how to verify your download. · [安全架构（中文）](docs/security-architecture.zh-CN.md) · [威胁模型（中文）](docs/threat-model.zh-CN.md)
 
 ---
 
@@ -74,6 +74,8 @@ Please include:
 - **Memory extraction** — encryption keys exist in memory while the app is unlocked; a sophisticated local attacker with the right tools may extract them.
 
 > **Bottom line:** Novara's encryption protects your data *at rest on disk*. It is not a substitute for a healthy, malware-free, physically-secured machine.
+
+> **The full model.** This section is the summary. The assets, the adversary classes, the assumptions we depend on but do not control, what we deliberately do not protect, and the mitigation behind each boundary are written out in the **[Threat Model](docs/threat-model.md)**.
 
 ## 4. Encryption architecture
 
