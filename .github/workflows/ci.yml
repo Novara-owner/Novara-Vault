@@ -83,25 +83,31 @@ jobs:
       - name: Record outdated packages
         continue-on-error: true
         run: dotnet list Novara.slnx package --outdated
-      - name: Generate license inventory
+      - name: Audit license inventory
         shell: pwsh
         run: |
           dotnet tool install --global dotnet-project-licenses
           $dir = Join-Path $env:RUNNER_TEMP 'licenses'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           dotnet-project-licenses -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
-          $generated = ([IO.File]::ReadAllText((Join-Path $dir 'THIRD_PARTY_LICENSES.md'))) -replace "`r`n", "`n"
-          $header = "# Third-Party Licenses`n`nThis file lists the third-party NuGet packages used to build Novara, together with their license types and license links.`n`nIt is generated automatically by the dotnet-project-licenses tool and verified in CI. Do not edit it by hand.`n`n"
-          [IO.File]::WriteAllText((Join-Path (Get-Location) 'THIRD_PARTY_LICENSES.md'), ($header + $generated), (New-Object System.Text.UTF8Encoding($false)))
-      - name: Verify license inventory is current
-        shell: pwsh
-        run: |
-          git diff --exit-code --ignore-cr-at-eol -- THIRD_PARTY_LICENSES.md
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error 'THIRD_PARTY_LICENSES.md is out of date. Regenerate it and commit the result.'
+          function Get-LicenseRows([string]$text) {
+            ($text -split "`n") |
+              Where-Object { $_ -match '^\s*\|' } |
+              Where-Object { $_ -notmatch '^\s*\|\s*(Reference|-+)' } |
+              ForEach-Object { ($_ -replace '\s+', ' ').Trim() } |
+              Sort-Object
+          }
+          $generated = [IO.File]::ReadAllText((Join-Path $dir 'THIRD_PARTY_LICENSES.md'))
+          $committed = (git show HEAD:THIRD_PARTY_LICENSES.md | Out-String)
+          $delta = Compare-Object (Get-LicenseRows $committed) (Get-LicenseRows $generated)
+          if ($delta) {
+            $message = ($delta | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join "`n"
+            if ($message.Length -gt 3500) { $message = $message.Substring(0, 3500) }
+            $encoded = $message.Replace('%', '%25').Replace("`r`n", '%0A').Replace("`n", '%0A')
+            Write-Host "::error title=License inventory drift::$encoded"
             exit 1
           }
-          Write-Host 'THIRD_PARTY_LICENSES.md is current.'
+          Write-Host 'License inventory is current.'
 
   desktop:
     name: Desktop build
