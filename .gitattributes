@@ -1,0 +1,7 @@
+*.cmd text eol=crlf
+*.iss text eol=crlf
+*.png binary
+*.ico binary
+*.bmp binary
+*.ttf binary
+*.woff binary

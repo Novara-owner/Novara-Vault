@@ -64,9 +64,6 @@ body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{ba
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title b,#title strong,#title span[style*=bold]{{font-weight:700!important}}
 #title:empty::before{{content:'{6}';color:{2};font-weight:normal;letter-spacing:0.18em}}
-// 6.1-X-09（占位符配方的依据记账，进 Bug 档案）：Tiptap 官方 Placeholder 配方——float+height:0+
-// pointer-events:none 让占位符成为纯背景：不可点击/不占布局/不影响光标（修复自拼版 50% 概率光标
-// 被困在占位符后的问题）。配方本身在下方 CSS 内，不再内嵌 CSS 注释——字符串通道剥不离，会原样进公开库。
 #body.ph .ProseMirror p:first-child::before{{content:'{7}';color:{2};float:left;height:0;pointer-events:none;}}
 .sep{{height:1px;background:{3};margin:0 0 16px 0;opacity:0.45}}
 #body{{min-height:calc(100vh - 150px)}}

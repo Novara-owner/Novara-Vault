@@ -1,27 +1,16 @@
-# Build outputs
 bin/
 obj/
 [Bb]uild/
 Generated Files/
-
-# IDE / local tooling
 .vs/
 .vscode/
 *.user
 *.suo
 *.rsuser
-
-# JS editor dependencies (the dist bundles are tracked; node_modules is not)
 DiaryEditorJs/node_modules/
-
-# Installer output (rebuildable from setup.iss)
 Installer/*.exe
 _publish_tmp/
-
-# OS noise
 Thumbs.db
 desktop.ini
-
-# Logs
 *.log
 logs/
