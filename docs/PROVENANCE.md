@@ -12,7 +12,7 @@ This is the single source for **how a Novara release is produced**: what the pip
 
 ## The pipeline
 
-Releases are produced by the CI workflow in this repository ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) on a version tag.
+Releases are produced by the CI workflow in this repository ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) on a version tag. One stage still runs outside it: the Windows installer is packaged on the release machine (see below).
 
 | Stage | What it does | Can it block the release? |
 |---|---|---|
@@ -22,7 +22,7 @@ Releases are produced by the CI workflow in this repository ([`.github/workflows
 | Release artifacts | Publishes the self-contained sync-server binary | Yes |
 | Sign release artifacts | **10.0+** signs the container image and the installer (see below) | Yes |
 
-The Windows installer is packaged on the release machine from the **same sources**, attached to the release page, and then signed by the CI job — the signature is produced by the pipeline, not by hand.
+The Windows installer is packaged on the release machine from the **same sources**, attached to the release page, and then signed by the CI job — the signature is produced by the pipeline, not by hand. Installers signed under the [code signing policy](CODE_SIGNING_POLICY.md) are built by the CI workflow from the tagged source.
 
 ## What every release ships
 
