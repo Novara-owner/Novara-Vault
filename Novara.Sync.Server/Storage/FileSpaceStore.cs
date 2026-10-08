@@ -53,7 +53,7 @@ public sealed class FileSpaceStore : ISpaceStore
 
 
         if (requireExisting && !SpaceExists(space.SpaceId))
-            throw new SpaceStoreException($"space no longer exists: {space.SpaceId}");
+            throw new SpaceGoneException($"space no longer exists: {space.SpaceId}");
         Directory.CreateDirectory(SpaceDir(space.SpaceId));
         WriteAtomic(Path.Combine(SpaceDir(space.SpaceId), SpaceFile), JsonSerializer.Serialize(space, Options));
     }
@@ -133,7 +133,7 @@ public sealed class FileSpaceStore : ISpaceStore
         ArgumentNullException.ThrowIfNull(device);
         RequireSafeId(spaceId);
         if (requireExisting && !SpaceExists(spaceId))
-            throw new SpaceStoreException($"space no longer exists: {spaceId}");
+            throw new SpaceGoneException($"space no longer exists: {spaceId}");
 
         var devices = GetDevices(spaceId).ToList();
         var index = devices.FindIndex(d => string.Equals(d.DeviceId, device.DeviceId, StringComparison.Ordinal));
@@ -171,7 +171,7 @@ public sealed class FileSpaceStore : ISpaceStore
         ArgumentNullException.ThrowIfNull(versions);
         RequireSafeId(spaceId);
         if (requireExisting && !SpaceExists(spaceId))
-            throw new SpaceStoreException($"space no longer exists: {spaceId}");
+            throw new SpaceGoneException($"space no longer exists: {spaceId}");
 
         var ordered = versions.OrderBy(v => v.Version).ToList();
         Directory.CreateDirectory(SpaceDir(spaceId));

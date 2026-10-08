@@ -171,10 +171,10 @@ public class SpaceAdminTests : IDisposable
 
 
 
-        Assert.Throws<SpaceStoreException>(() => store.SaveSpace(Space("gone", "gone", 1), requireExisting: true));
-        Assert.Throws<SpaceStoreException>(() => store.SaveVersions("gone", new List<VersionRecord>
+        Assert.Throws<SpaceGoneException>(() => store.SaveSpace(Space("gone", "gone", 1), requireExisting: true));
+        Assert.Throws<SpaceGoneException>(() => store.SaveVersions("gone", new List<VersionRecord>
             { new() { Version = 1, CreatedAt = DateTime.UtcNow, DeviceId = "d", Sha256 = "x", Size = 1 } }));
-        Assert.Throws<SpaceStoreException>(() => store.SaveDevice("gone",
+        Assert.Throws<SpaceGoneException>(() => store.SaveDevice("gone",
             new DeviceRecord { DeviceId = "d", Name = "n", CreatedAt = DateTime.UtcNow }));
         Assert.Null(store.GetSpace("gone"));
         Assert.DoesNotContain(store.ListSpaces(), s => s.SpaceId == "gone");

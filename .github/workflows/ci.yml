@@ -35,7 +35,24 @@ jobs:
           dotnet build Novara.Sync.Server/Novara.Sync.Server.csproj -c Release --no-restore
           dotnet build Novara.Server/Novara.Server.csproj -c Release --no-restore
       - name: Test
-        run: dotnet test Novara.Tests/Novara.Tests.csproj -c Release --no-restore
+        run: dotnet test Novara.Tests/Novara.Tests.csproj -c Release --no-restore --collect:"XPlat Code Coverage" --results-directory coverage
+      - name: Check coverage
+        shell: pwsh
+        run: |
+          $report = Get-ChildItem -Path coverage -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
+          if (-not $report) {
+            Write-Error 'No coverage report was produced.'
+            exit 1
+          }
+          [xml]$xml = Get-Content $report.FullName
+          $rate = [double]$xml.coverage.'line-rate'
+          $percent = [math]::Round($rate * 100, 2)
+          Write-Host "Line coverage: $percent%"
+          if ($rate -lt 0.80) {
+            Write-Error "Line coverage ($percent%) is below the 80% threshold."
+            exit 1
+          }
+          Write-Host 'Line coverage is above the 80% threshold.'
 
   scan:
     name: Dependency and license audit

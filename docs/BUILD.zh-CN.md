@@ -17,6 +17,22 @@
 
 > **Windows SDK 路径说明：** `AppxMSBuildToolsPath` 指向 WinUI 生成 PRI 步骤所用的 Appx MSBuild 任务。本仓库**不包含**该属性——它属于**本机构建设置**而非工程设置——因此构建会回落到 .NET SDK 自带的路径。若你的 SDK 没有 `Microsoft.Build.Packaging.Pri.Tasks.dll`，会报 `MSB4062 ... ExpandPriContent`；此时可在命令行传入该属性（或写成环境变量），指向你本机 Visual Studio 的 `AppxPackage` 目录。
 
+## 可复现的构建输入
+
+有三类输入被钉死，以保证同一份源码产出同一份字节：
+
+- **SDK** —— `global.json` 以 `rollForward: disable` 精确钉版 .NET SDK，装有更高 feature band 的机器不会静默换用。
+- **依赖** —— 每个工程随仓携带 `packages.lock.json`。按锁文件还原：
+
+  ```powershell
+  dotnet restore Novara.slnx -p:RestoreLockedMode=true
+  ```
+
+  工程文件与锁文件不一致时该命令直接失败。只有当你确实有意改动包引用时才用 `--force-evaluate`。不要给 `dotnet publish -r <rid>`（或单文件发布）传锁定模式：那类还原会合法地扩展依赖图，必被拒绝。
+- **构建路径** —— `Directory.Build.props` 在 `Release` 下设置 `PathMap`，把构建机绝对路径映射为 `/_/`，使其不落入二进制。
+
+打包作业会在同一次运行里发布两趟，并以 SHA-256 逐文件比对两棵树；任何差异都会让构建失败。
+
 ## 工程结构
 
 | 工程 | 产物 | 说明 |
@@ -96,6 +112,14 @@ dotnet test Novara.Tests/Novara.Tests.csproj
 ```
 
 测试工程覆盖纯逻辑核心（`Novara.Core`）：存储、加密、MCP 逻辑与 API 探测。
+
+按 CI 的方式度量覆盖率：
+
+```powershell
+dotnet test Novara.Tests/Novara.Tests.csproj --collect:"XPlat Code Coverage" --results-directory coverage
+```
+
+CI 读取产出的 Cobertura 报告中的 `line-rate`，低于 80% 即失败。
 
 ## 产物汇总
 

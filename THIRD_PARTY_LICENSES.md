@@ -9,6 +9,7 @@ Packages that the .NET SDK injects for build tooling are excluded from the CI co
  | Reference                                  | Version         | License Type | License                                                                      | 
  | ------------------------------------------ | --------------- | ------------ | ---------------------------------------------------------------------------- | 
  | AngleSharp                                 | 1.5.0           | MIT          | https://licenses.nuget.org/MIT                                               | 
+ | coverlet.collector                         | 6.0.4           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | H.GeneratedIcons.System.Drawing            | 2.3.0           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | H.NotifyIcon                               | 2.3.0           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | H.NotifyIcon.WinUI                         | 2.3.0           | MIT          | https://licenses.nuget.org/MIT                                               | 

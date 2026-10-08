@@ -3,7 +3,27 @@
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
-  <a href="https://scorecard.dev/viewer/?uri=github.com/Novara-owner/Novara-Vault"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/Novara-owner/Novara-Vault/badge"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/actions/workflows/ci.yml"><img alt="CI: passing" src="https://github.com/Novara-owner/Novara-Vault/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/blob/main/LICENSE.md"><img alt="License: MIT" src="https://img.shields.io/github/license/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Release date" src="https://img.shields.io/github/release-date/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Novara-owner/Novara-Vault/total"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Novara-owner/Novara-Vault/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/graphs/commit-activity"><img alt="Commit activity" src="https://img.shields.io/github/commit-activity/m/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault/graphs/contributors"><img alt="Contributors" src="https://img.shields.io/github/contributors/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault"><img alt="Code size" src="https://img.shields.io/github/languages/code-size/Novara-owner/Novara-Vault"></a>
+  <a href="https://github.com/Novara-owner/Novara-Vault"><img alt="Top language" src="https://img.shields.io/github/languages/top/Novara-owner/Novara-Vault"></a>
+</p>
+
+<p align="center">
+  <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/novaraxin/novara-sync"></a>
+  <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker image size" src="https://img.shields.io/docker/image-size/novaraxin/novara-sync"></a>
+  <img alt="Platform: Windows 10 2004+ | x64" src="https://img.shields.io/badge/platform-Windows%2010%202004%2B%20%7C%20x64-blue">
+  <img alt="Runtime: .NET 10.0 | WinUI 3" src="https://img.shields.io/badge/.NET-10.0%20%7C%20WinUI%203-512BD4">
+  <img alt="Releases: SHA-256 + SPDX SBOM" src="https://img.shields.io/badge/releases-SHA--256%20%2B%20SPDX%20SBOM-green">
 </p>
 
 <p align="center">
@@ -19,6 +39,12 @@ Not a password manager. Not a notes app. A data control layer for the AI era —
 Today that layer takes the shape of memos (with built-in API-key connectivity testing), file paths, to-dos, sticky notes, and rich-text records, in one fast, native application that works fully offline. Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters.
 
 ---
+
+## 10.0 — Built to Be Verified
+
+10.0 is the trust release: most of the work went into making Novara verifiable from the outside. Releases are signed with Sigstore and can be checked with `cosign`; the build is pinned and reproducible on the input side; and the security posture is published rather than asserted. A bilingual threat model states what Novara protects against and what it does not, and a code signing policy documents who authors, reviews and approves release binaries. Every push is gated on locked dependency restores, vulnerability and licence audits, and an 80% line-coverage floor, while the packaging job refuses to ship unless two independent publishes come out byte-identical. On the desktop, the record editor gains a live split preview that follows the line you are typing.
+
+Full details: [Release v10.0.0](https://github.com/Novara-owner/Novara-Vault/releases/tag/v10.0.0) · [CHANGELOG](CHANGELOG.md)
 
 ## 9.0 — Self-Hosting, One Command Away
 

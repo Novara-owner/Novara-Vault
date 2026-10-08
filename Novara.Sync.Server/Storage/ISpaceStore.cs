@@ -84,8 +84,20 @@ public interface ISpaceStore
 }
 
 
-public sealed class SpaceStoreException : Exception
+public class SpaceStoreException : Exception
 {
     public SpaceStoreException(string message) : base(message) { }
     public SpaceStoreException(string message, Exception inner) : base(message, inner) { }
+}
+
+
+
+
+
+
+
+
+public sealed class SpaceGoneException : SpaceStoreException
+{
+    public SpaceGoneException(string message) : base(message) { }
 }

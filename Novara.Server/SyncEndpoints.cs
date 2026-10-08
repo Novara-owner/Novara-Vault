@@ -1,6 +1,7 @@
 using Novara.Models;
 using Novara.Sync.Server;
 using Novara.Sync.Server.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace Novara.Server;
 
@@ -19,6 +20,32 @@ public static class SyncEndpoints
     public static void MapSyncEndpoints(this WebApplication app)
     {
         var api = app.MapGroup(SyncApi.ApiPrefix);
+
+
+
+
+
+
+
+        api.AddEndpointFilter(async (context, next) =>
+        {
+            try
+            {
+                return await next(context);
+            }
+            catch (SpaceGoneException)
+            {
+                return Error(SyncErrorCode.SpaceNotFound, "space not found");
+            }
+            catch (SpaceStoreException e)
+            {
+
+
+                (context.HttpContext.RequestServices.GetService(typeof(ILoggerFactory)) as ILoggerFactory)
+                    ?.CreateLogger("SyncEndpoints").LogError(e, "sync storage failure");
+                return Error(SyncErrorCode.ServerError, e.Message);
+            }
+        });
 
         api.MapPost("/devices/register", (DeviceRegistrationRequest body, SpaceService service, HttpContext ctx) =>
         {

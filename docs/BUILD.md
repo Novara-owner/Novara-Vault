@@ -17,6 +17,22 @@ How to build, publish, and package Novara from source.
 
 > **Windows SDK path note:** `AppxMSBuildToolsPath` points at the Appx package MSBuild tasks used by the WinUI PRI generation step. This repository does **not** ship the property — it is a build-machine setting, not a project setting — so the build falls back to the .NET SDK's own path. If your SDK lacks `Microsoft.Build.Packaging.Pri.Tasks.dll` you will see `MSB4062 ... ExpandPriContent`; in that case pass the property on the command line (or set it in the environment) to point at your Visual Studio installation's `AppxPackage` folder.
 
+## Reproducible build inputs
+
+Three inputs are pinned so that the same source produces the same bytes:
+
+- **SDK** — `global.json` pins the .NET SDK to an exact version with `rollForward: disable`, so a machine with a newer feature band cannot silently build with it.
+- **Dependencies** — every project carries a `packages.lock.json`. Restore against it:
+
+  ```powershell
+  dotnet restore Novara.slnx -p:RestoreLockedMode=true
+  ```
+
+  This fails if the project files and the lock files disagree. Use `--force-evaluate` only when you have intentionally changed a package reference. Do not pass locked mode to `dotnet publish -r <rid>` (or a single-file publish): that restore legitimately extends the dependency graph and would be rejected.
+- **Build paths** — `Directory.Build.props` sets `PathMap` in `Release`, mapping the build-machine absolute path to `/_/` so it does not end up in the binaries.
+
+The packaging job publishes twice in the same run and compares the two trees file by file with SHA-256; any difference fails the build.
+
 ## Project layout
 
 | Project | Output | Notes |
@@ -94,6 +110,14 @@ Empty the publish folder first: `dotnet publish` never deletes leftovers, and a 
 ```powershell
 dotnet test Novara.Tests/Novara.Tests.csproj
 ```
+
+To measure coverage the way CI does:
+
+```powershell
+dotnet test Novara.Tests/Novara.Tests.csproj --collect:"XPlat Code Coverage" --results-directory coverage
+```
+
+CI reads `line-rate` from the resulting Cobertura report and fails below 80%.
 
 The test project covers the pure-logic core (`Novara.Core`): storage, crypto, MCP logic, and API probing.
 

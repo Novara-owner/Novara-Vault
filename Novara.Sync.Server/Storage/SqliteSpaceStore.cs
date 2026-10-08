@@ -196,7 +196,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
 
 
             if (requireExisting && !SpaceRowExists(cn, tx, space.SpaceId))
-                throw new SpaceStoreException($"space no longer exists: {space.SpaceId}");
+                throw new SpaceGoneException($"space no longer exists: {space.SpaceId}");
 
             using var cmd = cn.CreateCommand();
             cmd.Transaction = tx;
@@ -282,7 +282,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
         {
 
             if (requireExisting && !SpaceRowExists(cn, tx, spaceId))
-                throw new SpaceStoreException($"space no longer exists: {spaceId}");
+                throw new SpaceGoneException($"space no longer exists: {spaceId}");
 
             using var cmd = cn.CreateCommand();
             cmd.Transaction = tx;
@@ -378,7 +378,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
         {
 
             if (requireExisting && !SpaceRowExists(cn, tx, spaceId))
-                throw new SpaceStoreException($"space no longer exists: {spaceId}");
+                throw new SpaceGoneException($"space no longer exists: {spaceId}");
 
             using (var delete = cn.CreateCommand())
             {

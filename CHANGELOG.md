@@ -6,6 +6,26 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2026-10-08
+
+This release is about being verifiable from the outside. The feature list is short on purpose: most of the work went into signing, provenance, and the checks that run on every change.
+
+### Added
+
+- **Markdown split preview** - the record editor's preview button now opens an even split: source on the left, rendered result on the right, each column scrolling on its own. The divider drags continuously between 0% and 100%, and dragging it to either end returns to the plain write or preview view. The preview follows the line you are editing - the matching block scrolls into view while anything already inside the visible band stays put, so typing never makes the page jump.
+
+### Changed
+
+- **Signed releases** - from 10.0 the container image and the Windows installer are signed keyless with Sigstore, and the signature bundle ships as a release asset. The verification commands are in `docs/VERIFYING.md`. Versions up to and including 9.4.0 are not signed and were not signed retrospectively.
+- **Reproducible builds** - the .NET SDK is pinned exactly, every project carries a NuGet lock file that CI restores in locked mode, and Release builds map build-machine paths out of the binaries. The packaging job publishes twice and compares the two trees file by file, refusing to continue if a single byte differs.
+- **The installer reports its version** - the setup executable previously shipped with an empty `FileVersion`; it now carries the company, product and version metadata.
+
+### Security
+
+- **A public threat model** - the security policy's threat section is now a standalone bilingual document covering the protected assets, the attacker classes, the safety assumptions, the non-goals and the mitigations.
+- **Dependency and licence audits** - every push restores in locked mode, fails on critical dependency advisories, and checks the committed third-party licence inventory against what the build actually resolves. Line coverage is measured on every push and must stay above 80%.
+- **A code signing policy** - who authors, reviews and approves release binaries, and where the signing certificate comes from, are documented in `docs/CODE_SIGNING_POLICY.md`.
+
 ## [9.4.0] - 2026-10-08
 
 ### Changed
