@@ -8,13 +8,11 @@
   <a href="https://github.com/Novara-owner/Novara-Vault/blob/main/LICENSE.md"><img alt="License: MIT" src="https://img.shields.io/github/license/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Release date" src="https://img.shields.io/github/release-date/Novara-owner/Novara-Vault"></a>
-  <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Novara-owner/Novara-Vault/total"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/Novara-owner/Novara-Vault/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/graphs/commit-activity"><img alt="Commit activity" src="https://img.shields.io/github/commit-activity/m/Novara-owner/Novara-Vault"></a>
-  <a href="https://github.com/Novara-owner/Novara-Vault/graphs/contributors"><img alt="Contributors" src="https://img.shields.io/github/contributors/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault"><img alt="Code size" src="https://img.shields.io/github/languages/code-size/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault"><img alt="Top language" src="https://img.shields.io/github/languages/top/Novara-owner/Novara-Vault"></a>
 </p>
@@ -23,7 +21,7 @@
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/novaraxin/novara-sync"></a>
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker image size" src="https://img.shields.io/docker/image-size/novaraxin/novara-sync"></a>
   <img alt="Platform: Windows 10 2004+ | x64" src="https://img.shields.io/badge/platform-Windows%2010%202004%2B%20%7C%20x64-blue">
-  <img alt="Runtime: .NET 10.0 | WinUI 3" src="https://img.shields.io/badge/.NET-10.0%20%7C%20WinUI%203-512BD4">
+  <img alt="Runtime: .NET 8 | WinUI 3" src="https://img.shields.io/badge/.NET-8%20%7C%20WinUI%203-512BD4">
   <img alt="Releases: SHA-256 + SPDX SBOM" src="https://img.shields.io/badge/releases-SHA--256%20%2B%20SPDX%20SBOM-green">
 </p>
 
