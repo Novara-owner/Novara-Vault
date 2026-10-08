@@ -12,7 +12,7 @@ This is the single source for **how a Novara release is produced**: what the pip
 
 ## The pipeline
 
-Releases are produced by the CI workflow in this repository ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) on a version tag. One stage still runs outside it: the Windows installer is packaged on the release machine (see below).
+Releases are produced by the CI workflow in this repository ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) on a version tag — **the Windows installer included, since 10.0**. Up to and including 9.4.0 the installer was packaged on the release machine from the same sources (see below).
 
 | Stage | What it does | Can it block the release? |
 |---|---|---|
@@ -20,9 +20,10 @@ Releases are produced by the CI workflow in this repository ([`.github/workflows
 | Dependency and license audit | Scans every project for known vulnerabilities and **fails the run on any Critical advisory**; records High advisories for manual review; verifies the committed third-party license inventory | Yes (Critical) |
 | Desktop build | Builds the WinUI desktop application | Yes |
 | Release artifacts | Publishes the self-contained sync-server binary | Yes |
+| Package installer | Triggered manually; builds the Windows installer and compares two publishes byte for byte | Yes |
 | Sign release artifacts | **10.0+** signs the container image and the installer (see below) | Yes |
 
-The Windows installer is packaged on the release machine from the **same sources**, attached to the release page, and then signed by the CI job — the signature is produced by the pipeline, not by hand. Installers signed under the [code signing policy](CODE_SIGNING_POLICY.md) are built by the CI workflow from the tagged source.
+**Since 10.0 the Windows installer is built by the CI workflow from the tagged source** and attached to the release page; the signature is then produced by the pipeline, not by hand. Up to and including 9.4.0 the installer was packaged on the release machine from the same sources. Installers signed under the [code signing policy](CODE_SIGNING_POLICY.md) are likewise built by the CI workflow from the tagged source.
 
 ## What every release ships
 
