@@ -3,6 +3,7 @@
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
+  <a href="https://www.bestpractices.dev/projects/15308"><img alt="OpenSSF Best Practices: passing" src="https://www.bestpractices.dev/projects/15308/badge"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/actions/workflows/ci.yml"><img alt="CI: passing" src="https://github.com/Novara-owner/Novara-Vault/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/blob/main/LICENSE.md"><img alt="License: MIT" src="https://img.shields.io/github/license/Novara-owner/Novara-Vault"></a>
   <a href="https://github.com/Novara-owner/Novara-Vault/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Novara-owner/Novara-Vault"></a>
