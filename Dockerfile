@@ -24,7 +24,7 @@
 # (With a TUN-style proxy the container is already routed and neither arg is needed.)
 
 # ---------- build ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS build
 
 # Declared so the predefined proxy args reach the restore. BuildKit invalidates the layers below
 # when their value changes, which is what keeps a cached restore from outliving the proxy setting.
@@ -33,9 +33,9 @@ ARG HTTPS_PROXY
 
 WORKDIR /src
 
-# global.json is copied first and on purpose: it pins the SDK band (10.0.400, rollForward
-# latestFeature), so the image cannot quietly build with a different toolchain than the developer
-# and CI machines. A base image older than that pin fails here, loudly, which is the wanted outcome.
+# global.json is copied first and on purpose: it pins the SDK to an exact version with
+# rollForward disabled, so the image cannot build with a different toolchain than the developer and
+# CI machines - which is also why the base tag above names that exact SDK version, not 10.0.
 COPY global.json ./
 
 # Restore before the sources: the layer then survives every source-only change.
