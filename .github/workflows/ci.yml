@@ -193,54 +193,57 @@ jobs:
       - name: Publish main app pass A
         run: >
           dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
-          -o publish/a
+          -o ../novara-ci/pub_a
       - name: Snapshot pass A pri
         shell: pwsh
         run: |
+          $pkg = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'novara-ci'
           $pri = Get-ChildItem -Path 'bin/x64/Release' -Recurse -Filter 'Novara.pri' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $pri) {
             Write-Error 'Novara.pri was not produced by the build.'
             exit 1
           }
-          New-Item -ItemType Directory -Force -Path 'pri/a' | Out-Null
-          Copy-Item -Path $pri.FullName -Destination 'pri/a/Novara.pri' -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $pkg 'pri_a') | Out-Null
+          Copy-Item -Path $pri.FullName -Destination (Join-Path $pkg 'pri_a/Novara.pri') -Force
       - name: Publish main app pass B
         run: >
           dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
-          -o publish/b
+          -o ../novara-ci/pub_b
       - name: Snapshot pass B pri
         shell: pwsh
         run: |
+          $pkg = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'novara-ci'
           $pri = Get-ChildItem -Path 'bin/x64/Release' -Recurse -Filter 'Novara.pri' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $pri) {
             Write-Error 'Novara.pri was not produced by the build.'
             exit 1
           }
-          New-Item -ItemType Directory -Force -Path 'pri/b' | Out-Null
-          Copy-Item -Path $pri.FullName -Destination 'pri/b/Novara.pri' -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $pkg 'pri_b') | Out-Null
+          Copy-Item -Path $pri.FullName -Destination (Join-Path $pkg 'pri_b/Novara.pri') -Force
       - name: Publish helper processes
         run: |
-          dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-contained -o publish/host
-          dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained -o publish/mcp
-          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/sync
+          dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-contained -o ../novara-ci/host
+          dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained -o ../novara-ci/mcp
+          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ../novara-ci/sync
       - name: Assemble package trees
         shell: pwsh
         run: |
+          $pkg = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'novara-ci'
           foreach ($pass in @('a', 'b')) {
-            $stage = Join-Path 'stage' $pass
+            $stage = Join-Path $pkg "stage_$pass"
             New-Item -ItemType Directory -Force -Path $stage | Out-Null
-            Copy-Item -Path "publish/$pass/*" -Destination $stage -Recurse -Force
-            Copy-Item -Path "pri/$pass/Novara.pri" -Destination (Join-Path $stage 'Novara.pri') -Force
+            Copy-Item -Path (Join-Path $pkg "pub_$pass/*") -Destination $stage -Recurse -Force
+            Copy-Item -Path (Join-Path $pkg "pri_$pass/Novara.pri") -Destination (Join-Path $stage 'Novara.pri') -Force
             $hostDir = Join-Path $stage 'Host'
             New-Item -ItemType Directory -Force -Path $hostDir | Out-Null
-            Copy-Item -Path 'publish/host/*' -Destination $hostDir -Recurse -Force
+            Copy-Item -Path (Join-Path $pkg 'host/*') -Destination $hostDir -Recurse -Force
             $hostAssets = Join-Path $hostDir 'Assets'
             New-Item -ItemType Directory -Force -Path $hostAssets | Out-Null
             Copy-Item -Path 'StickNoteHost/Assets/128.ico' -Destination (Join-Path $hostAssets '128.ico') -Force
-            Copy-Item -Path 'publish/mcp/NovaraMCP.exe' -Destination (Join-Path $stage 'NovaraMCP.exe') -Force
+            Copy-Item -Path (Join-Path $pkg 'mcp/NovaraMCP.exe') -Destination (Join-Path $stage 'NovaraMCP.exe') -Force
             $syncDir = Join-Path $stage 'Sync'
             New-Item -ItemType Directory -Force -Path $syncDir | Out-Null
-            Copy-Item -Path 'publish/sync/*' -Destination $syncDir -Recurse -Force
+            Copy-Item -Path (Join-Path $pkg 'sync/*') -Destination $syncDir -Recurse -Force
             Copy-Item -Path 'Installer/Sync/*.cmd' -Destination $syncDir -Force
           }
           Write-Host 'Package trees assembled.'
@@ -258,8 +261,9 @@ jobs:
               } |
               Sort-Object -Property Path
           }
-          $treeA = Get-TreeHashes 'stage/a'
-          $treeB = Get-TreeHashes 'stage/b'
+          $pkg = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'novara-ci'
+          $treeA = Get-TreeHashes (Join-Path $pkg 'stage_a')
+          $treeB = Get-TreeHashes (Join-Path $pkg 'stage_b')
           $delta = Compare-Object -ReferenceObject $treeA -DifferenceObject $treeB -Property Path, Hash
           if ($delta) {
             $delta | ForEach-Object { Write-Host "$($_.SideIndicator) $($_.Path) $($_.Hash)" }
@@ -273,10 +277,11 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
+          $pkg = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'novara-ci'
           $publishDir = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'Novara_Publish'
           if (Test-Path $publishDir) { Remove-Item -Path $publishDir -Recurse -Force }
           New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-          Copy-Item -Path 'stage/a/*' -Destination $publishDir -Recurse -Force
+          Copy-Item -Path (Join-Path $pkg 'stage_a/*') -Destination $publishDir -Recurse -Force
           $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $iscc)) {
             $found = Get-ChildItem -Path 'C:\Program Files (x86)', 'C:\Program Files' -Directory -Filter 'Inno Setup*' -ErrorAction SilentlyContinue |
