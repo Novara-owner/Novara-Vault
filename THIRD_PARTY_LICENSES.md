@@ -29,10 +29,10 @@ Packages that the .NET SDK injects for build tooling are excluded from the CI co
  | Microsoft.Windows.SDK.BuildTools           | 10.0.26100.1742 |              | https://aka.ms/WinSDKLicenseURL                                              | 
  | Microsoft.WindowsAppSDK                    | 1.6.250108002   | license.txt  | https://www.nuget.org/packages/Microsoft.WindowsAppSDK/1.6.250108002/License | 
  | Newtonsoft.Json                            | 13.0.1          | MIT          | https://licenses.nuget.org/MIT                                               | 
- | SQLitePCLRaw.bundle_e_sqlite3              | 2.1.6           | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
- | SQLitePCLRaw.core                          | 2.1.6           | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
- | SQLitePCLRaw.lib.e_sqlite3                 | 2.1.6           | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
- | SQLitePCLRaw.provider.e_sqlite3            | 2.1.6           | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
+ | SQLitePCLRaw.bundle_e_sqlite3              | 2.1.13          | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
+ | SQLitePCLRaw.core                          | 2.1.13          | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
+ | SQLitePCLRaw.lib.e_sqlite3                 | 2.1.13          | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
+ | SQLitePCLRaw.provider.e_sqlite3            | 2.1.13          | Apache-2.0   | https://licenses.nuget.org/Apache-2.0                                        | 
  | System.Collections.Immutable               | 9.0.1           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | System.Drawing.Common                      | 9.0.1           | MIT          | https://licenses.nuget.org/MIT                                               | 
  | System.Reflection.Metadata                 | 9.0.1           | MIT          | https://licenses.nuget.org/MIT                                               | 
