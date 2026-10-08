@@ -193,7 +193,7 @@ jobs:
       - name: Publish main app pass A
         run: >
           dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
-          -p:RestoreLockedMode=true -o publish/a
+          -o publish/a
       - name: Snapshot pass A pri
         shell: pwsh
         run: |
@@ -207,7 +207,7 @@ jobs:
       - name: Publish main app pass B
         run: >
           dotnet publish Novara.csproj -c Release -r win-x64 --self-contained
-          -p:RestoreLockedMode=true -o publish/b
+          -o publish/b
       - name: Snapshot pass B pri
         shell: pwsh
         run: |
@@ -220,9 +220,9 @@ jobs:
           Copy-Item -Path $pri.FullName -Destination 'pri/b/Novara.pri' -Force
       - name: Publish helper processes
         run: |
-          dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-contained -p:RestoreLockedMode=true -o publish/host
-          dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained -p:RestoreLockedMode=true -o publish/mcp
-          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:RestoreLockedMode=true -o publish/sync
+          dotnet publish StickNoteHost/StickNoteHost.csproj -c Release -r win-x64 --self-contained -o publish/host
+          dotnet publish NovaraMCP/NovaraMCP.csproj -c Release -r win-x64 --self-contained -o publish/mcp
+          dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/sync
       - name: Assemble package trees
         shell: pwsh
         run: |
@@ -329,7 +329,7 @@ jobs:
         run: >
           dotnet publish Novara.Server/Novara.Server.csproj -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true -p:RestoreLockedMode=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish/sync
       - name: Upload sync server
         uses: actions/upload-artifact@v7
