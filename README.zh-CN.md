@@ -281,6 +281,10 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 - **隐私政策** — [English](PRIVACY.md) · [简体中文](PRIVACY.zh-CN.md)
 - **安全说明** — [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 
+## 代码签名政策 · Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation（免费代码签名由 SignPath.io 提供，证书由 SignPath Foundation 签发）。作者 / 评审 / 批准：[@Novara-owner](https://github.com/Novara-owner)。隐私政策：[PRIVACY.zh-CN.md](PRIVACY.zh-CN.md)。完整政策：[docs/CODE_SIGNING_POLICY.zh-CN.md](docs/CODE_SIGNING_POLICY.zh-CN.md)。
+
 ## 许可证
 
 Novara 依据 [MIT 许可证](LICENSE.md) 开源发布。

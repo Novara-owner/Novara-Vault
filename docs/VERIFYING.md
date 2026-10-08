@@ -76,4 +76,4 @@ The badge at the top of the README links to this repository's [OpenSSF Scorecard
 
 ## Code signing
 
-The Windows installer is **not Authenticode-signed yet**: SmartScreen may show a warning on first run. Use "More info → Run anyway" only after verifying the SHA-256 and the Sigstore signature above. Free open-source Authenticode routes (SignPath Foundation / Certum) remain on the roadmap.
+The Windows installer is **not Authenticode-signed yet**: SmartScreen may show a warning on first run. Use "More info → Run anyway" only after verifying the SHA-256 and the Sigstore signature above. How the installer is signed once that changes — and who approves each release — is written down in the [code signing policy](CODE_SIGNING_POLICY.md).

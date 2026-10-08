@@ -76,4 +76,4 @@ README 顶部的徽章链接到本仓库的 [OpenSSF Scorecard](https://scorecar
 
 ## 代码签名
 
-Windows 安装包**暂未做 Authenticode 签名**：首次运行时 SmartScreen 可能弹提示。请先完成上文的 SHA-256 校验与 Sigstore 签名校验，再选择「更多信息 → 仍要运行」。免费的开源 Authenticode 路线（SignPath Foundation / Certum）仍在后续计划中。
+Windows 安装包**暂未做 Authenticode 签名**：首次运行时 SmartScreen 可能弹提示。请先完成上文的 SHA-256 校验与 Sigstore 签名校验，再选择「更多信息 → 仍要运行」。该状态一旦改变，签名方式与每次发布的批准流程都写在[代码签名政策](CODE_SIGNING_POLICY.zh-CN.md)里。

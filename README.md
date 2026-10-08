@@ -281,6 +281,10 @@ Your data moves with you, freely and without vendor lock-in:
 - **Privacy Policy** — [English](PRIVACY.md) · [简体中文](PRIVACY.zh-CN.md)
 - **Security Policy** — [English](SECURITY.md) · [简体中文](SECURITY.zh-CN.md)
 
+## Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation. Authors, reviewers and approvers: [@Novara-owner](https://github.com/Novara-owner). Privacy policy: [PRIVACY.md](PRIVACY.md). Full policy: [docs/CODE_SIGNING_POLICY.md](docs/CODE_SIGNING_POLICY.md).
+
 ## License
 
 Novara is released under the [MIT License](LICENSE.md).
