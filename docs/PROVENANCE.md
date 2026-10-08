@@ -16,7 +16,7 @@ Releases are produced by the CI workflow in this repository ([`.github/workflows
 
 | Stage | What it does | Can it block the release? |
 |---|---|---|
-| Build and test | Restores, builds the core and server projects, runs the full unit-test suite | Yes |
+| Build and test | Restores in locked mode, builds the core and server projects in Release, runs the full unit-test suite, and enforces a 80% line-coverage floor on the test run | Yes |
 | Dependency and license audit | Scans every project for known vulnerabilities and **fails the run on any Critical advisory**; records High advisories for manual review; verifies the committed third-party license inventory | Yes (Critical) |
 | Desktop build | Builds the WinUI desktop application | Yes |
 | Release artifacts | Publishes the self-contained sync-server binary | Yes |
