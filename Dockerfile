@@ -24,7 +24,7 @@
 # (With a TUN-style proxy the container is already routed and neither arg is needed.)
 
 # ---------- build ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 
 # Declared so the predefined proxy args reach the restore. BuildKit invalidates the layers below
 # when their value changes, which is what keeps a cached restore from outliving the proxy setting.
