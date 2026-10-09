@@ -37,18 +37,18 @@ docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-s
 
 digest 必须与 `IMAGES.txt` 一致。同一 digest 也会发布到 Docker Hub，两个来源解析到的是同一份字节。
 
-## 签名（Sigstore，10.0 起）
+## 签名（Sigstore，10.1 起）
 
-10.0 起的每个版本都由本仓库自身的发布工作流以 [Sigstore](https://www.sigstore.dev/) 无密钥方式签名。没有可被窃取的长期签名私钥：每份签名都附带一张短期证书，证明「哪个仓库、哪个工作流、哪个 tag」产出了这份字节，并记入公开的透明度日志。
+自 10.1 起，每个版本都由本仓库自身的发布工作流以 [Sigstore](https://www.sigstore.dev/) 无密钥方式签名。**10.0.0 未附签名包**——签名作业于 10.0 发版当日首跑失败，已在构建工作流中订正，首次实际签名发生在下一个 tag 发布。没有可被窃取的长期签名私钥：每份签名都附带一张短期证书，证明「哪个仓库、哪个工作流、哪个 tag」产出了这份字节，并记入公开的透明度日志。
 
-Windows 安装包附带 `signature.bundle` 附件。把它与安装包下载到同一目录，然后：
+自 10.1 起，Windows 安装包附带 `signature.bundle` 附件。把它与安装包下载到同一目录，然后：
 
 ```bash
 cosign verify-blob \
   --bundle signature.bundle \
   --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  Novara_Setup_10.0.0.exe
+  Novara_Setup_10.1.0.exe
 ```
 
 Docker 镜像的签名存放在镜像仓库中。按 digest 校验，身份条件相同：
@@ -60,7 +60,7 @@ cosign verify \
   ghcr.io/novara-owner/novara-sync@sha256:<IMAGES.txt 中的 digest>
 ```
 
-两条命令都会打印签名时的版本 tag。`cosign` 可从 [Sigstore releases](https://github.com/sigstore/cosign/releases) 获取。9.4.0 及以前的历史版本未签名，也未做追溯补签。
+两条命令都会打印签名时的版本 tag。`cosign` 可从 [Sigstore releases](https://github.com/sigstore/cosign/releases) 获取。10.0 及以前的历史版本未签名，也未做追溯补签。
 
 ## SBOM（9.0 起）
 
@@ -76,4 +76,4 @@ README 顶部的徽章链接到本仓库的 [OpenSSF Scorecard](https://scorecar
 
 ## 代码签名
 
-Windows 安装包**暂未做 Authenticode 签名**：首次运行时 SmartScreen 可能弹提示。请先完成上文的 SHA-256 校验与 Sigstore 签名校验，再选择「更多信息 → 仍要运行」。该状态一旦改变，签名方式与每次发布的批准流程都写在[代码签名政策](CODE_SIGNING_POLICY.zh-CN.md)里。
+Windows 安装包**暂未做 Authenticode 签名**：首次运行时 SmartScreen 可能弹提示。请先完成上文的 SHA-256 校验（10.1 起的版本可再完成 Sigstore 签名校验），再选择「更多信息 → 仍要运行」。该状态一旦改变，签名方式与每次发布的批准流程都写在[代码签名政策](CODE_SIGNING_POLICY.zh-CN.md)里。

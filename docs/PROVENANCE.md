@@ -21,9 +21,9 @@ Releases are produced by the CI workflow in this repository ([`.github/workflows
 | Desktop build | Builds the WinUI desktop application | Yes |
 | Release artifacts | Publishes the self-contained sync-server binary | Yes |
 | Package installer | Triggered manually; builds the Windows installer and compares two publishes byte for byte | Yes |
-| Sign release artifacts | **10.0+** signs the container image and the installer (see below) | Yes |
+| Sign release artifacts | **10.1+** signs the container image and the installer (see below) | Yes |
 
-**Since 10.0 the Windows installer is built by the CI workflow from the tagged source** and attached to the release page; the signature is then produced by the pipeline, not by hand. Up to and including 9.4.0 the installer was packaged on the release machine from the same sources. Installers signed under the [code signing policy](CODE_SIGNING_POLICY.md) are likewise built by the CI workflow from the tagged source.
+**Since 10.0 the Windows installer is built by the CI workflow from the tagged source** and attached to the release page; signing is produced by the same pipeline from 10.1 on, not by hand (10.0.0 shipped without a signature bundle). Up to and including 9.4.0 the installer was packaged on the release machine from the same sources. Installers signed under the [code signing policy](CODE_SIGNING_POLICY.md) are likewise built by the CI workflow from the tagged source.
 
 ## What every release ships
 
@@ -33,7 +33,7 @@ Releases are produced by the CI workflow in this repository ([`.github/workflows
 | `SHA256SUMS` | The SHA-256 of the installer |
 | `IMAGES.txt` | The exact container image digests — the same digest on GHCR and Docker Hub |
 | `novara-sync-x.y.z.spdx.json` | A Software Bill of Materials (SPDX, generated with Syft) |
-| `signature.bundle` | **10.0+** the Sigstore signature bundle for the installer |
+| `signature.bundle` | **10.1+** the Sigstore signature bundle for the installer |
 
 ## How the build is pinned (10.0 and later)
 
@@ -52,9 +52,9 @@ We would rather state the limits than let you assume more than we can show.
 - **The shipped binaries contain debug information.** We ship `.pdb` files next to the executable so that a crash report from your machine can name the exact source line. Release builds map source paths to a neutral root, but the debug metadata still records the build's own file layout.
 - **No independent audit.** The OpenSSF Scorecard is automated, and our threat model is our own. Neither is a third-party security audit.
 
-## Signing (10.0 and later)
+## Signing (10.1 and later)
 
-Container images and installers are signed with [Sigstore](https://www.sigstore.dev/) in **keyless** mode, by the same workflow that produces the release. There is no long-lived signing key to steal: each signature carries a short-lived certificate that pins the repository, the workflow file and the tag, and it is recorded in the public transparency log. The verification commands are in [VERIFYING.md](VERIFYING.md).
+From 10.1 on, container images and installers are signed with [Sigstore](https://www.sigstore.dev/) in **keyless** mode, by the same workflow that produces the release; 10.0.0 shipped without a signature bundle (the signing job's failed first run has been fixed; see [VERIFYING.md](VERIFYING.md)). There is no long-lived signing key to steal: each signature carries a short-lived certificate that pins the repository, the workflow file and the tag, and it is recorded in the public transparency log. The verification commands are in [VERIFYING.md](VERIFYING.md).
 
 ## Related documents
 

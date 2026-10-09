@@ -34,7 +34,7 @@ The project's privacy policy is [PRIVACY.md](../PRIVACY.md) ([简体中文](../P
 
 ## Status
 
-The SignPath Foundation certificate covers the first installer published after this policy takes effect. Installers published before that are not Authenticode-signed and were not signed retrospectively — for those, check the SHA-256 and the Sigstore signature described in [VERIFYING.md](VERIFYING.md). Sigstore signatures ship with every release from 10.0 on.
+The SignPath Foundation certificate covers the first installer published after this policy takes effect. Installers published before that are not Authenticode-signed and were not signed retrospectively — for those, check the SHA-256 and the Sigstore signature described in [VERIFYING.md](VERIFYING.md). Sigstore signatures ship with every release from 10.1 on.
 
 ## Related documents
 

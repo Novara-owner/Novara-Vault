@@ -16,7 +16,7 @@ This release is about being verifiable from the outside. The feature list is sho
 
 ### Changed
 
-- **Signed releases** - from 10.0 the container image and the Windows installer are signed keyless with Sigstore, and the signature bundle ships as a release asset. The verification commands are in `docs/VERIFYING.md`. Versions up to and including 9.4.0 are not signed and were not signed retrospectively.
+- **Signed releases** - the release workflow signs the container image and the Windows installer keylessly with Sigstore, effective from 10.1, with the signature bundle shipping as a release asset from that version on (10.0.0 shipped without one after the signing job failed its first run). The verification commands are in `docs/VERIFYING.md`. Versions up to and including 10.0.0 are not signed and were not signed retrospectively.
 - **Reproducible builds** - the .NET SDK is pinned exactly, every project carries a NuGet lock file that CI restores in locked mode, and Release builds map build-machine paths out of the binaries. The packaging job publishes twice and compares the two trees file by file, refusing to continue if a single byte differs.
 - **The installer reports its version** - the setup executable previously shipped with an empty `FileVersion`; it now carries the company, product and version metadata.
 

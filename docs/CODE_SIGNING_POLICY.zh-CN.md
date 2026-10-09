@@ -36,7 +36,7 @@ Novara 由单一账号维护，该账号同时承担全部角色。角色定义�
 
 ## 状态
 
-SignPath Foundation 证书覆盖**本政策生效之后**发布的第一个安装包。在此之前发布的安装包**未经 Authenticode 签名，也未追溯补签** —— 对这些版本，请按 [VERIFYING.zh-CN.md](VERIFYING.zh-CN.md) 校验 SHA-256 与 Sigstore 签名。Sigstore 签名自 10.0 起随每个版本提供。
+SignPath Foundation 证书覆盖**本政策生效之后**发布的第一个安装包。在此之前发布的安装包**未经 Authenticode 签名，也未追溯补签** —— 对这些版本，请按 [VERIFYING.zh-CN.md](VERIFYING.zh-CN.md) 校验 SHA-256 与 Sigstore 签名。Sigstore 签名自 10.1 起随每个版本提供。
 
 ## 相关文档
 
