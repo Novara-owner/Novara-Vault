@@ -48,7 +48,7 @@ Four tabs + a settings page + an optional privacy lock:
 | Tab | Function |
 |--------|------|
 | **Memo** | Manages account / password / API Key / email / website / bank card / WiFi / ID / custom entries in groups; per-field copy buttons, TOTP two-factor, star & pin, API connectivity detection |
-| **File path backup** | Registers local file / folder paths, one-click existence / validity detection (green / red status), copy / open |
+| **File path backup** | Registers local file / folder paths, one-click existence / validity detection (brand-blue / red status), copy / open |
 | **Plan** | Todo + note cards (star / pin / sort / expand); "Send to desktop" standalone sticky note; timed reminders |
 | **Records** | Rich-text diary (HTML) + Markdown document dual-format editor, timeline review, filtering |
 
@@ -231,7 +231,7 @@ Read encryption flag
 
 - **Password submit**: Enter / unlock button → `VerifyAsync` → `LoadWithPassword`.
 - **Auto-probe**: at 6 characters entered, debounce 400ms and try automatically; capped at 64 attempts per run; probe failures do not count, only explicit submit counts.
-- **Error feedback**: wrong → red flash + shake (`ShakeAndFlashAsync`); correct → green frame + content fly-out animation (`PlayExitAnimation`: title moves left -240, input box moves right +240, Windows Hello text moves left, "forgot password" moves down).
+- **Error feedback**: wrong → red flash + shake (`ShakeAndFlashAsync`); on success the content flies out (`PlayExitAnimation`: title moves left -240, input box moves right +240, Windows Hello text moves left, "forgot password" moves down).
 - **5-attempt lockout**: 5 consecutive failures → red countdown breathing (30 minutes, persisted in `lockout.dat`, restored across restarts).
 - **Clear password on window blur** (anti-shoulder-surfing, rule G13).
 - **Windows Hello unlock**: click "Unlock with Windows Hello" → `RequestVerificationAsync` pops the native Hello → `PasswordVault` reads the password back → `LoadWithPassword` reuses the unlock path. On failure, reuse `ShakeAndFlashAsync`. When enabled, auto-attempts once (1s delay, waiting for the entrance animation).
@@ -254,7 +254,7 @@ The welcome page is a full-screen overlay shown on first launch (or when "show w
 
 - Entrance animation: logo fades in, title slides in from the left, subtitle slides in from the right, hint fades in (staggered BeginTime).
 - Hint breathing: Opacity 0.3↔0.7 loop.
-- Fade-out animation: on click, the overlay fades out linearly over 400ms, then stops the breathing animation → enters the main content → the navigation bar fades in.
+- Fade-out animation: on click, the **ink-drop melt** takes over (the main path when animations are enabled, see 7.1); when animations are off or the melt fails, it falls back to a linear 400ms overlay fade. Then the breathing animation stops → enters the main content → the navigation bar fades in.
 
 **Responsive**: `UpdateWelcomeLayout` scales each element's size according to the window height + uses Transform for positioning (`WelcomeLogoTransform.Y = -0.2875 * h`, etc.).
 
@@ -263,6 +263,18 @@ The welcome page is a full-screen overlay shown on first launch (or when "show w
 - `WelcomeOnLaunch = true`: show on every double-click launch.
 - `WelcomeOnLaunch = false` + `HasCompletedWelcome = true`: skip the welcome page and go straight to the main content.
 - Clicking the welcome page writes `HasCompletedWelcome = true` and flushes to disk synchronously.
+
+### 7.1 Welcome ink-drop (click-to-melt)
+
+Clicking anywhere on the welcome page: three brand-color ink drops burst from the **click position** (`PaintMeltBlob`: scale 0.88 / 0.62 / 0.45, opacity 0.42 / 0.28 / 0.20), spreading with 0 / 180 / 360ms staggers over 1650 / 1850 / 2050ms (`SpreadBlob`; drops fade in over 240ms staggered, peak opacity 1.0 / 0.9 / 0.8); the welcome content fades out over 1400ms with the Standard curve starting at 200ms, and the melt layer dissolves over 300ms with the Decelerate curve starting at 1600ms → the main content takes over. The spread radius is derived from the distance from the click point to the farthest corner of the content area (`MeltFarRadius`). This path runs when animations are enabled; with animations off, a linear 400ms fade is the fallback.
+
+### 7.2 First-launch wizard (full-screen 7 pages + ink-drop finale, since 9.3)
+
+- **Trigger**: shown full-screen on first launch while `HasCompletedCarousel = false`; finishing or "skip wizard" sets the flag and it never shows again.
+- **Seven pages**: entry (everything starts in the right-click menu) → the four tabs (memo / paths / plan / records introductions) → quick invocation (edge handle + the search / capture / lock hotkeys, remappable) → privacy lock & Windows Hello → the MCP interface (who it is for / who does not need it / how to enable) → interconnect (snapshot & sync) → finale ("Get started").
+- **Page transition**: horizontal slide-out / slide-in (300ms Accelerate; the old page fades out over 210ms, the new page fades in over 200ms after a 30ms delay).
+- **Ink-drop finale**: clicking "Get started" on the last page bursts the same three ink drops from the button (same parameters); a `CompositionBackdropBlur` dissolves the wizard layer (BlurAmount 6→0, starting at 1800ms, lasting 420ms) while the main content cross-fades in at the start of the dissolve; on completion `HasCompletedCarousel = true`.
+- **Always plays**: the wizard ink-drop finale is **not gated** by the animation toggle (no `IsAnimationsEnabled` check in code — the first-run ritual always plays); the welcome-page melt is gated (fallback when off). Both share the same melt-paint pipeline (`PaintMeltBlob` / `SpreadBlob` / `ResetCarouselMeltLayer`).
 
 ---
 
@@ -368,7 +380,7 @@ Tab 3, todo + note cards.
 
 ### 10.3 Timed reminder
 
-Todo / note card right-click "Set reminder" → card border gradient (green→red HSV interpolation) + system-level reminder + Toast + desktop reminder card (see 19).
+Todo / note card right-click "Set reminder" → card border gradient (brand-blue → reminder dark-red, linear RGB interpolation; start `PaperTheme.BrandColor` follows the paper theme, end `#8F3B3B` light / `#A04343` dark, progress = elapsed / total) + system-level reminder + Toast + desktop reminder card (see 19).
 
 ### 10.4 Filtering & sorting
 
@@ -404,11 +416,13 @@ Tab 4 ("Records"), hosting "HTML rich-text diary" + "Markdown document" dual for
 **Editor routing** (both hosted by WebView2):
 
 - `format=html` → WebView2 + Tiptap rich-text editor (verbatim, untouched).
-- `format=markdown` → WebView2 + markdown-it rendering (`html:false` against XSS), GitHub-style Write / Preview views (two independent switch buttons).
+- `format=markdown` → WebView2 + markdown-it rendering (`html:false` against XSS), Write / Split / Preview views (two independent switch buttons, see "MD view tri-state" below).
 
 **HTML rich-text toolbar** (11 buttons): undo / redo / bold / italic / underline / text color / alignment / code block / horizontal rule / insert image / collapse (floating capsule toolbar).
 
 **MD toolbar** (17 buttons: 16 commands + collapse): undo / redo / bold / italic / strikethrough / inline code / heading (a single button with a popup selector, H1–H4) / bullet list / ordered list / quote / link / image / code block / divider / table / clear formatting / collapse.
+
+**MD view tri-state (Write / Split / Preview, since 10.0)**: a `MdViewMode` enum with `SetMdView` as the single state-machine entry (button on/off, JS dispatch, toolbar linkage, document-switch reset all centralized — no scattered branches). Entry = clicking the preview button opens an **even split**; "light-off" semantics: in split, clicking the code button turns its light off and enters pure preview, clicking the preview button enters pure code; in a pure state, clicking the dark button returns to split. A full-height divider drags **continuously from 0% to 100%** (CSS grid `--split` variable + 6px divider); dragging to either end returns to the pure state (decided by a pure C# function). **Line-level following** (implemented purely in the template layer, zero changes to the C# state machine, textarea is the single data source): the source is rendered in blocks split on blank lines, each carrying its starting source line number; a hidden mirror div measures per-line heights (wrapped lines make heights non-constant, pixel mapping is not viable); an alignment formula pins the same line of both columns to the same horizontal line — the edited line stays perfectly still while inside the viewport band, and the view scrolls smoothly back only when it is outside; edits re-render on a 150ms debounce anchored at the edited block. The left column hides its scrollbar, the right column keeps the brand scrollbar, and long lines / tables wrap to the column width. The HTML rich-text editor is untouched.
 
 **Security**:
 
@@ -540,8 +554,8 @@ stickies.json (data directory, avoids data.novadb's exclusive lock):
 
 - Whole-card drag + 8px edge resize (pure XAML pointer events + `SetWindowPos`, **system drag loop disabled** — the compositor swallows messages).
 - Lock & pin (TOPMOST, SetWindowPos refresh reinforcement in Activated).
-- Borderless (`IsResizable=false`); invisible in Alt+Tab (`TOOLWINDOW`).
-- Theme / language follow: `stickies.json.theme/language` snapshot + watcher; the Host never restarts due to a theme change.
+- Pure color-block, borderless (`WM_NCCALCSIZE` full-bleed kills the client-area white band + DWM system corner rounding + DWM border color NONE); invisible in Alt+Tab (`TOOLWINDOW`).
+- Theme / language follow: `stickies.json.theme/language` snapshot + watcher; the Host never restarts due to a theme change; **card color and size persist** (`stickies.json` `Color` / `W` / `H`, main-program and Host model copies locked in step).
 - Edit-jump IPC: Host right-click "Edit" → write pending-edit.json + named event `Local\Novara.EditRequest(.Dev)` → the main program switches to the plan page and opens the edit dialog (auto-starts if not running, cold-start retry ~4s).
 
 ### 15.4 Reminder card
@@ -550,9 +564,10 @@ stickies.json (data directory, avoids data.novadb's exclusive lock):
 
 ### 15.5 Card visuals
 
-- Faint border (theme border color, 1px, consistent with main-program cards).
-- Title brand-blue (note / todo cards, keeps the brand element).
-- Todo card checkbox: checked brand-blue + white check, unchecked rounded faint border.
+- **Pure color block, no border** (DWM border color NONE): background / text come from the selected **palette pair** (bg + 0xDD foreground, inner hairline border at 0x55 foreground).
+- **24 self-contained palette colors** (paper-theme 4 + paper 10 + pure 10; each bg+fg pair is self-contained and does not follow the main-program theme); chosen via the right-click "Color" submenu; reminder cards skip the palette.
+- Title stays brand-blue `#7276FF` (keeps the brand element).
+- Todo card checkbox: checked classic brand-blue + white check, unchecked rounded faint border.
 
 ---
 
@@ -653,13 +668,13 @@ Three-layer reminder:
 
 | Layer | Mechanism |
 |----|------|
-| In-app | todo / note card right-click "Set reminder", card border gradient (green `#00CC22` → red `#DD2222`, HSV continuous interpolation), popup on due |
+| In-app | todo / note card right-click "Set reminder", card border gradient (brand-blue `PaperTheme.BrandColor` → reminder dark-red: `#8F3B3B` light / `#A04343` dark, continuous RGB interpolation), popup on due |
 | System-level | `ReminderScheduler` registers a one-shot task via `schtasks` (`/sd` date `yyyy/MM/dd`), at due time launches `Novara.exe --reminder <id>` |
 | Toast | `ToastService` sends `AppNotification` (with a system sound), unpackaged front AUMID shortcut |
 
 Data: `TodoCard` / `NoteCard` add `ReminderAt` (due time) + `ReminderSetAt` (set time).
 
-- Border gradient: progress `p = (Now - ReminderSetAt) / (ReminderAt - ReminderSetAt)` clamped to 0~1, HSV continuous interpolation.
+- Border gradient: progress `p = (Now - ReminderSetAt) / (ReminderAt - ReminderSetAt)` clamped to 0~1, continuous RGB interpolation from brand-blue to the reminder dark-red (endpoints as in §10.3).
 - Due popup: card content + "Got it", pops once only; click clears fields + deletes the task + restores.
 - A running reminder is forwarded via the single-instance Mutex + `ReminderDueRequest` (pending json + named event); if not running, launch and parse the argument to show the reminder.
 - Due already passed before boot → silently dropped (by design).

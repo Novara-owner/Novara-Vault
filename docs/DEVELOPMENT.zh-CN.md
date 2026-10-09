@@ -48,7 +48,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 | 标签页 | 功能 |
 |--------|------|
 | **备忘** | 分组管理账号 / 密码 / API Key / 邮箱 / 网站 / 银行卡 / WiFi / 证件 / 自定义等条目；字段行一键复制、TOTP 两步验证、星标置顶、API 连通检测 |
-| **路径备份** | 登记本地文件 / 文件夹路径，一键检测存在性 / 有效性（绿 / 红状态）、复制 / 打开 |
+| **路径备份** | 登记本地文件 / 文件夹路径，一键检测存在性 / 有效性（品牌蓝 / 红状态标识）、复制 / 打开 |
 | **计划** | 待办 + 便签卡片（星标 / 置顶 / 排序 / 展开）；「发送到桌面」独立便签；时间提醒 |
 | **记录** | 富文本日记（HTML）+ Markdown 文档双格式编辑器、时间线回顾、筛选 |
 
@@ -231,7 +231,7 @@ Novara/
 
 - **密码提交**：回车 / 解锁按钮 → `VerifyAsync` → `LoadWithPassword`。
 - **自动探测**：输入达 6 位防抖 400ms 自动尝试；每运行上限 64 次；探测失败不计数，显式提交才计数。
-- **错误反馈**：错误红闪震动（`ShakeAndFlashAsync`），正确绿框 + 内容飞走动画（`PlayExitAnimation`：标题左移 -240、输入框右移 +240、Windows Hello 文字左移、忘记密码下移）。
+- **错误反馈**：错误红闪震动（`ShakeAndFlashAsync`），解锁成功后内容飞走动画（`PlayExitAnimation`：标题左移 -240、输入框右移 +240、Windows Hello 文字左移、忘记密码下移）。
 - **5 次锁定**：连续 5 次错误 → 红色倒计时呼吸（30 分钟，`lockout.dat` 持久化重启恢复）。
 - **窗口失焦清空密码**（防旁观，规则 G13）。
 - **Windows Hello 解锁**：点击「Windows Hello 解锁」→ `RequestVerificationAsync` 弹原生 Hello → `PasswordVault` 读回密码 → `LoadWithPassword` 复用解锁链路。失败复用 `ShakeAndFlashAsync`。开启时自动尝试一次（延迟 1s，等入场动画）。
@@ -254,7 +254,7 @@ Novara/
 
 - 入场动画：logo 淡入、标题左滑入、副标题右滑入、hint 淡入（错峰 BeginTime）。
 - hint 呼吸：Opacity 0.3↔0.7 循环。
-- 渐出动画：点击后 Overlay 线性淡出 400ms，然后停呼吸动画 → 进入主内容 → 导航栏渐入。
+- 渐出动画：点击后走**墨滴化开**（动效总控开启时的主路径，见 7.1）；动效关闭或化开失败时退回 Overlay 线性淡出 400ms 兜底。随后停呼吸动画 → 进入主内容 → 导航栏渐入。
 
 **响应式**：`UpdateWelcomeLayout` 根据窗口高度缩放各元素尺寸 + 用 Transform 定位（`WelcomeLogoTransform.Y = -0.2875 * h` 等）。
 
@@ -263,6 +263,18 @@ Novara/
 - `WelcomeOnLaunch = true`：每次双击启动都展示。
 - `WelcomeOnLaunch = false` + `HasCompletedWelcome = true`：跳过欢迎页直接进主内容。
 - 点击欢迎页后写 `HasCompletedWelcome = true` 并同步落盘。
+
+### 7.1 欢迎页墨滴（点击化开）
+
+点击欢迎页任意位置：三滴品牌色墨滴从**点击位置**起爆（`PaintMeltBlob`：缩放 0.88 / 0.62 / 0.45、透明度 0.42 / 0.28 / 0.20），按 0 / 180 / 360ms 错峰扩散、时长 1650 / 1850 / 2050ms（`SpreadBlob`；墨滴淡入 240ms 错峰，峰值透明度 1.0 / 0.9 / 0.8）；欢迎层内容 200ms 起 1400ms Standard 曲线淡出，墨滴层 1600ms 起 300ms Decelerate 化尽收层 → 进入主内容。扩散半径按点击点到内容区最远角的距离推算（`MeltFarRadius`）。动效总控开启时走此路径；关闭时走 400ms 线性淡出兜底。
+
+### 7.2 首启向导（全屏七页 + 墨滴终章，9.3 起）
+
+- **触发**：`HasCompletedCarousel = false` 时首启全屏展示；完成或「跳过向导」后置位，不再弹。
+- **七页**：入口（一切从右键菜单开始）→ 顶部四标签（备忘 / 路径 / 计划 / 记录四简介）→ 快捷呼出（边缘把手 + 搜索 / 捕获 / 锁定三热键，可自定义）→ 隐私锁与 Windows Hello → MCP 接口（适合谁 / 谁不需要 / 怎么开启）→ 互联（快照与同步）→ 终章（「开始使用」）。
+- **页间切换**：水平位移滑出滑入（300ms Accelerate；旧页 210ms 淡出，新页 30ms 延迟 200ms 淡入）。
+- **墨滴终章**：末页点「开始使用」→ 与 7.1 同构的三墨滴从按钮位置起爆扩散（同参数）；`CompositionBackdropBlur` 把向导层模糊化尽（BlurAmount 6→0，1800ms 起持续 420ms），主内容在化尽起点交叉淡入；完成后 `HasCompletedCarousel = true`。
+- **固定播放**：向导墨滴终章**不受动效总控 gating**（代码无 `IsAnimationsEnabled` 判断，首启仪式恒在）；欢迎页墨滴则受总控（关闭走兜底）。两处共享同一化层绘制管线（`PaintMeltBlob` / `SpreadBlob` / `ResetCarouselMeltLayer`）。
 
 ---
 
@@ -368,7 +380,7 @@ Novara/
 
 ### 10.3 时间提醒
 
-待办 / 便签卡右键「设置提醒」→ 卡片边框渐变（绿→红 HSV 插值）+ 系统级提醒 + Toast + 桌面提醒卡（详见 19）。
+待办 / 便签卡右键「设置提醒」→ 卡片边框渐变（品牌蓝 → 提醒暗红，RGB 线性插值；起点 `PaperTheme.BrandColor` 随类纸款，终点浅色 `#8F3B3B` / 深色 `#A04343`，进度 = 已过时间 / 总时长）+ 系统级提醒 + Toast + 桌面提醒卡（详见 19）。
 
 ### 10.4 筛选与排序
 
@@ -404,11 +416,13 @@ Novara/
 **编辑器分流**（都是 WebView2 承载）：
 
 - `format=html` → WebView2 + Tiptap 富文本编辑器（一字不动）。
-- `format=markdown` → WebView2 + markdown-it 渲染（`html:false` 防 XSS），GitHub 式 Write / Preview 两种视图（两个独立切换钮）。
+- `format=markdown` → WebView2 + markdown-it 渲染（`html:false` 防 XSS），Write / Split / Preview 三种视图（两个独立切换钮，见下方「MD 视图三态」）。
 
 **HTML 富文本工具栏**（11 按钮）：撤销 / 重做 / 加粗 / 斜体 / 下划线 / 文字颜色 / 对齐 / 代码块 / 水平分隔线 / 插入图片 / 收起（胶囊悬浮工具栏）。
 
 **MD 工具栏**（17 按钮：16 命令 + 收起）：撤销 / 重做 / 加粗 / 斜体 / 删除线 / 行内代码 / 标题（单钮 + 弹层选择器，含 H1–H4）/ 无序列表 / 有序列表 / 引用 / 链接 / 图片 / 代码块 / 水平分隔线 / 表格 / 清除格式 / 收起。
+
+**MD 视图三态（Write / Split / Preview，10.0 起）**：`MdViewMode` 枚举 + `SetMdView` 唯一状态机入口（按钮亮灭、JS 派发、工具栏联动、换文档复位全集中于此，禁止散写分支）。入口 = 预览钮点击进**等分分屏**；「灭灯」语义：分屏态点代码钮 → 灯灭进纯预览、点预览钮 → 灯灭进纯代码，纯态点灭的钮 → 回分屏。贯穿分割线可拖**连续 0~100%**（CSS grid `--split` 变量 + 6px divider），拖至极值自动回纯态（C# 纯态函数判定）。**行级跟随**（纯模板层实现，C# 状态机零改动，textarea 唯一数据源）：按空行分块渲染、每块携带源起始行号；隐藏镜像 div 逐源行测量行高（折行使行高非常数，像素映射不可行）；对齐公式把两列的同一行钉在同一水平线，编辑行在视口带内纹丝不动、视野外才平滑滚回；编辑以 150ms debounce 以编辑块为锚重渲染。左列隐藏滚动条、右列品牌滚动条、长行与表格自动折行适配列宽。HTML 富文本编辑器不参与（一字不动）。
 
 **安全**：
 
@@ -540,8 +554,8 @@ stickies.json（数据目录，避开 data.novadb 独占锁）:
 
 - 整卡拖动 + 边缘 8px 缩放（纯 XAML 指针事件 + `SetWindowPos`，**禁用系统拖动循环**——合成器吞消息）。
 - 锁定置顶（TOPMOST，Activated 里 SetWindowPos 刷新加固）。
-- 无边框（`IsResizable=false`）；Alt+Tab 不可见（`TOOLWINDOW`）。
-- 主题 / 语言跟随：`stickies.json.theme/language` 快照 + watcher，Host 永不因主题重启。
+- 纯色块无边框（`WM_NCCALCSIZE` 满铺根除客户区白边 + DWM 系统圆角 + DWM 边框色 NONE）；Alt+Tab 不可见（`TOOLWINDOW`）。
+- 主题 / 语言跟随：`stickies.json.theme/language` 快照 + watcher，Host 永不因主题重启；**卡片颜色与尺寸持久化**（`stickies.json` 的 `Color` / `W` / `H`，主程序与 Host 双侧模型副本锁步）。
 - 编辑跳转 IPC：Host 右键「编辑」→ 写 pending-edit.json + 命名事件 `Local\Novara.EditRequest(.Dev)` → 主程序切计划页打开编辑弹窗（未运行则自动启动，冷启动重试 ~4s）。
 
 ### 15.4 提醒卡
@@ -550,9 +564,10 @@ stickies.json（数据目录，避开 data.novadb 独占锁）:
 
 ### 15.5 卡片视觉
 
-- 淡描边（主题边框色，1px，与主程序卡片一致）。
-- 标题品牌蓝（便签 / 待办卡，保留品牌元素）。
-- 待办卡复选框：选中品牌蓝 + 白勾，未选中圆角淡边框。
+- **纯色块，无描边**（DWM 边框色 NONE）：背景 / 文字取自所选**色板对**（bg + 0xDD 前景，内部细边框用 0x55 前景）。
+- **24 色自包含色板**（类纸 theme 4 + 纸色 paper 10 + 纯色 pure 10；每对 bg+fg 自包含配色、不随主程序主题）；右键「颜色」子菜单选择；提醒卡不走色板。
+- 标题恒品牌蓝 `#7276FF`（保留品牌元素）。
+- 待办卡复选框：选中经典品牌蓝 + 白勾，未选中圆角淡边框。
 
 ---
 
@@ -653,13 +668,13 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 | 层 | 机制 |
 |----|------|
-| 应用内 | 待办 / 便签卡右键「设置提醒」，卡片边框渐变（绿 `#00CC22` → 红 `#DD2222`，HSV 连续插值），到期弹窗 |
+| 应用内 | 待办 / 便签卡右键「设置提醒」，卡片边框渐变（品牌蓝 `PaperTheme.BrandColor` → 提醒暗红：浅色 `#8F3B3B` / 深色 `#A04343`，RGB 连续插值），到期弹窗 |
 | 系统级 | `ReminderScheduler` 用 `schtasks` 注册一次性任务（`/sd` 日期 `yyyy/MM/dd`），到点拉起 `Novara.exe --reminder <id>` |
 | Toast | `ToastService` 发 `AppNotification`（带系统音效），unpackaged 前置 AUMID 快捷方式 |
 
 数据：`TodoCard` / `NoteCard` 加 `ReminderAt`（截止时间）+ `ReminderSetAt`（设置时刻）。
 
-- 边框渐变：进度 `p = (Now - ReminderSetAt) / (ReminderAt - ReminderSetAt)` 夹 0~1，HSV 连续插值。
+- 边框渐变：进度 `p = (Now - ReminderSetAt) / (ReminderAt - ReminderSetAt)` 夹 0~1，品牌蓝 → 提醒暗红 RGB 连续插值（端点同 §10.3）。
 - 到期弹窗：卡片内容 + 「知道了」，只弹一次；点击清字段 + 删任务 + 复原。
 - 运行中提醒经单实例 Mutex + `ReminderDueRequest`（pending json + 命名事件）转发；未运行则启动并解析参数弹提醒。
 - 到期已过才开机 → 静默丢弃（设计如此）。
