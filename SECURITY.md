@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-08 · **Applies to:** Novara 10.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-09 · **Applies to:** Novara 10.1 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 10.0 | ✅ Supported | Current release — the trust release: signature verification, reproducible builds, a public threat model, and dependency, licence and coverage gates in CI |
+| 10.1 | ✅ Supported | Current release — picker fix, semantic toasts, keyless signatures shipping |
+| 10.0 | ✅ Supported | The trust release: signature verification, reproducible builds, a public threat model, and dependency, licence and coverage gates in CI |
 | 9.4 | ✅ Supported | Derivation cache and UI-thread offload (performance), plus a full hardening round across desktop and self-hosted server |
 | 9.3 | ✅ Supported | Hotfix line on top of 9.2 |
 | 9.2 | ✅ Supported | Hotfix line on top of 9.1 |

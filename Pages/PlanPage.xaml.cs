@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -480,7 +480,7 @@ public sealed partial class PlanPage : Page
         var t = ReminderTimePicker.Time;
         var due = new DateTimeOffset(d.Year, d.Month, d.Day, t.Hours, t.Minutes, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(d.Year, d.Month, d.Day)));
 
-        if (due.LocalDateTime <= DateTime.Now) { _confirming = false; App.ShowToast(App.GetString("Reminder_Past_Time")); FlashTextBox(ReminderContentBox); return; }
+        if (due.LocalDateTime <= DateTime.Now) { _confirming = false; App.ShowToast(App.GetString("Reminder_Past_Time"), ToastTone.Error); FlashTextBox(ReminderContentBox); return; }
         if (isEdit)
             Services.StickySync.UpdateReminder(_editingReminderId!, content, due);
         else
@@ -1429,15 +1429,16 @@ PersistOrderAndSave(); };
             return false;
         }
         var color = ReminderColor(setAt.Value, at.Value);
+        var thickness = ReminderThickness(ReminderProgress(setAt.Value, at.Value));
 
-        if (_lastReminderColor.TryGetValue(card, out var last) && last == color)
+        if (_lastReminderColor.TryGetValue(card, out var last) && last == (color, thickness))
         {
             _reminderCards.Add(card);
             return true;
         }
-        _lastReminderColor[card] = color;
+        _lastReminderColor[card] = (color, thickness);
         card.BorderBrush = new SolidColorBrush(color);
-        card.BorderThickness = new Thickness(3);
+        card.BorderThickness = new Thickness(thickness);
         _reminderCards.Add(card);
         return true;
     }
@@ -1463,27 +1464,37 @@ PersistOrderAndSave(); };
 
     private static Color ReminderColor(DateTime setAt, DateTime dueAt)
     {
-        double total = (dueAt - setAt).TotalSeconds;
-        double elapsed = (DateTime.Now - setAt).TotalSeconds;
-        double p = total <= 0 ? 1 : Math.Clamp(elapsed / total, 0, 1);
         Color start = PaperTheme.BrandColor;
         bool isLight = App.CurrentTheme == "浅色模式" || App.CurrentTheme.StartsWith("类纸", StringComparison.Ordinal)
             || (App.MainWindow?.Content is FrameworkElement root && root.ActualTheme == ElementTheme.Light);
         Color end = isLight
             ? Color.FromArgb(0xFF, 0x8F, 0x3B, 0x3B)
             : Color.FromArgb(0xFF, 0xA0, 0x43, 0x43);
+        double p = ReminderProgress(setAt, dueAt);
         return Color.FromArgb(0xFF,
             (byte)Math.Round(start.R + (end.R - start.R) * p),
             (byte)Math.Round(start.G + (end.G - start.G) * p),
             (byte)Math.Round(start.B + (end.B - start.B) * p));
     }
 
+
+    private static double ReminderProgress(DateTime setAt, DateTime dueAt)
+    {
+        double total = (dueAt - setAt).TotalSeconds;
+        double elapsed = (DateTime.Now - setAt).TotalSeconds;
+        return total <= 0 ? 1 : Math.Clamp(elapsed / total, 0, 1);
+    }
+
+
+
+    private static double ReminderThickness(double p) => 1 + p * 2;
+
     private DispatcherTimer? _reminderTimer;
 
 
 
 
-    private readonly Dictionary<Border, Color> _lastReminderColor = new();
+    private readonly Dictionary<Border, (Color C, double T)> _lastReminderColor = new();
     private const double ReminderUrgentFraction = 0.15;
     private List<Guid>? _lastUrgentOrder;
     private readonly HashSet<Border> _dueShown = new();

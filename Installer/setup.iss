@@ -1,5 +1,5 @@
-#define MyAppName "Novara"
-#define MyAppVersion "10.0.0"
+﻿#define MyAppName "Novara"
+#define MyAppVersion "10.1.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 
@@ -97,7 +97,9 @@ Source: "Sync\3-查看空间.cmd"; DestDir: "{app}\Sync"; Flags: ignoreversion
 [Run]
 
 
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait
+
+
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait runasoriginaluser
 
 
 Filename: "https://novara.xin/help/"; Description: "查看 Novara 使用教程"; Flags: postinstall nowait skipifsilent shellexec

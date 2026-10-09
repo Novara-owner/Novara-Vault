@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -8,7 +8,6 @@ using Windows.Foundation;
 using Novara.Models;
 using Novara.Services;
 using WinRT.Interop;
-using Windows.Storage.Pickers;
 
 namespace Novara.Pages;
 
@@ -42,6 +41,7 @@ public sealed partial class FilePathPage : Page
     private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
     private readonly Dictionary<Border, Button> _openButtons = new();
+    private readonly HashSet<Border> _invalidOpenCards = new();
     private readonly Dictionary<Border, Button> _copyButtons = new();
 
 
@@ -434,24 +434,24 @@ public sealed partial class FilePathPage : Page
         return menu;
     }
 
-    private async void PickFileButton_Click(object sender, RoutedEventArgs e)
+    private void PickFileButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-        InitializeWithWindow.Initialize(picker, hwnd);
-        picker.FileTypeFilter.Add("*");
-        var file = await picker.PickSingleFileAsync();
-        if (file != null) NewPathInputBox.Text = file.Path;
+        try
+        {
+            var path = FilePicker.PickFile("*.*");
+            if (path != null) NewPathInputBox.Text = path;
+        }
+        catch (Exception ex) { CrashLogger.LogNote("FilePathPicker", ex.Message); }
     }
 
-    private async void PickFolderButton_Click(object sender, RoutedEventArgs e)
+    private void PickFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker();
-        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-        InitializeWithWindow.Initialize(picker, hwnd);
-        picker.SuggestedStartLocation = PickerLocationId.Desktop;
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder != null) NewPathInputBox.Text = folder.Path;
+        try
+        {
+            var path = FilePicker.PickFolder(startAtDesktop: true);
+            if (path != null) NewPathInputBox.Text = path;
+        }
+        catch (Exception ex) { CrashLogger.LogNote("FilePathPicker", ex.Message); }
     }
 
 
@@ -596,6 +596,7 @@ public sealed partial class FilePathPage : Page
             _cardBaseBorderColor.Remove(old);
             _openButtons.Remove(old);
             _copyButtons.Remove(old);
+            _invalidOpenCards.Remove(old);
             _createdAt.Remove(old);
             _editingPathCard = null;
         }
@@ -782,6 +783,12 @@ public sealed partial class FilePathPage : Page
         openBtn.Click += async (_, _) =>
         {
 
+            if (_invalidOpenCards.Contains(card))
+            {
+                App.ShowToast(App.GetString("Path_Invalid_OpenToast"), ToastTone.Error);
+                return;
+            }
+
 
 
 
@@ -806,7 +813,7 @@ public sealed partial class FilePathPage : Page
                 {
 
 
-                    App.ShowToast(App.GetString("OpenFile_Fail"));
+                    App.ShowToast(App.GetString("OpenFile_Fail"), ToastTone.Error);
                 }
             }
             else
@@ -817,7 +824,7 @@ public sealed partial class FilePathPage : Page
                 }
                 catch (System.ComponentModel.Win32Exception ex)
                 {
-                    App.ShowToast(App.GetString("OpenFile_Fail"));
+                    App.ShowToast(App.GetString("OpenFile_Fail"), ToastTone.Error);
                     System.Diagnostics.Debug.WriteLine($"explorer /select failed: {ex.Message}");
                 }
             }
@@ -848,7 +855,7 @@ public sealed partial class FilePathPage : Page
 
 
             try { Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg); App.ShowToast(App.GetString("Common_Toast_Copied")); }
-            catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); }
+            catch { App.ShowToast(App.GetString("Common_Toast_CopyFail"), ToastTone.Error); }
         };
         rightPanel.Children.Add(copyBtn);
 
@@ -989,6 +996,7 @@ public sealed partial class FilePathPage : Page
             _cardBaseBorderColor.Remove(_pendingDeleteCard);
             _openButtons.Remove(_pendingDeleteCard);
             _copyButtons.Remove(_pendingDeleteCard);
+            _invalidOpenCards.Remove(_pendingDeleteCard);
             _createdAt.Remove(_pendingDeleteCard);
 
             if (_cardIds.Remove(_pendingDeleteCard, out var delId))
@@ -1331,11 +1339,13 @@ public sealed partial class FilePathPage : Page
         card.BorderBrush = new SolidColorBrush(color);
 
 
+
         var btnColor = Windows.UI.Color.FromArgb(0x99, color.R, color.G, color.B);
         if (_openButtons.TryGetValue(card, out var ob))
         {
             ob.BorderBrush = new SolidColorBrush(btnColor);
-            ob.IsEnabled = isValid;
+            if (isValid) _invalidOpenCards.Remove(card);
+            else _invalidOpenCards.Add(card);
         }
         if (_copyButtons.TryGetValue(card, out var cb))
             cb.BorderBrush = new SolidColorBrush(btnColor);

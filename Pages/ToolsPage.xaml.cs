@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.UI;
 using Windows.Security.Credentials.UI;
 using Novara.Services;
-using Windows.Storage.Pickers;
 using WinRT.Interop;
 using Windows.ApplicationModel.DataTransfer;
 using System.Security.Cryptography;
@@ -1029,7 +1028,7 @@ public sealed partial class ToolsPage : Page
     {
 
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SnapshotGuideUrl) { UseShellExecute = true }); }
-        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail")); }
+        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error); }
     }
 
     private void ConnectConfirm_Click(object sender, RoutedEventArgs e)
@@ -1161,22 +1160,18 @@ public sealed partial class ToolsPage : Page
                 return;
             }
 
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("Novara Snapshot", new List<string> { ".html" });
-            picker.SuggestedFileName = "index";
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile("index", new[] { ("Novara Snapshot", new[] { ".html" }) });
+            if (path == null) return;
 
             var exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "10.0.0";
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "10.1.0";
             var html = template
                 .Replace("__CIPHER_BASE64__", cipher)
                 .Replace("__EXPORTED_AT__", exportedAt)
                 .Replace("__VERSION__", version)
                 .Replace("__LANGUAGE__", App.CurrentLanguage);
 
-            await File.WriteAllTextAsync(file.Path, html, new System.Text.UTF8Encoding(false));
+            await File.WriteAllTextAsync(path, html, new System.Text.UTF8Encoding(false));
             ShowImportResult(App.GetString("Setting_Export_Success"), App.GetString("Connect_Export_SuccessDesc"));
         }
         catch (Exception ex)
@@ -1390,7 +1385,7 @@ private void ShowResetPasswordDialog()
         var nativeImportItem = MakeItem(App.GetString("Setting_Archive_ExportNative"));
         var csvImportItem = MakeItem(App.GetString("Setting_CsvImport"));
         nativeImportItem.Click += (_, _) => ShowImportConfirmDialog();
-        csvImportItem.Click += (_, _) => RunPrivacyGated(() => _ = PickAndShowCsvImportAsync());
+        csvImportItem.Click += (_, _) => RunPrivacyGated(PickAndShowCsvImport);
         importSub.Items.Add(nativeImportItem);
         importSub.Items.Add(csvImportItem);
 
@@ -1502,14 +1497,9 @@ private void ShowResetPasswordDialog()
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导入失败: {ex}"); }
     }
 
-    private async System.Threading.Tasks.Task<string?> PickImportFileAsync()
+    private System.Threading.Tasks.Task<string?> PickImportFileAsync()
     {
-        var picker = new FileOpenPicker();
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-        picker.FileTypeFilter.Add(".novabak");
-        picker.FileTypeFilter.Add(".novaenc");
-        var file = await picker.PickSingleFileAsync();
-        return file?.Path;
+        return System.Threading.Tasks.Task.FromResult(FilePicker.PickFile("*.novabak;*.novaenc"));
     }
 
     private async System.Threading.Tasks.Task ImportAfterPasswordAsync(string? prePickedPath)
@@ -1531,14 +1521,10 @@ private void ShowResetPasswordDialog()
     {
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add(App.GetString("Setting_Backup_FilePrefix"), new List<string> { ".novabak" });
-            picker.SuggestedFileName = string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Backup_FilePrefix"), DateTime.Now);
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile(string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Backup_FilePrefix"), DateTime.Now), new[] { (App.GetString("Setting_Backup_FilePrefix"), new[] { ".novabak" }) });
+            if (path == null) return;
 
-            bool ok = App.Store?.ExportBackup(file.Path, includePaths) ?? false;
+            bool ok = App.Store?.ExportBackup(path, includePaths) ?? false;
             ShowImportResult(ok ? App.GetString("Setting_Export_Success") : App.GetString("Setting_Export_Fail"),
                 ok ? App.GetString("Setting_Export_SuccessDesc") : App.GetString("Setting_Export_FailDesc"));
         }
@@ -1867,14 +1853,10 @@ private void ShowResetPasswordDialog()
                 ? App.Store?.Password
                 : EncPasswordBox.Text;
             if (string.IsNullOrEmpty(password)) return;
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add(App.GetString("Setting_Archive_ExportEncrypted"), new List<string> { ".novaenc" });
-            picker.SuggestedFileName = string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Archive_ExportEncrypted"), DateTime.Now);
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile(string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Archive_ExportEncrypted"), DateTime.Now), new[] { (App.GetString("Setting_Archive_ExportEncrypted"), new[] { ".novaenc" }) });
+            if (path == null) return;
 
-            bool ok = App.Store?.ExportBackupEncrypted(file.Path, password, includePaths) ?? false;
+            bool ok = App.Store?.ExportBackupEncrypted(path, password, includePaths) ?? false;
             if (ok)
             {
 
@@ -1973,18 +1955,14 @@ private void ShowResetPasswordDialog()
     {
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
-            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameSummary")}_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile($"Novara_{App.GetString("Setting_Export_FileNameSummary")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("Markdown", new[] { ".md" }) });
+            if (path == null) return;
 
             var md = BuildSummaryMarkdown();
-            System.IO.File.WriteAllText(file.Path, md, new System.Text.UTF8Encoding(false));
+            System.IO.File.WriteAllText(path, md, new System.Text.UTF8Encoding(false));
             App.ShowToast(App.GetString("Common_Toast_Exported"));
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 Markdown 失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed")); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 Markdown 失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
 
@@ -1995,18 +1973,14 @@ private void ShowResetPasswordDialog()
     {
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("HTML", new List<string> { ".html" });
-            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile($"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("HTML", new[] { ".html" }) });
+            if (path == null) return;
 
             var html = BuildHtmlCollection();
-            System.IO.File.WriteAllText(file.Path, html, new System.Text.UTF8Encoding(false));
+            System.IO.File.WriteAllText(path, html, new System.Text.UTF8Encoding(false));
             App.ShowToast(App.GetString("Common_Toast_Exported"));
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 HTML 合集失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed")); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 HTML 合集失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
     private string BuildHtmlCollection()
@@ -2093,15 +2067,11 @@ private void ShowResetPasswordDialog()
     {
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("PDF", new List<string> { ".pdf" });
-            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile($"Novara_{App.GetString("Setting_Export_FileNameCollection")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("PDF", new[] { ".pdf" }) });
+            if (path == null) return;
 
-            bool pdfOk = await ExportPdfViaWebView2Async(BuildHtmlCollection(), file.Path);
-            App.ShowToast(App.GetString(pdfOk ? "Common_Toast_Exported" : "Common_Toast_Failed"));
+            bool pdfOk = await ExportPdfViaWebView2Async(BuildHtmlCollection(), path);
+            App.ShowToast(App.GetString(pdfOk ? "Common_Toast_Exported" : "Common_Toast_Failed"), pdfOk ? ToastTone.Success : ToastTone.Error);
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 PDF 合集失败: {ex.Message}"); }
     }
@@ -2167,17 +2137,13 @@ private void ShowResetPasswordDialog()
 
     private async System.Threading.Tasks.Task ExportImageCollectionFlowAsync()
     {
-        Windows.Storage.StorageFile? picked = null;
+        string? picked = null;
         try
         {
             var db = App.Store?.Database;
             if (db == null) return;
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("PNG", new List<string> { ".png" });
-            picker.SuggestedFileName = $"Novara_{App.GetString("Export_Section_Memo")}_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var file = picked = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = picked = FilePicker.PickSaveFile($"Novara_{App.GetString("Export_Section_Memo")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("PNG", new[] { ".png" }) });
+            if (path == null) return;
 
             var logo = ImageExportService.TryReadLogoSvg();
             var exportedAt = DateTime.Now;
@@ -2186,7 +2152,7 @@ private void ShowResetPasswordDialog()
             string narrow = ImageExportTemplates.BuildMemoCollectionHtml(db.MemoGroups, db.MemoEntries,
                 ImageExportTemplates.NarrowWidth, exportedAt, logo);
 
-            var narrowPath = ImageExportService.SiblingPath(file.Path, "_mobile");
+            var narrowPath = ImageExportService.SiblingPath(path, "_mobile");
             int wideParts = 0, narrowParts = 0;
             bool wideDone = false, narrowDone = false;
             var session = await ImageExportSession.BeginAsync(wide, ImageExportTemplates.WideWidth, ToolsRoot);
@@ -2194,7 +2160,7 @@ private void ShowResetPasswordDialog()
             {
                 try
                 {
-                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(file.Path);
+                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(path);
                     if (wideDone && await session.LoadAsync(narrow, ImageExportTemplates.NarrowWidth))
                         (narrowParts, narrowDone) = await session.ScreenshotToFileAsync(narrowPath);
                 }
@@ -2209,21 +2175,21 @@ private void ShowResetPasswordDialog()
             }
             else
             {
-                ImageExportService.DeleteGroupFiles(file.Path, wideParts);
+                ImageExportService.DeleteGroupFiles(path, wideParts);
                 ImageExportService.DeleteGroupFiles(narrowPath, narrowParts);
-                App.ShowToast(App.GetString("Common_Toast_Failed"));
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
             }
         }
         catch (Exception ex)
         {
 
             System.Diagnostics.Debug.WriteLine($"导出图片合集失败: {ex.Message}");
-            if (picked?.Path != null)
+            if (picked != null)
             {
-                ImageExportService.DeleteGroupFiles(picked.Path, 0);
-                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked.Path, "_mobile"), 0);
+                ImageExportService.DeleteGroupFiles(picked, 0);
+                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked, "_mobile"), 0);
             }
-            App.ShowToast(App.GetString("Common_Toast_Failed"));
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
         }
     }
 
@@ -2559,16 +2525,13 @@ private void ShowResetPasswordDialog()
     private static readonly IReadOnlyList<string> CsvImportTypeOptions = MemoEntryTypes.All;
     private MenuFlyout? _csvTypeMenu;
 
-    private async System.Threading.Tasks.Task PickAndShowCsvImportAsync()
+    private void PickAndShowCsvImport()
     {
         try
         {
-            var picker = new FileOpenPicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeFilter.Add(".csv");
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
-            _csvImportText = System.IO.File.ReadAllText(file.Path);
+            var path = FilePicker.PickFile("*.csv");
+            if (path == null) return;
+            _csvImportText = System.IO.File.ReadAllText(path);
 
 
             _csvImportType = "账户";
@@ -2795,20 +2758,16 @@ private void ShowResetPasswordDialog()
     {
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("CSV", new List<string> { ".csv" });
-            picker.SuggestedFileName = $"Novara_{App.GetString("Setting_CsvExport_FileName")}_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile($"Novara_{App.GetString("Setting_CsvExport_FileName")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("CSV", new[] { ".csv" }) });
+            if (path == null) return;
 
             var entries = App.Store?.Database.MemoEntries ?? new();
             var groups = App.Store?.Database.MemoGroups ?? new();
             var csv = CsvImportExportService.ExportMemoEntriesToCsv(entries, groups);
-            System.IO.File.WriteAllText(file.Path, csv, new System.Text.UTF8Encoding(true));
+            System.IO.File.WriteAllText(path, csv, new System.Text.UTF8Encoding(true));
             App.ShowToast(App.GetString("Common_Toast_Exported"));
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CSV 导出失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed")); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CSV 导出失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
 
@@ -3062,7 +3021,7 @@ private void ShowResetPasswordDialog()
         var snapshot = AutoBackupService.CreateSnapshot(isManual: true);
         HideBackupNowDialog();
         UpdateBackupUI();
-        if (snapshot == null) { App.ShowToast(App.GetString("Common_Toast_Failed")); return; }
+        if (snapshot == null) { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); return; }
         App.ShowToast(App.GetString("Common_Toast_Created"));
     }
     private void BackupNowCancel_Click(object sender, RoutedEventArgs e) => HideBackupNowDialog();
@@ -3170,7 +3129,7 @@ private void ShowResetPasswordDialog()
         else
         {
             _pendingRestoreSnapshot = null;
-            App.ShowToast(App.GetString("Store_Err_IoFail"));
+            App.ShowToast(App.GetString("Store_Err_IoFail"), ToastTone.Error);
         }
     }
     private void BackupRestoreConfirmCancel_Click(object sender, RoutedEventArgs e) => CancelBackupRestoreConfirm();
@@ -3284,11 +3243,11 @@ private void ShowResetPasswordDialog()
         if (AutoBackupService.RollbackLastRestore())
         {
             UpdateBackupUI();
-            App.ShowToast(App.GetString("Setting_Backup_RestartFail_Rollback"));
+            App.ShowToast(App.GetString("Setting_Backup_RestartFail_Rollback"), ToastTone.Error);
         }
         else
         {
-            App.ShowToast(App.GetString("Setting_Backup_RestartFail_RollbackFail"));
+            App.ShowToast(App.GetString("Setting_Backup_RestartFail_RollbackFail"), ToastTone.Error);
         }
     }
 
@@ -4911,7 +4870,7 @@ private void ShowResetPasswordDialog()
 
 
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SyncGuideUrl) { UseShellExecute = true }); }
-        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail")); }
+        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error); }
     }
 
     private void SyncPairClose_Click(object sender, RoutedEventArgs e) => HideSyncPairDialog();
@@ -5019,7 +4978,7 @@ private void ShowResetPasswordDialog()
             if (!inspection.Success)
             {
                 HideSyncConflictDialog();
-                App.ShowToast(App.GetString("Sync_Conflict_InspectFailed"));
+                App.ShowToast(App.GetString("Sync_Conflict_InspectFailed"), ToastTone.Error);
                 return;
             }
 
@@ -5133,25 +5092,21 @@ private void ShowResetPasswordDialog()
         _pickerFlowBusy = true;
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeChoices.Add("Novara", new List<string> { ".novaenc" });
             var suggested = Services.SyncConflictResolver.SuggestFileName(remote, version, DateTime.Now);
-            picker.SuggestedFileName = System.IO.Path.GetFileNameWithoutExtension(suggested);
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickSaveFile(System.IO.Path.GetFileNameWithoutExtension(suggested), new[] { ("Novara", new[] { ".novaenc" }) });
+            if (path == null) return;
 
             var outcome = remote
-                ? Services.SyncConflictResolver.ExportRemoteVersion(file.Path, remoteContainer)
-                : Services.SyncService.ExportLocalVersion(file.Path);
+                ? Services.SyncConflictResolver.ExportRemoteVersion(path, remoteContainer)
+                : Services.SyncService.ExportLocalVersion(path);
 
             if (outcome.Success) Services.SyncService.RecordExport(remote, version);
-            App.ShowToast(App.GetString(outcome.Success ? "Sync_Conflict_Exported" : "Sync_Conflict_ExportFailed"));
+            App.ShowToast(App.GetString(outcome.Success ? "Sync_Conflict_Exported" : "Sync_Conflict_ExportFailed"), outcome.Success ? ToastTone.Success : ToastTone.Error);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导出同步版本失败: {ex.Message}");
-            App.ShowToast(App.GetString("Sync_Conflict_ExportFailed"));
+            App.ShowToast(App.GetString("Sync_Conflict_ExportFailed"), ToastTone.Error);
         }
         finally { _pickerFlowBusy = false; }
     }
@@ -5172,7 +5127,7 @@ private void ShowResetPasswordDialog()
             UpdateSyncUI();
             App.ShowToast(App.GetString(outcome.Ok
                 ? "Sync_Conflict_Resolved_KeptLocal"
-                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")));
+                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")), outcome.Ok ? ToastTone.Success : ToastTone.Error);
         }
         catch (Exception ex)
         {
@@ -5226,7 +5181,7 @@ private void ShowResetPasswordDialog()
             UpdateSyncUI();
             App.ShowToast(App.GetString(outcome.Status == Services.SyncRoundStatus.RollbackRejected
                 ? "Sync_Toast_Rollback"
-                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")));
+                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")), outcome.Status == Services.SyncRoundStatus.RollbackRejected ? ToastTone.Success : ToastTone.Error);
         }
         catch (Exception ex)
         {
@@ -5327,21 +5282,16 @@ private void ShowResetPasswordDialog()
         _pickerFlowBusy = true;
         try
         {
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+            var path = FilePicker.PickSaveFile(SuggestKeyBackupName(), new[] { ("Novara", new[] { ".novakey" }) });
+            if (path == null) return;
 
-            picker.FileTypeChoices.Add("Novara", new List<string> { ".novakey" });
-            picker.SuggestedFileName = SuggestKeyBackupName();
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
-
-            var outcome = Services.SyncService.ExportSpaceKeyFile(file.Path);
-            App.ShowToast(App.GetString(outcome.Ok ? "Sync_KeyBackup_Exported" : outcome.Message));
+            var outcome = Services.SyncService.ExportSpaceKeyFile(path);
+            App.ShowToast(App.GetString(outcome.Ok ? "Sync_KeyBackup_Exported" : outcome.Message), outcome.Ok ? ToastTone.Success : ToastTone.Error);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导出空间密钥失败: {ex.Message}");
-            App.ShowToast(App.GetString("Sync_KeyBackup_WriteFailed"));
+            App.ShowToast(App.GetString("Sync_KeyBackup_WriteFailed"), ToastTone.Error);
         }
         finally { _pickerFlowBusy = false; }
     }
@@ -5354,19 +5304,16 @@ private void ShowResetPasswordDialog()
         return $"Novara-space-key{tag}-{DateTime.Now:yyyyMMdd}";
     }
 
-    private async void SyncKeyImportButton_Click(object sender, RoutedEventArgs e)
+    private void SyncKeyImportButton_Click(object sender, RoutedEventArgs e)
     {
         if (_pickerFlowBusy) return;
         _pickerFlowBusy = true;
         try
         {
-            var picker = new FileOpenPicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeFilter.Add(".novakey");
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickFile("*.novakey");
+            if (path == null) return;
 
-            _pendingImportPath = file.Path;
+            _pendingImportPath = path;
             _animSyncKeyImportPwd = false;
             SyncKeyImportPwdBox.Text = "";
             SyncKeyImportPwdErrorText.Visibility = Visibility.Collapsed;
@@ -5376,7 +5323,7 @@ private void ShowResetPasswordDialog()
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"选择空间密钥备份失败: {ex.Message}");
-            App.ShowToast(App.GetString("Sync_KeyBackup_ReadFailed"));
+            App.ShowToast(App.GetString("Sync_KeyBackup_ReadFailed"), ToastTone.Error);
         }
         finally { _pickerFlowBusy = false; }
     }

@@ -335,6 +335,7 @@ Tab 2, registers local file / folder paths.
 - Path validity detection: valid = brand color (deep / light theme `#7276FF`, paper themes follow their scheme) / invalid = the theme's danger red `AppDangerTextBrush`.
 - Five detection triggers: create / edit validation, 30-minute timer, startup detection, full scan from the empty area, single-card right-click detection.
 - Copy path Toast "Copied" disappears in 2 seconds; one-click open with `explorer /select` to highlight.
+- The "open containing folder" button on an invalid card is **always clickable**: tapping it shows "Invalid path — please check the file or folder status" without actually opening; valid cards behave as before (directories open directly, files get located).
 - New / edit dialog has "Select file / Select folder" dual buttons (Picker, `InitializeWithWindow` binds the main window handle).
 - Path input auto-strips quotes; invalid / blank is rejected on create.
 - Pinned single card first; drag sorting.
@@ -380,7 +381,7 @@ Tab 3, todo + note cards.
 
 ### 10.3 Timed reminder
 
-Todo / note card right-click "Set reminder" → card border gradient (brand-blue → reminder dark-red, linear RGB interpolation; start `PaperTheme.BrandColor` follows the paper theme, end `#8F3B3B` light / `#A04343` dark, progress = elapsed / total) + system-level reminder + Toast + desktop reminder card (see 19).
+Todo / note card right-click "Set reminder" → card border gradient (brand-blue → reminder dark-red, linear RGB interpolation; start `PaperTheme.BrandColor` follows the paper theme, end `#8F3B3B` light / `#A04343` dark, progress = elapsed / total); **the border thickness interpolates continuously along the same progress (1px — same as path-page cards — to 3px, native double Thickness with no visible steps)** + system-level reminder + Toast + desktop reminder card (see 19).
 
 ### 10.4 Filtering & sorting
 
@@ -888,6 +889,7 @@ Novara/
 | 9.3 | 2026-10-07 | Hotfix — first-run wizard rebuilt as a full-screen seven-page tour (ink-drop finale; the welcome screen dissolves from the clicked point), diary/document editor failure diagnostics (cause classification, copyable detail, retry, runtime link, logging) so a missing or damaged WebView2 runtime no longer fails silently, editor initialization hardened (cached environment object plus a re-entrancy guard, ending the "already initialized with a different CoreWebView2Environment" error), wizard mixed-language fix on non-Chinese systems |
 | 9.4 | 2026-10-08 | Performance and hardening — PBKDF2 key-derivation cache (encrypted-library saves drop from ~330 ms to sub-millisecond), three low-end-machine hot paths removed (registry reads per card, per-second brush rebuilds, password operations off the UI thread), password dialogs locked while in flight, reminder border kept across drags, self-hosted server write-fence against cross-process delete races plus CLI fixes (dash-leading space ids, exit-code contract, unknown-command rejection), compose default tag back to latest |
 | 10.0 | 2026-10-08 | **Trusted foundation** — Markdown split preview with line-level following; releases signed keyless with Sigstore (container image and installer); reproducible builds (exact SDK pin, NuGet lock files restored in locked mode, Release path mapping, a two-publish byte comparison in CI); public bilingual threat model; code signing policy; dependency, licence and coverage gates in CI |
+| 10.1 | 2026-10-09 | Hotfix — pickers in elevated instances fixed for good (all file/folder/save dialogs moved to native Win32 dialogs); the invalid-path Open button always responds with an explanation; the plan-page reminder border thickness now gradients continuously with its color (1→3px); semantic toasts (errors show a danger-red cross via the AppDanger dual-track, successes keep the brand-blue check, ~50 call sites marked); keyless Sigstore signatures ship (signature.bundle attached to the release) |
 
 ---
 

@@ -1455,7 +1455,7 @@ private MenuFlyout BuildContextMenu()
 
     private void CopyToClipboardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string text) { var dp = new DataPackage(); dp.SetText(text); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } }
+        if (sender is Button btn && btn.Tag is string text) { var dp = new DataPackage(); dp.SetText(text); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail"), ToastTone.Error); } }
     }
 
     private void OpenWebsite(string url)
@@ -2056,7 +2056,7 @@ private MenuFlyout BuildContextMenu()
             var code = new TextBlock { Text = TotpService.ComputeCode(cfg, nowUnix), FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, CharacterSpacing = 200 };
             var seconds = new TextBlock { Text = TotpService.RemainingSeconds(cfg.Period, nowUnix) + "s", FontSize = 11, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
             var cb = new Button { Width = 24, Height = 24, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)), BorderThickness = new Thickness(0), Padding = new Thickness(4), VerticalAlignment = VerticalAlignment.Center, IsTabStop = false, Content = new Viewbox { Width = 12, Height = 12, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, Child = new PathIcon { Data = App.CreateGeometry(IconData.Copy), Foreground = App.GetBrush("IconForegroundBrush") } } };
-            cb.Click += (_, _) => { var dp = new DataPackage(); dp.SetText(TotpService.ComputeCode(cfg)); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); } };
+            cb.Click += (_, _) => { var dp = new DataPackage(); dp.SetText(TotpService.ComputeCode(cfg)); try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); } catch { App.ShowToast(App.GetString("Common_Toast_CopyFail"), ToastTone.Error); } };
             Grid.SetColumn(code, 0); Grid.SetColumn(seconds, 1); Grid.SetColumn(cb, 2);
             inner.Children.Add(code); inner.Children.Add(seconds); inner.Children.Add(cb);
 
@@ -3649,31 +3649,28 @@ private void ShowApiCheckDialog(Border card)
     private void RelayProbeCloseButton_Click(object sender, RoutedEventArgs e) => HideRelayProbeOverlay();
     private void RelayProbeScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, RelayProbeScrim)) HideRelayProbeOverlay(); }
 
-    private async void RelayProbeLoadDatasetButton_Click(object sender, RoutedEventArgs e)
+    private void RelayProbeLoadDatasetButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var picker = new Windows.Storage.Pickers.FileOpenPicker();
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
-            picker.FileTypeFilter.Add(".json");
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
+            var path = FilePicker.PickFile("*.json");
+            if (path == null) return;
 
-            var json = System.IO.File.ReadAllText(file.Path);
+            var json = System.IO.File.ReadAllText(path);
             if (!Novara.Services.ProbeDataSetLoader.TryParse(json, out _, out var error))
             {
-                App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + error);
+                App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + error, ToastTone.Error);
                 return;
             }
             var dest = System.IO.Path.Combine(System.AppContext.BaseDirectory, Novara.Services.ProbeDataSetLoader.DefaultFileName);
-            System.IO.File.Copy(file.Path, dest, overwrite: true);
+            System.IO.File.Copy(path, dest, overwrite: true);
             App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset"));
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"加载探针数据集失败: {ex}");
 
-            try { App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + ex.Message); }
+            try { App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + ex.Message, ToastTone.Error); }
             catch { }
         }
     }

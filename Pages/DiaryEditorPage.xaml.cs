@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using Windows.UI;
 using WinRT.Interop;
 using Novara.Models;
@@ -856,7 +855,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         try { saved = await SaveCurrentDiaryAsync().WaitAsync(TimeSpan.FromSeconds(3)); }
         catch { saved = false; }
         if (saved) App.ShowToast(App.GetString(wasNew ? "Common_Toast_Created" : "Common_Toast_Modified"));
-        else if (_userEditedSinceRender) App.ShowToast(App.GetString("Editor_SaveFail_Toast"));
+        else if (_userEditedSinceRender) App.ShowToast(App.GetString("Editor_SaveFail_Toast"), ToastTone.Error);
         App.MainWindow?.NavigateBackFromEditor();
     }
 
@@ -1222,36 +1221,31 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
 
     private async void InsertButton_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-        InitializeWithWindow.Initialize(picker, hwnd);
-        picker.FileTypeFilter.Add(".png");
-        picker.FileTypeFilter.Add(".jpg");
-        picker.FileTypeFilter.Add(".jpeg");
-        var files = await picker.PickMultipleFilesAsync();
-        if (files == null || files.Count == 0) return;
-        foreach (var f in files)
-            await InsertImageAsBase64(f);
+        try
+        {
+            var files = FilePicker.PickFiles("*.png;*.jpg;*.jpeg");
+            if (files.Count == 0) return;
+            foreach (var f in files)
+                await InsertImageFromPath(f);
+        }
+        catch (Exception ex) { CrashLogger.LogNote("DiaryImagePicker", ex.Message); }
     }
 
-    private async System.Threading.Tasks.Task InsertImageAsBase64(StorageFile file)
+    private async System.Threading.Tasks.Task InsertImageFromPath(string path)
     {
         try
         {
-            using var stream = await file.OpenReadAsync();
-            using var ms = new System.IO.MemoryStream();
-            await stream.AsStream().CopyToAsync(ms);
-            var bytes = ms.ToArray();
-            if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge")); return; }
+            var bytes = await System.IO.File.ReadAllBytesAsync(path);
+            if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge"), ToastTone.Error); return; }
 
 
 
 
             long existing = await QueryEmbeddedImageBytesAsync();
-            if (existing + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded")); return; }
+            if (existing + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded"), ToastTone.Error); return; }
             _currentImageBytes = existing + bytes.Length;
-            var mime = file.FileType.ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
-            PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(bytes), filename = file.Name, mime });
+            var mime = System.IO.Path.GetExtension(path).ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
+            PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(bytes), filename = System.IO.Path.GetFileName(path), mime });
         }
         catch { }
     }

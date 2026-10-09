@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -8,7 +8,6 @@ using Windows.UI;
 using Windows.Foundation;
 using Novara.Models;
 using Novara.Services;
-using Windows.Storage.Pickers;
 using WinRT.Interop;
 using System.IO;
 using System.Text;
@@ -807,19 +806,14 @@ public sealed partial class DiaryPage : Page
     {
         try
         {
-            var picker = new FileOpenPicker();
-            var hwnd = WindowNative.GetWindowHandle(App.MainWindow);
-            InitializeWithWindow.Initialize(picker, hwnd);
-            picker.FileTypeFilter.Add(".md");
-            picker.FileTypeFilter.Add(".markdown");
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
-            await ImportDocumentFromPath(file.Path);
+            var path = FilePicker.PickFile("*.md;*.markdown");
+            if (path == null) return;
+            await ImportDocumentFromPath(path);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导入 Markdown 失败: {ex.Message}");
-            App.ShowToast(App.GetString("Diary_Import_Fail"));
+            App.ShowToast(App.GetString("Diary_Import_Fail"), ToastTone.Error);
         }
     }
 
@@ -834,7 +828,7 @@ public sealed partial class DiaryPage : Page
             if (!string.Equals(ext, ".md", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(ext, ".markdown", StringComparison.OrdinalIgnoreCase)) return;
 
-            if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge")); return; }
+            if (new FileInfo(filePath).Length > 2 * 1024 * 1024) { App.ShowToast(App.GetString("Diary_Import_TooLarge"), ToastTone.Error); return; }
 
 
             string content;
@@ -846,7 +840,7 @@ public sealed partial class DiaryPage : Page
             }
             catch (System.Text.DecoderFallbackException)
             {
-                App.ShowToast(App.GetString("Diary_Import_Fail"));
+                App.ShowToast(App.GetString("Diary_Import_Fail"), ToastTone.Error);
                 return;
             }
 
@@ -862,7 +856,7 @@ public sealed partial class DiaryPage : Page
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"导入 Markdown 失败: {ex.Message}");
-            App.ShowToast(App.GetString("Diary_Import_Fail"));
+            App.ShowToast(App.GetString("Diary_Import_Fail"), ToastTone.Error);
         }
     }
 
@@ -1139,20 +1133,16 @@ public sealed partial class DiaryPage : Page
     {
         try
         {
-            if (App.MainWindow is not { } mw) return;
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(mw));
-            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
-            picker.SuggestedFileName = SanitizeFileName(entry.Title);
-            var file = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            if (App.MainWindow is null) return;
+            var path = FilePicker.PickSaveFile(SanitizeFileName(entry.Title), new[] { ("Markdown", new[] { ".md" }) });
+            if (path == null) return;
 
             string md;
             if (entry.Format == "markdown")
                 md = entry.Content;
             else
                 md = HtmlToMarkdown(App.DiaryTitleText(entry.Title), entry.Content, removeImages);
-            File.WriteAllText(file.Path, md, new UTF8Encoding(false));
+            File.WriteAllText(path, md, new UTF8Encoding(false));
             App.ShowToast(App.GetString("Common_Toast_Exported"));
         }
         catch (Exception ex)
@@ -1179,16 +1169,12 @@ public sealed partial class DiaryPage : Page
 
     private async System.Threading.Tasks.Task ExportDiaryAsImage(DiaryEntry entry)
     {
-        Windows.Storage.StorageFile? picked = null;
+        string? picked = null;
         try
         {
-            if (App.MainWindow is not { } mw) return;
-            var picker = new FileSavePicker();
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(mw));
-            picker.FileTypeChoices.Add("PNG", new List<string> { ".png" });
-            picker.SuggestedFileName = SanitizeFileName(entry.Title);
-            var file = picked = await picker.PickSaveFileAsync();
-            if (file == null) return;
+            if (App.MainWindow is null) return;
+            var path = picked = FilePicker.PickSaveFile(SanitizeFileName(entry.Title), new[] { ("PNG", new[] { ".png" }) });
+            if (path == null) return;
 
             var logo = ImageExportService.TryReadLogoSvg();
             var exportedAt = DateTime.Now;
@@ -1199,7 +1185,7 @@ public sealed partial class DiaryPage : Page
             string narrow = ImageExportTemplates.BuildDiaryHtml(title, content,
                 entry.CreatedAt, entry.ModifiedAt, ImageExportTemplates.NarrowWidth, exportedAt, logo);
 
-            var narrowPath = ImageExportService.SiblingPath(file.Path, "_mobile");
+            var narrowPath = ImageExportService.SiblingPath(path, "_mobile");
             int wideParts = 0, narrowParts = 0;
             bool wideDone = false, narrowDone = false;
             var session = await ImageExportSession.BeginAsync(wide, ImageExportTemplates.WideWidth, RootGrid);
@@ -1207,7 +1193,7 @@ public sealed partial class DiaryPage : Page
             {
                 try
                 {
-                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(file.Path);
+                    (wideParts, wideDone) = await session.ScreenshotToFileAsync(path);
                     if (wideDone && await session.LoadAsync(narrow, ImageExportTemplates.NarrowWidth))
                         (narrowParts, narrowDone) = await session.ScreenshotToFileAsync(narrowPath);
                 }
@@ -1222,21 +1208,21 @@ public sealed partial class DiaryPage : Page
             }
             else
             {
-                ImageExportService.DeleteGroupFiles(file.Path, wideParts);
+                ImageExportService.DeleteGroupFiles(path, wideParts);
                 ImageExportService.DeleteGroupFiles(narrowPath, narrowParts);
-                App.ShowToast(App.GetString("Common_Toast_Failed"));
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
             }
         }
         catch (Exception ex)
         {
 
             System.Diagnostics.Debug.WriteLine($"导出图片失败: {ex.Message}");
-            if (picked?.Path != null)
+            if (picked != null)
             {
-                ImageExportService.DeleteGroupFiles(picked.Path, 0);
-                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked.Path, "_mobile"), 0);
+                ImageExportService.DeleteGroupFiles(picked, 0);
+                ImageExportService.DeleteGroupFiles(ImageExportService.SiblingPath(picked, "_mobile"), 0);
             }
-            App.ShowToast(App.GetString("Common_Toast_Failed"));
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
         }
     }
 

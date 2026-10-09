@@ -6,6 +6,24 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.0] - 2026-10-09
+
+Fix-and-polish release.
+
+### Added
+
+- **Keyless signatures ship** - the Sigstore signing that took effect from 10.1 ships with this release: the release workflow signs the container image and the Windows installer, and the `signature.bundle` is attached to the release for verification per `docs/VERIFYING.md`.
+
+### Fixed
+
+- **File and folder pickers in elevated instances** - when Novara was launched by its own installer, "pick file" and "pick folder" could not open at all (an elevated process cannot show the modern WinRT pickers) and the failure was swallowed silently by an async handler. Every file, folder and save dialog now uses the native Win32 dialogs, exceptions surface at the call site instead of disappearing, and the fix covers all entrances: path picking, image insert, Markdown import, CSV, backups, snapshots and sync-key backups.
+
+### Changed
+
+- **The Open button on an invalid path is always clickable** - it used to be disabled with no explanation; tapping it now shows "Invalid path — please check the file or folder status" instead of doing nothing, and valid paths open exactly as before.
+- **Reminder border thickness gradients with time** - the plan-page reminder border no longer jumps straight to thick: it grows continuously from 1px (the same as the path-page cards) to 3px, following the same progress as its color, with no visible steps.
+- **Semantic toasts** - toasts used to show a brand-blue checkmark no matter what happened. Error-class toasts now show a danger-red cross — normal red on the light/dark themes, softened per paper theme, through the shared `AppDanger*` resources — while successes keep the check. About 50 error-class call sites are marked.
+
 ## [10.0.0] - 2026-10-08
 
 This release is about being verifiable from the outside. The feature list is short on purpose: most of the work went into signing, provenance, and the checks that run on every change.

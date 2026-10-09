@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
@@ -71,7 +71,9 @@ public sealed partial class MainWindow : Window
 
 
 
-    public void ShowToast(string message)
+
+
+    public void ShowToast(string message, ToastTone tone = ToastTone.Success)
     {
         if (string.IsNullOrWhiteSpace(message)) return;
         if (_toast != null) { ToastHost.Children.Remove(_toast); _toast = null; }
@@ -92,6 +94,7 @@ public sealed partial class MainWindow : Window
 
 
 
+
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         var icon = new Viewbox
         {
@@ -99,11 +102,17 @@ public sealed partial class MainWindow : Window
             Height = 14,
             Stretch = Stretch.Uniform,
             Margin = new Thickness(0, 0, 8, 0),
-            Child = new PathIcon
-            {
-                Data = App.CreateGeometry(ToastCheckIconPath),
-                Foreground = App.GetBrush("AppPrimaryButtonBrush"),
-            },
+            Child = tone == ToastTone.Error
+                ? new PathIcon
+                {
+                    Data = App.CreateGeometry(IconData.Close),
+                    Foreground = App.GetBrush("AppDangerTextBrush"),
+                }
+                : new PathIcon
+                {
+                    Data = App.CreateGeometry(ToastCheckIconPath),
+                    Foreground = App.GetBrush("AppPrimaryButtonBrush"),
+                },
         };
         row.Children.Add(icon);
         row.Children.Add(new TextBlock
@@ -299,7 +308,7 @@ public sealed partial class MainWindow : Window
 
         if (!Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdLockNow,
                 Services.GlobalHotkeyService.MOD_CONTROL | Services.GlobalHotkeyService.MOD_SHIFT, 0x4C))
-            App.ShowToast(App.GetString("LockNow_HotkeyConflict"));
+            App.ShowToast(App.GetString("LockNow_HotkeyConflict"), ToastTone.Error);
         ApplyQuickCaptureHotkey();
 
         McpService.AuthorizeClient = clientPath =>
@@ -641,7 +650,7 @@ private void CreateTrayIcon()
         catch { threw = true; }
         if (!saved && ed.HasUnsavedEdits)
         {
-            App.ShowToast(App.GetString("Editor_SaveFail_Toast"));
+            App.ShowToast(App.GetString("Editor_SaveFail_Toast"), ToastTone.Error);
             Services.CrashLogger.LogNote("EditorFlushOnExit", timedOut
                 ? "editor save timed out after 3s - the last edit may not have been persisted"
                 : threw
@@ -750,7 +759,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (s is not { QuickCaptureEnabled: true }) return;
         var (mods, vk) = Services.GlobalHotkeyService.ParsePreset(s.QuickCaptureHotkey);
         if (!Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdQuickCapture, mods, vk))
-            App.ShowToast(App.GetString("QuickCapture_HotkeyConflict"));
+            App.ShowToast(App.GetString("QuickCapture_HotkeyConflict"), ToastTone.Error);
     }
 
     private void OnQuickCaptureHotkey()

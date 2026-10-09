@@ -22,6 +22,9 @@ using Novara.Services;
 namespace Novara;
 
 
+public enum ToastTone { Success, Error }
+
+
 
 
 public partial class App : Application
@@ -430,9 +433,10 @@ public partial class App : Application
     }
 
 
-    public static void ShowToast(string message)
+
+    public static void ShowToast(string message, ToastTone tone = ToastTone.Success)
     {
-        UiQueue?.TryEnqueue(() => MainWindow?.ShowToast(message));
+        UiQueue?.TryEnqueue(() => MainWindow?.ShowToast(message, tone));
     }
 
 

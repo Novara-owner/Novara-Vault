@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.UI;
 using Windows.Security.Credentials.UI;
 using Novara.Services;
-using Windows.Storage.Pickers;
 using WinRT.Interop;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -558,7 +557,7 @@ private void ShowThemeRestartOverlay()
             }
             else
             {
-                App.ShowToast(App.GetString("Setting_Autostart_FailOn"));
+                App.ShowToast(App.GetString("Setting_Autostart_FailOn"), ToastTone.Error);
             }
         };
         offItem.Click += (_, _) =>
@@ -572,7 +571,7 @@ private void ShowThemeRestartOverlay()
             }
             else
             {
-                App.ShowToast(App.GetString("Setting_Autostart_FailOff"));
+                App.ShowToast(App.GetString("Setting_Autostart_FailOff"), ToastTone.Error);
             }
         };
 
@@ -615,7 +614,7 @@ private void ShowThemeRestartOverlay()
             }
             else
             {
-                App.ShowToast(App.GetString("Setting_ContextMenu_FailOn"));
+                App.ShowToast(App.GetString("Setting_ContextMenu_FailOn"), ToastTone.Error);
             }
         };
         offItem.Click += (_, _) =>
@@ -629,7 +628,7 @@ private void ShowThemeRestartOverlay()
             }
             else
             {
-                App.ShowToast(App.GetString("Setting_ContextMenu_FailOff"));
+                App.ShowToast(App.GetString("Setting_ContextMenu_FailOff"), ToastTone.Error);
             }
         };
 
@@ -802,7 +801,7 @@ private void ShowSetPasswordDialog()
 
 
             _ = System.Threading.Tasks.Task.Run(() => WindowsHelloService.Update(newPw))
-                .ContinueWith(t => { if (t.IsFaulted || !t.Result) App.ShowToast(App.GetString("Hello_Update_Fail")); });
+                .ContinueWith(t => { if (t.IsFaulted || !t.Result) App.ShowToast(App.GetString("Hello_Update_Fail"), ToastTone.Error); });
         }
 
 
@@ -814,14 +813,14 @@ private void ShowSetPasswordDialog()
 
 
 
-                if (t.IsFaulted) { App.ShowToast(App.GetString("Sync_KeyWrap_RewrapFailed")); return; }
+                if (t.IsFaulted) { App.ShowToast(App.GetString("Sync_KeyWrap_RewrapFailed"), ToastTone.Error); return; }
                 switch (t.Result)
                 {
                     case SyncService.RewrapOutcome.SessionTornDown:
                         App.ShowToast(App.GetString("Sync_Status_KeyWrapStale")); break;
                     case SyncService.RewrapOutcome.StateWriteFailed:
                     case SyncService.RewrapOutcome.RoundTripFailed:
-                        App.ShowToast(App.GetString("Sync_KeyWrap_RewrapFailed")); break;
+                        App.ShowToast(App.GetString("Sync_KeyWrap_RewrapFailed"), ToastTone.Error); break;
 
                 }
             });
@@ -1742,7 +1741,7 @@ private void ShowPrivacyLockWarningDialog()
             var result = await Novara.Services.UpdateService.CheckLatestAsync(System.Threading.CancellationToken.None);
             if (result.Error != null)
             {
-                if (result.Error != "cancelled") App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), result.Error));
+                if (result.Error != "cancelled") App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), result.Error), ToastTone.Error);
                 return;
             }
             if (result.Latest == null || !result.HasNewer)
@@ -1769,7 +1768,7 @@ private void ShowPrivacyLockWarningDialog()
         }
         catch (Exception ex)
         {
-            App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), ex.Message));
+            App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), ex.Message), ToastTone.Error);
         }
         finally
         {
@@ -1803,7 +1802,7 @@ private void ShowPrivacyLockWarningDialog()
             if (string.IsNullOrEmpty(expected) || !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
             {
                 try { System.IO.File.Delete(file); } catch { }
-                App.ShowToast(App.GetString("Update_Fail_Hash"));
+                App.ShowToast(App.GetString("Update_Fail_Hash"), ToastTone.Error);
                 ResetUpdateInstallUi();
                 return;
             }
@@ -1817,7 +1816,7 @@ private void ShowPrivacyLockWarningDialog()
             catch (Exception launchEx)
             {
 
-                App.ShowToast(string.Format(App.GetString("Update_Fail_Launch"), launchEx.Message));
+                App.ShowToast(string.Format(App.GetString("Update_Fail_Launch"), launchEx.Message), ToastTone.Error);
                 ResetUpdateInstallUi();
                 return;
             }
@@ -1830,7 +1829,7 @@ private void ShowPrivacyLockWarningDialog()
         }
         catch (Exception ex)
         {
-            App.ShowToast(string.Format(App.GetString("Update_Fail_Download"), ex.Message));
+            App.ShowToast(string.Format(App.GetString("Update_Fail_Download"), ex.Message), ToastTone.Error);
             ResetUpdateInstallUi();
         }
         finally
