@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Novara"
-#define MyAppVersion "10.1.0"
+#define MyAppVersion "10.2.0"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 

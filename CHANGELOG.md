@@ -6,6 +6,19 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.2.0] - 2026-10-10
+
+A Markdown split-view rework, driven by heavy real-world use of the editor.
+
+### Changed
+
+- **Split view reworked** - the title now lives at the top of the source column and scrolls away with the source (the preview column shows no title), the horizontal rule between the two is removed, and the scrolling area spans the full window height — with nothing pinned at the top and nothing pinned at the bottom. Both columns keep an 80px tail after the last line so the end of the document is never hidden behind the floating toolbar, and the title is editable in split view again. Line-level following carries over to the new coordinate system unchanged.
+
+### Fixed
+
+- **Toolbar edits sync instantly** - the toolbar buttons (bold, italic, strikethrough, headings, lists, quotes, links, images, code blocks, tables, clear formatting, undo and redo) edit the source through APIs that never fire the input event, so the preview stayed stale until the next keystroke. Every edit now refreshes the preview immediately.
+- **No more jumping to the bottom** - in split view, typing used to snap the source column to the bottom of the window on every keystroke. The column's scroll position is now preserved while its content height is recalculated.
+
 ## [10.1.0] - 2026-10-09
 
 Fix-and-polish release.

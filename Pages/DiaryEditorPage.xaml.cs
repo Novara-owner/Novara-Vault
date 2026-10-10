@@ -215,14 +215,14 @@ body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{ba
 #md-preview a{{color:{9};text-decoration:underline}}
 #md-preview img{{max-width:100%;height:auto}}
 ::selection{{background:{10};color:inherit}}
-body.split{{display:grid;grid-template-columns:var(--split,50%) 6px 1fr;grid-template-rows:auto auto 1fr;height:100vh;overflow:hidden;margin:0}}
-body.split #title{{grid-column:1/4;grid-row:1;min-width:0}}
-body.split .sep{{grid-column:1/4;grid-row:2;margin:0 0 10px 0;min-width:0}}
-body.split #md-editor{{grid-column:1;grid-row:3;min-height:0;min-width:0;height:auto;overflow-y:auto;scrollbar-width:none}}
-body.split #md-editor::-webkit-scrollbar{{display:none!important;width:0;height:0}}
-body.split #md-divider{{display:block;grid-column:2;grid-row:3;width:6px;margin:0;cursor:col-resize;background:transparent;border-left:1px solid {5};}}
+body.split{{display:grid;grid-template-columns:var(--split,50%) 6px 1fr;grid-template-rows:minmax(0,1fr);height:100vh;overflow:hidden;margin:0;padding-bottom:0}}
+body.split .sep{{display:none}}
+body.split #md-split-col{{display:block;grid-column:1;grid-row:1;min-width:0;min-height:0;overflow-y:auto;scrollbar-width:none;padding-bottom:80px}}
+body.split #md-split-col::-webkit-scrollbar{{display:none!important;width:0;height:0}}
+body.split #md-editor{{display:block;height:auto;min-height:0;min-width:0;overflow:hidden}}
+body.split #md-divider{{display:block;grid-column:2;grid-row:1;width:6px;margin:0;cursor:col-resize;background:transparent;border-left:1px solid {5};}}
 body.split #md-divider:hover,body.split #md-divider.dragging{{background:{4};border-left-color:{4}}}
-body.split #md-preview{{grid-column:3;grid-row:3;display:block;min-height:0;min-width:0;overflow-x:hidden;overflow-y:auto;padding-left:16px}}
+body.split #md-preview{{grid-column:3;grid-row:1;display:block;min-height:0;min-width:0;overflow-x:hidden;overflow-y:auto;padding-left:16px;padding-bottom:80px}}
 body.split #md-preview::-webkit-scrollbar{{width:4px}}
 body.split #md-preview::-webkit-scrollbar-thumb{{background:{4};border-radius:2px}}
 #md-preview table{{max-width:100%}}
@@ -230,9 +230,11 @@ body.split #md-preview::-webkit-scrollbar-thumb{{background:{4};border-radius:2p
 .mdb{{min-width:0}}
 #md-mirror{{position:absolute;top:0;left:-99999px;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;font-family:'Segoe UI',sans-serif;font-size:14px;line-height:22px;padding:0;color:{1}}}
 </style></head><body>
+<div id='md-split-col'>
 <div id='title' contenteditable='true' spellcheck='false'></div>
 <div class='sep'></div>
 <textarea id='md-editor' spellcheck='false' placeholder='{7}'></textarea>
+</div>
 <div id='md-divider'></div>
 <div id='md-preview'></div>
 <div id='md-mirror' aria-hidden='true'></div>
@@ -241,8 +243,11 @@ body.split #md-preview::-webkit-scrollbar-thumb{{background:{4};border-radius:2p
 var tel=document.getElementById('title');
 var ta=document.getElementById('md-editor');
 var pv=document.getElementById('md-preview');
+var col=document.getElementById('md-split-col');
+function titleH(){{return tel.offsetHeight}}
 function setMd(t,b){{tel.textContent=t||'';ta.value=b||'';updateTitleSpacing();autoResize();renderPreview();rebuildMirror()}}
-function autoResize(){{if(document.body.classList.contains('split'))return;var doc=document.documentElement;var prev=doc.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(doc.scrollTop!==prev)doc.scrollTop=prev}}
+function autoResize(){{if(document.body.classList.contains('split')){{var prev=col.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(col.scrollTop!==prev)col.scrollTop=prev;return}}var doc=document.documentElement;var prev=doc.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(doc.scrollTop!==prev)doc.scrollTop=prev}}
+function syncAfterEdit(){{autoResize();rebuildMirror();renderPreview();if(document.body.classList.contains('split')){{clearTimeout(window._mdSplitT);window._mdSplitT=setTimeout(function(){{alignPreview(cursorLine(),true)}},150)}}}}
 function renderPreview(){{
 var bs=splitBlocks(ta.value);var h='';for(var i=0;i<bs.length;i++){{h+='<div class=\'mdb\' data-sl=\''+(bs[i].s+1)+'\'>'+window.NovaraMd.render(bs[i].t)+'</div>'}}pv.innerHTML=h||'<div class=\'mdb\' data-sl=\'1\'></div>'}}
 var mr=document.getElementById('md-mirror');var _lineTops=[0];
@@ -254,15 +259,15 @@ function cursorLine(){{return ta.value.slice(0,ta.selectionStart).split('\n').le
 function splitBlocks(text){{var ls=text.split('\n');var bs=[];var cur=-2;for(var i=0;i<ls.length;i++){{if(/^\s*$/.test(ls[i])){{cur=-2;continue}}if(cur===-2){{cur=i;bs.push({{s:i,t:ls[i]}})}}else{{bs[bs.length-1].t+='\n'+ls[i]}}}}return bs}}
 function alignPreview(L,smooth){{
 var el=null;var bs=pv.querySelectorAll('.mdb');for(var i=bs.length-1;i>=0;i--){{if(parseInt(bs[i].getAttribute('data-sl'))<=L){{el=bs[i];break}}}}if(!el)return;var sl=parseInt(el.getAttribute('data-sl'));var yPv=el.offsetTop+(L-sl)*22;
-var yCode=Math.max(0,lineToY(L)-ta.scrollTop);var target=yPv-yCode;var rel=target-pv.scrollTop;var h=pv.clientHeight;if(smooth&&rel>-h*0.25&&rel<h*0.75)return;
+var yCode=Math.max(0,titleH()+lineToY(L)-col.scrollTop);var target=yPv-yCode;var rel=target-pv.scrollTop;var h=pv.clientHeight;if(smooth&&rel>-h*0.25&&rel<h*0.75)return;
 if(smooth)pv.scrollTo({{top:target,behavior:'smooth'}});else pv.scrollTop=target}}
 function getTitle(){{return tel.innerHTML}}
 function getMd(){{return ta.value}}
 function fracOf(el){{var doc=document.documentElement;return (doc.scrollTop-el.offsetTop+8)/Math.max(1,el.scrollHeight)}}
-function showWrite(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(ta.scrollTop)+1;document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','true');rebuildMirror()}}var doc=document.documentElement;var vis=pv.scrollHeight>1;var f=vis?(doc.scrollTop-pv.offsetTop+8)/Math.max(1,pv.scrollHeight):0;ta.style.display='block';pv.style.display='none';autoResize();if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else if(vis){{doc.scrollTop=Math.max(0,ta.offsetTop+f*ta.scrollHeight-8)}}}}
-function showPreview(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(ta.scrollTop)+1}}document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','false');var doc=document.documentElement;var f=(doc.scrollTop-ta.offsetTop+8)/Math.max(1,ta.scrollHeight);renderPreview();rebuildMirror();ta.style.display='none';pv.style.display='block';if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else{{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8)}}var anchored=doc.scrollTop;var imgs=pv.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{imgs[i].addEventListener('load',function(){{if(pv.style.display!=='none'&&doc.scrollTop===anchored){{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);anchored=doc.scrollTop}}}})}}}}
+function showWrite(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1;document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','true');rebuildMirror()}}var doc=document.documentElement;var vis=pv.scrollHeight>1;var f=vis?(doc.scrollTop-pv.offsetTop+8)/Math.max(1,pv.scrollHeight):0;ta.style.display='block';pv.style.display='none';autoResize();if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else if(vis){{doc.scrollTop=Math.max(0,ta.offsetTop+f*ta.scrollHeight-8)}}}}
+function showPreview(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1}}document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','false');var doc=document.documentElement;var f=(doc.scrollTop-ta.offsetTop+8)/Math.max(1,ta.scrollHeight);renderPreview();rebuildMirror();ta.style.display='none';pv.style.display='block';if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else{{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8)}}var anchored=doc.scrollTop;var imgs=pv.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{imgs[i].addEventListener('load',function(){{if(pv.style.display!=='none'&&doc.scrollTop===anchored){{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);anchored=doc.scrollTop}}}})}}}}
 function showSplit(){{var doc=document.documentElement;var docY=doc.scrollTop;var intoTa=Math.max(0,docY-ta.offsetTop);var L=yToLine(intoTa)+1;
-document.body.classList.add('split');dvEnd();tel.setAttribute('contenteditable','false');ta.style.display='block';pv.style.display='block';ta.style.height='';document.body.style.setProperty('--split','50%');rebuildMirror();renderPreview();var _reflow=ta.clientHeight;ta.scrollTop=lineToY(L);alignPreview(L,false);requestAnimationFrame(function(){{ta.scrollTop=lineToY(L);alignPreview(L,false);}});}}
+document.body.classList.add('split');dvEnd();ta.style.display='block';pv.style.display='block';autoResize();document.body.style.setProperty('--split','50%');rebuildMirror();renderPreview();var _reflow=col.clientHeight;col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);requestAnimationFrame(function(){{col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);}});}}
 var dv=document.getElementById('md-divider');var dragDv=false;
 function dvEnd(){{dragDv=false;dv.classList.remove('dragging')}}
 dv.addEventListener('pointerdown',function(e){{dragDv=true;dv.classList.add('dragging');dv.setPointerCapture(e.pointerId);e.preventDefault()}});
@@ -271,24 +276,24 @@ dv.addEventListener('pointerup',function(){{dvEnd()}});dv.addEventListener('poin
 function wrapSel(before,after,ph){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e)||ph;ta.setRangeText(before+sel+after,s,e,'end');ta.setSelectionRange(s+before.length,s+before.length+sel.length);ta.focus()}}
 function prefixLines(prefix){{var s=ta.selectionStart;var val=ta.value;var ls=val.lastIndexOf('\n',s-1)+1;ta.setRangeText(prefix,ls,ls,'end');ta.focus()}}
 function insertBlock(text){{var s=ta.selectionStart,e=ta.selectionEnd;ta.setRangeText(text,s,e,'end');ta.focus()}}
-function mdBold(){{wrapSel('**','**','bold')}}
-function mdItalic(){{wrapSel('*','*','italic')}}
-function mdStrike(){{wrapSel('~~','~~','text')}}
-function mdInlineCode(){{wrapSel('`','`','code')}}
-function mdHeading(n){{prefixLines('#'.repeat(n)+' ')}}
-function mdBullet(){{prefixLines('- ')}}
-function mdOrdered(){{prefixLines('1. ')}}
-function mdQuote(){{prefixLines('> ')}}
-function mdLink(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);var looksUrl=sel.length>0&&!/\s/.test(sel)&&/^[a-zA-Z0-9-]/.test(sel)&&/\.[a-zA-Z0-9-]{{2,}}/.test(sel);var href=looksUrl?(sel.indexOf('://')>=0?sel:'https://'+sel):'url';var text=sel.length>0?sel:'链接';ta.setRangeText('['+text+']('+href+')',s,e,'end');if(!looksUrl){{var hs=s+text.length+3;ta.setSelectionRange(hs,hs+3);}}ta.focus();autoResize()}}
-function mdImage(){{wrapSel('![','](url)','alt')}}
-function mdCodeBlock(lang){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);ta.setRangeText('```'+(lang||'')+'\n'+sel+'\n```',s,e,'end');ta.focus()}}
-function mdHr(){{insertBlock('\n\n---\n\n')}}
-function mdTable(){{insertBlock('|  |  |  |\n|---|---|---|\n|  |  |  |\n|  |  |  |\n')}}
-function mdClearFormat(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);ta.setRangeText(sel.replace(/[*_~`>#]/g,''),s,e,'end');ta.focus()}}
-function mdUndo(){{ta.focus();document.execCommand('undo')}}
-function mdRedo(){{ta.focus();document.execCommand('redo')}}
+function mdBold(){{wrapSel('**','**','bold');syncAfterEdit();}}
+function mdItalic(){{wrapSel('*','*','italic');syncAfterEdit();}}
+function mdStrike(){{wrapSel('~~','~~','text');syncAfterEdit();}}
+function mdInlineCode(){{wrapSel('`','`','code');syncAfterEdit();}}
+function mdHeading(n){{prefixLines('#'.repeat(n)+' ');syncAfterEdit();}}
+function mdBullet(){{prefixLines('- ');syncAfterEdit();}}
+function mdOrdered(){{prefixLines('1. ');syncAfterEdit();}}
+function mdQuote(){{prefixLines('> ');syncAfterEdit();}}
+function mdLink(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);var looksUrl=sel.length>0&&!/\s/.test(sel)&&/^[a-zA-Z0-9-]/.test(sel)&&/\.[a-zA-Z0-9-]{{2,}}/.test(sel);var href=looksUrl?(sel.indexOf('://')>=0?sel:'https://'+sel):'url';var text=sel.length>0?sel:'链接';ta.setRangeText('['+text+']('+href+')',s,e,'end');if(!looksUrl){{var hs=s+text.length+3;ta.setSelectionRange(hs,hs+3);}}ta.focus();autoResize();syncAfterEdit();}}
+function mdImage(){{wrapSel('![','](url)','alt');syncAfterEdit();}}
+function mdCodeBlock(lang){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);ta.setRangeText('```'+(lang||'')+'\n'+sel+'\n```',s,e,'end');ta.focus();syncAfterEdit();}}
+function mdHr(){{insertBlock('\n\n---\n\n');syncAfterEdit();}}
+function mdTable(){{insertBlock('|  |  |  |\n|---|---|---|\n|  |  |  |\n|  |  |  |\n');syncAfterEdit();}}
+function mdClearFormat(){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e);ta.setRangeText(sel.replace(/[*_~`>#]/g,''),s,e,'end');ta.focus();syncAfterEdit();}}
+function mdUndo(){{ta.focus();document.execCommand('undo');syncAfterEdit();}}
+function mdRedo(){{ta.focus();document.execCommand('redo');syncAfterEdit();}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
-tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
+tel.addEventListener('input',function(){{updateTitleSpacing();autoResize();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
 ta.addEventListener('input',function(){{autoResize();rebuildMirror();if(document.body.classList.contains('split')){{clearTimeout(window._mdSplitT);window._mdSplitT=setTimeout(function(){{renderPreview();alignPreview(cursorLine(),true)}},150)}}}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
