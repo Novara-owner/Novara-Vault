@@ -6,6 +6,14 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.3.0] - 2026-10-10
+
+A focused fix release: every export and backup dialog saves files with their proper file extension again.
+
+### Fixed
+
+- **Exported files keep their extension** - the native save dialogs introduced in 10.1.0 appended no default extension, so all twelve export paths (secure snapshots, encrypted backups, regular backups, sync-key backups, CSV, Markdown/HTML/PDF collections, images) wrote extension-less files such as `index` instead of `index.html`. The default extension is now taken from the selected file type, and a final guard appends it before writing even if the name was typed without one. Files exported by 10.1.0/10.2.0 are intact: add the missing extension by hand and they work exactly as before.
+
 ## [10.2.0] - 2026-10-10
 
 A Markdown split-view rework, driven by heavy real-world use of the editor.

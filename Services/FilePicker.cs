@@ -49,12 +49,22 @@ internal static class FilePicker
             dlg.SetFileTypeIndex(1);
         }
         if (!string.IsNullOrWhiteSpace(defaultName)) dlg.SetFileName(defaultName);
+
+
+
+        if (choices is { Length: > 0 } && choices[0].Extensions.Length > 0)
+            dlg.SetDefaultExtension(choices[0].Extensions[0].TrimStart('.'));
         var hwnd = App.MainWindow is null ? nint.Zero : WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
         var hr = dlg.Show(hwnd);
         if (hr == HR_CANCELLED) return null;
         if (hr != 0) Marshal.ThrowExceptionForHR(hr);
         dlg.GetResult(out var item);
-        return ItemPath(item);
+        var path = ItemPath(item);
+
+        if (path != null && choices is { Length: > 0 } && choices[0].Extensions.Length > 0
+            && string.IsNullOrEmpty(System.IO.Path.GetExtension(path)))
+            path += choices[0].Extensions[0];
+        return path;
     }
 
     private static List<string> Core(bool folders, bool multi, string? filters, string? title, bool startAtDesktop = false)

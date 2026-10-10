@@ -7,7 +7,7 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>10.2.0</Version>
+    <Version>10.3.0</Version>
     <Platforms>x64</Platforms>
 
 
@@ -38,7 +38,7 @@
 
 
 
-    <DefaultItemExcludes>$(DefaultItemExcludes);StickPoc\**;StickNoteHost\**;Novara.Core\**;Novara.Tests\**;NovaraMCP\**;Novara.Server\**;Novara.Sync.Server\**;_publish_tmp\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);StickPoc\**;StickNoteHost\**;Novara.Core\**;Novara.Tests\**;NovaraMCP\**;Novara.Server\**;Novara.Sync.Server\**;_publish_tmp\**</DefaultItemExcludes> 
 
   </PropertyGroup>
 
