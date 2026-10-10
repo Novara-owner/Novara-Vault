@@ -124,6 +124,10 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
   <img src="images/Chinese-PlanPage.png" alt="任务面板" width="720" />
 </p>
 
+<p align="center">
+  <img src="images/Plan Reminder.png" alt="计划卡片的提醒渐变" width="720" />
+</p>
+
 ## 桌面便签
 
 一键把任意便签或待办卡发送到桌面。轻量独立进程（**StickNoteHost**）让便签在主程序关闭后依然可见：
@@ -157,6 +161,7 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
   <img src="images/HtmlEditor.png" alt="富文本 HTML 编辑器" width="420" />
   <img src="images/Chinese-MdEditor-PreviewMode.png" alt="Markdown 编辑器预览" width="420" />
   <img src="images/Chinese-MdEditor-SourceMode.png" alt="Markdown 编辑器源码模式" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown 编辑器分屏预览" width="420" />
 </p>
 
 ## Novara Snapshot

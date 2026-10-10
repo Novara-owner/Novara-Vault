@@ -124,6 +124,10 @@ A lightweight productivity board that combines to-do lists, sticky notes, and ti
   <img src="images/English-PlanPage.png" alt="Task dashboard" width="720" />
 </p>
 
+<p align="center">
+  <img src="images/Plan Reminder.png" alt="Reminder gradient on a plan card" width="720" />
+</p>
+
 ## Desktop Sticky Notes
 
 Send any note or todo card to your desktop with one click. A dedicated lightweight host process (**StickNoteHost**) keeps notes visible even when the main app is closed:
@@ -157,6 +161,7 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
   <img src="images/HtmlEditor.png" alt="Rich text HTML editor" width="420" />
   <img src="images/English-MdEditor-PreviewMode.png" alt="Markdown editor preview" width="420" />
   <img src="images/English-MdEditor-SourceMode.png" alt="Markdown editor source mode" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown editor split preview" width="420" />
 </p>
 
 ## Novara Snapshot
