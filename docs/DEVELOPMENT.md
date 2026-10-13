@@ -36,6 +36,7 @@
 25. [Testing](#25-testing)
 26. [Directory Structure](#26-directory-structure)
 27. [Version History](#27-version-history)
+28. [Coding Style](#28-coding-style)
 
 ---
 
@@ -864,6 +865,21 @@ Novara/
 ├── Installer/                 Inno Setup install script
 └── Assets/                    icons (ico / png / svg logo)
 ```
+
+---
+
+## 28. Coding Style
+
+The project follows the [Microsoft C# coding conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions) and the [.NET Framework Design Guidelines](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/) as the base style. The build is kept warning-free and CI enforces the floor (coverage gate, dependency and licence gates). Beyond the base style, the project-specific rules are:
+
+- **Nullable and implicit usings are enabled**; file-scoped namespaces (`namespace X;`) everywhere; four-space indentation.
+- **No `x:Bind` for display text.** Text shown to the user is assigned via `x:Name` + code (the `App.GetString` static dictionary), because the XAML compiler can disable a `x:Bind` binding and blank the text. `x:Bind` remains fine for non-text bindings.
+- **Brushes and resources go through the accessors.** UI code takes brushes via `App.GetBrush("AppResourceKey")`; never index the resource dictionary directly, never hardcode a colour that exists as a resource. XAML uses `{ThemeResource ...}`.
+- **Danger red and brand blue are dual-track**: the classic palette and the paper palettes define the same resource keys with different values. New code references the keys (`AppDanger*`, `AppPrimaryButton*`), never a hex literal.
+- **Buttons carry a template.** A `Button` with a raw `Background` and no `ControlTemplate` flashes the system hover colour; use the shared styles in `Themes/Controls.xaml` (`NovaraPrimaryButtonStyle`, `NovaraOutlineButtonStyle`, `NovaraDangerButtonStyle`, `NovaraIconButtonStyle`) or provide a full template.
+- **Storage values are language-neutral.** Chinese string literals are written to the data file as-is; UI strings come from the five-language dictionary in `AppResources.cs` (all five language blocks must gain or lose a key together).
+- **Every user-visible behaviour change ships with a test.** Major new functionality lands together with xUnit tests in `Novara.Tests`; CI keeps the suite green and the coverage floor enforced.
+- **Comments are sparse and state constraints**, not narration — the surrounding code is expected to explain itself.
 
 ---
 

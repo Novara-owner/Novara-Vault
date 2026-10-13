@@ -1,4 +1,4 @@
-<!--
+﻿<!--
 Thanks for your contribution! / 感谢你的贡献！
 Please describe your changes and reference any related issue.
 请描述你的改动，并关联相关 Issue。
@@ -17,3 +17,4 @@ Please describe your changes and reference any related issue.
 - [ ] I have read the [Security Policy](SECURITY.md) / 已阅读安全说明
 - [ ] My changes are consistent with the project's coding style / 改动符合项目编码风格
 - [ ] I have added/updated tests where applicable / 已按需添加/更新测试
+- [ ] My commits carry a `Signed-off-by` line (DCO, `git commit -s`) / 提交带 Signed-off-by（DCO）

@@ -1,4 +1,4 @@
-# Contributing to Novara
+﻿# Contributing to Novara
 
 Thanks for taking the time to look. Novara is maintained by a single author, so the process is deliberately small and explicit.
 
@@ -22,9 +22,20 @@ Please include:
 1. Fork the repository and branch from `main`.
 2. Keep the change to a single concern, and follow the style of the surrounding code.
 3. Make the build and the tests pass, and keep line coverage at or above the 80% floor that CI enforces.
+4. **Major new functionality must include automated tests added to Novara.Tests in the same change**; a pull request that adds new behaviour without tests will not be merged.
 4. Open a pull request against `main`. Describe the problem, the change, and how you verified it — the pull request template asks for exactly that.
 
 Build prerequisites and the full build are in [docs/BUILD.md](docs/BUILD.md); the project layout and conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+## Developer Certificate of Origin (DCO)
+
+Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/) (DCO). Every commit must carry a `Signed-off-by` line matching the commit author:
+
+```
+Signed-off-by: Your Name <you@example.com>
+```
+
+The simplest way is `git commit -s`, which adds the line automatically. A pull request whose commits are not signed off cannot be merged.
 
 ## Licence
 

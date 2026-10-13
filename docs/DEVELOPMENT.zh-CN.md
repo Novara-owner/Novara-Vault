@@ -36,6 +36,7 @@
 25. [测试](#25-测试)
 26. [目录结构](#26-目录结构)
 27. [版本历史](#27-版本历史)
+28. [编码风格](#28-编码风格)
 
 ---
 
@@ -864,6 +865,21 @@ Novara/
 ├── Installer/                 Inno Setup 安装脚本
 └── Assets/                    图标（ico / png / svg logo）
 ```
+
+---
+
+## 28. 编码风格
+
+项目遵循 [Microsoft C# 编码约定](https://learn.microsoft.com/zh-cn/dotnet/csharp/fundamentals/coding-style/coding-conventions) 与 [.NET 框架设计准则](https://learn.microsoft.com/zh-cn/dotnet/standard/design-guidelines/) 作为基础风格。构建保持零警告，CI 强制下限（覆盖率门、依赖与许可门）。在基础风格之上，项目自身的规约是：
+
+- **Nullable 与隐式 using 已启用**；全程文件范围命名空间（`namespace X;`）；四空格缩进。
+- **禁止用 `x:Bind` 绑定显示文本。** 面向用户的文字经 `x:Name` + 代码赋值（`App.GetString` 静态字典）——XAML 编译器可能把 `x:Bind` 绑定置为 Disabled 而使文字凭空空白。`x:Bind` 用于非文本绑定没有问题。
+- **画刷与资源走访问器。** UI 代码经 `App.GetBrush("AppResourceKey")` 取画刷；不直接索引资源字典，不硬编码已存在为资源的颜色。XAML 侧用 `{ThemeResource ...}`。
+- **危险红与品牌蓝是双轨的**：经典色板与类纸色板以同名资源键承载不同取值。新代码只引用资源键（`AppDanger*`、`AppPrimaryButton*`），不写十六进制字面量。
+- **按钮必须带模板。** 只设 `Background` 不给 `ControlTemplate` 的 `Button` 会在指针悬停时闪系统色；使用 `Themes/Controls.xaml` 的共享样式（`NovaraPrimaryButtonStyle`、`NovaraOutlineButtonStyle`、`NovaraDangerButtonStyle`、`NovaraIconButtonStyle`）或提供完整模板。
+- **存储值语言无关。** 中文字面量按原样写入数据文件；UI 文案来自 `AppResources.cs` 的五语言字典（五个语言块必须同步增删同一个键）。
+- **每个用户可见的行为变更都随附测试。** 重要的新功能与 `Novara.Tests` 的 xUnit 测试同批落地；CI 保持套件全绿并强制覆盖率下限。
+- **注释克制、只陈述约束**，不做叙述——周边代码应当自己说明自己。
 
 ---
 
