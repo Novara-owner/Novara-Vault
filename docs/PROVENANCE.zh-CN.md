@@ -1,4 +1,4 @@
-# 构建溯源
+﻿# 构建溯源
 
 <p align="center"><a href="PROVENANCE.md">English</a> · <strong>简体中文</strong></p>
 
@@ -55,6 +55,16 @@
 ## 签名（10.1 及以后）
 
 自 10.1 起，容器镜像与安装包以 [Sigstore](https://www.sigstore.dev/) 的**无密钥**方式签名，由产出该版本的**同一个工作流**完成；10.0.0 未附签名包（签名作业的首跑失败已订正，见[校验你的下载](VERIFYING.zh-CN.md)）。没有可被窃取的长期签名私钥：每份签名都附带一张短期证书，把仓库、工作流文件与 tag 钉死，并记入公开的透明度日志。校验命令见 [VERIFYING.zh-CN.md](VERIFYING.zh-CN.md)。
+
+### 版本标签签名
+
+每个版本标签都经**加密签名**。仓库使用 SSH 签名密钥为标签签名（`gpg.format = ssh`、`tag.gpgSign = true`），对应公钥已在 GitHub 注册为签名密钥——推送后的标签在发布页显示 **Verified** 徽标，任何人都可以本地验证：
+
+```
+git ssh-verify <(curl -s https://github.com/Novara-owner.keys) "$(git cat-file tag vX.Y.Z)"
+```
+
+或在自有密钥环中直接 `git tag -v vX.Y.Z`。没有有效签名的标签不用作发布锚点；该要求同样写入发布流程（[DEVELOPMENT.zh-CN.md](DEVELOPMENT.zh-CN.md) §24）。
 
 ## 相关文档
 

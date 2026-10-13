@@ -1,4 +1,4 @@
-# Build Provenance
+﻿# Build Provenance
 
 <p align="center"><strong>English</strong> · <a href="PROVENANCE.zh-CN.md">简体中文</a></p>
 
@@ -55,6 +55,16 @@ We would rather state the limits than let you assume more than we can show.
 ## Signing (10.1 and later)
 
 From 10.1 on, container images and installers are signed with [Sigstore](https://www.sigstore.dev/) in **keyless** mode, by the same workflow that produces the release; 10.0.0 shipped without a signature bundle (the signing job's failed first run has been fixed; see [VERIFYING.md](VERIFYING.md)). There is no long-lived signing key to steal: each signature carries a short-lived certificate that pins the repository, the workflow file and the tag, and it is recorded in the public transparency log. The verification commands are in [VERIFYING.md](VERIFYING.md).
+
+### Signed version tags
+
+Every version tag is **cryptographically signed**. The repository signs tags with an SSH signing key (`gpg.format = ssh`, `tag.gpgSign = true`), and the corresponding public key is registered with GitHub as a signing key — so a pushed tag shows a **Verified** badge on the releases page and anyone can verify it locally:
+
+```
+git ssh-verify <(curl -s https://github.com/Novara-owner.keys) "$(git cat-file tag vX.Y.Z)"
+```
+
+or simply `git tag -v vX.Y.Z` with the key in your own keyring. A tag without a valid signature is not used as a release anchor; the requirement is also recorded in the release procedure ([DEVELOPMENT.md](DEVELOPMENT.md) §24).
 
 ## Related documents
 
