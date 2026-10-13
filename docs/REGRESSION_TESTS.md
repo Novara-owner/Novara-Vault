@@ -1,4 +1,4 @@
-# Regression Tests
+﻿# Regression Tests
 
 English · [简体中文](REGRESSION_TESTS.zh-CN.md)
 
@@ -11,27 +11,27 @@ How bugs fixed over the last six months map onto the automated regression surfac
 
 | Version | Fixed issue | Regression test |
 |---|---|---|
-| 10.3 | Exported files lost their extension | Guard: `reverse_verify` extension-append entry + final write-time guard pinned in code |
-| 10.2 | Toolbar edits did not refresh the preview | Manual verification (WebView2 editor surface) |
+| 10.3 | Exported files lost their extension | `RegressionGuardsTests.FilePicker_KeepsTheExtensionInvariant` (CI) + local guard |
+| 10.2 | Toolbar edits did not refresh the preview | `RegressionGuardsTests.EditorToolbar_ActionsSyncThePreview` (CI) |
 | 10.2 | Split-view typing jumped to the bottom | Manual verification (WebView2 editor surface) |
-| 10.1 | Pickers in elevated instances | Manual verification (native Win32 dialog migration) |
+| 10.1 | Pickers in elevated instances | `RegressionGuardsTests.FilePicker_UsesNativeWin32DialogsOnly` (CI) |
 | 9.4 | Password dialogs double-submitted | Guard: `page_lifecycle_guard` in-flight lock check |
 | 9.4 | Reminder border lost after drag | Guard: `page_lifecycle_guard` border-preservation check |
 | 9.4 | Server write fence against cross-process delete races | `SpaceAdminTests`, `SqliteSpaceStoreTests`; HTTP probe in `Tools/m3_e2e.py` |
 | 9.4 | Update download validates the manifest | `UpdateManifestVerifierTests` (5 tests) + `UpdatePolicyTests` |
 | 9.4 | Lock screen over the first-run wizard | Guard: `page_lifecycle_guard` lifecycle checks |
 | 9.3 | Editor failure diagnostics (missing WebView2 runtime) | Manual verification + diagnostics logging review |
-| 9.3 | WebView2 environment re-initialization error | Guard: `page_lifecycle_guard` re-entrancy check |
+| 9.3 | WebView2 environment re-initialization error | `RegressionGuardsTests.EditorInit_IsReentrancyGuarded` (CI) + local guard |
 | 9.3 | Mixed-language wizard text | Manual verification (locale matrix) |
 | 9.2 | Reminders did not fire with the app closed | Manual verification (Task Scheduler COM integration) |
-| 9.2 | Paper-theme color parser rejected 6-digit colors | Guard: `danger_red_guard` palette checks; theme apply path reviewed |
-| 9.2 | Hardcoded danger reds across the UI | Guard: `danger_red_guard` (hex + `FromArgb` scan) |
-| 9.1 | Frozen TOTP live codes (GC of managed wrappers) | Guard: `page_lifecycle_guard` strong-reference pins |
-| 9.1 | Cooldown confirm-key first-frame flash | Guard: `cooldown_guard` (20 hosts audited) |
-| 9.1 | Card drag stutter | Manual verification (frame-loop perf) |
+| 9.2 | Paper-theme color parser rejected 6-digit colors | `RegressionGuardsTests.PaperTheme_ParsesSixDigitColors` (CI) |
+| 9.2 | Hardcoded danger reds across the UI | `RegressionGuardsTests.NoHardcodedDangerRed` (CI) + local guard |
+| 9.1 | Frozen TOTP live codes (GC of managed wrappers) | `RegressionGuardsTests.TotpRegistry_UsesStrongReferences` (CI) + local guard |
+| 9.1 | Cooldown confirm-key first-frame flash | `RegressionGuardsTests.CooldownHosts_KeepInlineButtonTemplates` (CI) + local guard |
+| 9.1 | Card drag stutter | `RegressionGuardsTests.DragAutoScroll_UsesTheCompositorFrameCallback` (CI) |
 | 9.0 | Container health check with host allowlist | HTTP-level probe in `Tools/m3_e2e.py` |
 | 6.2 | Incremental verification round | Covered by the guard suite below |
-| 6.1 | New empty group vanished under the no-filter view | Guard: `page_lifecycle_guard` visibility checks |
+| 6.1 | New empty group vanished under the no-filter view | `RegressionGuardsTests.EmptyGroup_VisibilityIsWorkspaceConditional` (CI) + local guard |
 | 6.0 | ~250 issues from five verification rounds | The whole guard suite: 193 reverse-verify entries + 368 lifecycle checks + the guard family — these rounds are why the guards exist |
 | 5.2 | Sync-lock livelock | `SyncPlannerTests` (session-lock lifecycle rules) |
 | 5.1 | ~20 fixes from a domain-wide verification | Covered by the guard suite below |
@@ -42,8 +42,8 @@ The contributing policy requires major functionality to arrive with tests, and t
 
 ## Totals
 
-- Named changelog fixes with a mapped regression artifact: **26/26** (17 unit/integration-test or mutation-verified guard entries, 9 manual verifications for WebView2/COM/native-dialog surfaces that cannot be hosted in a unit test).
-- Aggregate rounds (6.0's ~250 issues, 5.1's ~20) are covered by the standing guard suite rather than one test per issue.
+- **13 of the 26 named fixes (50%) carry their regression inside the CI test suite** — 3 as behavioural unit tests, 10 as `RegressionGuardsTests` source-form assertions; the remaining 9 are manual verifications for surfaces a unit test cannot host (WebView2, Task Scheduler COM, locale matrix).
+- The local guard scripts (which run before every local build and are mutation-verified) back 10 of the CI assertions plus the aggregate rounds (6.0's ~250 issues, 5.1's ~20) — they are development infrastructure and intentionally not part of this public repository.
 
 ---
 

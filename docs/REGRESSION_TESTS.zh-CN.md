@@ -1,4 +1,4 @@
-# 回归测试
+﻿# 回归测试
 
 [English](REGRESSION_TESTS.md) · 简体中文
 
@@ -11,27 +11,27 @@
 
 | 版本 | 修复 | 回归测试 |
 |---|---|---|
-| 10.3 | 导出文件丢失扩展名 | 守卫：`reverse_verify` 扩展名补全条目 + 代码内写盘前最终闸 |
-| 10.2 | 工具栏编辑不即时刷新预览 | 人工验证（WebView2 编辑器面） |
+| 10.3 | 导出文件丢失扩展名 | `RegressionGuardsTests.FilePicker_KeepsTheExtensionInvariant`（CI）+ 本地守卫 |
+| 10.2 | 工具栏编辑不即时刷新预览 | `RegressionGuardsTests.EditorToolbar_ActionsSyncThePreview`（CI） |
 | 10.2 | 分屏打字跳到底部 | 人工验证（WebView2 编辑器面） |
-| 10.1 | 提权实例中的文件选择器 | 人工验证（原生 Win32 对话框迁移） |
+| 10.1 | 提权实例中的文件选择器 | `RegressionGuardsTests.FilePicker_UsesNativeWin32DialogsOnly`（CI） |
 | 9.4 | 密码弹窗可双提交 | 守卫：`page_lifecycle_guard` 进行中锁定判据 |
 | 9.4 | 提醒边框拖拽后丢失 | 守卫：`page_lifecycle_guard` 边框保留判据 |
 | 9.4 | 服务端写栅栏防跨进程删除竞态 | `SpaceAdminTests`、`SqliteSpaceStoreTests`；`Tools/m3_e2e.py` HTTP 探针 |
 | 9.4 | 更新下载校验清单 | `UpdateManifestVerifierTests`（5 项）+ `UpdatePolicyTests` |
 | 9.4 | 首启向导期间的锁屏 | 守卫：`page_lifecycle_guard` 生命周期判据 |
 | 9.3 | 编辑器失败诊断（缺 WebView2 运行时） | 人工验证 + 诊断日志审查 |
-| 9.3 | WebView2 环境重复初始化错误 | 守卫：`page_lifecycle_guard` 防重入判据 |
+| 9.3 | WebView2 环境重复初始化错误 | `RegressionGuardsTests.EditorInit_IsReentrancyGuarded`（CI）+ 本地守卫 |
 | 9.3 | 向导混语言文案 | 人工验证（语言矩阵） |
 | 9.2 | 应用关闭时提醒不触发 | 人工验证（Task Scheduler COM 集成） |
-| 9.2 | 类纸主题色解析拒绝 6 位色 | 守卫：`danger_red_guard` 色板判据；主题应用路径已审查 |
-| 9.2 | UI 各处硬编码危险红 | 守卫：`danger_red_guard`（hex + `FromArgb` 双形态扫描） |
-| 9.1 | TOTP 动态码冻结（托管包装类 GC） | 守卫：`page_lifecycle_guard` 强引用钉 |
-| 9.1 | 冷静期确认键首帧闪红 | 守卫：`cooldown_guard`（20 个宿主全审） |
-| 9.1 | 卡片拖拽卡顿 | 人工验证（帧循环性能） |
+| 9.2 | 类纸主题色解析拒绝 6 位色 | `RegressionGuardsTests.PaperTheme_ParsesSixDigitColors`（CI） |
+| 9.2 | UI 各处硬编码危险红 | `RegressionGuardsTests.NoHardcodedDangerRed`（CI）+ 本地守卫 |
+| 9.1 | TOTP 动态码冻结（托管包装类 GC） | `RegressionGuardsTests.TotpRegistry_UsesStrongReferences`（CI）+ 本地守卫 |
+| 9.1 | 冷静期确认键首帧闪红 | `RegressionGuardsTests.CooldownHosts_KeepInlineButtonTemplates`（CI）+ 本地守卫 |
+| 9.1 | 卡片拖拽卡顿 | `RegressionGuardsTests.DragAutoScroll_UsesTheCompositorFrameCallback`（CI） |
 | 9.0 | 配置 host 白名单后的容器健康检查 | `Tools/m3_e2e.py` HTTP 级探针 |
 | 6.2 | 增量核验轮 | 由下方守卫套件覆盖 |
-| 6.1 | 无筛选视图下新建空分组消失 | 守卫：`page_lifecycle_guard` 可见性判据 |
+| 6.1 | 无筛选视图下新建空分组消失 | `RegressionGuardsTests.EmptyGroup_VisibilityIsWorkspaceConditional`（CI）+ 本地守卫 |
 | 6.0 | 五轮核验的约 250 项问题 | 全部守卫套件：193 条反向验证 + 368 条生命周期判据 + 守卫家族——这些守卫正是那几轮核验的产物 |
 | 5.2 | 同步锁死循环 | `SyncPlannerTests`（会话锁生命周期规则） |
 | 5.1 | 一次全域核验的约 20 项修复 | 由下方守卫套件覆盖 |
@@ -42,8 +42,8 @@
 
 ## 合计
 
-- 具名更新日志修复中有映射回归产物者：**26/26**（17 条单元/集成测试或经变异验证的守卫条目，9 条为无法在单元测试中承载的 WebView2/COM/原生对话框面的人工验证）。
-- 汇总轮（6.0 的约 250 项、5.1 的约 20 项）由常设守卫套件覆盖，而非一问题一测试。
+- **26 条具名修复中的 13 条（50%）把回归放进 CI 测试套件**——3 条为行为级单元测试，10 条为 `RegressionGuardsTests` 源码形态断言；其余 9 条是单元测试无法承载的表面（WebView2、Task Scheduler COM、语言矩阵）的人工验证。
+- 本地守卫脚本（每次本机构建前运行、经变异验证）为 10 条 CI 断言及汇总轮（6.0 的约 250 项、5.1 的约 20 项）提供后备——它们是开发基础设施，有意不入本公开仓库。
 
 ---
 
