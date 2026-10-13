@@ -1,0 +1,54 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+[*.{cs,xaml,json,yml,yaml}]
+indent_size = 4
+
+[*.{cmd,bat}]
+end_of_line = crlf
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+# Preference-level IDE suggestions stay off on purpose: applying them would
+# rewrite the whole code base in a single style-noise commit. The rules below
+# were all reported by `dotnet format style --severity info` and are closed
+# explicitly so the CI style check stays meaningful and quiet.
+dotnet_style_prefer_primary_constructors = false
+dotnet_diagnostic.IDE0290.severity = none
+dotnet_diagnostic.IDE0028.severity = none
+dotnet_diagnostic.IDE0300.severity = none
+dotnet_diagnostic.IDE0301.severity = none
+dotnet_diagnostic.IDE0302.severity = none
+dotnet_diagnostic.IDE0303.severity = none
+dotnet_diagnostic.IDE0304.severity = none
+dotnet_diagnostic.IDE0305.severity = none
+dotnet_diagnostic.IDE0057.severity = none
+dotnet_diagnostic.IDE0063.severity = none
+dotnet_diagnostic.IDE0090.severity = none
+dotnet_diagnostic.IDE0130.severity = none
+dotnet_diagnostic.IDE0161.severity = none
+dotnet_diagnostic.IDE0024.severity = none
+dotnet_diagnostic.IDE0032.severity = none
+dotnet_diagnostic.IDE0044.severity = none
+dotnet_diagnostic.IDE0052.severity = none
+dotnet_diagnostic.IDE0051.severity = none
+dotnet_diagnostic.IDE0055.severity = none
+dotnet_diagnostic.IDE0059.severity = none
+dotnet_diagnostic.IDE0060.severity = none
+dotnet_diagnostic.IDE0061.severity = none
+dotnet_diagnostic.IDE0062.severity = none
+dotnet_diagnostic.IDE0066.severity = none
+dotnet_diagnostic.IDE0074.severity = none
+dotnet_diagnostic.IDE0075.severity = none
+dotnet_diagnostic.IDE0180.severity = none
+dotnet_diagnostic.IDE0200.severity = none
+dotnet_diagnostic.IDE0250.severity = none
+dotnet_diagnostic.IDE0251.severity = none
+dotnet_diagnostic.IDE0270.severity = none
+dotnet_diagnostic.IDE1006.severity = none

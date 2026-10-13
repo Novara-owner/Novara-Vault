@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -29,6 +29,8 @@ jobs:
           dotnet-version: '10.0.400'
       - name: Restore
         run: dotnet restore Novara.slnx -p:RestoreLockedMode=true
+      - name: Enforce code style (dotnet format style)
+        run: dotnet format style Novara.slnx --verify-no-changes --no-restore
       - name: Build
         run: |
           dotnet build Novara.Core/Novara.Core.csproj -c Release --no-restore
