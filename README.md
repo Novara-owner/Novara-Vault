@@ -39,6 +39,10 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 
 ---
 
+## Versioning
+
+Starting with the 11.0 release, Novara uses a compact version scheme instead of dotted version numbers: the first release on a new major line is **`novara11`**, and follow-up fix releases are **`novara11.R1`**, `novara11.R2`, and so on (R = Revision). The next major line will be `novara12`. Releases up to 10.3.0 used the previous numeric scheme and keep their original names; the GitHub release tag of each new release carries the same identifier, and installer files are named accordingly (`Novara_Setup_novara11.exe`).
+
 ## 10.0 — Built to Be Verified
 
 10.0 is the trust release: most of the work went into making Novara verifiable from the outside. Release signing with Sigstore (checkable with `cosign`) is in place and takes effect from 10.1; the build is pinned and reproducible on the input side; and the security posture is published rather than asserted. A bilingual threat model states what Novara protects against and what it does not, and a code signing policy documents who authors, reviews and approves release binaries. Every push is gated on locked dependency restores, vulnerability and licence audits, and an 80% line-coverage floor, while the packaging job refuses to ship unless two independent publishes come out byte-identical. On the desktop, the record editor gains a live split preview that follows the line you are typing.
