@@ -2,7 +2,7 @@
 
 [English](REGRESSION_TESTS.md) · 简体中文
 
-近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与核验轮汇总；回归面有两层：
+近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与验证轮次汇总；回归面有两层：
 
 1. **单元/集成测试** —— `Novara.Tests`（xUnit，35+ 文件，约 850 个测试），直接引用发行程序集，覆盖数据、加密、同步与服务端层。
 2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（368 条判据）、`Tools/reverse_verify.py`（193 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
@@ -30,7 +30,7 @@
 | 9.1 | 冷静期确认键首帧闪红 | `RegressionGuardsTests.CooldownHosts_KeepInlineButtonTemplates`（CI）+ 本地守卫 |
 | 9.1 | 卡片拖拽卡顿 | `RegressionGuardsTests.DragAutoScroll_UsesTheCompositorFrameCallback`（CI） |
 | 9.0 | 配置 host 白名单后的容器健康检查 | `Tools/m3_e2e.py` HTTP 级探针 |
-| 6.2 | 增量核验轮 | 由下方守卫套件覆盖 |
+| 6.2 | 增量验证轮次 | 由下方守卫套件覆盖 |
 | 6.1 | 无筛选视图下新建空分组消失 | `RegressionGuardsTests.EmptyGroup_VisibilityIsWorkspaceConditional`（CI）+ 本地守卫 |
 | 6.0 | 五轮核验的约 250 项问题 | 全部守卫套件：193 条反向验证 + 368 条生命周期判据 + 守卫家族——这些守卫正是那几轮核验的产物 |
 | 5.2 | 同步锁死循环 | `SyncPlannerTests`（会话锁生命周期规则） |
