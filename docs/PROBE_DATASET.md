@@ -32,17 +32,18 @@ Each benchmark entry looks like `{ "key": "unique id", "prompt": "question sent 
 
 ## Constraints
 
-- `benchmarkQuestions` must not be empty; at most the first **7** questions are kept.
-- `adversarialBenchmarks` is optional, capped at **64** entries; each run samples from both tiers.
+- `benchmarkQuestions` must not be empty; the tier is capped at **7** questions (anything beyond is ignored at load time).
+- `adversarialBenchmarks` is optional, capped at **64** entries.
+- Each run executes a **layered sample**: 3 questions from the base tier (K1) + 2 from the adversarial tier (K2), shortfalls tolerated; question order and request markers are randomized per run, and the run seed is recorded on the report for reproducibility.
 - Every question's `prompt` and `expected` must be non-empty — an empty `expected` would make scoring trivially true.
-- Patterns are .NET regular expressions and must compile; the two pattern lists are capped at **64** entries combined.
+- Patterns are .NET regular expressions and must compile; the strong and weak lists are each capped at **64** entries.
 - `expected` is compared numerically (a number appearing in the reply equal to the expected value counts as a pass), so design questions whose answer is an unambiguous number.
 
 ## Import / Apply / Revert
 
 - **Import**: Memos page → API card → Relay probe → "Load Probe Dataset" at the bottom of the dialog, then pick the JSON file. After validation it is written to `%LOCALAPPDATA%\Novara\ProbeDataSet.json` and the app restarts to apply it.
 - The **"How to build your own dataset?" link** in the dialog opens this page (Chinese or English, following the interface language).
-- **Revert**: delete `%LOCALAPPDATA%\Novara\ProbeDataSet.json` and restart to fall back to the shipped dataset; or import a file with a lower `version` (a lower-version file loses to a higher one in the read chain).
+- **Revert**: delete `%LOCALAPPDATA%\Novara\ProbeDataSet.json` and restart to fall back to the shipped dataset; or import a corrected file with a higher `version` (the read chain only honours the highest version).
 
 ## Full Example
 
@@ -75,7 +76,7 @@ Each benchmark entry looks like `{ "key": "unique id", "prompt": "question sent 
 
 ## Honest Limits of Detection
 
-Each probe run randomizes its question draw and request markers, which prevents relays from recognizing the probe by **traffic fingerprints** (fixed request prefixes, fixed question order). But **randomization cannot defeat semantic cheating**: some relays understand the questions, answer probes with a genuine model, and serve a downgraded model to real traffic. Growing the adversarial tier improves detection of such relays, but 100% recognition is not guaranteed — consistent with the note in the probe dialog. This check is probabilistic and intended for personal reference only.
+Each probe run randomizes its question draw, request markers and filler text, which sharply raises the bar for relays recognizing the probe by **traffic fingerprints** (fixed request prefixes, fixed question order, fixed padding paragraphs) - though the fixed test questions and instruction phrasing themselves remain potential signatures. **Randomization cannot defeat semantic cheating**: some relays understand the questions, answer probes with a genuine model, and serve a downgraded model to real traffic. Growing the adversarial tier improves detection of such relays, but 100% recognition is not guaranteed — consistent with the note in the probe dialog. This check is probabilistic and intended for personal reference only.
 
 ---
 
