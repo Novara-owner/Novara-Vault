@@ -38,8 +38,4 @@
     <Platform Solution="Debug|Any CPU" Project="Any CPU" />
     <Platform Solution="Release|Any CPU" Project="Any CPU" />
   </Project>
-    <Platform Solution="*|Any CPU" Project="Any CPU" />
-    <Platform Solution="Debug|Any CPU" Project="Any CPU" />
-    <Platform Solution="Release|Any CPU" Project="Any CPU" />
-  </Project>
 </Solution>
