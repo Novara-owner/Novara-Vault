@@ -33,11 +33,13 @@ public class SyncContainerV5Tests
 
 
 
+
+
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root != null && !File.Exists(Path.Combine(root.FullName, "Novara.slnx"))) root = root.Parent;
         Assert.NotNull(root);
-        var b64 = File.ReadAllText(Path.Combine(root!.FullName, "Tools", "fixtures", "v5-manifest.b64")).Trim();
-        var expected = File.ReadAllText(Path.Combine(root.FullName, "Tools", "fixtures", "v5-manifest.json")).Trim();
+        var b64 = File.ReadAllText(Path.Combine(root!.FullName, "Novara.Tests", "Fixtures", "v5-manifest.b64")).Trim();
+        var expected = File.ReadAllText(Path.Combine(root.FullName, "Novara.Tests", "Fixtures", "v5-manifest.json")).Trim();
         var key = Convert.ToBase64String(System.Linq.Enumerable.Range(0, 32).Select(i => (byte)i).ToArray());
 
         var opened = SyncContainer.OpenManifest(Convert.FromBase64String(b64), key);
