@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-10 · **Applies to:** Novara 10.3 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-19 · **Applies to:** Novara novara11 / 11.0 (and earlier versions where noted)
 
 ---
 

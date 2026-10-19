@@ -21,7 +21,7 @@
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/novaraxin/novara-sync"></a>
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker image size" src="https://img.shields.io/docker/image-size/novaraxin/novara-sync"></a>
   <img alt="Platform: Windows 10 2004+ | x64" src="https://img.shields.io/badge/platform-Windows%2010%202004%2B%20%7C%20x64-blue">
-  <img alt="Runtime: .NET 8 | WinUI 3" src="https://img.shields.io/badge/.NET-8%20%7C%20WinUI%203-512BD4">
+  <img alt="Runtime: .NET 10 | WinUI 3" src="https://img.shields.io/badge/.NET-10%20%7C%20WinUI%203-512BD4">
   <img alt="Releases: SHA-256 + SPDX SBOM" src="https://img.shields.io/badge/releases-SHA--256%20%2B%20SPDX%20SBOM-green">
 </p>
 
@@ -42,6 +42,12 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 ## Versioning
 
 Starting with the 11.0 release, Novara uses a compact version scheme instead of dotted version numbers: the first release on a new major line is **`novara11`**, and follow-up fix releases are **`novara11.R1`**, `novara11.R2`, and so on (R = Revision). The next major line will be `novara12`. Releases up to 10.3.0 used the previous numeric scheme and keep their original names; the GitHub release tag of each new release carries the same identifier, and installer files are named accordingly (`Novara_Setup_novara11.exe`).
+
+## 11.0 — Making everything you already use more dependable
+
+11.0 is the "Hardened" release: no feature sprawl — a stronger foundation for everything already shipped. The desktop app moves to .NET 10; the database upgrades to the v5 container (Argon2id derivation, self-describing parameters, SHA-256 integrity precheck, optional upgrade after unlocking); sync uploads only the partitions that changed; update manifests carry an ECDSA signature and are rejected without one; backup snapshots record SHA-256 hashes with GFS-tiered retention. An optional automatic update check arrives in-app (off by default). And a codebase-wide overhaul fixed **some 470 defects** one by one — including deeply buried ones like "the app occasionally quit after a theme switch without relaunching", "a sync device stuck forever", and "dialogs crashing on extremely narrow windows".
+
+Full details: [Release novara11](https://github.com/Novara-owner/Novara-Vault/releases/tag/novara11) · [CHANGELOG](CHANGELOG.md)
 
 ## 10.0 — Built to Be Verified
 

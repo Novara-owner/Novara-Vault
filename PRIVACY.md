@@ -5,7 +5,7 @@
 ---
 
 **Effective date:** 2026-08-14
-**Last updated:** 2026-10-08
+**Last updated:** 2026-10-19
 **Applies to:** Novara 9.4 (and, where the behavior described below already existed, earlier versions)
 
 > This policy describes the Novara **desktop application** for Windows. The official website (novara.xin) and the GitHub repository are separate properties; this document focuses on the software you install and run on your machine.
@@ -16,7 +16,7 @@
 
 - **Novara keeps your data local.** Your data lives on your computer and never leaves it unless you explicitly make it leave.
 - **We collect nothing.** No account, no telemetry, no usage analytics, no ads, no device fingerprinting.
-- **It works fully offline.** Network activity happens only when you ask for it: the API-key detection you trigger manually (Section 5), the local MCP interface you opt into (Section 6), and — since 8.0 — sync to **your own** server, which you must switch on and pair yourself, and — since 9.0 — the in-app update check you click, which talks only to the project's release site (both in Section 5). The exported Snapshot viewer file performs no network requests at all; where you host it and who may reach it is entirely up to you.
+- **It works fully offline.** Network activity happens only when you ask for it: the API-key detection you trigger manually (Section 5), the local MCP interface you opt into (Section 6), and — since 8.0 — sync to **your own** server, which you must switch on and pair yourself, the in-app update check (manual by default; an optional automatic schedule exists since novara11), which talks only to the project's release site — both in Section 5. The exported Snapshot viewer file performs no network requests at all; where you host it and who may reach it is entirely up to you.
 - **Encryption is optional and OFF by default.** Read Section 4 carefully so you know exactly what is and is not protected. Snapshot exports (Section 11) are always encrypted — every export requires a password and produces the same encrypted container, whether or not your local vault is itself encrypted.
 
 ---
@@ -85,9 +85,9 @@ Encryption in Novara is **optional and turned OFF by default**.
 
 Novara is designed to be **fully usable offline** and does not phone home.
 
-- **No background updates:** Novara never checks for updates on its own — no startup check, no polling. The in-app update check (since 9.0, see below) runs only when you click it; nothing is downloaded or installed without your explicit confirmation at every step.
+- **Updates are opt-in, and never installed on their own:** by default, Novara never checks for updates on its own. If you explicitly opt in from the "You're up to date" dialog, Novara performs the exact same static-manifest check about 25 seconds after launch and then every 6 hours; the schedule is visible in the interface and can be switched off at any time. Nothing is ever downloaded or installed without your explicit confirmation at every step.
 - **No telemetry or analytics:** the application never contacts any server owned by the Novara project.
-- **Network features are all opt-in:** the **API-key detection** in the memo manager (three tiers you trigger explicitly), plus — since 8.0 — sync to a server you configure yourself, and — since 9.0 — the in-app update check you click.
+- **Network features are all opt-in:** the **API-key detection** in the memo manager (three tiers you trigger explicitly), plus — since 8.0 — sync to a server you configure yourself, the in-app update check (manual by default; an optional automatic schedule since novara11).
 
 ### The three detection tiers
 
@@ -119,7 +119,7 @@ Turning sync off (or revoking a device) stops the traffic; the server keeps whic
 
 ### Update check (9.0) — only to the project's release site
 
-Checking for updates happens only when you click it — there is no startup check and no background polling. The app fetches a static manifest (`latest.json`) from **novara.xin** containing the latest version number, release date, download URL, and SHA-256 hash; the request carries nothing about you. If you choose to upgrade, the installer is downloaded over HTTPS from the same site, and its SHA-256 is verified before anything is allowed to run. The request appears in the network activity panel like every other outbound call.
+Checking for updates is always a click away — and if you opt in, it also runs about 25 seconds after launch and every 6 hours afterward. Either way, the app fetches a static manifest (`latest.json`) plus its signature file from **novara.xin**, containing only the latest version number, release date, download URL, and SHA-256 hash; the requests carry nothing about you. If you choose to upgrade, the installer is downloaded over HTTPS from the same site, and its SHA-256 is verified before anything is allowed to run. The request appears in the network activity panel like every other outbound call.
 
 ## 6. MCP Agent interface — read this carefully
 
@@ -209,7 +209,7 @@ The Novara project commits to the following, as a matter of design:
 - We will **never** operate a cloud server that collects your data. Any server component the project ships in the connected era is self-hosted **by you** and handles ciphertext only — the plaintext never reaches it by construction.
 - We will **never** add telemetry, analytics, or ads.
 - We will **never** add a backdoor, a password-recovery bypass, or any remote mechanism to unlock or exfiltrate your data.
-- We will **never** auto-update, auto-upload, or otherwise move your data without an explicit action from you.
+- We will **never** auto-install an update, auto-upload, or otherwise move your data without an explicit action from you.
 
 ## 13. Children's privacy
 

@@ -12,10 +12,10 @@
 2. 比对哈希。在 PowerShell 中：
 
    ```powershell
-   Get-FileHash .\Novara_Setup_10.3.0.exe -Algorithm SHA256
+   Get-FileHash .\Novara_Setup_novara11.exe -Algorithm SHA256
    ```
 
-   结果必须与 `SHA256SUMS` 中的那一行一致。如果你有 `sha256sum`（Git Bash、Linux），把安装包放到 `SHA256SUMS` 旁边，一条命令完成校验：
+   结果必须与 `SHA256SUMS` 中的那一行一致。通过应用内检查更新下载的安装包，与 `SHA256SUMS` 附件描述的是同一份文件。如果你有 `sha256sum`（Git Bash、Linux），把安装包放到 `SHA256SUMS` 旁边，一条命令完成校验：
 
    ```bash
    sha256sum -c SHA256SUMS
@@ -32,7 +32,7 @@ docker pull ghcr.io/novara-owner/novara-sync@sha256:<IMAGES.txt 中的 digest>
 校验已经拉到本地的镜像：
 
 ```bash
-docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:10.3.0
+docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:novara11
 ```
 
 digest 必须与 `IMAGES.txt` 一致。同一 digest 也会发布到 Docker Hub，两个来源解析到的是同一份字节。
@@ -48,7 +48,7 @@ cosign verify-blob \
   --bundle signature.bundle \
   --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  Novara_Setup_10.3.0.exe
+  Novara_Setup_novara11.exe
 ```
 
 Docker 镜像的签名存放在镜像仓库中。按 digest 校验，身份条件相同：
@@ -67,7 +67,7 @@ cosign verify \
 发布附件中包含软件物料清单（SPDX JSON，用 Syft 生成），列出产品中的每一个组件。用任意 SPDX 查看器打开，或直接列出包名：
 
 ```bash
-jq -r '.packages[].name' novara-sync-10.3.0.spdx.json | sort -u
+jq -r '.packages[].name' novara-sync-novara11.spdx.json | sort -u
 ```
 
 ## OpenSSF Scorecard

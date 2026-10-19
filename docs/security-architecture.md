@@ -69,7 +69,7 @@ flowchart LR
 
 ## Trust boundaries
 
-- All user data lives in `%LocalAppData%\Novara` — no cloud, no telemetry, no accounts. The only network activity is user-triggered API connectivity checks (memos), MCP access on a local named pipe, and — if you switch it on — sync to the server you configured yourself (8.0+), plus the in-app update check you trigger against the release site (9.0+). The exported Snapshot viewer file performs no network requests at all.
+- All user data lives in `%LocalAppData%\Novara` — no cloud, no telemetry, no accounts. The only network activity is user-triggered API connectivity checks (memos), MCP access on a local named pipe, and — if you switch it on — sync to the server you configured yourself (8.0+), plus the in-app update check against the release site (9.0+; manual by default, an optional automatic schedule since novara11). The exported Snapshot viewer file performs no network requests at all.
 - Plaintext `.novabak` exports carry integrity checksums (corruption detection, not tamper protection). `.novaenc` encrypted exports use AES-256-GCM with an independent password that is never stored and cannot be recovered — the same container protects Snapshot exports (7.0+).
 - The desktop sticky-note host (`StickNoteHost.exe`) is a separate process and holds no decryption keys; it only renders what you explicitly send to the desktop.
 - Known limits are documented honestly in [SECURITY.md](../SECURITY.md) — including that Windows Hello is a software gate, not a cryptographic binding.

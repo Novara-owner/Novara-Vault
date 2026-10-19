@@ -6,6 +6,38 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [novara11] - 2026-10-19
+
+> Starting with this release the project uses compact version identifiers (`novara11` ↔ internal 11.0.0; see "Version naming" in the README).
+
+A "Hardened" release: no feature sprawl — instead, everything already in use gets a stronger foundation: a new database container, leaner sync, backups that keep receipts, and a multi-pass, codebase-wide overhaul.
+
+### Added
+
+- **Optional in-app auto update check (off by default)** — enable it from the "You're up to date" dialog; the first check runs about 25 seconds after launch, then every 6 hours. A lightweight in-app reminder takes you straight to the download; dismissing it suppresses the reminder for that version (the check-update button keeps its blue dot). Manual checks work exactly as before.
+- **v5 database container** — Argon2id key derivation, self-describing header parameters and an unlock-free SHA-256 integrity precheck; v2/v3 databases can upgrade after unlocking (decline once and it stops asking; a manual entry stays in Settings).
+- **Partition-level incremental sync uploads** — only partitions that actually changed are uploaded.
+- **Signed update manifests** — `latest.json` ships with an ECDSA P-521 signature; a missing or invalid signature rejects the update outright (fail-closed supply-chain protection).
+- **Snapshot integrity manifests and tiered retention** — every backup snapshot records its SHA-256 and is verified before restore; retention upgrades to "latest 10 plus daily (7 days) / weekly (4 weeks) / monthly (3 months) anchors".
+
+### Changed
+
+- The desktop app moves to the .NET 10 runtime (server-side has been on .NET 10 since 8.0).
+- All 96 dialogs converge on 5 width tiers and scale with the window: no shrinking on small windows, at most 1.25× on large ones, always 100px of side margin.
+- The relay deep-probe flow splits into separate "running" and "results" dialogs: the 8 probes render as a two-column table that fits on one screen, the disclaimer stays fixed, and results can be re-run directly.
+- "Clear log" really clears the detection history now (with a toast) — no more permanent "cleared" placeholder row.
+
+### Fixed
+
+Roughly **470 issues** were found and fixed across this cycle in multiple full-codebase review passes. Highlights:
+
+- **Restart race (long-standing)** — after switching themes or languages the app occasionally quit without relaunching, needing a manual start. A mismatch between the single-instance kernel object's lifetime and how a fresh instance tests for it; fixed for good.
+- **Three sync-direction defects** — a device could get permanently stuck pushing after server-side chunk recycling (the local cache is now cleared and the push retried immediately); a failed force-push no longer leaves the version ledger out of step with reality; "take remote" no longer aborts silently on corrupted data and reports a readable error.
+- **Dialog infrastructure** — with a previously opened dialog in the session, dragging the window extremely narrow could crash the app (negative width computation).
+- **Auto-check scheduling** — users with auto-lock fired a redundant pair of update requests on every unlock, and unhandled reminders could reappear.
+- **Lockout consistency** — the "5 wrong attempts" lockout behaves identically at every entrance, and the correct password is rejected while locked.
+- The remaining ~460 fixes cover robustness and consistency across memos, paths, plans, records, search, the recycle bin, settings, tools, the lock screen, desktop stickies, sync, the MCP interface, update checks and storage.
+
 ## [10.3.0] - 2026-10-11
 
 A focused fix release: every export and backup dialog saves files with their proper file extension again.

@@ -21,7 +21,7 @@
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/novaraxin/novara-sync"></a>
   <a href="https://hub.docker.com/r/novaraxin/novara-sync"><img alt="Docker image size" src="https://img.shields.io/docker/image-size/novaraxin/novara-sync"></a>
   <img alt="Platform: Windows 10 2004+ | x64" src="https://img.shields.io/badge/platform-Windows%2010%202004%2B%20%7C%20x64-blue">
-  <img alt="Runtime: .NET 8 | WinUI 3" src="https://img.shields.io/badge/.NET-8%20%7C%20WinUI%203-512BD4">
+  <img alt="Runtime: .NET 10 | WinUI 3" src="https://img.shields.io/badge/.NET-10%20%7C%20WinUI%203-512BD4">
   <img alt="Releases: SHA-256 + SPDX SBOM" src="https://img.shields.io/badge/releases-SHA--256%20%2B%20SPDX%20SBOM-green">
 </p>
 
@@ -42,6 +42,12 @@ Novara 是一个**本地优先的个人数据控制层——为你，也为你�
 ## 版本命名
 
 自 11.0 版起，Novara 的对外版本号改用紧凑格式，不再使用点分数字：新主线的首个版本为 **`novara11`**，其后的修复版依次为 **`novara11.R1`**、`novara11.R2` 等（R = Revision，修订）。下一个主线版本将是 `novara12`。10.3.0 及更早的版本沿用此前的数字格式、名称保持不变；每个新版本的 GitHub release tag 与该标识一致，安装包文件名随之相应命名（`Novara_Setup_novara11.exe`）。
+
+## 11.0 — 把已经在用的每一处，做得更可靠
+
+11.0 的主题是「加固」：不铺新功能，给既有的一切换上更结实的底座。桌面端迁移到 .NET 10；主库升级到 v5 加密容器（Argon2id 派生、参数自描述、SHA-256 完整性预检，旧库解锁后可选升级）；同步改为分区增量上传；更新清单带上 ECDSA 签名，缺失或不符即拒绝；备份快照登记 SHA-256 并按 GFS 分层保留。应用内新增可选的自动检查更新（默认关闭）。以及一次覆盖全部代码的彻底检修：**470 余项缺陷被逐一修复**——包括「切换主题后偶尔不再自动拉起」「同步设备永久推不上去」「极窄窗口下弹窗崩溃」这类藏得很深的问题。
+
+完整细节：[Release novara11](https://github.com/Novara-owner/Novara-Vault/releases/tag/novara11) · [CHANGELOG](CHANGELOG.zh-CN.md)
 
 ## 10.0 — 为「可被验证」而构建
 

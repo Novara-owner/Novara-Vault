@@ -10,7 +10,7 @@ How to build, publish, and package Novara from source.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| .NET SDK | **10.0.400** (via `global.json`) | Build all C# projects — desktop projects stay on `net8.0`, the three server-side projects target `net10.0` |
+| .NET SDK | **10.0.400** (via `global.json`) | Build all C# projects — every project targets `net10.0` (desktop moved off `net8.0` in novara11) |
 | Windows SDK | 10.0.26100.0 | WinUI 3 target (see note below) |
 | Node.js + npm | any recent LTS | Build the `DiaryEditorJs` editor bundles |
 | Inno Setup | 6+ | Compile the installer (`Installer/setup.iss`) |
