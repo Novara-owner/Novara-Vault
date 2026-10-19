@@ -1,9 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "benchmarkQuestions": [
     { "key": "strawberry", "prompt": "How many times does the letter 'r' appear in the word 'strawberry'? Answer with just the number.", "expected": "3" },
     { "key": "compare", "prompt": "Which number is larger: 9.11 or 9.9? Answer with just the number.", "expected": "9.9" },
     { "key": "math", "prompt": "What is 24 * 7 + 5? Answer with just the number.", "expected": "173" }
+  ],
+  "adversarialBenchmarks": [
+    { "key": "adv-count", "prompt": "How many times does the letter 'o' appear in the word 'collaboration'? Answer with just the number.", "expected": "3" },
+    { "key": "adv-words", "prompt": "How many words are in the sentence 'The quick brown fox jumps over the lazy dog'? Answer with just the number.", "expected": "9" }
   ],
   "poisoningStrongPatterns": [
     "\\b(curl|wget)\\s",
