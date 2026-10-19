@@ -14,11 +14,11 @@ A "Hardened" release: no feature sprawl — instead, everything already in use g
 
 ### Added
 
-- **Optional in-app auto update check (off by default)** — enable it from the "You're up to date" dialog; the first check runs about 25 seconds after launch, then every 6 hours. A lightweight in-app reminder takes you straight to the download; dismissing it suppresses the reminder for that version (the check-update button keeps its blue dot). Manual checks work exactly as before.
 - **v5 database container** — Argon2id key derivation, self-describing header parameters and an unlock-free SHA-256 integrity precheck; v2/v3 databases can upgrade after unlocking (decline once and it stops asking; a manual entry stays in Settings).
 - **Partition-level incremental sync uploads** — only partitions that actually changed are uploaded.
 - **Signed update manifests** — `latest.json` ships with an ECDSA P-521 signature; a missing or invalid signature rejects the update outright (fail-closed supply-chain protection).
 - **Snapshot integrity manifests and tiered retention** — every backup snapshot records its SHA-256 and is verified before restore; retention upgrades to "latest 10 plus daily (7 days) / weekly (4 weeks) / monthly (3 months) anchors".
+- **Optional in-app auto update check (off by default)** — the release's only behavioral addition, deliberately small: enable it from the "You're up to date" dialog and the same static-manifest check runs about 25 seconds after launch, then every 6 hours; a lightweight in-app reminder takes you straight to the download, and dismissing it suppresses the reminder for that version. Manual checks work exactly as before.
 
 ### Changed
 
