@@ -35,13 +35,28 @@ public static class NovaraBridge
 
 
 
+        var hostDir = System.IO.Path.GetFullPath(AppContext.BaseDirectory)
+            .TrimEnd(System.IO.Path.DirectorySeparatorChar);
+        var parentDir = System.IO.Path.GetDirectoryName(hostDir);
+        if (!string.IsNullOrEmpty(parentDir))
+        {
+            var fromParent = System.IO.Path.Combine(parentDir, "Novara.exe");
+            if (System.IO.File.Exists(fromParent)) return fromParent;
+        }
+
+
+
 
 
         for (var dir = System.IO.Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
             if (System.IO.File.Exists(System.IO.Path.Combine(dir, "Novara.csproj")))
             {
+#if DEBUG
                 foreach (var cfg in new[] { "Debug", "Release" })
+#else
+                foreach (var cfg in new[] { "Release", "Debug" })
+#endif
                 {
                     foreach (var platform in new[] { System.IO.Path.Combine("bin", "x64"), "bin" })
                     {
@@ -50,13 +65,32 @@ public static class NovaraBridge
 
                         var cfgDir = System.IO.Path.Combine(dir, platform, cfg);
                         if (!System.IO.Directory.Exists(cfgDir)) continue;
+
+
+
+
+
+
+                        string? bestDev = null;
+                        System.Version? bestVer = null;
+                        try
+                        {
+                            foreach (var tfmDir in System.IO.Directory.GetDirectories(cfgDir, "net*-windows*"))
+                            {
+                                var head = System.IO.Path.GetFileName(tfmDir).Substring("net".Length);
+                                var dash = head.IndexOf('-');
+                                if (dash >= 0) head = head[..dash];
+                                if (!System.Version.TryParse(head, out var ver)) continue;
+                                var dev = System.IO.Path.Combine(tfmDir, "win-x64", "Novara.exe");
+                                if (!System.IO.File.Exists(dev)) continue;
+                                if (bestVer == null || ver > bestVer) { bestDev = dev; bestVer = ver; }
+                            }
+                        }
+                        catch {  }
+                        if (bestDev != null) return bestDev;
+
                         var noTfm = System.IO.Path.Combine(cfgDir, "win-x64", "Novara.exe");
                         if (System.IO.File.Exists(noTfm)) return noTfm;
-                        foreach (var tfmDir in System.IO.Directory.GetDirectories(cfgDir, "net8.0-windows*"))
-                        {
-                            var dev = System.IO.Path.Combine(tfmDir, "win-x64", "Novara.exe");
-                            if (System.IO.File.Exists(dev)) return dev;
-                        }
                     }
                 }
             }

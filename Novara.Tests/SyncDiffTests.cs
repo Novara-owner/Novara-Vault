@@ -42,6 +42,50 @@ public class SyncDiffTests
         Assert.Equal(1, MemoDiff(summary).Same);
     }
 
+
+
+    private static void AddWorkspace(NovaraDatabase db, string id, string name, string iconKey = "Group01")
+        => db.AppSettings.Workspaces.Add(new WorkspaceItem { Id = id, Name = name, IconKey = iconKey, CreatedAt = new DateTime(2026, 1, 1) });
+
+    [Fact]
+    public void WorkspaceOnlyDifference_IsReported_NotSilentlyAdopted()
+    {
+        var local = Db();
+        var remote = Db();
+        AddWorkspace(local, "w1", "本地名");
+        AddWorkspace(remote, "w1", "远端名");
+
+        var summary = SyncDiff.Compare(local, remote);
+
+        Assert.True(summary.RoamingSettingsDiffer, "仅工作区不同必须进差异汇总（旧实现误判 identical → AutoRebased 静默采纳远端）");
+        Assert.False(summary.IsIdentical);
+    }
+
+    [Fact]
+    public void WorkspacePresenceMismatch_IsReported()
+    {
+        var local = Db();
+        var remote = Db();
+        AddWorkspace(remote, "w1", "远端工作区");
+
+        var summary = SyncDiff.Compare(local, remote);
+        Assert.True(summary.RoamingSettingsDiffer);
+    }
+
+    [Fact]
+    public void EmptyRemoteWorkspaces_AdoptsNothing_IsNoDifference()
+    {
+
+
+        var local = Db();
+        var remote = Db();
+        AddWorkspace(local, "w1", "本机工作区");
+        remote.AppSettings.Workspaces.Clear();
+
+        var summary = SyncDiff.Compare(local, remote);
+        Assert.True(summary.IsIdentical);
+    }
+
     [Fact]
     public void EveryPartitionIsAlwaysReported_InAFixedOrder()
     {

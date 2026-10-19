@@ -17,9 +17,28 @@ public class AuditSanitizerTests
     [InlineData("secret=JBSWY3DPEHPK3PXP", "secret=***")]
     [InlineData("password=Sup3rSecret12", "password=***")]
     [InlineData("otp=JBSWY3DPEHPK3P", "otp=***")]
+
+
+    [InlineData("password=correct horse", "password=*** horse")]
+    [InlineData("passwd=pa$$w0rd!", "passwd=***")]
+    [InlineData("token=abc+defghij", "token=***")]
+    [InlineData("key=abc/def?ghi=jkl", "key=***")]
     public void Clean_MasksTokenShapedSecrets(string input, string expected)
     {
         Assert.Equal(expected, AuditSanitizer.Clean(input));
+    }
+
+    [Theory]
+
+
+    [InlineData("gsk_live_abcdefgh123", "gsk_***")]
+    [InlineData("AIzaSyA1234567890abcdef", "AIza***")]
+    [InlineData("xai-abcdefgh1234", "xai-***")]
+    [InlineData("sk-or-v1-abcdefgh1234", "sk-or-***")]
+    public void Clean_MasksVendorPrefixedKeys(string input, string expected)
+    {
+        Assert.Equal(expected, AuditSanitizer.Clean(input));
+        Assert.NotEqual("", ApiProbeService.SuggestVendorForKey(input) ?? "");
     }
 
     [Theory]

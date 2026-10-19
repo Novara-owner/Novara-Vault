@@ -50,6 +50,8 @@ public static class SyncService
             System.IO.Path.GetDirectoryName(NovaraStore.DefaultFilePath)!, SyncStateStore.FileName));
 
 
+
+
     public static SyncState State { get { lock (Gate) return _state; } }
 
 
@@ -222,6 +224,10 @@ public static class SyncService
             return PairResult.Local("Sync_Pair_NeedsEncryptedVault");
 
 
+        SyncState session;
+        lock (Gate) session = _state;
+
+
         var isCreate = string.IsNullOrWhiteSpace(spaceKeyBase64);
         var effectiveSpaceKey = isCreate ? "" : spaceKeyBase64.Trim();
         if (!isCreate && !SyncKeyWrap.IsWellFormedSpaceKey(effectiveSpaceKey))
@@ -267,6 +273,12 @@ public static class SyncService
 
 
 
+
+
+
+
+                if (!SyncKeyWrap.IsWellFormedSpaceKey(effectiveSpaceKey))
+                    return PairResult.Local("Sync_Pair_SpaceKeyInvalid");
                 wrapJson = await Task.Run(() => SyncJson.SerializeKeyWrap(SyncKeyWrap.Wrap(effectiveSpaceKey, password))).ConfigureAwait(false);
             }
         }
@@ -297,20 +309,33 @@ public static class SyncService
             LastSeenVersion = 0,
             LastPushedSha256 = "",
         };
-        if (!TrySaveState(state)) return PairResult.Local("Sync_Pair_StateWriteFailed");
 
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Pair, 0, deviceName));
+
+
 
         lock (Gate)
         {
+            if (!store.IsLoaded) return PairResult.Local("Sync_Pair_NeedsEncryptedVault");
+            if (!ReferenceEquals(_state, session))
+                return PairResult.Remote("pairing aborted: the sync session was closed while pairing");
+            if (!TrySaveState(state)) return PairResult.Local("Sync_Pair_StateWriteFailed");
+
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Pair, 0, deviceName));
+
             _client?.Dispose();
             _client = null;
             _state = state;
             _spaceKey = effectiveSpaceKey;
             _deviceToken = token;
+
+
+
+
+            _keyWrapStale = false;
+            _credentialUnavailable = false;
+            StartTimer();
         }
 
-        StartTimer();
         return PairResult.Success(effectiveSpaceKey);
     }
 
@@ -507,7 +532,7 @@ public static class SyncService
     public static async Task<SyncRoundOutcome> SyncNowAsync(bool force = false)
     {
         if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
-            return new SyncRoundOutcome(SyncRoundStatus.NoOp, "a round is already running");
+            return new SyncRoundOutcome(SyncRoundStatus.NoOp, "a round is already running", Busy: true);
 
 
 
@@ -536,15 +561,32 @@ public static class SyncService
 
             var outcome = force
                 ? await SyncEngine.ForcePushAsync(store, state, spaceKey ?? "", client, DateTime.UtcNow).ConfigureAwait(false)
-                : await SyncEngine.RunRoundAsync(store, state, spaceKey ?? "", client, DateTime.UtcNow).ConfigureAwait(false);
+
+                : await SyncEngine.RunRoundWithTransportRetryAsync(store, state, spaceKey ?? "",
+                    _ => Task.FromResult(client), DateTime.UtcNow).ConfigureAwait(false);
 
 
 
 
-            if (outcome.Changed || outcome.NeedsDecision)
+
+
+
+
+
+
+
+
+            RecordRound(state, outcome, force);
+            if (outcome.Status != SyncRoundStatus.Disabled)
             {
-                if (!TrySaveState(state))
+
+
+                var save = TrySaveStateIfCurrent(state);
+                if (save == StateSaveOutcome.WriteFailed)
                     SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.StateSaveFailed, outcome.RemoteVersion, "sync-state.json", ok: false));
+                else if (save == StateSaveOutcome.SessionTornDown)
+                    SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Error, outcome.RemoteVersion,
+                        "sync-state.json not written - the pairing was removed during this round", ok: false));
             }
 
 
@@ -552,7 +594,6 @@ public static class SyncService
 
 
             if (outcome.Status == SyncRoundStatus.AutoRebased) ClearRestorePendingConfirm();
-            RecordRound(state, outcome, force);
             return Publish(outcome, remindersBefore);
         }
         finally
@@ -593,9 +634,10 @@ public static class SyncService
 
         var minutes = state.FrequencyMinutes;
         if (minutes <= SyncState.FrequencyManual) return Task.FromResult(new SyncRoundOutcome(SyncRoundStatus.Disabled));
-        if (state.LastSyncAt is { } last && (utcNow - last) < TimeSpan.FromMinutes(minutes))
-            return Task.FromResult(new SyncRoundOutcome(SyncRoundStatus.NoOp, "not due yet"));
 
+
+        if ((state.LastAttemptAt ?? state.LastSyncAt) is { } last && (utcNow - last) < TimeSpan.FromMinutes(minutes))
+            return Task.FromResult(new SyncRoundOutcome(SyncRoundStatus.NoOp, "not due yet"));
         return SyncNowAsync();
     }
 
@@ -719,12 +761,31 @@ public static class SyncService
     public static SpaceKeyBackupOutcome ExportSpaceKeyFile(string path)
     {
         SyncState state;
-        lock (Gate) state = _state;
+        lock (Gate)
+        {
+
+
+
+            if (_keyWrapStale) return SpaceKeyBackupOutcome.Fail("Sync_Status_KeyWrapStale");
+            state = _state;
+        }
         if (string.IsNullOrEmpty(state.KeyWrapJson)) return SpaceKeyBackupOutcome.Fail("Sync_KeyBackup_NotPaired");
 
-        try { System.IO.File.WriteAllText(path, state.KeyWrapJson); }
+
+
+
+        var temp = path + ".tmp";
+        try
+        {
+            System.IO.File.WriteAllText(temp, state.KeyWrapJson);
+            System.IO.File.Move(temp, path, overwrite: true);
+        }
         catch (IOException) { return SpaceKeyBackupOutcome.Fail("Sync_KeyBackup_WriteFailed"); }
         catch (UnauthorizedAccessException) { return SpaceKeyBackupOutcome.Fail("Sync_KeyBackup_WriteFailed"); }
+        finally
+        {
+            try { if (System.IO.File.Exists(temp)) System.IO.File.Delete(temp); } catch {  }
+        }
 
         SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyExport));
         return SpaceKeyBackupOutcome.Success();
@@ -1035,6 +1096,18 @@ public static class SyncService
 
 
 
+
+    public static void MarkRestorePendingConfirmOrWarn(string context)
+    {
+        if (MarkRestorePendingConfirm()) return;
+        CrashLogger.LogNote("SyncService.RestoreGate",
+            context + ": sync-state.json write failed - the restore gate will NOT survive the restart; do not let sync run until the direction is confirmed");
+        App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+    }
+
+
+
+
     public static void ClearRestorePendingConfirm()
     {
         try
@@ -1057,6 +1130,9 @@ public static class SyncService
 
     public static async Task<SyncRoundOutcome> ResolveKeepLocalAsync()
     {
+
+
+        if (!State.Enabled) return new SyncRoundOutcome(SyncRoundStatus.Disabled, "sync is switched off");
         var outcome = await SyncNowAsync(force: true).ConfigureAwait(false);
 
         if (outcome.Status == SyncRoundStatus.Push) ClearRestorePendingConfirm();
@@ -1070,9 +1146,12 @@ public static class SyncService
 
     public static async Task<SyncRoundOutcome> ResolveTakeRemoteAsync(CancellationToken ct = default)
     {
-        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
-            return new SyncRoundOutcome(SyncRoundStatus.NoOp, "a round is already running");
 
+        if (!State.Enabled) return new SyncRoundOutcome(SyncRoundStatus.Disabled, "sync is switched off");
+        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0)
+            return new SyncRoundOutcome(SyncRoundStatus.NoOp, "a round is already running", Busy: true);
+
+        Dictionary<Guid, DateTime>? remindersBefore = null;
         try
         {
             SyncApiClient client;
@@ -1091,14 +1170,21 @@ public static class SyncService
             if (store is null) return Publish(new SyncRoundOutcome(SyncRoundStatus.WaitUnlocked, "no vault"));
 
 
-            var remindersBefore = ReminderSnapshot(store);
+            remindersBefore = ReminderSnapshot(store);
 
             var outcome = await SyncEngine.PullAsync(store, state, spaceKey ?? "", client, DateTime.UtcNow, ct)
                 .ConfigureAwait(false);
+
+
             if (outcome.Changed || outcome.NeedsDecision)
             {
-                if (!TrySaveState(state))
+
+                var save = TrySaveStateIfCurrent(state);
+                if (save == StateSaveOutcome.WriteFailed)
                     SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.StateSaveFailed, 0, "sync-state.json", ok: false));
+                else if (save == StateSaveOutcome.SessionTornDown)
+                    SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Error, 0,
+                        "sync-state.json not written - the pairing was removed during this round", ok: false));
             }
 
 
@@ -1117,6 +1203,17 @@ public static class SyncService
                 _ => Audit(state, SyncAuditEvents.Error, outcome.RemoteVersion, outcome.Message, ok: false),
             });
             return Publish(outcome, remindersBefore);
+        }
+        catch (OperationCanceledException)
+        {
+            return Publish(new SyncRoundOutcome(SyncRoundStatus.TransportFailure, "cancelled"), remindersBefore);
+        }
+        catch (Exception ex)
+        {
+
+
+            CrashLogger.LogNote("SyncTakeRemote", ex.Message);
+            return Publish(new SyncRoundOutcome(SyncRoundStatus.Error, ex.Message), remindersBefore);
         }
         finally
         {
@@ -1164,6 +1261,9 @@ public static class SyncService
 
     private static void RecordRound(SyncState state, SyncRoundOutcome outcome, bool forced)
     {
+
+
+        state.LastAttemptAt = DateTime.UtcNow;
         var ev = outcome.Status switch
         {
             SyncRoundStatus.Push => forced ? SyncAuditEvents.KeepLocal : SyncAuditEvents.Push,
@@ -1175,6 +1275,17 @@ public static class SyncService
             _ => null,
         };
         if (ev is null) return;
+
+
+
+
+        if (outcome.Status is SyncRoundStatus.Conflict or SyncRoundStatus.RollbackRejected)
+        {
+            var now = DateTime.UtcNow;
+            if (outcome.Status == _lastRepeatableAuditStatus && now - _lastRepeatableAuditAt < TimeSpan.FromMinutes(30)) return;
+            _lastRepeatableAuditStatus = outcome.Status;
+            _lastRepeatableAuditAt = now;
+        }
 
 
 
@@ -1203,6 +1314,36 @@ public static class SyncService
     private static SyncApiClient BuildClient(SyncState state, string? token)
         => new(state.ServerUrl, string.IsNullOrEmpty(state.SpaceId) ? "unpaired" : state.SpaceId,
             state.DeviceId, token);
+
+
+
+
+
+    private enum StateSaveOutcome
+    {
+
+        Saved,
+
+
+        SessionTornDown,
+
+
+        WriteFailed,
+    }
+
+
+
+
+
+
+    private static StateSaveOutcome TrySaveStateIfCurrent(SyncState state)
+    {
+        lock (Gate)
+        {
+            if (!ReferenceEquals(_state, state)) return StateSaveOutcome.SessionTornDown;
+            return TrySaveState(state) ? StateSaveOutcome.Saved : StateSaveOutcome.WriteFailed;
+        }
+    }
 
 
     private static bool TrySaveState(SyncState state)
@@ -1263,7 +1404,13 @@ public static class SyncService
 
 
             if (App.Store is { } pulledStore)
+            {
                 PaperTheme.SyncHintWith(pulledStore.Database.AppSettings.Theme);
+
+
+
+                App.SaveLanguageHint(pulledStore.Database.AppSettings.AppLanguage ?? "");
+            }
         }
 
 
@@ -1310,10 +1457,27 @@ public static class SyncService
         {
             var outcome = await SyncIfDueAsync(DateTime.UtcNow).ConfigureAwait(false);
 
-            if (outcome.Changed || outcome.NeedsDecision) App.UiQueue?.TryEnqueue(() => App.MainWindow?.ShowToast(ToastFor(outcome)));
+
+
+            if ((outcome.Changed || outcome.NeedsDecision) && ShouldNotify(outcome.Status))
+                App.UiQueue?.TryEnqueue(() => App.MainWindow?.ShowToast(ToastFor(outcome)));
 
         }
         catch {  }
+    }
+
+    private static SyncRoundStatus _lastNotifiedStatus;
+    private static DateTime _lastNotifiedAt;
+    private static SyncRoundStatus _lastRepeatableAuditStatus;
+    private static DateTime _lastRepeatableAuditAt;
+
+    private static bool ShouldNotify(SyncRoundStatus status)
+    {
+        var now = DateTime.UtcNow;
+        if (status == _lastNotifiedStatus && now - _lastNotifiedAt < TimeSpan.FromMinutes(30)) return false;
+        _lastNotifiedStatus = status;
+        _lastNotifiedAt = now;
+        return true;
     }
 
 

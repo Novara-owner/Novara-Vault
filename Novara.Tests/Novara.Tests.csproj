@@ -7,10 +7,22 @@
     <RootNamespace>Novara.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>10.3.0</Version>
+    <Version>11.0.0</Version>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
+
+  <ItemGroup>
+
+
+    <Content Include="..\ProbeDataSet.json" Link="ProbeDataSet.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+
+
+    <ProjectReference Include="..\NovaraMCP\NovaraMCP.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

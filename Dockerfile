@@ -15,12 +15,12 @@
 # assert the same status codes against both.
 #
 # Build (amd64; arm64 is deliberately not built or tested here):
-#   docker buildx build --platform linux/amd64 -t novara-sync:9.0.0 .
+#   docker buildx build --platform linux/amd64 -t novara-sync:latest .
 #
 # Behind a proxy, the two predefined build args are honoured by the restore and publish steps:
 #   docker buildx build --platform linux/amd64 \
 #     --build-arg HTTP_PROXY=http://host.docker.internal:7897 \
-#     --build-arg HTTPS_PROXY=http://host.docker.internal:7897 -t novara-sync:9.0.0 .
+#     --build-arg HTTPS_PROXY=http://host.docker.internal:7897 -t novara-sync:latest .
 # (With a TUN-style proxy the container is already routed and neither arg is needed.)
 
 # ---------- build ----------
@@ -37,6 +37,7 @@ WORKDIR /src
 # rollForward disabled, so the image cannot build with a different toolchain than the developer and
 # CI machines - which is also why the base tag above names that exact SDK version, not 10.0.
 COPY global.json ./
+COPY Directory.Build.props ./
 
 # Restore before the sources: the layer then survives every source-only change.
 COPY Novara.Core/Novara.Core.csproj Novara.Core/

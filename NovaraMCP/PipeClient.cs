@@ -48,8 +48,19 @@ public sealed class McpPipeClient
 
     }
 
+
+
+
+
+    private static bool IsRetrySafeTool(string method)
+        => method.StartsWith("list_", StringComparison.Ordinal)
+        || method.StartsWith("read_", StringComparison.Ordinal)
+        || method.StartsWith("search_", StringComparison.Ordinal);
+
     public string Call(string method, JsonObject? args)
     {
+
+        bool retrySafe = IsRetrySafeTool(method);
 
 
         for (int attempt = 0; ; attempt++)
@@ -64,14 +75,25 @@ public sealed class McpPipeClient
 
                     ["params"] = (args ?? new JsonObject()).DeepClone()
                 };
-                _writer!.WriteLine(req.ToJsonString());
+
+
+
+                try { _writer!.WriteLine(req.ToJsonString()); }
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException && attempt < 1)
+                {
+                    ResetConnection();
+                    continue;
+                }
 
 
 
                 var line = ReadLineWithTimeout(_reader!, 60);
                 if (line == null)
                 {
-                    if (attempt >= 1) throw new McpForwardError("主进程无响应");
+
+
+
+                    if (attempt >= 1 || !retrySafe) { ResetConnection(); throw new McpForwardError("主进程无响应"); }
                     ResetConnection();
                     continue;
                 }
@@ -89,7 +111,10 @@ public sealed class McpPipeClient
             }
             catch (IOException)
             {
-                if (attempt >= 1) throw;
+
+
+
+                if (attempt >= 1 || !retrySafe) { ResetConnection(); throw new McpForwardError("主进程无响应"); }
                 ResetConnection();
             }
         }
@@ -180,15 +205,21 @@ public sealed class McpPipeClient
         if (File.Exists(sideBySide)) return sideBySide;
 
 
+
+
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
             if (File.Exists(Path.Combine(dir, "Novara.csproj")))
             {
+#if DEBUG
                 foreach (var cfg in new[] { "Debug", "Release" })
+#else
+                foreach (var cfg in new[] { "Release", "Debug" })
+#endif
                     foreach (var platform in new[] { Path.Combine("bin", "x64"), "bin" })
                     {
-                        var dev = Path.Combine(dir, platform, cfg, "net8.0-windows10.0.26100.0", "win-x64", "Novara.exe");
-                        if (File.Exists(dev)) return dev;
+                        var dev = FindNewestTfmNovaraExe(Path.Combine(dir, platform, cfg));
+                        if (dev != null) return dev;
                     }
             }
             var parent = Directory.GetParent(dir)?.FullName;
@@ -196,6 +227,31 @@ public sealed class McpPipeClient
             dir = parent;
         }
         return null;
+    }
+
+
+
+    private static string? FindNewestTfmNovaraExe(string cfgDir)
+    {
+        if (!Directory.Exists(cfgDir)) return null;
+        string? best = null;
+        Version? bestVer = null;
+        try
+        {
+            foreach (var tfmDir in Directory.EnumerateDirectories(cfgDir, "net*-windows*"))
+            {
+                var head = Path.GetFileName(tfmDir).Substring("net".Length);
+                var dash = head.IndexOf('-');
+                if (dash >= 0) head = head[..dash];
+                if (!Version.TryParse(head, out var ver)) continue;
+
+                var exe = Path.Combine(tfmDir, "win-x64", "Novara.exe");
+                if (!File.Exists(exe)) continue;
+                if (bestVer == null || ver > bestVer) { best = exe; bestVer = ver; }
+            }
+        }
+        catch { return best; }
+        return best;
     }
 
 

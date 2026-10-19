@@ -96,10 +96,15 @@ public static class CryptoService
 
 
     public static void ClearKeyCache()
-    {
-        lock (KeyCacheLock)
+    {        lock (KeyCacheLock)
         {
-            for (var i = 0; i < KeyCacheCapacity; i++) { CacheKeys[i] = null!; CacheValues[i] = null; }
+
+            for (var i = 0; i < KeyCacheCapacity; i++)
+            {
+                if (CacheValues[i] is { } v) CryptographicOperations.ZeroMemory(v);
+                CacheKeys[i] = null!;
+                CacheValues[i] = null;
+            }
             CacheCount = 0;
         }
     }
@@ -107,7 +112,8 @@ public static class CryptoService
     private static string CacheKey(string password, byte[] salt, int iterations)
         => string.Concat(iterations.ToString(), ":", Convert.ToBase64String(salt), ":", password);
 
-    private static byte[] DeriveKey(string password, byte[] salt, int iterations = LegacyIterations)
+
+    internal static byte[] DeriveKey(string password, byte[] salt, int iterations = LegacyIterations)
     {
         var cacheKey = CacheKey(password, salt, iterations);
         lock (KeyCacheLock)
@@ -117,7 +123,7 @@ public static class CryptoService
                 if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal))
                 {
                     if (HitCount < HitLog.Length) HitLog[HitCount++] = iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
-                    return CacheValues[i]!;
+                    return (byte[])CacheValues[i]!.Clone();
                 }
             }
         }
@@ -128,18 +134,83 @@ public static class CryptoService
             if (MissCount < MissLog.Length) MissLog[MissCount++] = iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
 
             for (var i = 0; i < CacheCount; i++)
-                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal)) return CacheValues[i]!;
+                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal)) return (byte[])CacheValues[i]!.Clone();
             if (CacheCount >= KeyCacheCapacity)
             {
+
+                if (CacheValues[0] is { } evicted) CryptographicOperations.ZeroMemory(evicted);
                 for (var i = 1; i < KeyCacheCapacity; i++) { CacheKeys[i - 1] = CacheKeys[i]; CacheValues[i - 1] = CacheValues[i]; }
                 CacheCount = KeyCacheCapacity - 1;
             }
             CacheKeys[CacheCount] = cacheKey;
-            CacheValues[CacheCount] = derived;
+            CacheValues[CacheCount] = (byte[])derived.Clone();
             CacheCount++;
         }
         return derived;
     }
+
+
+
+
+    public const int Argon2idDefaultIterations = 3;
+
+
+    public const int Argon2idDefaultMemoryKiB = 64 * 1024;
+
+
+    public const byte V5KdfPbkdf2Sha256 = 0x00;
+    public const byte V5KdfArgon2id = 0x01;
+
+    private static byte[] DeriveKeyArgon2idCore(string password, byte[] salt, int iterations, int memoryKiB, int lanes)
+    {
+        using var argon2 = new Konscious.Security.Cryptography.Argon2id(System.Text.Encoding.UTF8.GetBytes(password))
+        {
+            Salt = salt,
+            Iterations = iterations,
+            MemorySize = memoryKiB,
+            DegreeOfParallelism = lanes,
+        };
+        return argon2.GetBytes(KeySize);
+    }
+
+
+    public static byte[] DeriveKeyArgon2id(string password, byte[] salt, int iterations, int memoryKiB)
+    {
+        var cacheKey = "argon2id:" + iterations + ":" + memoryKiB + ":" + Convert.ToBase64String(salt) + ":" + password;
+        lock (KeyCacheLock)
+        {
+            for (var i = 0; i < CacheCount; i++)
+            {
+                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal))
+                {
+                    if (HitCount < HitLog.Length) HitLog[HitCount++] = "a" + iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
+                    return (byte[])CacheValues[i]!.Clone();
+                }
+            }
+        }
+
+        var derived = DeriveKeyArgon2idCore(password, salt, iterations, memoryKiB, 1);
+        lock (KeyCacheLock)
+        {
+            if (MissCount < MissLog.Length) MissLog[MissCount++] = "a" + iterations + ":" + DateTime.UtcNow.ToString("HH:mm:ss.fff");
+            for (var i = 0; i < CacheCount; i++)
+                if (string.Equals(CacheKeys[i], cacheKey, StringComparison.Ordinal)) return (byte[])CacheValues[i]!.Clone();
+            if (CacheCount >= KeyCacheCapacity)
+            {
+                if (CacheValues[0] is { } evicted) CryptographicOperations.ZeroMemory(evicted);
+                for (var i = 1; i < KeyCacheCapacity; i++) { CacheKeys[i - 1] = CacheKeys[i]; CacheValues[i - 1] = CacheValues[i]; }
+                CacheCount = KeyCacheCapacity - 1;
+            }
+            CacheKeys[CacheCount] = cacheKey;
+            CacheValues[CacheCount] = (byte[])derived.Clone();
+            CacheCount++;
+        }
+        return derived;
+    }
+
+
+    internal static byte[] DeriveKeyArgon2idForVectorTest(string password, byte[] salt, int iterations, int memoryKiB, int lanes)
+        => DeriveKeyArgon2idCore(password, salt, iterations, memoryKiB, lanes);
 
 
 
@@ -211,6 +282,47 @@ public static class CryptoService
     }
 
 
+
+
+
+
+
+
+    public static byte[] EncryptGcmRaw(byte[] plainData, byte[] key, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+
+        var nonce = RandomNumberGenerator.GetBytes(GcmNonceSize);
+
+        var cipher = new byte[plainData.Length];
+        var tag = new byte[GcmTagSize];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Encrypt(nonce, plainData, cipher, tag, associatedData);
+
+        var result = new byte[GcmNonceSize + GcmTagSize + cipher.Length];
+        nonce.CopyTo(result, 0);
+        tag.CopyTo(result, GcmNonceSize);
+        cipher.CopyTo(result, GcmNonceSize + GcmTagSize);
+        return result;
+    }
+
+
+    public static byte[] DecryptGcmRaw(byte[] data, byte[] key, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+        if (data.Length < GcmNonceSize + GcmTagSize + 1) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
+
+        var nonce = data.AsSpan(0, GcmNonceSize);
+        var tag = data.AsSpan(GcmNonceSize, GcmTagSize);
+        var cipher = data.AsSpan(GcmNonceSize + GcmTagSize);
+
+        var plain = new byte[cipher.Length];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Decrypt(nonce, cipher, tag, plain, associatedData);
+        return plain;
+    }
+
+
     public static byte[] DecryptGcmWithKey(byte[] data, byte[] key, byte[]? associatedData = null)
     {
         if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
@@ -234,10 +346,14 @@ public static class CryptoService
         return ms.ToArray();
     }
 
-    private static byte[] Decompress(byte[] data)
+    internal const long MaxDecompressedBytes = 256L * 1024 * 1024;
+
+
+
+    internal static byte[] Decompress(byte[] data)
     {
 
-        const long MaxDecompressed = 256L * 1024 * 1024;
+        const long MaxDecompressed = MaxDecompressedBytes;
         using var input = new MemoryStream(data);
         using var gz = new GZipStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();

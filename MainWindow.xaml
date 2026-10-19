@@ -46,13 +46,39 @@
         </Grid.RowDefinitions>
 
         <Grid x:Name="CustomTitleBar" Background="Transparent">
-            <TextBlock
-                Text="Novara"
-                FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
-                VerticalAlignment="Center"
-                Margin="16,0,0,0"
-                FontSize="15"
-                Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+
+
+
+
+            <Button x:Name="TitleBrandButton"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="16,0,0,0"
+                    Padding="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    IsTabStop="False"
+                    Click="TitleBrandButton_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver" />
+                                    <VisualState x:Name="Pressed" />
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </ControlTemplate>
+                </Button.Template>
+                <TextBlock
+                    Text="Novara"
+                    FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
+                    FontSize="15"
+                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+            </Button>
 
 
 
@@ -92,7 +118,7 @@
             </Button>
         </Grid>
 
-        <Grid x:Name="NavBar" Grid.Row="1" Margin="60,4,60,8" Visibility="Collapsed">
+        <Grid x:Name="NavBar" Grid.Row="1" Margin="64,0,64,8" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
@@ -119,7 +145,7 @@
                 </Border.Background>
                 <Border.RenderTransform><TranslateTransform x:Name="NavIndicatorTranslate" Y="8" /></Border.RenderTransform>
             </Border>
-            <Grid x:Name="NavMemoHost" Grid.Column="0" Margin="0,0,10,0">
+            <Grid x:Name="NavMemoHost" Grid.Column="0" Margin="8,0,8,0">
                 <Button x:Name="NavMemo" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Memo" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavMemoPath" Width="20" Height="20" Stretch="Uniform"
@@ -128,7 +154,7 @@
                     </StackPanel>
                 </Button>
             </Grid>
-            <Grid x:Name="NavFileHost" Grid.Column="1" Margin="0,0,10,0">
+            <Grid x:Name="NavFileHost" Grid.Column="1" Margin="8,0,8,0">
                 <Button x:Name="NavFile" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="File" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavFilePath" Width="20" Height="20" Stretch="Uniform"
@@ -137,7 +163,7 @@
                     </StackPanel>
                 </Button>
             </Grid>
-            <Grid x:Name="NavPlanHost" Grid.Column="2" Margin="0,0,10,0">
+            <Grid x:Name="NavPlanHost" Grid.Column="2" Margin="8,0,8,0">
                 <Button x:Name="NavPlan" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Plan" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavPlanPath" Width="20" Height="20" Stretch="Uniform"
@@ -145,7 +171,7 @@
                         <TextBlock x:Name="NavPlanText" Text="计划" Tag="Nav_Tab_Plan" VerticalAlignment="Center" FontSize="14" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="NavPlanFilterButton"
+                <Button Tag="A11y_PlanFilter" x:Name="NavPlanFilterButton"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
                         Margin="0,0,10,0"
@@ -188,7 +214,7 @@
                     </Viewbox>
                 </Button>
             </Grid>
-            <Grid x:Name="NavDiaryHost" Grid.Column="3">
+            <Grid x:Name="NavDiaryHost" Grid.Column="3" Margin="8,0,8,0">
                 <Button x:Name="NavDiary" Style="{StaticResource NovaraNavButtonStyle}" Click="NavButton_Click" Tag="Diary" IsTabStop="False">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Path x:Name="NavDiaryPath" Width="20" Height="20" Stretch="Uniform"
@@ -196,7 +222,7 @@
                         <TextBlock x:Name="NavDiaryText" Text="记录" Tag="Nav_Tab_Diary" VerticalAlignment="Center" FontSize="14" />
                     </StackPanel>
                 </Button>
-                <Button x:Name="NavDiaryFilterButton"
+                <Button Tag="A11y_DiaryFilter" x:Name="NavDiaryFilterButton"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
                         Margin="0,0,10,0"
@@ -428,11 +454,16 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-                        <Button x:Name="QcModeMemo" Style="{StaticResource NovaraOutlineButtonStyle}" Width="104" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
-                        <Button x:Name="QcModeTodo" Style="{StaticResource NovaraOutlineButtonStyle}" Width="104" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
-                        <Button x:Name="QcModeNote" Style="{StaticResource NovaraOutlineButtonStyle}" Width="104" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
-                    </StackPanel>
+                    <Grid Grid.Row="0" HorizontalAlignment="Center" MaxWidth="328" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="QcModeMemo" Grid.Column="0" HorizontalAlignment="Stretch" Style="{StaticResource NovaraOutlineButtonStyle}" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
+                        <Button x:Name="QcModeTodo" Grid.Column="1" HorizontalAlignment="Stretch" Style="{StaticResource NovaraOutlineButtonStyle}" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
+                        <Button x:Name="QcModeNote" Grid.Column="2" HorizontalAlignment="Stretch" Style="{StaticResource NovaraOutlineButtonStyle}" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
+                    </Grid>
                     <TextBox x:Name="QuickCaptureBox" Grid.Row="1" Style="{StaticResource NovaraSearchBoxStyle}" Margin="0,18,0,0"
                              MaxLength="500" KeyDown="QuickCaptureBox_KeyDown" />
                     <TextBlock x:Name="QuickCaptureHint" Grid.Row="2" HorizontalAlignment="Center" Margin="0,14,0,0"
@@ -443,7 +474,7 @@
 
         <Grid x:Name="ThemeRestartOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ThemeRestartScrim" Background="#2E000000" Tapped="ThemeRestartScrim_Tapped" />
-            <Border x:Name="ThemeRestartDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="ThemeRestartDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform>
                     <CompositeTransform x:Name="ThemeRestartDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
                 </Border.RenderTransform>
@@ -458,7 +489,7 @@
                                    HorizontalAlignment="Left" VerticalAlignment="Center"
                                    FontSize="18" FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}" />
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 Click="ThemeRestartClose_Click">
@@ -475,17 +506,46 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="160" Height="36"
+                        <Button HorizontalAlignment="Left" Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="ThemeRestartCancel_Click">
                             <TextBlock Text="取消" Tag="Common_Button_Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36"
+                        <Button HorizontalAlignment="Right" Width="160" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 Click="ThemeRestartConfirm_Click">
                             <TextBlock Text="确认重启" Tag="Theme_Restart_ConfirmButton" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+
+        <Grid x:Name="AutoUpdateOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" KeyDown="AutoUpdateOverlay_KeyDown">
+            <Grid x:Name="AutoUpdateScrim" Background="#2E000000" Tapped="AutoUpdateScrim_Tapped" />
+            <Border x:Name="AutoUpdateDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="AutoUpdateDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="AutoUpdateTitleText" Grid.Row="0" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="AutoUpdateBodyText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="22" Margin="0,20,0,0" />
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button x:Name="AutoUpdateCancelButton" HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="AutoUpdateCancel_Click">
+                            <TextBlock Text="取消" Tag="Common_Button_Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="AutoUpdateUpdate_Click">
+                            <TextBlock x:Name="AutoUpdateUpdateText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -523,38 +583,9 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button x:Name="StoreCorruptConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
-                                Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
-                                CornerRadius="10" FontSize="14" FontWeight="SemiBold"
-                                BorderThickness="0"
+                        <Button Style="{StaticResource NovaraDangerButtonStyle}" x:Name="StoreCorruptConfirmButton" HorizontalAlignment="Center" Width="160" Height="40" FontSize="14"
                                 Click="StoreCorruptConfirm_Click">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
-                                        <VisualStateManager.VisualStateGroups>
-                                            <VisualStateGroup x:Name="CommonStates">
-                                                <VisualState x:Name="Normal" />
-                                                <VisualState x:Name="PointerOver">
-                                                    <Storyboard>
-                                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
-                                                        </ObjectAnimationUsingKeyFrames>
-                                                    </Storyboard>
-                                                </VisualState>
-                                                <VisualState x:Name="Pressed">
-                                                    <Storyboard>
-                                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
-                                                        </ObjectAnimationUsingKeyFrames>
-                                                    </Storyboard>
-                                                </VisualState>
-                                                <VisualState x:Name="Disabled" />
-                                            </VisualStateGroup>
-                                        </VisualStateManager.VisualStateGroups>
-                                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    </Grid>
-                                </ControlTemplate>
-                            </Button.Template>
+                            
                             <TextBlock x:Name="StoreCorruptConfirmText" Text="重建资料库" Tag="Store_Corrupt_RebuildButton" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
@@ -586,11 +617,11 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button HorizontalAlignment="Center" Width="160" Height="36"
+                        <Button HorizontalAlignment="Center" Width="160" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="SaveFailedConfirm_Click">
-                            <TextBlock Text="知道了" Tag="Common_Button_GotIt" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Text="确定" Tag="Common_Button_Confirm" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -622,13 +653,13 @@
                                Margin="0,20,0,0"
                                LineHeight="22" />
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button x:Name="MigrateLaterButton" HorizontalAlignment="Left" Width="160" Height="36"
+                        <Button x:Name="MigrateLaterButton" HorizontalAlignment="Left" Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="MigrateLater_Click">
                             <TextBlock Text="暂不升级" Tag="Security_Migrate_Later" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="MigrateConfirmButton" HorizontalAlignment="Right" Width="160" Height="36"
+                        <Button x:Name="MigrateConfirmButton" HorizontalAlignment="Right" Width="160" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 Click="MigrateConfirm_Click">
@@ -642,7 +673,7 @@
 
         <Grid x:Name="McpAuthorizeOverlay" Visibility="Collapsed" Grid.RowSpan="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="McpAuthorizeScrim" Background="#2E000000" />
-            <Border x:Name="McpAuthorizeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="McpAuthorizeDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform>
                     <CompositeTransform x:Name="McpAuthorizeDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
                 </Border.RenderTransform>
@@ -667,13 +698,13 @@
                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <Grid Grid.Row="2" Margin="0,24,0,0">
-                        <Button HorizontalAlignment="Left" Width="160" Height="36"
+                        <Button HorizontalAlignment="Left" Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
                                 Click="McpAuthorizeDeny_Click">
                             <TextBlock Text="拒绝" Tag="Mcp_Authorize_Deny" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36"
+                        <Button HorizontalAlignment="Right" Width="160" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10" FontSize="14" FontWeight="SemiBold"
                                 Click="McpAuthorizeAllow_Click">

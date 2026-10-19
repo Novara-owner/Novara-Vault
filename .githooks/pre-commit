@@ -1,0 +1,2 @@
+#!/bin/sh
+python Tools/frozen_comment_gate.py

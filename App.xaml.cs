@@ -1,4 +1,4 @@
-using Windows.ApplicationModel;
+﻿using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
@@ -29,6 +29,47 @@ public enum ToastTone { Success, Error }
 
 public partial class App : Application
 {
+
+
+
+
+
+
+    internal static void ApplyAutomationNames(Microsoft.UI.Xaml.Window window)
+    {
+        if (window.Content is UIElement root) ApplyAutomationNamesInner(root);
+    }
+
+    internal static void ApplyAutomationNames(UIElement root)
+        => ApplyAutomationNamesInner(root);
+
+    private static void ApplyAutomationNamesInner(DependencyObject node)
+    {
+        var count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(node);
+        for (var i = 0; i < count; i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(node, i);
+            if (child is Microsoft.UI.Xaml.Controls.Button button)
+            {
+
+
+
+
+
+                var tag = button.Tag as string;
+                bool tagIsKey = tag is not null
+                    && (tag.StartsWith("A11y_", StringComparison.Ordinal) || tag.StartsWith("Common_Button_", StringComparison.Ordinal));
+                var key = tagIsKey ? tag : Microsoft.UI.Xaml.Automation.AutomationProperties.GetItemStatus(button);
+                if (!string.IsNullOrEmpty(key)
+                    && (key.StartsWith("A11y_", StringComparison.Ordinal) || key.StartsWith("Common_Button_", StringComparison.Ordinal))
+                    && string.IsNullOrEmpty(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(button)))
+                {
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, GetString(key));
+                }
+            }
+            ApplyAutomationNamesInner(child);
+        }
+    }
 
     public static MainWindow? MainWindow { get; private set; }
 
@@ -634,6 +675,7 @@ public partial class App : Application
                 {
 
                     Novara.Services.NovaraStore.DiscardOrphanedPasswordFiles(Novara.Services.NovaraStore.DefaultFilePath);
+                    Services.AutoBackupService.RecoverInterruptedRestore();
                     var loadResult = Store.Load();
                     System.Diagnostics.Debug.WriteLine($"MCP background load: {loadResult.Status}");
 
@@ -825,6 +867,13 @@ public partial class App : Application
 
 
         MainWindow?.ApplyPaperBrandToNavGlow();
+
+
+
+
+
+        if (Store is { IsLoaded: true })
+            Services.StickySync.UpdateTheme(Services.StickySync.ResolveTheme());
 
         UpdateTitleBarColors();
     }

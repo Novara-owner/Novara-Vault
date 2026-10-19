@@ -82,22 +82,8 @@ public static class EditRequest
     }
 
 
-    public static void Raise(Guid id)
-    {
-        try
-        {
-            var dir = Path.GetDirectoryName(PendingPath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(PendingPath, JsonSerializer.Serialize(new PendingEdit { Id = id.ToString() }));
-            try
-            {
-                using var evt = EventWaitHandle.OpenExisting(EventName);
-                evt.Set();
-            }
-            catch {  }
-        }
-        catch { }
-    }
+
+
 }
 
 public class PendingEdit

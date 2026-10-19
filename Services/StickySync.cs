@@ -23,7 +23,10 @@ public static class StickySync
     private static void Save(StickyData data)
     {
         var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-        var tmp = JsonPath + ".tmp";
+
+
+
+        var tmp = JsonPath + "." + Environment.ProcessId + ".tmp";
         try
         {
             File.WriteAllText(tmp, json);
@@ -54,18 +57,28 @@ public static class StickySync
 
 
 
+
+
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
             if (Directory.Exists(Path.Combine(dir, "StickNoteHost")))
             {
                 var hostRoot = Path.Combine(dir, "StickNoteHost");
+#if DEBUG
                 foreach (var cfg in new[] { "Debug", "Release" })
+#else
+                foreach (var cfg in new[] { "Release", "Debug" })
+#endif
                 {
                     foreach (var platform in new[] { Path.Combine("bin", "x64"), Path.Combine("bin") })
                     {
-                        var dev = Path.Combine(hostRoot, platform, cfg,
-                            "net8.0-windows10.0.26100.0", "win-x64", "StickNoteHost.exe");
-                        if (File.Exists(dev)) return dev;
+                        var cfgDir = Path.Combine(hostRoot, platform, cfg);
+                        if (!Directory.Exists(cfgDir)) continue;
+
+
+
+
+                        if (FindNewestTfmHostExe(cfgDir) is { } dev) return dev;
                     }
                 }
             }
@@ -74,6 +87,32 @@ public static class StickySync
             dir = parent;
         }
         return null;
+    }
+
+
+
+
+    private static string? FindNewestTfmHostExe(string cfgDir)
+    {
+        if (!Directory.Exists(cfgDir)) return null;
+        string? best = null;
+        Version? bestVer = null;
+        try
+        {
+            foreach (var tfmDir in Directory.EnumerateDirectories(cfgDir, "net*-windows*"))
+            {
+                var head = Path.GetFileName(tfmDir).Substring("net".Length);
+                var dash = head.IndexOf('-');
+                if (dash >= 0) head = head[..dash];
+                if (!Version.TryParse(head, out var ver)) continue;
+
+                var exe = Path.Combine(tfmDir, "win-x64", "StickNoteHost.exe");
+                if (!File.Exists(exe)) continue;
+                if (bestVer == null || ver > bestVer) { best = exe; bestVer = ver; }
+            }
+        }
+        catch { return best; }
+        return best;
     }
 
     public static string ResolveTheme() =>
@@ -137,7 +176,9 @@ public static class StickySync
     }
 
 
-    public static void AddReminder(string content, DateTimeOffset dueTime)
+
+
+    public static (bool Written, bool HostReady) AddReminder(string content, DateTimeOffset dueTime)
     {
         try
         {
@@ -147,7 +188,7 @@ public static class StickySync
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null) return (false, false);
                 var notes = data.Notes ?? new List<StickyNote>();
                 notes.Add(new StickyNote { Id = Guid.NewGuid().ToString(), Kind = "reminder", Title = "", Content = content, DueTime = dueTime });
                 data.Theme = ResolveTheme();
@@ -159,32 +200,27 @@ public static class StickySync
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.AddReminder 失败: {ex}");
+            return (false, false);
         }
 
 
-        try
-        {
-            if (!string.IsNullOrEmpty(HostExePath) && File.Exists(HostExePath))
-                Process.Start(new ProcessStartInfo { FileName = HostExePath, UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"唤起 StickNoteHost 失败: {ex}");
-        }
+        return (true, EnsureHostReady());
     }
 
 
-    public static void UpdateReminder(string id, string content, DateTimeOffset dueTime)
+
+
+    public static (bool Written, bool HostReady) UpdateReminder(string id, string content, DateTimeOffset dueTime)
     {
         try
         {
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null) return (false, false);
                 var notes = data.Notes ?? new List<StickyNote>();
                 var existing = notes.FirstOrDefault(n => n.Id == id);
-                if (existing == null) return;
+                if (existing == null) return (false, false);
                 existing.Content = content;
                 existing.DueTime = dueTime;
                 data.Theme = ResolveTheme();
@@ -196,7 +232,28 @@ public static class StickySync
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.UpdateReminder 失败: {ex}");
+            return (false, false);
         }
+        return (true, HostRunning);
+    }
+
+
+    private static bool EnsureHostReady()
+    {
+        if (HostRunning) return true;
+        try
+        {
+            if (!string.IsNullOrEmpty(HostExePath) && File.Exists(HostExePath))
+            {
+                Process.Start(new ProcessStartInfo { FileName = HostExePath, UseShellExecute = true });
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"唤起 StickNoteHost 失败: {ex}");
+        }
+        return false;
     }
 
 

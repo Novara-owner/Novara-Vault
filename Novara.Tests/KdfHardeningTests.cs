@@ -43,8 +43,9 @@ public class KdfHardeningTests : IDisposable
 
 
     [Fact]
-    public void NewEncryption_StartsAtVer3_And_RoundTrips()
+    public void NewEncryption_StartsAtV5_And_RoundTrips()
     {
+
         PasswordService.SetBaseDir(_dir);
         try
         {
@@ -54,13 +55,14 @@ public class KdfHardeningTests : IDisposable
             store.Load();
             store.Database.MemoEntries.Add(new Novara.Models.MemoEntry { Name = "kdf条目", Type = "自定义" });
             Assert.True(store.EnableEncryption("pw-123"));
-            Assert.Equal(3, VersionByte(dbPath));
+            Assert.Equal(5, VersionByte(dbPath));
 
             var reload = new NovaraStore(dbPath);
             Assert.Equal(LoadStatus.Encrypted, reload.Load().Status);
             Assert.Equal(LoadStatus.Ok, reload.LoadWithPassword("pw-123").Status);
             Assert.Single(reload.Database.MemoEntries);
             Assert.False(reload.NeedsKdfMigration);
+            Assert.False(reload.NeedsV5Migration);
         }
         finally { PasswordService.SetBaseDir(null); }
     }

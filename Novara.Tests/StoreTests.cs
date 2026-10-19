@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Novara.Models;
+using System.Security.Cryptography;
 using Novara.Services;
 using Xunit;
 
@@ -279,6 +280,37 @@ public class NovaraStoreTests : IDisposable
         Assert.Equal(new List<string> { "子项" }, loaded.TodoCards[0].SubTexts);
     }
 
+    [Fact]
+    public void Load_DuplicateIdsAndDanglingRefs_AreRenormalized()
+    {
+
+
+
+
+        var db = new NovaraDatabase();
+        var dupGroupId = Guid.NewGuid();
+        db.MemoGroups.Add(new MemoGroup { Id = dupGroupId, Name = "组一" });
+        db.MemoGroups.Add(new MemoGroup { Id = dupGroupId, Name = "组二" });
+        var dangling = Guid.NewGuid();
+        db.MemoEntries.Add(new MemoEntry { Name = "挂空组", Type = "账户", GroupId = dangling });
+        db.MemoEntries.Add(new MemoEntry { Name = "引用正式组", Type = "账户", GroupId = dupGroupId });
+        var dupEntryId = Guid.NewGuid();
+        db.MemoEntries.Add(new MemoEntry { Id = dupEntryId, Name = "甲", Type = "账户" });
+        db.MemoEntries.Add(new MemoEntry { Id = dupEntryId, Name = "乙", Type = "账户" });
+        WriteRawDb(db);
+
+        var store = new NovaraStore(DbPath);
+        Assert.Equal(LoadStatus.Ok, store.Load().Status);
+        var d = store.Database;
+
+        var groupIds = d.MemoGroups.Select(g => g.Id).ToList();
+        Assert.Equal(2, groupIds.Distinct().Count());
+        Assert.Contains(dupGroupId, groupIds);
+        Assert.Equal(4, d.MemoEntries.Select(e => e.Id).Distinct().Count());
+        Assert.Null(d.MemoEntries.First(e => e.Name == "挂空组").GroupId);
+        Assert.Equal(dupGroupId, d.MemoEntries.First(e => e.Name == "引用正式组").GroupId);
+    }
+
 
 
 
@@ -409,9 +441,8 @@ public class NovaraStoreTests : IDisposable
 
 
     [Fact]
-    public void WriteSnapshot_PlaintextHeaderCarriesMd5_ButGcmHeaderLeavesItZero()
+    public void WriteSnapshot_PlaintextHeaderCarriesMd5_V5CarriesSha256_Integrity()
     {
-
 
 
 
@@ -432,8 +463,19 @@ public class NovaraStoreTests : IDisposable
 
         var encrypted = File.ReadAllBytes(path);
         Assert.Equal(0x41564F4Eu, BitConverter.ToUInt32(encrypted, 0));
-        Assert.Equal(3, encrypted[4]);
-        Assert.All(encrypted.Skip(6).Take(16), b => Assert.Equal(0, b));
+        Assert.Equal(5, encrypted[4]);
+        Assert.Equal(0x01, encrypted[6]);
+        var body = encrypted.Skip(NovaraStore.HeaderSizeV5).ToArray();
+        var integrity = encrypted.Skip(31).Take(32).ToArray();
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(body)), Convert.ToHexString(integrity));
+
+
+
+        store.SetFileVersionForTests(NovaraStore.FileVersionKdfHardened);
+        Assert.True(store.SaveSync());
+        var v3bytes = File.ReadAllBytes(path);
+        Assert.Equal(3, v3bytes[4]);
+        Assert.All(v3bytes.Skip(6).Take(16), b => Assert.Equal(0, b));
 
 
         var reload = new NovaraStore(path);
@@ -531,6 +573,43 @@ public class NovaraStoreTests : IDisposable
         Assert.Equal(NovaraStore.RestorePendingMessage, result.Detail);
         Assert.Same(before, store.Database);
     }
+
+
+
+
+    [Fact]
+    public void V1Cbc_HeaderMd5_IsRewrittenOnSave()
+    {
+        PasswordService.SetBaseDir(_dir);
+        try
+        {
+            Assert.True(PasswordService.Create("cbc-pw"));
+            var deriveSalt = PasswordService.GetDeriveSalt()!;
+            var dbPath = Path.Combine(_dir, "cbc-" + Guid.NewGuid().ToString("N") + ".novadb");
+            var db = new NovaraDatabase();
+            db.MemoEntries.Add(new MemoEntry { Name = "老库条目", Type = "自定义" });
+            var json = JsonSerializer.SerializeToUtf8Bytes(db, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            var cipher = CryptoService.Encrypt(json, "cbc-pw", deriveSalt);
+            var header = new byte[22];
+            BitConverter.TryWriteBytes(header.AsSpan(0, 4), 0x41564F4Eu);
+            header[4] = 1; header[5] = 1;
+            MD5.HashData(json).CopyTo(header, 6);
+            File.WriteAllBytes(dbPath, header.Concat(cipher).ToArray());
+
+            var store = new NovaraStore(dbPath);
+            Assert.Equal(LoadStatus.Encrypted, store.Load().Status);
+            Assert.Equal(LoadStatus.Ok, store.LoadWithPassword("cbc-pw").Status);
+
+            store.Database.MemoEntries.Add(new MemoEntry { Name = "追加条目", Type = "自定义" });
+            Assert.True(store.SaveSync());
+
+            var reopened = new NovaraStore(dbPath);
+            Assert.Equal(LoadStatus.Encrypted, reopened.Load().Status);
+            Assert.Equal(LoadStatus.Ok, reopened.LoadWithPassword("cbc-pw").Status);
+            Assert.Contains(reopened.Database.MemoEntries, e => e.Name == "追加条目");
+        }
+        finally { PasswordService.SetBaseDir(null); }
+    }
 }
 
 
@@ -565,4 +644,5 @@ public class DiaryEntrySerializationTests
     {
         Assert.Equal("html", new DiaryEntry().Format);
     }
+
 }

@@ -143,6 +143,45 @@ public class SqliteSpaceStoreTests : IDisposable
         Assert.Null(sqlite.ReadBlob("sp1", conflict));
     }
 
+    [Fact]
+    public void BothBackends_ReportBadMetadataAsSpaceStoreException()
+    {
+        const string spaceId = "sp-metadata";
+        var sqlite = new SqliteSpaceStore(_dir);
+        sqlite.SaveSpace(new SpaceRecord { SpaceId = spaceId, Name = "s", QuotaBytes = 1, MaxVersions = 2 });
+
+
+
+
+        using (var cn = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={Path.Combine(_dir, "novara-sync.db")};Pooling=False"))
+        {
+            cn.Open();
+            using var cmd = cn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO versions (space_id, version, created_at, device_id, sha256, size,
+                                      is_conflict, conflict_of, retained, chunk_ids)
+                VALUES ($space, 1, 'not-a-time', 'd', 'h', 1, 0, 0, 1, '[]');
+                """;
+            cmd.Parameters.AddWithValue("$space", spaceId);
+            cmd.ExecuteNonQuery();
+        }
+        Assert.Throws<SpaceStoreException>(() => sqlite.GetVersions(spaceId));
+
+
+
+        var versionsPath = Path.Combine(_dir, "spaces", spaceId, "versions.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(versionsPath)!);
+        File.WriteAllText(versionsPath,
+            """[{"version":1,"createdAt":"not-a-time","deviceId":"d","sha256":"h","size":1,"retained":true,"chunkIds":[]}]""");
+        var file = new FileSpaceStore(_dir);
+        Assert.Throws<SpaceStoreException>(() => file.GetVersions(spaceId));
+
+        File.WriteAllText(versionsPath,
+            """[{"version":1,"createdAt":"2026-01-01T00:00:00Z","deviceId":"d","sha256":"h","size":1,"retained":true,"chunkIds":null}]""");
+        Assert.Empty(Assert.Single(file.GetVersions(spaceId)).ChunkIds);
+    }
+
 
 
     [Fact]

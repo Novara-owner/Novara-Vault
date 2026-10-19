@@ -11,7 +11,7 @@
 
     <Grid x:Name="RootGrid" Background="{ThemeResource AppSurfaceBrush}" ContextRequested="RootGrid_ContextRequested" IsTabStop="False">
         <ScrollViewer x:Name="CardScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="CardList" Padding="40,12,40,20" Spacing="12" />
+            <StackPanel x:Name="CardList" Padding="40,8,40,20" Spacing="12" />
         </ScrollViewer>
 
 
@@ -27,7 +27,7 @@
 
         <Grid x:Name="ReminderOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ReminderScrim" Background="#2E000000" Tapped="ReminderScrim_Tapped" />
-            <Border x:Name="ReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="ReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform>
                     <CompositeTransform x:Name="ReminderDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
                 </Border.RenderTransform>
@@ -40,7 +40,7 @@
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <TextBlock x:Name="ReminderDialogTitle" Text="{x:Bind app:App.GetString(\'Reminder_New_Title\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseReminderDialog_Click">
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseReminderDialog_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
@@ -77,7 +77,7 @@
 
                     <Grid Grid.Row="0">
                         <TextBlock x:Name="NewTodoDialogTitle" Text="{x:Bind app:App.GetString(\'Plan_Todo_NewTitle\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseNewTodo_Click">
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseNewTodo_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
@@ -121,7 +121,7 @@
 
 
                     <Grid Grid.Row="2" Margin="0,8,0,0">
-                        <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewTodoConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="12" FontSize="14" Click="NewTodoConfirm_Click">
+                        <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewTodoConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="NewTodoConfirm_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
@@ -143,7 +143,7 @@
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <TextBlock x:Name="NewNoteDialogTitle" Text="{x:Bind app:App.GetString(\'Plan_Note_NewTitle\')}" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseNewNote_Click">
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CloseNewNote_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
@@ -174,7 +174,7 @@
 
 
                     <Grid Grid.Row="2" Margin="0,16,0,0">
-                        <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewNoteConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="12" FontSize="14" Click="NewNoteConfirm_Click">
+                        <Button HorizontalAlignment="Center" Width="220" Height="40" x:Name="NewNoteConfirmButton" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="NewNoteConfirm_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
@@ -188,11 +188,11 @@
                 <Border.RenderTransform><CompositeTransform x:Name="DeleteConfirmDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Grid Grid.Row="0"><TextBlock x:Name="DeleteConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="DeleteConfirmClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
+                    <Grid Grid.Row="0"><TextBlock x:Name="DeleteConfirmTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="DeleteConfirmClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
                     <StackPanel Grid.Row="1" Margin="0,20,0,0"><TextBlock x:Name="DeleteConfirmMessageText" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" Margin="0" /></StackPanel>
                     <Grid Grid.Row="2" Margin="0,20,0,0">
-                        <Button HorizontalAlignment="Left" Width="160" Height="36" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmClose_Click"><TextBlock x:Name="DeleteCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
-                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><TextBlock x:Name="DeleteConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmClose_Click"><TextBlock x:Name="DeleteCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><TextBlock x:Name="DeleteConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
                     </Grid>
                 </Grid>
             </Border>
@@ -200,11 +200,11 @@
 
         <Grid x:Name="SetReminderOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="SetReminderScrim" Background="#2E000000" Tapped="SetReminderScrim_Tapped" />
-            <Border x:Name="SetReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="SetReminderDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform><CompositeTransform x:Name="SetReminderDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Grid Grid.Row="0"><TextBlock x:Name="SetReminderTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="SetReminderClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
+                    <Grid Grid.Row="0"><TextBlock x:Name="SetReminderTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="SetReminderClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
                     <StackPanel Grid.Row="1" Spacing="14" Margin="0,8,0,0"><DatePicker x:Name="SetReminderDatePicker" /><TimePicker x:Name="SetReminderTimePicker" /></StackPanel>
                     <Grid Grid.Row="2" Margin="0"><Button x:Name="SetReminderConfirmButton" HorizontalAlignment="Center" Width="220" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="SetReminderConfirm_Click"><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button></Grid>
                 </Grid>
@@ -218,7 +218,7 @@
                 <Border.RenderTransform><CompositeTransform x:Name="CancelReminderDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Grid Grid.Row="0"><TextBlock x:Name="CancelReminderTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CancelReminderClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
+                    <Grid Grid.Row="0"><TextBlock x:Name="CancelReminderTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="CancelReminderClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
                     <TextBlock x:Name="CancelReminderMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" Margin="0,16,0,0" />
                     <Grid Grid.Row="2" Margin="0,20,0,0"><Button HorizontalAlignment="Center" Width="220" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="CancelReminderConfirm_Click"><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Confirm\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button></Grid>
                 </Grid>
@@ -228,13 +228,13 @@
 
         <Grid x:Name="ReminderDueOverlay" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="ReminderDueScrim" Background="#2E000000" Tapped="ReminderDueScrim_Tapped" />
-            <Border x:Name="ReminderDueDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="ReminderDueDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform><CompositeTransform x:Name="ReminderDueDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Grid Grid.Row="0"><TextBlock x:Name="ReminderDueTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ReminderDueClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
+                    <Grid Grid.Row="0"><TextBlock x:Name="ReminderDueTitleText" HorizontalAlignment="Left" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppPrimaryButtonBrush}" /><Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ReminderDueClose_Click"><Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" /></Button></Grid>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Margin="0,4,0,8"><TextBlock x:Name="ReminderDueContentText" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" TextWrapping="Wrap" /></ScrollViewer>
-                    <Grid Grid.Row="2" Margin="0"><Button HorizontalAlignment="Center" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="ReminderDueConfirm_Click"><TextBlock x:Name="ReminderDueConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button></Grid>
+                    <Grid Grid.Row="2" Margin="0"><Button HorizontalAlignment="Center" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="ReminderDueConfirm_Click"><TextBlock x:Name="ReminderDueConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button></Grid>
                     <Border x:Name="ReminderDueBreathBorder" Grid.RowSpan="3" Margin="-28,-24" CornerRadius="23" BorderThickness="2" IsHitTestVisible="False" Opacity="0" />
                 </Grid>
             </Border>

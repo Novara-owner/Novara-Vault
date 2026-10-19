@@ -19,7 +19,8 @@ internal static class DialogUi
 
     public static void ShowOverlay(Grid root,
         Dictionary<Grid, int> gens, Dictionary<Grid, Border> dialogMap,
-        Grid overlay, Border dialog, CompositeTransform transform)
+        Grid overlay, Border dialog, CompositeTransform transform,
+        DialogWidthFit? widthFit = null)
     {
         gens[overlay] = System.Collections.Generic.CollectionExtensions.GetValueOrDefault(gens, overlay) + 1;
         var scrim = FindOverlayScrim(overlay);
@@ -38,6 +39,7 @@ internal static class DialogUi
         Motion.AddDialogShowTransform(sb, transform);
 
         ClampDialogHeight(dialog, root);
+        FitDialogWidth(widthFit, dialog, root);
         dialogMap[overlay] = dialog;
         sb.Begin();
     }
@@ -47,10 +49,21 @@ internal static class DialogUi
 
 
     public static void RegisterDialogClamp(Grid root, System.Collections.Generic.Dictionary<Grid, Border> dialogMap,
-        Grid overlay, Border dialog)
+        Grid overlay, Border dialog, DialogWidthFit? widthFit = null)
     {
         ClampDialogHeight(dialog, root);
+        FitDialogWidth(widthFit, dialog, root);
         dialogMap[overlay] = dialog;
+    }
+
+
+
+    public static void RegisterDialogClamp(Grid root, System.Collections.Generic.Dictionary<Grid, int> gens,
+        System.Collections.Generic.Dictionary<Grid, Border> dialogMap,
+        Grid overlay, Border dialog, DialogWidthFit? widthFit = null)
+    {
+        gens[overlay] = System.Collections.Generic.CollectionExtensions.GetValueOrDefault(gens, overlay) + 1;
+        RegisterDialogClamp(root, dialogMap, overlay, dialog, widthFit);
     }
 
     public static void ClampDialogHeight(Border dialog, Grid root)
@@ -60,8 +73,56 @@ internal static class DialogUi
     public static void ClampDialogHeight(Border dialog, double viewport)
         => dialog.MaxHeight = viewport > 0 ? Math.Max(360, viewport - 60) : 720;
 
+
+
+
+
+
+    public static void FitDialogWidth(DialogWidthFit? widthFit, Border dialog, Grid root)
+        => widthFit?.Fit(dialog, root.ActualWidth);
+
+
+
+
+
+
+
+
+    public sealed class DialogWidthFit
+    {
+
+        private readonly Dictionary<Border, double> _designedWidths = new();
+
+        public void Fit(Border dialog, double viewportWidth)
+        {
+            if (!_designedWidths.TryGetValue(dialog, out var designedWidth))
+                _designedWidths[dialog] = designedWidth = dialog.Width;
+            dialog.Width = Compute(designedWidth, viewportWidth);
+        }
+
+        public void RefitAll(double viewportWidth)
+        {
+            foreach (var (dialog, designedWidth) in _designedWidths)
+                dialog.Width = Compute(designedWidth, viewportWidth);
+        }
+
+
+        public void Clear() => _designedWidths.Clear();
+
+        private static double Compute(double designedWidth, double viewportWidth)
+        {
+            if (viewportWidth <= 0 || double.IsNaN(designedWidth)) return designedWidth;
+
+
+
+            if (viewportWidth < 320) return designedWidth;
+            var scale = Math.Clamp(viewportWidth / 960.0, 1.0, 1.25);
+            return Math.Min(designedWidth * scale, Math.Max(320, viewportWidth - 200));
+        }
+    }
+
     public static void ReclampVisibleDialogs(Grid root, Dictionary<Grid, Border> dialogMap,
-        DialogScrollFit? scrollFit = null)
+        DialogScrollFit? scrollFit = null, DialogWidthFit? widthFit = null)
     {
         foreach (var (overlay, dialog) in dialogMap)
             if (overlay.Visibility == Visibility.Visible)
@@ -71,6 +132,9 @@ internal static class DialogUi
 
 
         scrollFit?.RefitAll(root.ActualHeight);
+
+
+        widthFit?.RefitAll(root.ActualWidth);
     }
 
 
@@ -107,6 +171,13 @@ internal static class DialogUi
                 var designedCap = _designedCaps.TryGetValue(scroll, out var cap) ? cap : double.PositiveInfinity;
                 scroll.MaxHeight = Compute(designedCap, scroll, fallbackChrome, viewportHeight);
             }
+        }
+
+
+        public void Clear()
+        {
+            _designedCaps.Clear();
+            _chromeFloors.Clear();
         }
 
         private static double Compute(double designedCap, ScrollViewer scroll, double fallbackChrome, double viewportHeight)

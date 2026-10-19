@@ -117,6 +117,7 @@ public class RelayProbeServiceTests
     [InlineData("9.9", "The larger is 9.9", true)]
     [InlineData("173", "173", true)]
     [InlineData("3", "4", false)]
+    [InlineData("3", "the token klimber-abc123ef was echoed", false)]
     public void CheckBenchmarkAnswer_ContainsExpected(string expected, string reply, bool ok)
     {
         Assert.Equal(ok, RelayProbeService.CheckBenchmarkAnswer(expected, reply));
@@ -215,6 +216,114 @@ public class RelayProbeServiceTests
 
 
 
+    [Fact]
+    public void BuildRunMarker_IsLowercaseWord()
+    {
+        for (int i = 0; i < 50; i++)
+        {
+            var m = RelayProbeService.BuildRunMarker();
+            Assert.InRange(m.Length, 5, 9);
+            Assert.Matches("^[a-z]+$", m);
+        }
+    }
+
+    [Fact]
+    public void SampleBenchmarkQuestions_LayeredDraw_BothTiersContribute()
+    {
+        var ds = ProbeDataSetLoader.Default();
+        var (sampled, pool) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(42));
+        Assert.Equal(5, pool);
+        Assert.Equal(5, sampled.Count);
+        Assert.Contains(sampled, q => q.Key == "strawberry");
+        Assert.Contains(sampled, q => q.Key == "adv-count");
+    }
+
+    [Fact]
+    public void SampleBenchmarkQuestions_Shortfalls_Tolerated()
+    {
+
+        var ds = ProbeDataSetLoader.Default();
+        ds.AdversarialBenchmarks!.Clear();
+        var (sampled, pool) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(7));
+        Assert.Equal(3, pool);
+        Assert.Equal(3, sampled.Count);
+
+
+        ds.BenchmarkQuestions.RemoveAt(ds.BenchmarkQuestions.Count - 1);
+        var (s2, pool2) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(7));
+        Assert.Equal(2, pool2);
+        Assert.Equal(2, s2.Count);
+    }
+
+
+
+
+    [Fact]
+    public void SampleBenchmarkQuestions_PoolLargerThanK_TakesExactlyK()
+    {
+        var ds = ProbeDataSetLoader.Default();
+        for (int i = 0; i < 6; i++)
+            ds.BenchmarkQuestions.Add(new BenchmarkQuestion { Key = "extra" + i, Prompt = "p", Expected = "1" });
+        var (sampled, pool) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(11));
+        Assert.Equal(11, pool);
+        Assert.Equal(5, sampled.Count);
+        Assert.Equal(3, sampled.Count(q => q.Key.StartsWith("strawberry") || q.Key.StartsWith("extra") || q.Key == "compare" || q.Key == "math"));
+        Assert.Equal(2, sampled.Count(q => q.Key.StartsWith("adv-")));
+    }
+
+    [Fact]
+    public void SampleBenchmarkQuestions_DifferentSeeds_DrawDifferentSubsets()
+    {
+        var ds = ProbeDataSetLoader.Default();
+        for (int i = 0; i < 6; i++)
+            ds.BenchmarkQuestions.Add(new BenchmarkQuestion { Key = "extra" + i, Prompt = "p", Expected = "1" });
+        var keysOf = new Random[] { new Random(42), new Random(43) }
+            .Select(rng => new HashSet<string>(
+                RelayProbeService.SampleBenchmarkQuestions(ds, 3, 0, rng).Sampled.Select(q => q.Key)))
+            .ToList();
+        Assert.True(keysOf[0].Union(keysOf[1]).Count() > 3, "两个不同 seed 抽到同一子集——抽样可能退化为固定顺序（按 6 选 3 的组合空间这是天文巧合，出现即说明 rng 未生效）");
+    }
+
+
+
+    [Fact]
+    public void ComputeOutputBudget_FollowsTheSampleCount_Linearly()
+    {
+        long b3 = RelayProbeService.ComputeOutputBudget(3);
+        long b5 = RelayProbeService.ComputeOutputBudget(5);
+        long b6 = RelayProbeService.ComputeOutputBudget(6);
+        Assert.Equal(b3 + 2 * 512, b5);
+        Assert.Equal(b5 + 512, b6);
+        Assert.Equal(b3, RelayProbeService.ComputeOutputBudget(0));
+    }
+
+
+
+    [Fact]
+    public async Task ProbeAsync_RecordsDistinctRunSeeds()
+    {
+        var handler = new StubHandler(req =>
+        {
+            if (req.Method != HttpMethod.Post) return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { Content = new StringContent("{}") };
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(ChatJson("hi"), System.Text.Encoding.UTF8, "application/json") };
+        });
+        var r1 = await RelayProbeService.ProbeAsync("https://api.test.com", "sk-test", "gpt-4o", handler: handler);
+        var r2 = await RelayProbeService.ProbeAsync("https://api.test.com", "sk-test", "gpt-4o", handler: handler);
+        Assert.NotEqual(r1.Seed, r2.Seed);
+    }
+
+    [Fact]
+    public void SampleBenchmarkQuestions_NoDuplicates_DeterministicPerSeed()
+    {
+        var ds = ProbeDataSetLoader.Default();
+        var (a, _) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(123));
+        var (b, _) = RelayProbeService.SampleBenchmarkQuestions(ds, 3, 2, new Random(123));
+        Assert.Equal(a.Select(q => q.Key), b.Select(q => q.Key));
+        Assert.Equal(a.Count, a.Select(q => q.Key).Distinct().Count());
+    }
+
+
+
     [Theory]
     [InlineData("qwen2.5-7b", true)]
     [InlineData("llama-3-8b", true)]
@@ -277,14 +386,16 @@ public class RelayProbeServiceTests
 
 
             if (prompt.Contains("strawberry")) content = "3";
+            else if (prompt.Contains("collaboration")) content = "3";
+            else if (prompt.Contains("quick brown fox")) content = "9";
             else if (prompt.Contains("9.11")) content = "9.9";
             else if (prompt.Contains("24 * 7")) content = "173";
-            else if (prompt.StartsWith("只回复")) content = Regex.Match(prompt, "【NOVARA-VERIFY-[0-9a-f]{8}】").Value;
+            else if (prompt.StartsWith("只回复")) content = Regex.Match(prompt, "【[a-z]+-[0-9a-f]{8}】").Value;
             else if (prompt.Contains("weather")) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ToolCallJson, Encoding.UTF8, "application/json") };
             else if (prompt.Contains("Reply with exactly: OK")) content = "OK";
             else if (prompt == "Hi") content = "Hello!";
             else if (prompt.Contains("12×7")) content = "144";
-            else if (prompt.Contains("复述")) content = "NOVARA-ANCHOR-" + Regex.Match(prompt, "NOVARA-ANCHOR-[0-9a-f]{8}").Value;
+            else if (prompt.Contains("复述")) content = Regex.Match(prompt, "[a-z]+-[0-9a-f]{8}").Value;
             else content = "hi";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ChatJson(content), Encoding.UTF8, "application/json") };
         });
@@ -348,14 +459,16 @@ public class RelayProbeServiceTests
             var prompt = ExtractPrompt(req);
             var completion = ExtractMaxTokens(req);
             if (prompt.Contains("strawberry")) return ChatJsonReporting("3", completion);
+            if (prompt.Contains("collaboration")) return ChatJsonReporting("3", completion);
+            if (prompt.Contains("quick brown fox")) return ChatJsonReporting("9", completion);
             if (prompt.Contains("9.11")) return ChatJsonReporting("9.9", completion);
             if (prompt.Contains("24 * 7")) return ChatJsonReporting("173", completion);
-            if (prompt.StartsWith("只回复")) return ChatJsonReporting(Regex.Match(prompt, "【NOVARA-VERIFY-[0-9a-f]{8}】").Value, completion);
+            if (prompt.StartsWith("只回复")) return ChatJsonReporting(Regex.Match(prompt, "【[a-z]+-[0-9a-f]{8}】").Value, completion);
             if (prompt.Contains("weather")) return ChatJsonReporting("", completion);
             if (prompt.Contains("Reply with exactly: OK")) return ChatJsonReporting("OK", completion);
             if (prompt == "Hi") return ChatJsonReporting("Hello!", completion);
             if (prompt.Contains("12×7")) return ChatJsonReporting("144", completion);
-            if (prompt.Contains("复述")) return ChatJsonReporting("NOVARA-ANCHOR-" + Regex.Match(prompt, "NOVARA-ANCHOR-[0-9a-f]{8}").Value, completion);
+            if (prompt.Contains("复述")) return ChatJsonReporting(Regex.Match(prompt, "[a-z]+-[0-9a-f]{8}").Value, completion);
             return ChatJsonReporting("hi", completion);
         });
 
@@ -390,6 +503,22 @@ public class RelayProbeServiceTests
     private const string PoisPrompt = "12×7 等于几？只回答数字。";
     private static readonly string[] PoisSignatures = { "只回答数字" };
     private static readonly string[] TruncSignatures = { "请复述我最后给出的特殊标记" };
+
+
+
+    [Fact]
+    public void LooksLikeEcho_ScanIsBoundedAndHonoursCancellation()
+    {
+        var longPrompt = new string('a', 100);
+        var reply = new string('x', RelayProbeService.EchoScanLimit + 64) + longPrompt;
+
+        Assert.False(RelayProbeService.LooksLikeEcho(reply, longPrompt, Array.Empty<string>()));
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Throws<OperationCanceledException>(() =>
+            RelayProbeService.LooksLikeEcho(longPrompt, longPrompt, Array.Empty<string>(), cts.Token));
+    }
 
     [Fact]
     public void LooksLikeEcho_DetectsInstructionReplay()
@@ -558,5 +687,40 @@ public class RelayProbeServiceTests
         Assert.NotEqual("mostly-trusted", report.Verdict);
         foreach (var key in new[] { "format", "truncation", "poisoning" })
             Assert.Equal("echoed", report.Probes.First(p => p.Key == key).Summary);
+    }
+
+
+
+    [Fact]
+    public void ClampEvidence_CapsAtTheBound()
+    {
+        var huge = new string('x', 32 * 1024 * 1024);
+        var clamped = RelayProbeService.ClampEvidence(huge);
+        Assert.Equal(RelayProbeService.MaxEvidenceChars + 1, clamped.Length);
+        Assert.EndsWith("…", clamped);
+        Assert.Equal("", RelayProbeService.ClampEvidence(null));
+        Assert.Equal("short", RelayProbeService.ClampEvidence("short"));
+    }
+
+    [Fact]
+    public async Task ProbeAsync_HugeReplies_KeepEveryEvidenceBounded()
+    {
+        var huge = new string('x', 200_000);
+        var handler = new StubHandler(req =>
+        {
+            if (req.Method != HttpMethod.Post) return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") };
+            var prompt = ExtractPrompt(req);
+            var content = prompt.Contains("strawberry") ? "3"
+                : prompt.Contains("9.11") ? "9.9"
+                : prompt.Contains("24 * 7") ? "173"
+                : huge;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ChatJson(content), Encoding.UTF8, "application/json") };
+        });
+
+        var report = await RelayProbeService.ProbeAsync("https://api.test.com", "sk-test", "gpt-4o", handler: handler);
+
+        Assert.True(report.Reachable);
+        Assert.All(report.Probes, p => Assert.True(p.Evidence.Length <= RelayProbeService.MaxEvidenceChars + 1,
+            $"{p.Key} evidence was {p.Evidence.Length} chars"));
     }
 }

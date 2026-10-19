@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -22,13 +22,20 @@ public sealed partial class TrashPage : Page
 {
     private object? _pendingDeleteForever;
     private bool _restoring;
+    private bool _clearAllConfirmed;
     private CancellationTokenSource? _renderCts;
+
+    private readonly Dictionary<Grid, int> _dialogGens = new();
+    private readonly Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
 
     public TrashPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         Unloaded += TrashPage_Unloaded;
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
+        TrashRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         InitIcons();
 
 
@@ -60,6 +67,10 @@ public sealed partial class TrashPage : Page
     {
         DeleteForeverOverlay.Visibility = Visibility.Collapsed;
         ClearAllOverlay.Visibility = Visibility.Collapsed;
+
+
+    foreach (var key in _dialogGens.Keys.ToList()) _dialogGens[key] = _dialogGens[key] + 1;
+    _dialogMap.Clear();
         DeleteForeverCd.Reset();
         ClearAllCd.Reset();
         _pendingDeleteForever = null;
@@ -458,22 +469,7 @@ public sealed partial class TrashPage : Page
     {
         DeleteForeverDangerIcon.Data = App.CreateGeometry(IconData.Danger);
 
-
-        DeleteForeverDialog.Opacity = 0;
-        DeleteForeverDialogTransform.ScaleX = 0.94; DeleteForeverDialogTransform.ScaleY = 0.94; DeleteForeverDialogTransform.TranslateY = 24;
-        DeleteForeverScrim.Opacity = 0;
-        DeleteForeverOverlay.Visibility = Visibility.Visible;
-        var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
-        var sa = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(sa, DeleteForeverScrim);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(sa, "Opacity");
-        sb.Children.Add(sa);
-        var da = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(da, DeleteForeverDialog);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(da, "Opacity");
-        sb.Children.Add(da);
-        Motion.AddDialogShowTransform(sb, DeleteForeverDialogTransform);
-        sb.Begin();
+        DialogUi.ShowOverlay(TrashRoot, _dialogGens, _dialogMap, DeleteForeverOverlay, DeleteForeverDialog, DeleteForeverDialogTransform, _dialogWidthFit);
 
         DeleteForeverConfirmButton.IsEnabled = false;
         DeleteForeverConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
@@ -492,29 +488,20 @@ public sealed partial class TrashPage : Page
     private void HideDeleteForeverDialog()
     {
         DeleteForeverCd.Reset();
-        DeleteForeverOverlay.Visibility = Visibility.Collapsed;
         _pendingDeleteForever = null;
+
+        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, DeleteForeverOverlay, DeleteForeverDialog, DeleteForeverDialogTransform, () => { });
     }
+
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs(TrashRoot, _dialogMap, widthFit: _dialogWidthFit);
 
     private void ShowClearAllDialog()
     {
+        _clearAllConfirmed = false;
         ClearAllDangerIcon.Data = App.CreateGeometry(IconData.Danger);
 
-        ClearAllDialog.Opacity = 0;
-        ClearAllDialogTransform.ScaleX = 0.94; ClearAllDialogTransform.ScaleY = 0.94; ClearAllDialogTransform.TranslateY = 24;
-        ClearAllScrim.Opacity = 0;
-        ClearAllOverlay.Visibility = Visibility.Visible;
-        var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
-        var sa = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(sa, ClearAllScrim);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(sa, "Opacity");
-        sb.Children.Add(sa);
-        var da = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(da, ClearAllDialog);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(da, "Opacity");
-        sb.Children.Add(da);
-        Motion.AddDialogShowTransform(sb, ClearAllDialogTransform);
-        sb.Begin();
+        DialogUi.ShowOverlay(TrashRoot, _dialogGens, _dialogMap, ClearAllOverlay, ClearAllDialog, ClearAllDialogTransform, _dialogWidthFit);
 
         ClearAllConfirmButton.IsEnabled = false;
         ClearAllConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
@@ -533,7 +520,8 @@ public sealed partial class TrashPage : Page
     private void HideClearAllDialog()
     {
         ClearAllCd.Reset();
-        ClearAllOverlay.Visibility = Visibility.Collapsed;
+
+        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, ClearAllOverlay, ClearAllDialog, ClearAllDialogTransform, () => { });
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => App.MainWindow?.CloseTrashPage();
@@ -555,6 +543,9 @@ public sealed partial class TrashPage : Page
 
     private void ClearAllConfirm_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_clearAllConfirmed) return;
+        _clearAllConfirmed = true;
         ClearAll();
         HideClearAllDialog();
     }

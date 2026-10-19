@@ -277,6 +277,8 @@ public static class PasswordService
 
 
 
+
+
     private static byte[] HashPasswordV2(string password, byte[] salt)
         => Rfc2898DeriveBytes.Pbkdf2(password, salt, CryptoService.CurrentIterations, HashAlgorithmName.SHA256, 32);
 
@@ -414,4 +416,28 @@ public static class PasswordService
         lf.FailCount = count;
         WriteLockout(lf);
     }
+
+
+    public const int MaxFailCount = 5;
+    public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(30);
+
+
+
+    public static bool IsLockoutActive(out TimeSpan remaining)
+    {
+        if (!IsLockoutEnabled()) { remaining = TimeSpan.Zero; return false; }
+        return IsLockedOut(out remaining);
+    }
+
+
+    public static void RegisterFailedAttempt()
+    {
+        var count = GetFailCount() + 1;
+        SetFailCount(count);
+        if (count >= MaxFailCount && IsLockoutEnabled())
+            SetLockoutUntil(DateTime.Now + LockoutDuration);
+    }
+
+
+    public static void RegisterSuccessfulAttempt() => SetFailCount(0);
 }

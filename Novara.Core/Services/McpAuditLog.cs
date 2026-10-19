@@ -68,17 +68,18 @@ public static class McpAuditLog
 
 
 
-    public static void ClearAllWithMarker()
+    public static bool ClearAllWithMarker()
     {
         try
         {
             var marker = new McpAuditEvent { Ev = "audit_cleared", Target = "-", Ok = true };
             Prepare(marker);
-            Store.ClearAllWithMarker(marker);
+            return Store.ClearAllWithMarker(marker);
         }
         catch (Exception ex)
         {
             AuditWriteHealth.Report("mcp-audit clear", ex);
+            return false;
         }
     }
 
@@ -106,7 +107,7 @@ public static class McpAuditLog
 
 
 
-    internal static void ClearAll() => Store.ClearAll();
+    internal static bool ClearAll() => Store.ClearAll();
 
 
     public static int CountAll() => Store.CountAll();

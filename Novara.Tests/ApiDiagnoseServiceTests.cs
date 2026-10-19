@@ -95,6 +95,29 @@ public class ApiDiagnoseServiceTests
         Assert.All(report.Items, i => Assert.NotEqual(ApiDiagItemStatus.Fail, i.Status));
     }
 
+
+
+    [Fact]
+    public async Task Diagnose_MaxTokenCountsTwice_SaturateInsteadOfWrapping()
+    {
+        const string ChatMax = """{"model":"gpt-4o","choices":[{"message":{"content":"hi"}}],"usage":{"prompt_tokens":2147483647,"completion_tokens":1,"total_tokens":2147483647}}""";
+        const string StreamMax =
+            "data: {\"model\":\"gpt-4o\",\"choices\":[{\"delta\":{\"content\":\"H\"}}]}\n\n" +
+            "data: {\"usage\":{\"prompt_tokens\":2147483647,\"completion_tokens\":1,\"total_tokens\":2147483647}}\n\n" +
+            "data: [DONE]\n\n";
+        var handler = new StubHandler(req =>
+        {
+            if (req.Method == HttpMethod.Get) return Json(HttpStatusCode.OK, ModelsOk);
+            var body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (body.Contains("\"stream\":true")) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(StreamMax) };
+            return Json(HttpStatusCode.OK, ChatMax);
+        });
+
+        var report = await ApiDiagnoseService.DiagnoseAsync("https://api.test.com", "sk-test", "gpt-4o", handler: handler);
+
+        Assert.Equal(int.MaxValue, report.TokensConsumed);
+    }
+
     [Fact]
     public async Task Diagnose_ChatInsufficientQuota_BalanceWarnConservative()
     {

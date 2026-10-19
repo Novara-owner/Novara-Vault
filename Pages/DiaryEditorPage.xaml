@@ -202,7 +202,7 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Background="Transparent">
-            <Button x:Name="BackButton"
+            <Button Tag="A11y_Back" x:Name="BackButton"
                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                     CornerRadius="8"
                     Click="BackButton_Click"
@@ -224,12 +224,12 @@
                         VerticalAlignment="Center"
                         Margin="0,-10,28,0"
                         Visibility="Collapsed">
-                <Button x:Name="MdWriteButton" Style="{StaticResource MdViewSwitchButtonStyle}"
+                <Button Tag="A11y_WriteMode" x:Name="MdWriteButton" Style="{StaticResource MdViewSwitchButtonStyle}"
                         Background="Transparent" Click="MdWriteButton_Click">
                     <Path x:Name="MdWritePathIcon" Width="20" Height="20"
                           Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                 </Button>
-                <Button x:Name="MdPreviewButton" Style="{StaticResource MdViewSwitchButtonStyle}"
+                <Button Tag="A11y_PreviewMode" x:Name="MdPreviewButton" Style="{StaticResource MdViewSwitchButtonStyle}"
                         Background="Transparent" Click="MdPreviewButton_Click">
                     <Path x:Name="MdPreviewPathIcon" Width="20" Height="20"
                           Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
@@ -277,12 +277,12 @@
                     Padding="12,8">
                     <StackPanel Orientation="Horizontal" Spacing="2">
 
-                        <Button x:Name="UndoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Undo" x:Name="UndoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="UndoButton_Click">
                             <Path x:Name="UndoPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
                         </Button>
-                        <Button x:Name="RedoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Redo" x:Name="RedoButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="RedoButton_Click">
                             <Path x:Name="RedoPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
@@ -290,17 +290,17 @@
 
                         <Border Style="{StaticResource ToolbarSeparatorStyle}" />
 
-                        <Button x:Name="BoldButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Bold" x:Name="BoldButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="BoldButton_Click">
                             <Path x:Name="BoldPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                         </Button>
-                        <Button x:Name="ItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Italic" x:Name="ItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="ItalicButton_Click">
                             <Path x:Name="ItalicPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                         </Button>
-                        <Button x:Name="UnderlineButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Underline" x:Name="UnderlineButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="UnderlineButton_Click">
                             <Path x:Name="UnderlinePathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
@@ -308,12 +308,12 @@
 
                         <Border Style="{StaticResource ToolbarSeparatorStyle}" />
 
-                        <Button x:Name="ColorButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_TextColor" x:Name="ColorButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="ColorButton_Click">
                             <Path x:Name="TextColorPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                         </Button>
-                        <Button x:Name="AlignButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Align" x:Name="AlignButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="AlignButton_Click">
                             <Path x:Name="AlignPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
@@ -321,12 +321,12 @@
 
                         <Border Style="{StaticResource ToolbarSeparatorStyle}" />
 
-                        <Button x:Name="CodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_CodeBlock" x:Name="CodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="CodeBlockButton_Click">
                             <Path x:Name="CodeBlockPathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
                         </Button>
-                        <Button x:Name="HorizontalRuleButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_HorizontalRule" x:Name="HorizontalRuleButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="HorizontalRuleButton_Click">
                             <Path x:Name="HorizontalRulePathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
@@ -334,7 +334,7 @@
 
                         <Border Style="{StaticResource ToolbarSeparatorStyle}" />
 
-                        <Button x:Name="InsertButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Insert" x:Name="InsertButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="InsertButton_Click">
                             <Path x:Name="InsertImagePathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" />
@@ -342,7 +342,7 @@
 
                         <Border Style="{StaticResource ToolbarSeparatorStyle}" />
 
-                        <Button x:Name="CollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                        <Button Tag="A11y_Collapse" x:Name="CollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                                 Click="CollapseButton_Click">
                             <Path x:Name="CollapsePathIcon" Width="20" Height="20"
                                   Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
@@ -366,30 +366,30 @@
                                   HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled" ZoomMode="Disabled"
                                   MaxWidth="860">
                         <StackPanel Orientation="Horizontal" Spacing="2">
-                            <Button x:Name="MdUndoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdUndoButton_Click"><Path x:Name="MdUndoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
-                            <Button x:Name="MdRedoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdRedoButton_Click"><Path x:Name="MdRedoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Undo" x:Name="MdUndoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdUndoButton_Click"><Path x:Name="MdUndoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Redo" x:Name="MdRedoButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdRedoButton_Click"><Path x:Name="MdRedoPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdBoldButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBoldButton_Click"><Path x:Name="MdBoldPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                            <Button x:Name="MdItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdItalicButton_Click"><Path x:Name="MdItalicPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                            <Button x:Name="MdStrikeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdStrikeButton_Click"><Path x:Name="MdStrikePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                            <Button x:Name="MdInlineCodeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdInlineCodeButton_Click"><Path x:Name="MdInlineCodePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Bold" x:Name="MdBoldButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBoldButton_Click"><Path x:Name="MdBoldPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_Italic" x:Name="MdItalicButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdItalicButton_Click"><Path x:Name="MdItalicPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_Strikethrough" x:Name="MdStrikeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdStrikeButton_Click"><Path x:Name="MdStrikePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_InlineCode" x:Name="MdInlineCodeButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdInlineCodeButton_Click"><Path x:Name="MdInlineCodePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdHeadingButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingButton_Click"><Path x:Name="MdHeadingPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_Heading" x:Name="MdHeadingButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingButton_Click"><Path x:Name="MdHeadingPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdBulletButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBulletButton_Click"><Path x:Name="MdBulletPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                            <Button x:Name="MdOrderedButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdOrderedButton_Click"><Path x:Name="MdOrderedPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                            <Button x:Name="MdQuoteButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdQuoteButton_Click"><Path x:Name="MdQuotePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_BulletList" x:Name="MdBulletButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdBulletButton_Click"><Path x:Name="MdBulletPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_OrderedList" x:Name="MdOrderedButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdOrderedButton_Click"><Path x:Name="MdOrderedPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_Quote" x:Name="MdQuoteButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdQuoteButton_Click"><Path x:Name="MdQuotePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdLinkButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdLinkButton_Click"><Path x:Name="MdLinkPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
-                            <Button x:Name="MdImageButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdImageButton_Click"><Path x:Name="MdImagePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Link" x:Name="MdLinkButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdLinkButton_Click"><Path x:Name="MdLinkPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Image" x:Name="MdImageButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdImageButton_Click"><Path x:Name="MdImagePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdCodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCodeBlockButton_Click"><Path x:Name="MdCodeBlockPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
-                            <Button x:Name="MdHrButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHrButton_Click"><Path x:Name="MdHrPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_CodeBlock" x:Name="MdCodeBlockButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCodeBlockButton_Click"><Path x:Name="MdCodeBlockPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_HorizontalRule" x:Name="MdHrButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHrButton_Click"><Path x:Name="MdHrPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdTableButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdTableButton_Click"><Path x:Name="MdTablePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
-                            <Button x:Name="MdClearFormatButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdClearFormatButton_Click"><Path x:Name="MdClearFormatPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_Table" x:Name="MdTableButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdTableButton_Click"><Path x:Name="MdTablePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
+                            <Button Tag="A11y_ClearFormat" x:Name="MdClearFormatButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdClearFormatButton_Click"><Path x:Name="MdClearFormatPathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="0.6" /></Button>
                             <Border Style="{StaticResource ToolbarSeparatorStyle}" />
-                            <Button x:Name="MdCollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCollapseButton_Click"><Path x:Name="MdCollapsePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                            <Button Tag="A11y_Collapse" x:Name="MdCollapseButton" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdCollapseButton_Click"><Path x:Name="MdCollapsePathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
@@ -414,14 +414,14 @@
                     <TranslateTransform x:Name="MdHeadingPickerTranslate" X="0" />
                 </Border.RenderTransform>
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button x:Name="MdHeading1Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="1"><Path x:Name="MdHeading1PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                    <Button x:Name="MdHeading2Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="2"><Path x:Name="MdHeading2PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                    <Button x:Name="MdHeading3Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="3"><Path x:Name="MdHeading3PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
-                    <Button x:Name="MdHeading4Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="4"><Path x:Name="MdHeading4PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button AutomationProperties.ItemStatus="A11y_Heading1" x:Name="MdHeading1Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="1"><Path x:Name="MdHeading1PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button AutomationProperties.ItemStatus="A11y_Heading2" x:Name="MdHeading2Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="2"><Path x:Name="MdHeading2PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button AutomationProperties.ItemStatus="A11y_Heading3" x:Name="MdHeading3Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="3"><Path x:Name="MdHeading3PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
+                    <Button AutomationProperties.ItemStatus="A11y_Heading4" x:Name="MdHeading4Button" Style="{StaticResource ToolbarCircleButtonStyle}" Click="MdHeadingItem_Click" Tag="4"><Path x:Name="MdHeading4PathIcon" Width="20" Height="20" Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" /></Button>
                 </StackPanel>
             </Border>
 
-            <Button x:Name="ExpandButton"
+            <Button Tag="A11y_Expand" x:Name="ExpandButton"
                     Visibility="Collapsed"
                     Click="ExpandButton_Click"
                     HorizontalAlignment="Right"
@@ -477,7 +477,7 @@
                         <ColumnDefinition Width="36" />
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Row="0" Grid.Column="0"
+                    <Button AutomationProperties.ItemStatus="A11y_Clear" Grid.Row="0" Grid.Column="0"
                             Style="{StaticResource ColorSwatchClearButtonStyle}"
                             Background="Transparent" Tag="Clear" Click="ColorItem_Click">
                         <Path x:Name="RestorePathIcon" Width="18" Height="18"
@@ -526,17 +526,17 @@
                     <TranslateTransform x:Name="AlignPickerTranslate" X="0" />
                 </Border.RenderTransform>
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button x:Name="AlignLeftButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                    <Button AutomationProperties.ItemStatus="A11y_Align" x:Name="AlignLeftButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                             Click="AlignItem_Click" Tag="left">
                         <Path x:Name="AlignLeftPathIcon" Width="20" Height="20"
                               Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                     </Button>
-                    <Button x:Name="AlignCenterButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                    <Button AutomationProperties.ItemStatus="A11y_Align" x:Name="AlignCenterButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                             Click="AlignItem_Click" Tag="center">
                         <Path x:Name="AlignCenterPathIcon" Width="20" Height="20"
                               Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />
                     </Button>
-                    <Button x:Name="AlignRightButton" Style="{StaticResource ToolbarCircleButtonStyle}"
+                    <Button AutomationProperties.ItemStatus="A11y_Align" x:Name="AlignRightButton" Style="{StaticResource ToolbarCircleButtonStyle}"
                             Click="AlignItem_Click" Tag="right">
                         <Path x:Name="AlignRightPathIcon" Width="20" Height="20"
                               Stretch="Uniform" Fill="{ThemeResource IconForegroundBrush}" />

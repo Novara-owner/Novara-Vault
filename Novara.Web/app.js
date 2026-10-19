@@ -4,6 +4,10 @@
   var VIEWER = window.NovaraViewer;
   var API_PREFIX = '/api/v1';
   var MAC_INFO = 'novara-sync-mac';
+  var CHUNK_INFO = 'novara-sync-chunk-v5';
+  var MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024;
+
+  var PARTITION_KEYS = ['appSettings', 'memoGroups', 'memoEntries', 'pathBackupItems', 'todoCards', 'noteCards', 'diaryItems'];
   var SPACE_KEY_TEXT_LENGTH = 44;
   var KEYWRAP_TAG_LENGTH = 16;
   var utf8 = new TextEncoder();
@@ -140,7 +144,10 @@
 
 
   async function verifyEnvelope(envelope, spaceKeyText) {
-    if (!envelope || Number(envelope.sync) !== 1 || Number(envelope.crypto) !== 4) return false;
+
+
+    var generation = Number(envelope && envelope.crypto);
+    if (!envelope || Number(envelope.sync) !== 1 || (generation !== 4 && generation !== 5)) return false;
     if (!envelope.mac || !envelope.payload || !envelope.payloadSha256) return false;
 
     var payload = bytesFromBase64(envelope.payload);
@@ -159,6 +166,77 @@
 
 
 
+  function bytesFromHex(hex) {
+    var text = String(hex || '');
+    if (!/^[0-9a-fA-F]+$/.test(text) || text.length % 2 !== 0) throw failWith('m3ErrServer');
+    var out = new Uint8Array(text.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(text.substr(i * 2, 2), 16);
+    return out;
+  }
+
+
+
+
+
+
+  async function deriveChunkKeys(spaceKeyText, pidBytes) {
+    var ikm = bytesFromBase64(spaceKeyText);
+    var material = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+    return crypto.subtle.deriveBits(
+      { name: 'HKDF', hash: 'SHA-256', salt: pidBytes, info: utf8.encode(CHUNK_INFO) }, material, 352);
+  }
+
+
+
+
+
+
+  async function openChunk(blobBytes, spaceKeyText, pidHex) {
+    if (!blobBytes || blobBytes.length < 12 + 16 + 1) throw failWith('m3ErrServer');
+    var okm = new Uint8Array(await deriveChunkKeys(spaceKeyText, bytesFromHex(pidHex)));
+    var key = await crypto.subtle.importKey('raw', okm.subarray(0, 32), 'AES-GCM', false, ['decrypt']);
+
+    var nonce = blobBytes.subarray(0, 12);
+    var tag = blobBytes.subarray(12, 28);
+    var cipher = blobBytes.subarray(28);
+    var combined = new Uint8Array(cipher.length + 16);
+    combined.set(cipher, 0);
+    combined.set(tag, cipher.length);
+    var plain;
+    try {
+      plain = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: nonce, additionalData: utf8.encode(CHUNK_INFO), tagLength: 128 }, key, combined);
+    } catch (e) {
+      throw failWith('m3ErrServer');
+    }
+
+
+
+    var decompressed;
+    try {
+      var seen = 0;
+      var limiter = new TransformStream({
+        transform: function (chunk, controller) {
+          seen += chunk.byteLength;
+          if (seen > MAX_DECOMPRESSED_BYTES) throw new Error('decompressed payload exceeds the safety limit');
+          controller.enqueue(chunk);
+        },
+      });
+      decompressed = await new Response(
+        new Blob([plain]).stream()
+          .pipeThrough(new DecompressionStream('gzip'))
+          .pipeThrough(limiter)).arrayBuffer();
+    } catch (e) {
+      throw failWith('m3ErrServer');
+    }
+    if (decompressed.byteLength > MAX_DECOMPRESSED_BYTES) throw failWith('m3ErrServer');
+    return JSON.parse(new TextDecoder().decode(decompressed));
+  }
+
+
+
+
+
 
 
 
@@ -174,12 +252,36 @@
 
     var editorCredentialUsed = false;
 
+
+
+
+
+
+
+    function responseError(status, text) {
+      var body = null;
+      try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }
+      var revoked = status === 403 && body &&
+        /device has been revoked/i.test(String(body.message || body.error || ''));
+      var error = failWith(status === 401 || revoked ? 'm3ErrAuth'
+        : status === 429 ? 'm3ErrRateLimited'
+          : 'm3ErrServer');
+      error.status = status;
+      return error;
+    }
+
     function fetchJson(path, useEditorCredential) {
 
 
 
 
-      var headers = { 'X-Novara-Space': config.spaceId };
+
+
+
+      var headers = {
+        'X-Novara-Space': config.spaceId,
+        'X-Novara-Container-V5': '1',
+      };
       if (useEditorCredential) {
         headers['Authorization'] = 'Bearer ' + config.getToken();
         headers['X-Novara-Device'] = 'web-editor';
@@ -195,20 +297,16 @@
       }).then(function (response) {
         if (!response.ok) {
 
-
-
-
-
-          var error = failWith(response.status === 401 ? 'm3ErrAuth'
-            : response.status === 429 ? 'm3ErrRateLimited'
-              : 'm3ErrServer');
-          error.status = response.status;
-          throw error;
+          return response.text().then(
+            function (text) { throw responseError(response.status, text); },
+            function () { throw responseError(response.status, ''); });
         }
         if (useEditorCredential) editorCredentialUsed = true;
         return response.text().then(function (text) {
           var version = Number(response.headers.get('X-Novara-Version')) || 0;
-          return { body: JSON.parse(text), version: version };
+          var body;
+          try { body = JSON.parse(text); } catch (e) { throw failWith('m3ErrServer'); }
+          return { body: body, version: version };
         });
       }, function () {
         throw failWith('m3ErrOffline');
@@ -240,6 +338,73 @@
       return fetchJson(path, !looksLikeReadToken(config.getToken()));
     }
 
+
+    function fetchBytes(path) {
+      var headers = {
+        'X-Novara-Space': config.spaceId,
+        'X-Novara-Container-V5': '1',
+      };
+      if (looksLikeReadToken(config.getToken())) {
+        headers['Authorization'] = 'Novara-Read ' + normalizeToken(config.getToken());
+      } else {
+        headers['Authorization'] = 'Bearer ' + config.getToken();
+        headers['X-Novara-Device'] = 'web-editor';
+      }
+      return fetch(base + API_PREFIX + path, {
+        method: 'GET',
+        headers: headers,
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+      }).then(function (response) {
+        if (!response.ok) {
+
+          return response.text().then(
+            function (text) { throw responseError(response.status, text); },
+            function () { throw responseError(response.status, ''); });
+        }
+        return response.arrayBuffer();
+      }, function () {
+        throw failWith('m3ErrOffline');
+      });
+    }
+
+
+
+
+
+
+
+
+    async function loadManifestGeneration(payloadBase64, spaceKey) {
+      var manifest;
+      try { manifest = await VIEWER.decryptSyncManifest(payloadBase64, spaceKey); }
+      catch (e) { throw (e && e.i18nKey) ? e : failWith('m3ErrVerify'); }
+      if (!manifest || Number(manifest.format) !== 5 ||
+          !manifest.partitions || typeof manifest.partitions !== 'object') throw failWith('m3ErrServer');
+
+
+
+
+      var manifestKeys = Object.keys(manifest.partitions);
+      if (manifestKeys.length !== PARTITION_KEYS.length ||
+          !PARTITION_KEYS.every(function (k) { return manifestKeys.indexOf(k) >= 0; })) throw failWith('m3ErrServer');
+
+      var data = {};
+      try {
+        for (var key in manifest.partitions) {
+          if (!Object.prototype.hasOwnProperty.call(manifest.partitions, key)) continue;
+          if (PARTITION_KEYS.indexOf(key) < 0) throw failWith('m3ErrServer');
+          var pid = String(manifest.partitions[key]).toLowerCase();
+          if (!/^[0-9a-f]{64}$/.test(pid)) throw failWith('m3ErrServer');
+          data[key] = await openChunk(new Uint8Array(await fetchBytes('/space/chunks/' + pid)), spaceKey, pid);
+        }
+      } catch (e) {
+        throw e && e.i18nKey ? e : failWith('m3ErrServer');
+      }
+      return data;
+    }
+
     return async function load(passphrase) {
       if (!hasCryptoEnv()) throw failWith('lockErrorEnv');
       editorCredentialUsed = false;
@@ -248,8 +413,21 @@
       var spaceKey = await unwrapSpaceKey(keywrap.body, passphrase);
       var envelope = await readJson('/space/data');
 
-      if (!(await verifyEnvelope(envelope.body, spaceKey))) throw failWith('m3ErrVerify');
-      lastLoadContext = { spaceKey: spaceKey, version: envelope.version, editorCredential: editorCredentialUsed };
+
+
+      var verified;
+      try { verified = await verifyEnvelope(envelope.body, spaceKey); }
+      catch (e) { throw (e && e.i18nKey) ? e : failWith('m3ErrServer'); }
+      if (!verified) throw failWith('m3ErrVerify');
+      lastLoadContext = { spaceKey: spaceKey, version: envelope.version, editorCredential: editorCredentialUsed, spaceId: config.spaceId };
+
+
+
+
+      var payloadBytes = bytesFromBase64(envelope.body.payload);
+      if (payloadBytes.length >= 5 && payloadBytes[4] === 5) {
+        return loadManifestGeneration(envelope.body.payload, spaceKey);
+      }
       return VIEWER.decryptSnapshot(envelope.body.payload, spaceKey);
     };
   }
@@ -265,6 +443,7 @@
       m3PasswordPlaceholder: '输入锁密码',
       m3Unlock: '连接并解锁',
       m3Note: '数据来自 {HOST}。本页不留存任何内容，关闭标签页即清除。',
+      drawerNote: '密码只在本页内存中使用 · 在线读取，不落盘',
       m3ErrNoSpace: '链接不完整：缺少空间标识（#s=…）',
       m3ErrNoViewer: '查看器脚本未能加载，请刷新重试',
       m3ErrAuth: '凭据无效或已作废（只读令牌 / 编辑凭据）',
@@ -282,6 +461,7 @@
       m3PasswordPlaceholder: 'Your lock password',
       m3Unlock: 'Connect and unlock',
       m3Note: 'Data comes from {HOST}. Nothing is stored on this device - closing the tab clears it.',
+      drawerNote: 'Password stays in this tab\u2019s memory · Read online, never stored',
       m3ErrNoSpace: 'Incomplete link: the space identifier (#s=…) is missing',
       m3ErrNoViewer: 'The viewer script could not be loaded; please reload',
       m3ErrAuth: 'The credential is invalid or has been revoked (read-only token / editor credential)',
@@ -299,6 +479,7 @@
       m3PasswordPlaceholder: '輸入鎖密碼',
       m3Unlock: '連線並解鎖',
       m3Note: '資料來自 {HOST}。本頁不留存任何內容，關閉分頁即清除。',
+      drawerNote: '密碼只在本頁記憶體中使用 · 線上讀取，不落盤',
       m3ErrNoSpace: '連結不完整：缺少空間識別碼（#s=…）',
       m3ErrNoViewer: '檢視器指令碼載入失敗，請重新整理',
       m3ErrAuth: '憑證無效或已作廢（唯讀權杖 / 編輯憑證）',
@@ -316,6 +497,7 @@
       m3PasswordPlaceholder: '잠금 비밀번호 입력',
       m3Unlock: '연결 후 잠금 해제',
       m3Note: '{HOST} 에서 데이터를 가져옵니다. 이 기기에는 아무것도 저장되지 않으며 탭을 닫으면 사라집니다.',
+      drawerNote: '비밀번호는 이 탭의 메모리에서만 사용 · 온라인으로 읽고 저장하지 않음',
       m3ErrNoSpace: '링크가 불완전합니다: 공간 식별자(#s=…)가 없습니다',
       m3ErrNoViewer: '뷰어 스크립트를 불러오지 못했습니다. 새로고침해 주세요',
       m3ErrAuth: '자격 증명이 유효하지 않거나 폐기되었습니다(읽기 전용 토큰 / 편집 자격 증명)',
@@ -333,6 +515,7 @@
       m3PasswordPlaceholder: 'ロックパスワードを入力',
       m3Unlock: '接続してロック解除',
       m3Note: 'データは {HOST} から取得します。この端末には何も保存されず、タブを閉じると消去されます。',
+      drawerNote: 'パスワードはこのタブのメモリ内のみ · オンラインで読み取り、保存しません',
       m3ErrNoSpace: 'リンクが不完全です: スペース識別子(#s=…)がありません',
       m3ErrNoViewer: 'ビューアスクリプトを読み込めませんでした。再読み込みしてください',
       m3ErrAuth: '資格情報が無効か、失効しています（読み取り専用トークン / 編集用資格情報）',
@@ -346,9 +529,19 @@
 
 
 
+
+
+  function webTranslation(key) {
+    var meta = document.querySelector('meta[name="snapshot-language"]');
+    var lang = (meta && meta.content ? meta.content : '').trim();
+    var table = TRANSLATIONS[lang] || TRANSLATIONS['en-US'] || TRANSLATIONS['zh-CN'];
+    return (table && table[key]) || key;
+  }
+
   function showUnlockError(key) {
     var error = document.getElementById('unlockError');
-    if (error) error.textContent = VIEWER ? VIEWER.t(key) : key;
+    if (!error) return;
+    error.textContent = (VIEWER && typeof VIEWER.t === 'function') ? VIEWER.t(key) : webTranslation(key);
   }
 
   function boot() {
@@ -400,8 +593,25 @@
   }
 
 
+
+
+  function clearSessionSecrets() {
+    lastLoadContext = null;
+    var rt = document.getElementById('readTokenInput');
+    if (rt) { rt.value = ''; rt.type = 'text'; }
+    var pw = document.getElementById('passwordInput');
+    if (pw) { pw.value = ''; pw.type = 'password'; }
+    var pwToggle = document.getElementById('passwordToggle');
+    if (pwToggle) { pwToggle.setAttribute('aria-label', 'Show password'); }
+  }
+
+
   window.NovaraWeb = {
     parseFragment: parseFragment,
+
+
+    openChunk: openChunk,
+    deriveChunkKeys: deriveChunkKeys,
     normalizeToken: normalizeToken,
     unwrapSpaceKey: unwrapSpaceKey,
     canonicalEnvelope: canonicalEnvelope,
@@ -409,9 +619,22 @@
     verifyEnvelope: verifyEnvelope,
     createRemoteLoader: createRemoteLoader,
     getLastLoadContext: function () { return lastLoadContext; },
+    onLock: clearSessionSecrets,
   };
 
   function WEBgetLastLoadContext() { return lastLoadContext; }
+
+
+
+
+  document.addEventListener('click', function (event) {
+    var anchor = event.target && event.target.closest ? event.target.closest('a[href^="#"]') : null;
+    if (!anchor) return;
+    var href = anchor.getAttribute('href') || '';
+    event.preventDefault();
+    var target = href.length > 1 ? document.getElementById(href.slice(1)) : null;
+    if (target && target.scrollIntoView) target.scrollIntoView();
+  });
 
   boot();
 })();

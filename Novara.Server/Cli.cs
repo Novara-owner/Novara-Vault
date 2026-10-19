@@ -55,6 +55,15 @@ public static class Cli
             Console.Error.WriteLine($"store error: {e.Message}");
             return 1;
         }
+
+
+
+
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"error: {e.Message}");
+            return 1;
+        }
     }
 
 
@@ -115,6 +124,9 @@ public static class Cli
             Console.WriteLine("  NovaraSync space create --name <name>");
             return 0;
         }
+
+
+
 
         var rows = new List<string[]>
         {

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.SearchPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -20,7 +20,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <Button x:Name="BackButton"
+            <Button Tag="A11y_Back" x:Name="BackButton"
                     Width="36" Height="36"
                     Style="{StaticResource NovaraPrimaryButtonStyle}"
                     CornerRadius="8"

@@ -6,11 +6,11 @@ public class NetworkActivityTests
     [Fact]
     public void BeginEnd_BasicLifecycle()
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://api.example.com/v1");
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://api.example.com/v1");
         Assert.True(NetworkActivityService.IsActive);
         Assert.Equal(("NetActivity_Kind_Probe", "api.example.com"), NetworkActivityService.Current);
 
-        NetworkActivityService.End();
+        NetworkActivityService.End(activity);
         Assert.False(NetworkActivityService.IsActive);
         Assert.Equal("api.example.com", NetworkActivityService.Recent[0].Host);
         Assert.True(NetworkActivityService.Recent[0].Success);
@@ -19,21 +19,41 @@ public class NetworkActivityTests
     [Fact]
     public void Begin_NestedSessions_PopInReverseOrder()
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Diagnose", "https://outer.example.com");
-        NetworkActivityService.Begin("NetActivity_Kind_Relay", "https://inner.example.com");
+        var outer = NetworkActivityService.Begin("NetActivity_Kind_Diagnose", "https://outer.example.com");
+        var inner = NetworkActivityService.Begin("NetActivity_Kind_Relay", "https://inner.example.com");
         Assert.Equal("inner.example.com", NetworkActivityService.Current!.Value.Host);
 
-        NetworkActivityService.End();
+        NetworkActivityService.End(inner);
         Assert.Equal("outer.example.com", NetworkActivityService.Current!.Value.Host);
-        NetworkActivityService.End();
+        NetworkActivityService.End(outer);
         Assert.False(NetworkActivityService.IsActive);
     }
 
     [Fact]
     public void End_EmptyStack_IsSafe()
     {
-        NetworkActivityService.End();
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://x.example.com");
+        NetworkActivityService.End(activity);
+        NetworkActivityService.End(activity);
         Assert.False(NetworkActivityService.IsActive);
+    }
+
+    [Fact]
+    public void ConcurrentSessions_EndByHandle_KeepTheOtherSession()
+    {
+
+        var first = NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://first.example.com");
+        var second = NetworkActivityService.Begin("NetActivity_Kind_Diagnose", "https://second.example.com");
+
+        NetworkActivityService.End(first, success: false);
+        Assert.True(NetworkActivityService.IsActive);
+        Assert.Equal("second.example.com", NetworkActivityService.Current!.Value.Host);
+
+        NetworkActivityService.End(second, success: true);
+        Assert.False(NetworkActivityService.IsActive);
+        Assert.Equal("second.example.com", NetworkActivityService.Recent[0].Host);
+        Assert.Equal("first.example.com", NetworkActivityService.Recent[1].Host);
+        Assert.False(NetworkActivityService.Recent[1].Success);
     }
 
     [Fact]
@@ -41,8 +61,8 @@ public class NetworkActivityTests
     {
         for (int i = 0; i < 55; i++)
         {
-            NetworkActivityService.Begin("NetActivity_Kind_Probe", $"https://h{i}.example.com");
-            NetworkActivityService.End();
+            var activity = NetworkActivityService.Begin("NetActivity_Kind_Probe", $"https://h{i}.example.com");
+            NetworkActivityService.End(activity);
         }
         Assert.True(NetworkActivityService.Recent.Count <= 50);
         Assert.Equal("h54.example.com", NetworkActivityService.Recent[0].Host);
@@ -59,8 +79,8 @@ public class NetworkActivityTests
     [Fact]
     public void ClearRecent_EmptiesTrail()
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://x.example.com");
-        NetworkActivityService.End();
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Probe", "https://x.example.com");
+        NetworkActivityService.End(activity);
         NetworkActivityService.ClearRecent();
         Assert.Empty(NetworkActivityService.Recent);
     }

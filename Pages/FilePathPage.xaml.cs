@@ -33,6 +33,11 @@ public sealed partial class FilePathPage : Page
     private Novara.Models.NovaraDatabase? _loadedDb;
     private bool _confirming;
     private int _newPathGen;
+
+    private readonly Dictionary<Grid, int> _dialogGens = new();
+    private readonly Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+    private readonly DialogUi.DialogScrollFit _dialogScrollFit = new();
     private bool _entrancePlayed;
     private bool _renderInProgress;
     private System.Threading.CancellationTokenSource? _renderCts;
@@ -52,24 +57,36 @@ public sealed partial class FilePathPage : Page
         private Border? _dropIndicator;
         private int _dropIndex;
         private int _dragOriginIndex;
+        private List<(FrameworkElement fe, double top, double half)>? _dropCache;
+        private bool _dropCacheDirty;
     private Point _lastPointerInRoot;
     private int _autoScrollDir;
     private int _autoScrollFrame;
     private bool _autoScrollActive;
 
+
+    internal async void ScrollToMain()
+    {
+        await Services.SmoothScroller.ScrollToTopAsync(PathScrollViewer);
+    }
+
     public FilePathPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         PickPathIcon.Data = App.CreateGeometry(IconData.PickFolder);
         PickPathButton.Flyout = BuildPickPathMenu();
         PickPathButton.PointerEntered += (_, _) => PickPathIcon.Opacity = 1.0;
         PickPathButton.PointerExited += (_, _) => PickPathIcon.Opacity = 0.6;
         KeyDown += Page_KeyDown;
-        ContentRoot.SizeChanged += (_, _) => { if (NewPathOverlay.Visibility == Visibility.Visible) DialogUi.ClampDialogHeight(NewPathDialog, ContentRoot); };
+
+        DeleteConfirmOverlay.ContextRequested += (_, e) => e.Handled = true;
+        ContentRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         Loaded += (_, _) => { LoadFromStore();
         CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => CheckAllPaths(); _autoCheckTimer.Start(); } };
         Unloaded += (_, _) => { _pathCheckCts?.Cancel();
+            _npCheckCts?.Cancel(); _npCheckCts?.Dispose(); _npCheckCts = null;
 
 
 
@@ -80,7 +97,9 @@ public sealed partial class FilePathPage : Page
          foreach (var cts in _flashCtsMap.Values) { cts.Cancel(); cts.Dispose(); } _flashCtsMap.Clear();
 
             if (_dragCard != null && _cardBaseBorderColor.TryGetValue(_dragCard, out var baseColor)) { _dragCard.BorderBrush = new SolidColorBrush(baseColor); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; _dragCard.RenderTransform = new TranslateTransform(); }
-            _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; } StopAutoScroll(); DialogDepth.VeilClear(); };
+            _dragging = false; _dragCard = null; if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; } if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; } _dropCache = null; StopAutoScroll(); DialogDepth.VeilClear();
+            _dialogGens.Clear(); _dialogMap.Clear(); _dialogWidthFit.Clear(); _dialogScrollFit.Clear();
+        };
     }
 
 
@@ -183,6 +202,7 @@ public sealed partial class FilePathPage : Page
         _copyButtons.Clear();
         _pathStatusGens.Clear();
         _starredCards.Clear();
+        _invalidOpenCards.Clear();
         _pinnedCard = null;
     }
 
@@ -329,71 +349,19 @@ public sealed partial class FilePathPage : Page
             NewPathNoteBox.Text = "";
             NewPathDialogTitle.Text = App.GetString("Path_New_Title");
         }
-        NewPathDialogTransform.ScaleX = 0.94; NewPathDialogTransform.ScaleY = 0.94; NewPathDialogTransform.TranslateY = 24;
-        NewPathDialog.Opacity = 0;
-        NewPathScrim.Opacity = 0;
-        NewPathOverlay.Visibility = Visibility.Visible;
 
-        DialogUi.ClampDialogHeight(NewPathDialog, ContentRoot);
+        DialogUi.ShowOverlay(ContentRoot, _dialogGens, _dialogMap, NewPathOverlay, NewPathDialog, NewPathDialogTransform, _dialogWidthFit);
         DialogDepth.VeilShow();
         UpdateNewPathConfirmState();
-
-        var sb = new Storyboard();
-        var scrimIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(scrimIn, NewPathScrim);
-        Storyboard.SetTargetProperty(scrimIn, "Opacity");
-        sb.Children.Add(scrimIn);
-        var dialogIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(dialogIn, NewPathDialog);
-        Storyboard.SetTargetProperty(dialogIn, "Opacity");
-        sb.Children.Add(dialogIn);
-        var sx = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sx, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(sx, "ScaleX");
-        sb.Children.Add(sx);
-        var sy = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sy, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(sy, "ScaleY");
-        sb.Children.Add(sy);
-        var su = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(su, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(su, "TranslateY");
-        sb.Children.Add(su);
-        sb.Begin();
     }
 
     private void HideNewPathDialog()
     {
         _newPathGen++;
         _editingPathCard = null;
-        var sb = new Storyboard();
-        var scrimOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(scrimOut, NewPathScrim);
-        Storyboard.SetTargetProperty(scrimOut, "Opacity");
-        sb.Children.Add(scrimOut);
-        var dialogOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(dialogOut, NewPathDialog);
-        Storyboard.SetTargetProperty(dialogOut, "Opacity");
-        sb.Children.Add(dialogOut);
-        var sx = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sx, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(sx, "ScaleX");
-        sb.Children.Add(sx);
-        var sy = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sy, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(sy, "ScaleY");
-        sb.Children.Add(sy);
-        var sd = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sd, NewPathDialogTransform);
-        Storyboard.SetTargetProperty(sd, "TranslateY");
-        sb.Children.Add(sd);
-        sb.Completed -= OnNewPathHideCompleted;
-        sb.Completed += OnNewPathHideCompleted;
         DialogDepth.VeilHide();
-        sb.Begin();
+        DialogUi.HideOverlay(ContentRoot, _dialogGens, _dialogMap, NewPathOverlay, NewPathDialog, NewPathDialogTransform, () => { });
     }
-
-    private void OnNewPathHideCompleted(object? sender, object e) { NewPathOverlay.Visibility = Visibility.Collapsed; }
 
     private void CloseNewPathDialog_Click(object sender, RoutedEventArgs e) => HideNewPathDialog();
     private void NewPathScrim_Tapped(object sender, TappedRoutedEventArgs e)
@@ -441,7 +409,11 @@ public sealed partial class FilePathPage : Page
             var path = FilePicker.PickFile("*.*");
             if (path != null) NewPathInputBox.Text = path;
         }
-        catch (Exception ex) { CrashLogger.LogNote("FilePathPicker", ex.Message); }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote("FilePathPicker", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
     }
 
     private void PickFolderButton_Click(object sender, RoutedEventArgs e)
@@ -451,7 +423,11 @@ public sealed partial class FilePathPage : Page
             var path = FilePicker.PickFolder(startAtDesktop: true);
             if (path != null) NewPathInputBox.Text = path;
         }
-        catch (Exception ex) { CrashLogger.LogNote("FilePathPicker", ex.Message); }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote("FilePathPicker", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
     }
 
 
@@ -486,6 +462,7 @@ public sealed partial class FilePathPage : Page
             }
             catch (System.OperationCanceledException) { return; }
             if (cts.IsCancellationRequested) return;
+            if (!IsLoaded) return;
             valid = exists;
         }
 
@@ -637,7 +614,10 @@ public sealed partial class FilePathPage : Page
             BorderThickness = new Thickness(1),
             Padding = new Thickness(20, 12, 20, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            RenderTransform = new TranslateTransform { Y = 30 }
+
+
+
+            RenderTransform = new TranslateTransform { Y = 0 }
         };
 
         var mainGrid = new Grid();
@@ -660,7 +640,7 @@ public sealed partial class FilePathPage : Page
             Text = name,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 15,
+            FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             CharacterSpacing = App.GetCharacterSpacing(name, 180),
             Foreground = App.GetBrush("AppTextPrimaryBrush"),
@@ -910,66 +890,25 @@ public sealed partial class FilePathPage : Page
 
     private void ShowDeleteConfirmDialog()
     {
-        DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
-        DeleteConfirmDialog.Opacity = 0;
-        DeleteConfirmScrim.Opacity = 0;
-        DeleteConfirmOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow();
 
-        var sb = new Storyboard();
-        var scrimIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(scrimIn, DeleteConfirmScrim);
-        Storyboard.SetTargetProperty(scrimIn, "Opacity");
-        sb.Children.Add(scrimIn);
-        var dialogIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(dialogIn, DeleteConfirmDialog);
-        Storyboard.SetTargetProperty(dialogIn, "Opacity");
-        sb.Children.Add(dialogIn);
-        var sx = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sx, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(sx, "ScaleX");
-        sb.Children.Add(sx);
-        var sy = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sy, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(sy, "ScaleY");
-        sb.Children.Add(sy);
-        var su = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(su, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(su, "TranslateY");
-        sb.Children.Add(su);
-        sb.Begin();
+        DialogUi.ShowOverlay(ContentRoot, _dialogGens, _dialogMap, DeleteConfirmOverlay, DeleteConfirmDialog, DeleteConfirmDialogTransform, _dialogWidthFit);
+        DialogDepth.VeilShow();
     }
 
     private void HideDeleteConfirmDialog()
     {
-        var sb = new Storyboard();
-        var scrimOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(scrimOut, DeleteConfirmScrim);
-        Storyboard.SetTargetProperty(scrimOut, "Opacity");
-        sb.Children.Add(scrimOut);
-        var dialogOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(dialogOut, DeleteConfirmDialog);
-        Storyboard.SetTargetProperty(dialogOut, "Opacity");
-        sb.Children.Add(dialogOut);
-        var sx = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sx, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(sx, "ScaleX");
-        sb.Children.Add(sx);
-        var sy = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sy, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(sy, "ScaleY");
-        sb.Children.Add(sy);
-        var sd = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(sd, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(sd, "TranslateY");
-        sb.Children.Add(sd);
-        sb.Completed -= OnDeleteConfirmHideCompleted;
-        sb.Completed += OnDeleteConfirmHideCompleted;
         DialogDepth.VeilHide();
-        sb.Begin();
+        DialogUi.HideOverlay(ContentRoot, _dialogGens, _dialogMap, DeleteConfirmOverlay, DeleteConfirmDialog, DeleteConfirmDialogTransform, () =>
+        {
+
+
+            if (DeleteConfirmOverlay.Visibility == Visibility.Visible) return;
+            _pendingDeleteCard = null; _deleteConfirming = false;
+        });
     }
 
-    private void OnDeleteConfirmHideCompleted(object? sender, object e) { DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; }
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs(ContentRoot, _dialogMap, _dialogScrollFit, _dialogWidthFit);
 
     private void DeleteConfirmClose_Click(object sender, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteCancel_Click(object sender, RoutedEventArgs e) => HideDeleteConfirmDialog();
@@ -1134,6 +1073,7 @@ public sealed partial class FilePathPage : Page
         _dragCard = card;
         _grabOffset = grabOffset;
         _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, PathList);
+        _dropCache = null; _dropCacheDirty = true;
 
         App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
@@ -1176,7 +1116,22 @@ public sealed partial class FilePathPage : Page
 
     private int ComputeDropIndex(Point ptInList)
     {
+
+
+        if (_dropCache == null || _dropCacheDirty) RebuildDropCache();
+        if (_dropCache == null) return 0;
         int count = 0;
+        foreach (var (_, top, half) in _dropCache)
+        {
+            if (ptInList.Y < top + half) break;
+            count++;
+        }
+        return count;
+    }
+
+    private void RebuildDropCache()
+    {
+        _dropCache = new List<(FrameworkElement fe, double top, double half)>();
         foreach (var child in PathList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
@@ -1184,11 +1139,10 @@ public sealed partial class FilePathPage : Page
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(PathList).TransformPoint(new Point(0, 0)).Y;
-                if (ptInList.Y < top + fe.ActualHeight / 2) break;
-                count++;
+                _dropCache.Add((fe, top, fe.ActualHeight / 2));
             }
         }
-        return count;
+        _dropCacheDirty = false;
     }
 
     private void UpdateDropIndicator(int index)
@@ -1201,12 +1155,17 @@ public sealed partial class FilePathPage : Page
         {
             if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; }
             _dropIndex = _dragOriginIndex;
+            _dropCacheDirty = true;
             return;
         }
+
+        if (_dropIndex == index && _dropIndicator != null) return;
+
         if (_dropIndicator != null) PathList.Children.Remove(_dropIndicator);
-        _dropIndicator = CreateDropIndicator();
+        else _dropIndicator = CreateDropIndicator();
         PathList.Children.Insert(index, _dropIndicator);
         _dropIndex = index;
+        _dropCacheDirty = true;
     }
 
     private Border CreateDropIndicator()
@@ -1231,6 +1190,7 @@ public sealed partial class FilePathPage : Page
         else if (pt.Y > PathScrollViewer.ViewportHeight - bottomZone) dir = 1;
 
         if (dir == 0) { StopAutoScroll(); return; }
+        _dropCacheDirty = true;
         _autoScrollDir = dir;
         StartAutoScroll();
     }
@@ -1274,6 +1234,7 @@ public sealed partial class FilePathPage : Page
 
         if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
         if (_dropIndicator != null) { PathList.Children.Remove(_dropIndicator); _dropIndicator = null; }
+        _dropCache = null;
         StopAutoScroll();
 
 

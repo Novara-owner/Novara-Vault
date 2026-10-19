@@ -56,8 +56,11 @@ public sealed partial class DiaryEditorPage : Page
 
 
 
-private const string EditorHtmlTemplate = @"<!DOCTYPE html>
-<html><head><meta charset='utf-8'><style>
+
+
+
+    private const string EditorHtmlTemplate = @"<!DOCTYPE html>
+<html><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
@@ -81,6 +84,7 @@ body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{ba
 #body .ProseMirror hr{{border:none;border-top:1px solid {3};margin:16px 0}}
 #body .ProseMirror a{{color:{12};text-decoration:underline;cursor:pointer}}
 img{{max-width:100%;height:auto;display:block;margin:4px 0}}
+img[src^='http:']{{opacity:.3;outline:1px dashed #999}}
 </style></head><body>
 <div id='title' contenteditable='true' spellcheck='false'></div>
 <div class='sep'></div>
@@ -120,7 +124,7 @@ function execAlign(a){{editor.chain().focus().setTextAlign(a).run()}}
 function execCodeBlock(){{editor.chain().focus().toggleCodeBlock().run()}}
 function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}}
 function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
-function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh()}}
+function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh();var n=document.querySelectorAll(""img[src^='http:']"").length;if(n>0)window.chrome.webview.postMessage(JSON.stringify({{action:'httpImgBlocked',count:n}}))}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
 tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
 function getTitle(){{return tel.innerHTML}}function getBody(){{return editor.getHTML()}}
@@ -170,7 +174,7 @@ notifyFormatState();
 
         string bundle;
         try { bundle = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "tiptap.bundle.js")); }
-        catch (Exception ex) { Services.CrashLogger.LogNote("EditorBundleMissing", "tiptap: " + ex.Message); bundle = "window.NovaraTiptap={};"; }
+        catch (Exception ex) { Services.CrashLogger.LogNote("EditorBundleMissing", "tiptap: " + ex.Message); bundle = "window.NovaraTiptap={};window.NovaraEditorBundleError='tiptap-missing';"; }
         return string.Format(EditorHtmlTemplate, bg, text, placeholder, sep, selection, scrollbar,
             App.GetString("DiaryEditor_TitlePlaceholder"), App.GetString("DiaryEditor_BodyPlaceholder"),
             bundle, App.GetString("Menu_Unlink"), menuBg, scrollbarHover, link);
@@ -192,13 +196,14 @@ notifyFormatState();
 
 
     private const string MarkdownHtmlTemplate = @"<!DOCTYPE html>
-<html><head><meta charset='utf-8'><style>
+<html><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
 body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{background:transparent}}body::-webkit-scrollbar-thumb{{background:{4};border-radius:2px}}body::-webkit-scrollbar-thumb:hover{{background:{8}}}
 #title{{font-size:17px;font-weight:normal;letter-spacing:0.18em;line-height:26px;outline:none;padding:4px 0 8px 0;word-wrap:break-word;color:{1}}}
 #title:empty::before{{content:'{2}';color:{3};font-weight:normal;letter-spacing:0.18em}}
+body.preview #title:empty::before{{content:none}}
 #md-editor::placeholder{{color:{3}}}
 .sep{{height:1px;background:{5};margin:0 0 16px 0;opacity:0.45}}
 #md-editor{{width:100%;min-height:calc(100vh - 150px);background:transparent;border:none;outline:none;resize:none;overflow-y:hidden;color:{1};font-family:'Segoe UI',sans-serif;font-size:14px;line-height:22px;padding:0}}
@@ -214,6 +219,10 @@ body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{ba
 #md-preview hr{{border:none;border-top:1px solid {5};margin:16px 0}}
 #md-preview a{{color:{9};text-decoration:underline}}
 #md-preview img{{max-width:100%;height:auto}}
+.img-blocked{{border:1px dashed {5};border-radius:8px;padding:10px 12px;margin:4px 0;color:{1};font-size:12px}}
+.img-blocked .ib-title{{opacity:.85}}
+.img-blocked .ib-actions{{margin-top:4px}}
+.img-blocked .ib-actions a{{color:{9};text-decoration:underline;margin-right:12px}}
 ::selection{{background:{10};color:inherit}}
 body.split{{display:grid;grid-template-columns:var(--split,50%) 6px 1fr;grid-template-rows:minmax(0,1fr);height:100vh;overflow:hidden;margin:0;padding-bottom:0}}
 body.split .sep{{display:none}}
@@ -249,7 +258,8 @@ function setMd(t,b){{tel.textContent=t||'';ta.value=b||'';updateTitleSpacing();a
 function autoResize(){{if(document.body.classList.contains('split')){{var prev=col.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(col.scrollTop!==prev)col.scrollTop=prev;return}}var doc=document.documentElement;var prev=doc.scrollTop;ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';if(doc.scrollTop!==prev)doc.scrollTop=prev}}
 function syncAfterEdit(){{autoResize();rebuildMirror();renderPreview();if(document.body.classList.contains('split')){{clearTimeout(window._mdSplitT);window._mdSplitT=setTimeout(function(){{alignPreview(cursorLine(),true)}},150)}}}}
 function renderPreview(){{
-var bs=splitBlocks(ta.value);var h='';for(var i=0;i<bs.length;i++){{h+='<div class=\'mdb\' data-sl=\''+(bs[i].s+1)+'\'>'+window.NovaraMd.render(bs[i].t)+'</div>'}}pv.innerHTML=h||'<div class=\'mdb\' data-sl=\'1\'></div>'}}
+var bs=splitBlocks(ta.value);var h='';for(var i=0;i<bs.length;i++){{h+='<div class=\'mdb\' data-sl=\''+(bs[i].s+1)+'\'>'+window.NovaraMd.render(bs[i].t)+'</div>'}}pv.innerHTML=h||'<div class=\'mdb\' data-sl=\'1\'></div>';blockHttpImages(pv)}}
+function blockHttpImages(root){{var imgs=root.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{var src=imgs[i].getAttribute('src')||'';if(src.indexOf('http://')===0){{var d=document.createElement('div');d.className='img-blocked';d.setAttribute('data-src',src);d.innerHTML='<div class=\'ib-title\'>'+'{11}'+'</div><div class=\'ib-actions\'><a href=\'#\' data-ib-open=\'1\'>'+'{12}'+'</a><a href=\'#\' data-ib-copy=\'1\'>'+'{13}'+'</a></div>';if(imgs[i].parentNode)imgs[i].parentNode.replaceChild(d,imgs[i])}}}}}}
 var mr=document.getElementById('md-mirror');var _lineTops=[0];
 function rebuildMirror(){{
 mr.style.width=ta.clientWidth+'px';while(mr.firstChild)mr.removeChild(mr.firstChild);var ls=ta.value.split('\n');_lineTops=new Array(ls.length);for(var i=0;i<ls.length;i++){{var d=document.createElement('div');d.textContent=ls[i]===''?'\u00a0':ls[i];mr.appendChild(d)}}var kids=mr.children;for(var i=0;i<kids.length;i++)_lineTops[i]=kids[i].offsetTop}}
@@ -264,15 +274,16 @@ if(smooth)pv.scrollTo({{top:target,behavior:'smooth'}});else pv.scrollTop=target
 function getTitle(){{return tel.innerHTML}}
 function getMd(){{return ta.value}}
 function fracOf(el){{var doc=document.documentElement;return (doc.scrollTop-el.offsetTop+8)/Math.max(1,el.scrollHeight)}}
-function showWrite(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1;document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','true');rebuildMirror()}}var doc=document.documentElement;var vis=pv.scrollHeight>1;var f=vis?(doc.scrollTop-pv.offsetTop+8)/Math.max(1,pv.scrollHeight):0;ta.style.display='block';pv.style.display='none';autoResize();if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else if(vis){{doc.scrollTop=Math.max(0,ta.offsetTop+f*ta.scrollHeight-8)}}}}
-function showPreview(){{var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1}}document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','false');var doc=document.documentElement;var f=(doc.scrollTop-ta.offsetTop+8)/Math.max(1,ta.scrollHeight);renderPreview();rebuildMirror();ta.style.display='none';pv.style.display='block';if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else{{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8)}}var anchored=doc.scrollTop;var imgs=pv.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{imgs[i].addEventListener('load',function(){{if(pv.style.display!=='none'&&doc.scrollTop===anchored){{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);anchored=doc.scrollTop}}}})}}}}
-function showSplit(){{var doc=document.documentElement;var docY=doc.scrollTop;var intoTa=Math.max(0,docY-ta.offsetTop);var L=yToLine(intoTa)+1;
-document.body.classList.add('split');dvEnd();ta.style.display='block';pv.style.display='block';autoResize();document.body.style.setProperty('--split','50%');rebuildMirror();renderPreview();var _reflow=col.clientHeight;col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);requestAnimationFrame(function(){{col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);}});}}
+function showWrite(){{document.body.classList.remove('preview');var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1;document.body.classList.remove('split');dvEnd();rebuildMirror()}}tel.setAttribute('contenteditable','true');var doc=document.documentElement;var vis=pv.scrollHeight>1;var f=vis?(doc.scrollTop-pv.offsetTop+8)/Math.max(1,pv.scrollHeight):0;ta.style.display='block';pv.style.display='none';autoResize();if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else if(vis){{doc.scrollTop=Math.max(0,ta.offsetTop+f*ta.scrollHeight-8)}}}}
+function showPreview(){{document.body.classList.add('preview');var fromSplit=document.body.classList.contains('split');var L=0;if(fromSplit){{L=yToLine(Math.max(0,col.scrollTop-titleH()))+1}}document.body.classList.remove('split');dvEnd();tel.setAttribute('contenteditable','false');var doc=document.documentElement;var f=(doc.scrollTop-ta.offsetTop+8)/Math.max(1,ta.scrollHeight);renderPreview();rebuildMirror();ta.style.display='none';pv.style.display='block';if(fromSplit){{doc.scrollTop=Math.max(0,ta.offsetTop+lineToY(L))}}else{{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8)}}var anchored=doc.scrollTop;var imgs=pv.querySelectorAll('img');for(var i=0;i<imgs.length;i++){{imgs[i].addEventListener('load',function(){{if(pv.style.display!=='none'&&doc.scrollTop===anchored){{doc.scrollTop=Math.max(0,pv.offsetTop+f*pv.scrollHeight-8);anchored=doc.scrollTop}}}})}}}}
+function showSplit(){{document.body.classList.remove('preview');var doc=document.documentElement;var docY=doc.scrollTop;var intoTa=Math.max(0,docY-ta.offsetTop);var L=yToLine(intoTa)+1;
+document.body.classList.add('split');tel.setAttribute('contenteditable','true');dvEnd();ta.style.display='block';pv.style.display='block';autoResize();document.body.style.setProperty('--split','50%');rebuildMirror();renderPreview();var _reflow=col.clientHeight;col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);requestAnimationFrame(function(){{col.scrollTop=titleH()+lineToY(L);alignPreview(L,false);}});}}
 var dv=document.getElementById('md-divider');var dragDv=false;
 function dvEnd(){{dragDv=false;dv.classList.remove('dragging')}}
 dv.addEventListener('pointerdown',function(e){{dragDv=true;dv.classList.add('dragging');dv.setPointerCapture(e.pointerId);e.preventDefault()}});
 dv.addEventListener('pointermove',function(e){{if(!dragDv)return;var W=document.documentElement.clientWidth;var pct=e.clientX/W*100;if(pct>=100){{window.chrome.webview.postMessage(JSON.stringify({{action:'exitSplit',mode:'write'}}));return}}if(pct<=0){{window.chrome.webview.postMessage(JSON.stringify({{action:'exitSplit',mode:'preview'}}));return}}document.body.style.setProperty('--split',pct+'%')}});
 dv.addEventListener('pointerup',function(){{dvEnd()}});dv.addEventListener('pointercancel',function(){{dvEnd()}});
+pv.addEventListener('click',function(e){{var ib=e.target&&e.target.closest?e.target.closest('[data-ib-open],[data-ib-copy]'):null;if(!ib)return;e.preventDefault();var card=ib.closest('.img-blocked');var u=card?card.getAttribute('data-src'):'';if(!u)return;window.chrome.webview.postMessage(JSON.stringify({{action:ib.hasAttribute('data-ib-open')?'openLink':'copyLink',url:u}}))}});
 function wrapSel(before,after,ph){{var s=ta.selectionStart,e=ta.selectionEnd;var sel=ta.value.substring(s,e)||ph;ta.setRangeText(before+sel+after,s,e,'end');ta.setSelectionRange(s+before.length,s+before.length+sel.length);ta.focus()}}
 function prefixLines(prefix){{var s=ta.selectionStart;var val=ta.value;var ls=val.lastIndexOf('\n',s-1)+1;ta.setRangeText(prefix,ls,ls,'end');ta.focus()}}
 function insertBlock(text){{var s=ta.selectionStart,e=ta.selectionEnd;ta.setRangeText(text,s,e,'end');ta.focus()}}
@@ -294,7 +305,7 @@ function mdUndo(){{ta.focus();document.execCommand('undo');syncAfterEdit();}}
 function mdRedo(){{ta.focus();document.execCommand('redo');syncAfterEdit();}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
 tel.addEventListener('input',function(){{updateTitleSpacing();autoResize();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
-ta.addEventListener('input',function(){{autoResize();rebuildMirror();if(document.body.classList.contains('split')){{clearTimeout(window._mdSplitT);window._mdSplitT=setTimeout(function(){{renderPreview();alignPreview(cursorLine(),true)}},150)}}}});
+ta.addEventListener('input',function(){{autoResize();rebuildMirror();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}));if(document.body.classList.contains('split')){{clearTimeout(window._mdSplitT);window._mdSplitT=setTimeout(function(){{renderPreview();alignPreview(cursorLine(),true)}},150)}}}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
 tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
@@ -325,29 +336,47 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         string selection = isLight ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)";
         if (PaperTheme.TryGetEditorColors(out var mBg, out var mText, out var mPh, out var mSep, out var mSel, out var mSb, out var mSbH, out var mMenu, out var mLink))
         { selection = mSel; }
-        return string.Format(MarkdownHtmlTemplate, bg, text, App.GetString("DiaryEditor_DocumentTitlePlaceholder"), placeholder, scrollbar, sep, bundle,
-            App.GetString("DiaryEditor_DocumentBodyPlaceholder"), scrollbarHover, link, selection);
+        var __rendered = string.Format(MarkdownHtmlTemplate, bg, text, App.GetString("DiaryEditor_DocumentTitlePlaceholder"), placeholder, scrollbar, sep, bundle,
+            App.GetString("DiaryEditor_DocumentBodyPlaceholder"), scrollbarHover, link, selection,
+            App.GetString("Memo_HttpImg_Blocked_Card"), App.GetString("Memo_HttpImg_Open"), App.GetString("Memo_HttpImg_Copy"));
+        return __rendered;
+
     }
+
 
 
 
     internal static string EnforceTitleLength(string title)
     {
         if (string.IsNullOrEmpty(title)) return title;
+        static int Step(string s, int i)
+            => char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? 2 : 1;
+        static bool IsWhite(string s, int i, int step)
+            => step == 2
+                ? System.Text.Rune.IsWhiteSpace(new System.Text.Rune(s[i], s[i + 1]))
+                : char.IsWhiteSpace(s[i]);
+
         int nonSpace = 0;
-        foreach (var c in title) if (!char.IsWhiteSpace(c)) nonSpace++;
+        for (int i = 0; i < title.Length;)
+        {
+            int step = Step(title, i);
+            if (!IsWhite(title, i, step)) nonSpace++;
+            i += step;
+        }
         if (nonSpace <= 120) return title;
 
         var sb = new System.Text.StringBuilder();
         int kept = 0;
-        foreach (var c in title)
+        for (int i = 0; i < title.Length;)
         {
-            if (!char.IsWhiteSpace(c))
+            int step = Step(title, i);
+            if (!IsWhite(title, i, step))
             {
                 if (kept >= 120) break;
                 kept++;
             }
-            sb.Append(c);
+            sb.Append(title, i, step);
+            i += step;
         }
         return sb.ToString().Trim();
     }
@@ -364,6 +393,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     public DiaryEditorPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         Loaded += Page_Loaded;
         Unloaded += Page_Unloaded;
@@ -430,7 +460,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         if (!string.IsNullOrEmpty(e.Uri)) OpenExternalLink(e.Uri);
     }
 
-    private void OnNavigationCompleted(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
+    private async void OnNavigationCompleted(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
         if (!e.IsSuccess)
         {
@@ -439,6 +469,16 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
             Services.CrashLogger.LogNote("DiaryEditorNavigationFailed", $"日记编辑器导航失败: {e.WebErrorStatus}");
             _webViewReady = false;
+            return;
+        }
+
+
+        var bundleError = await GetJsStringAsync("window.NovaraEditorBundleError||''");
+        if (!string.IsNullOrEmpty(bundleError))
+        {
+            Services.CrashLogger.LogNote("DiaryEditorBundleRuntime", bundleError);
+            _webViewReady = false;
+            ShowEditorFailNotice("bundle-runtime: " + bundleError);
             return;
         }
         _navigatingFormat = null;
@@ -500,10 +540,29 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
                 var url = doc.RootElement.TryGetProperty("url", out var u) ? u.GetString() : null;
                 if (!string.IsNullOrWhiteSpace(url)) OpenExternalLink(url);
             }
+            else if (action == "copyLink")
+            {
+                var curl = doc.RootElement.TryGetProperty("url", out var cu) ? cu.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(curl))
+                {
+                    try
+                    {
+                        var dp = new Windows.ApplicationModel.DataTransfer.DataPackage();
+                        dp.SetText(curl);
+                        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dp);
+                    }
+                    catch { }
+                }
+            }
             else if (action == "exitSplit")
             {
                 var mode = doc.RootElement.TryGetProperty("mode", out var mv) ? mv.GetString() : null;
                 SetMdView(mode == "write" ? MdViewMode.Write : MdViewMode.Preview);
+            }
+            else if (action == "httpImgBlocked")
+            {
+                var count = doc.RootElement.TryGetProperty("count", out var cn) && cn.TryGetInt32(out var hc) ? hc : 0;
+                if (count > 0) App.ShowToast(string.Format(App.GetString("Memo_HttpImg_Blocked_Toast"), count));
             }
             else if (action == "userEdited")
             {
@@ -739,15 +798,21 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     }
 
 
+
+
+
+
     private void SetDiaryContent(DiaryEntry? diary)
     {
-        if (diary == null) return;
         _userEditedSinceRender = false;
-        string title = IsUntitledStored(diary.Title) ? "" : diary.Title;
+        string title = diary == null || IsUntitledStored(diary.Title) ? "" : diary.Title;
+        string body = diary?.Content ?? "";
         if (_loadedFormat == "markdown")
-            PostMessageAsync("setMd", new { title = title, body = diary.Content });
+        {
+            PostMessageAsync("setMd", new { title = title, body = body });
+        }
         else
-            PostMessageAsync("setAll", new { title = title, body = HtmlSanitizer.Sanitize(diary.Content) });
+            PostMessageAsync("setAll", new { title = title, body = HtmlSanitizer.Sanitize(body) });
     }
 
 
@@ -806,7 +871,9 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
 
 
-            if (action.StartsWith("exec", StringComparison.Ordinal) || action == "insertImage") _userEditedSinceRender = true;
+
+            if (action.StartsWith("exec", StringComparison.Ordinal) || action.StartsWith("md", StringComparison.Ordinal)
+                || action == "insertImage") _userEditedSinceRender = true;
             var msg = new Dictionary<string, object> { ["action"] = action };
             if (data != null)
                 foreach (var p in data.GetType().GetProperties())
@@ -913,6 +980,17 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         {
 
             _userEditedSinceRender = false;
+            return false;
+        }
+
+
+
+
+
+        if (_currentDiary is { } live && App.Store?.Database.DiaryItems.Any(d => d.Id == live.Id) != true)
+        {
+            System.Diagnostics.Debug.WriteLine("V11-297: 打开的日记已不存在（外部删除）——保存被拒绝");
+            try { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); } catch { }
             return false;
         }
 
@@ -1144,7 +1222,7 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         bool isMd = _loadedFormat == "markdown";
         if (isMd)
         {
-            if (_mdView != MdViewMode.Write) SetMdView(MdViewMode.Write);
+            if (_mdView == MdViewMode.Preview) SetMdView(MdViewMode.Write);
             ExpandMdToolbar();
             return;
         }
@@ -1233,7 +1311,11 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
             foreach (var f in files)
                 await InsertImageFromPath(f);
         }
-        catch (Exception ex) { CrashLogger.LogNote("DiaryImagePicker", ex.Message); }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote("DiaryImagePicker", ex.Message);
+            try { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); } catch { }
+        }
     }
 
     private async System.Threading.Tasks.Task InsertImageFromPath(string path)
@@ -1252,7 +1334,12 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
             var mime = System.IO.Path.GetExtension(path).ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
             PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(bytes), filename = System.IO.Path.GetFileName(path), mime });
         }
-        catch { }
+        catch (Exception ex)
+        {
+
+            CrashLogger.LogNote("DiaryImageInsert", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
     }
 
 
@@ -1265,7 +1352,11 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
             if (ContentWebView.CoreWebView2 == null || !_webViewReady || _loadedFormat != "html") return _currentImageBytes;
             const string js = "(()=>{let s=0;document.querySelectorAll('#body img').forEach(im=>{const src=im.getAttribute('src')||'';const m=/^data:[^;]*;base64,(.*)$/.exec(src);if(m){try{s+=(atob(m[1])||'').length}catch(e){}}});return String(s)})()";
             var r = await ContentWebView.CoreWebView2.ExecuteScriptAsync(js);
-            return long.TryParse(r, out var v) ? v : _currentImageBytes;
+
+
+
+            var text = JsonSerializer.Deserialize<string>(r);
+            return long.TryParse(text, out var v) ? v : _currentImageBytes;
         }
         catch { return _currentImageBytes; }
     }
@@ -1362,7 +1453,10 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         Storyboard.SetTarget(f, MdToolbarContainer); Storyboard.SetTargetProperty(f, "Opacity"); sb.Children.Add(f);
         var s2 = new DoubleAnimation { To = 24, Duration = TimeSpan.FromMilliseconds(Services.Motion.DlgOut), EasingFunction = Services.Motion.Accelerate() };
         Storyboard.SetTarget(s2, MdToolbarTranslate); Storyboard.SetTargetProperty(s2, "TranslateY"); sb.Children.Add(s2);
-        sb.Completed += (_, _) => { MdToolbarContainer.Visibility = Visibility.Collapsed; ShowExpandButton(); }; sb.Begin();
+
+
+
+        sb.Completed += (_, _) => { MdToolbarContainer.Visibility = Visibility.Collapsed; MdToolbarTranslate.TranslateX = 0; MdToolbarTranslate.TranslateY = 0; MdToolbarTranslate.ScaleX = 1; MdToolbarTranslate.ScaleY = 1; MdToolbarContainer.Opacity = 1; ShowExpandButton(); }; sb.Begin();
     }
 
     private void MdHeadingButton_Click(object sender, RoutedEventArgs e)

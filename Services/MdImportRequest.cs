@@ -78,7 +78,7 @@ public static class MdImportRequest
         {
             var dir = Path.GetDirectoryName(PendingMd);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(PendingMd, JsonSerializer.Serialize(new PendingMdFile { Path = path }));
+            PendingWrite.WritePendingAtomic(PendingMd, JsonSerializer.Serialize(new PendingMdFile { Path = path }));
             try
             {
                 using var evt = EventWaitHandle.OpenExisting(EventName);

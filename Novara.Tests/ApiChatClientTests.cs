@@ -1,4 +1,6 @@
 using Novara.Services;
+using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using Xunit;
 
@@ -96,6 +98,104 @@ public class ApiChatClientTests
 
         Assert.Equal("http://localhost:11434/v1/chat/completions",
             ApiChatClient.ResolveChatEndpoint("http://localhost:11434", "Ollama", "http://localhost:11434/api/tags", ApiChatProtocol.OpenAI, "llama3"));
+    }
+
+    [Fact]
+    public void ResolveChatEndpoint_Cohere_UsesCompatibilityV1()
+    {
+
+
+        Assert.Equal("https://api.cohere.com/compatibility/v1/chat/completions",
+            ApiChatClient.ResolveChatEndpoint("https://api.cohere.com", "Cohere", "https://api.cohere.com/v1/models", ApiChatProtocol.OpenAI, "command-r"));
+    }
+
+
+
+    [Theory]
+    [InlineData("Ollama", "http://localhost:11434/v1", "http://localhost:11434/v1/chat/completions")]
+    [InlineData("Cohere", "https://api.cohere.com/compatibility/v1", "https://api.cohere.com/compatibility/v1/chat/completions")]
+    public void ResolveChatEndpoint_SpecialCasedVendor_BaseAlreadyCarriesPrefix_NoDuplicate(string vendor, string baseUrl, string expected)
+    {
+
+
+        Assert.Equal(expected,
+            ApiChatClient.ResolveChatEndpoint(baseUrl, vendor, baseUrl + "/models", ApiChatProtocol.OpenAI, "m"));
+    }
+
+
+
+    [Fact]
+    public async System.Threading.Tasks.Task ChatAsync_StreamWithNewlines_FusesAtTheByteCap()
+    {
+
+
+
+        var stream = new InfiniteByteStream(newlineEvery: 4096);
+        var handler = new OneShotContentHandler(new StreamContent(stream));
+        var result = await ApiChatClient.ChatAsync("https://api.example.com", "sk-test-key-1234567890",
+            new ApiChatRequest { Model = "m", Prompt = "p", Stream = true }, default, handler);
+
+        Assert.False(result.Ok);
+        Assert.Equal(ApiProbeStatus.NetworkError, result.Status);
+        Assert.Equal("network", result.Detail);
+        Assert.True(stream.BytesEmitted > 32 * 1024 * 1024,
+            $"应在 32MB 字节上限处熔断，实际只吐出 {stream.BytesEmitted} 字节（说明是单行上限先触发）");
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task ChatAsync_StreamWithNoNewlines_FusesAtTheSingleLineCap()
+    {
+
+
+
+
+        var stream = new InfiniteByteStream(newlineEvery: 0);
+        var handler = new OneShotContentHandler(new StreamContent(stream));
+        var result = await ApiChatClient.ChatAsync("https://api.example.com", "sk-test-key-1234567890",
+            new ApiChatRequest { Model = "m", Prompt = "p", Stream = true }, default, handler);
+
+        Assert.False(result.Ok);
+        Assert.Equal(ApiProbeStatus.NetworkError, result.Status);
+        Assert.True(stream.BytesEmitted > 8 * 1024 * 1024, $"应在约 8MB 处熔断，实际只吐出 {stream.BytesEmitted} 字节");
+        Assert.True(stream.BytesEmitted < 20 * 1024 * 1024, $"不应撑到字节上限，实际吐出 {stream.BytesEmitted} 字节");
+    }
+
+    private sealed class OneShotContentHandler : HttpMessageHandler
+    {
+        private readonly HttpContent _content;
+        public OneShotContentHandler(HttpContent content) => _content = content;
+        protected override System.Threading.Tasks.Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
+            => System.Threading.Tasks.Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = _content });
+    }
+
+
+
+
+    private sealed class InfiniteByteStream : System.IO.Stream
+    {
+        private readonly int _newlineEvery;
+        private long _emitted;
+        public InfiniteByteStream(int newlineEvery) => _newlineEvery = newlineEvery;
+
+        public long BytesEmitted => _emitted;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            for (var i = 0; i < count; i++)
+                buffer[offset + i] = _newlineEvery > 0 && (_emitted + i + 1) % _newlineEvery == 0 ? (byte)'\n' : (byte)'a';
+            _emitted += count;
+            return count;
+        }
+        public override System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer, int offset, int count, System.Threading.CancellationToken cancellationToken)
+            => System.Threading.Tasks.Task.FromResult(Read(buffer, offset, count));
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -221,6 +321,21 @@ public class ApiChatClientTests
         Assert.False(u.HasUsage);
     }
 
+    [Fact]
+    public void ParseUsage_OutOfRangeOrNegative_ClampedInsteadOfDroppingTheBlock()
+    {
+
+
+        var u = ApiChatClient.ParseUsage("""{"usage":{"prompt_tokens":99999999999,"completion_tokens":-5,"total_tokens":13}}""", ApiChatProtocol.OpenAI);
+        Assert.True(u.HasUsage);
+        Assert.Equal(int.MaxValue, u.PromptTokens);
+        Assert.Equal(0, u.CompletionTokens);
+
+        var a = ApiChatClient.ParseUsage("""{"usage":{"input_tokens":2147483647,"output_tokens":2147483647}}""", ApiChatProtocol.Anthropic);
+        Assert.True(a.HasUsage);
+        Assert.Equal(int.MaxValue, a.TotalTokens);
+    }
+
 
 
     [Theory]
@@ -287,5 +402,16 @@ public class ApiChatClientTests
         Assert.Equal("https://api.example.com/v1/models", modelsEndpoint);
         Assert.Equal("https://api.example.com/v1/chat/completions",
             ApiChatClient.ResolveChatEndpoint(baseUrl.TrimEnd('/'), vendor, modelsEndpoint, ApiChatProtocol.OpenAI, "gpt-4o"));
+    }
+
+
+
+    [Fact]
+    public void SaturatingAdd_ClampsInsteadOfWrapping()
+    {
+        Assert.Equal(int.MaxValue, ApiChatClient.SaturatingAdd(int.MaxValue, int.MaxValue));
+        Assert.Equal(int.MaxValue, ApiChatClient.SaturatingAdd(1, int.MaxValue));
+        Assert.Equal(12, ApiChatClient.SaturatingAdd(5, 7));
+        Assert.Equal(0, ApiChatClient.SaturatingAdd(5, -7));
     }
 }

@@ -46,17 +46,30 @@ internal sealed class JsonlAuditStore<T> where T : class
             {
                 Directory.CreateDirectory(Dir);
                 var current = new FileInfo(CurrentFile);
+                var rotated = false;
                 if (current.Exists && current.Length >= _rotateBytes)
+                {
                     File.Move(CurrentFile, Path.Combine(Dir, $"{_prefix}-{DateTime.Now:yyyyMMdd-HHmmss-fff}.log"));
+                    rotated = true;
+                }
 
-                File.AppendAllText(CurrentFile, JsonSerializer.Serialize(evt, Opts) + "\n", new UTF8Encoding(false));
 
 
+                var line = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(evt, Opts) + "\n");
+                using (var fs = new FileStream(CurrentFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+                {
+                    fs.Write(line, 0, line.Length);
+                    fs.Flush();
+                }
 
-                var stale = Directory.GetFiles(Dir, _prefix + "-*.log")
-                    .OrderByDescending(f => f, StringComparer.Ordinal)
-                    .Skip(_maxArchives);
-                foreach (var f in stale) { try { File.Delete(f); } catch { } }
+
+                if (rotated)
+                {
+                    var stale = Directory.GetFiles(Dir, _prefix + "-*.log")
+                        .OrderByDescending(f => f, StringComparer.Ordinal)
+                        .Skip(_maxArchives);
+                    foreach (var f in stale) { try { File.Delete(f); } catch { } }
+                }
             }
         }
         catch (Exception ex)
@@ -88,12 +101,39 @@ internal sealed class JsonlAuditStore<T> where T : class
 
 
 
-    internal void ClearAllWithMarker(T marker)
+
+
+    internal bool ClearAllWithMarker(T marker)
     {
-        Task work;
+        Task<bool> work;
         lock (_chainGate)
-            work = _chain = _chain.ContinueWith(_ => { ClearAll(); Append(marker); }, TaskScheduler.Default);
-        try { work.Wait(); } catch {  }
+        {
+            work = _chain.ContinueWith(_ =>
+            {
+                if (!ClearAll()) return false;
+                Append(marker);
+                return true;
+            }, TaskScheduler.Default);
+            _chain = work;
+        }
+        try { work.Wait(); return work.Result; }
+        catch { return false;  }
+    }
+
+
+
+
+
+    internal bool ClearAllOrdered()
+    {
+        Task<bool> work;
+        lock (_chainGate)
+        {
+            work = _chain.ContinueWith(_ => ClearAll(), TaskScheduler.Default);
+            _chain = work;
+        }
+        try { work.Wait(); return work.Result; }
+        catch { return false;  }
     }
 
 
@@ -111,20 +151,20 @@ internal sealed class JsonlAuditStore<T> where T : class
         if (max <= 0) return result;
         try
         {
+            List<string> files;
             lock (_gate)
             {
                 if (!Directory.Exists(Dir)) return result;
+                files = new List<string>();
+                if (File.Exists(CurrentFile)) files.Add(CurrentFile);
+                files.AddRange(Directory.GetFiles(Dir, _prefix + "-*.log")
+                    .OrderByDescending(f => f, StringComparer.Ordinal));
+            }
 
-
-
-
-                if (File.Exists(CurrentFile)) AppendTail(CurrentFile, max, result);
-                foreach (var archive in Directory.GetFiles(Dir, _prefix + "-*.log")
-                             .OrderByDescending(f => f, StringComparer.Ordinal))
-                {
-                    if (result.Count >= max) break;
-                    AppendTail(archive, max, result);
-                }
+            foreach (var file in files)
+            {
+                if (result.Count >= max) break;
+                AppendTail(file, max, result);
             }
         }
         catch { }
@@ -157,14 +197,20 @@ internal sealed class JsonlAuditStore<T> where T : class
     }
 
 
-    internal void ClearAll()
+
+    internal bool ClearAll()
     {
+        var failed = 0;
         try
         {
             lock (_gate)
             {
-                if (!Directory.Exists(Dir)) return;
-                foreach (var f in Directory.GetFiles(Dir, _prefix + "*.log")) { try { File.Delete(f); } catch { } }
+                if (!Directory.Exists(Dir)) return true;
+                foreach (var f in Directory.GetFiles(Dir, _prefix + "*.log"))
+                {
+                    try { File.Delete(f); }
+                    catch { failed++; }
+                }
             }
         }
         catch (Exception ex)
@@ -172,7 +218,15 @@ internal sealed class JsonlAuditStore<T> where T : class
 
 
             AuditWriteHealth.Report(_prefix + " clear", ex);
+            return false;
         }
+        if (failed > 0)
+        {
+            AuditWriteHealth.Report(_prefix + " clear",
+                new IOException($"{failed} audit file(s) could not be deleted"));
+            return false;
+        }
+        return true;
     }
 
 

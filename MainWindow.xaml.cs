@@ -159,14 +159,30 @@ public sealed partial class MainWindow : Window
     private string _closeBehavior = "直接退出";
 
     private bool _themeRestartAnimating;
+    private bool _themeRestartHiding;
+    private Storyboard? _themeRestartHideSb;
+
+    private bool _autoUpdateAnimating;
+    private bool _autoUpdateDismissPending;
+
+
+    private readonly Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+    private bool _autoUpdateHiding;
+    private Storyboard? _autoUpdateHideSb;
+    private Novara.Services.UpdateService.LatestRelease? _autoUpdateRelease;
 
     private bool _isTrayExit;
     private bool _restarting;
+    private bool _themeRestartCancelled;
     private bool _exitSaving;
     private bool _welcomeFading;
     private bool _closeAllowed;
     private bool _animCorruptHide;
+    private bool _rebuildInFlight;
     private bool _animSaveFailedHide;
+    private Storyboard? _corruptHideSb;
+    private Storyboard? _saveFailedHideSb;
     private bool _closingHandled;
     private bool _corruptDialogIsIoError;
     private bool _themeChangedWhileLocked;
@@ -181,6 +197,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
 
         if (App.CurrentLanguage == "en-US")
         {
@@ -198,6 +215,7 @@ public sealed partial class MainWindow : Window
         this.SizeChanged += (_, e) => UpdateWelcomeLayout(e.Size.Width, e.Size.Height);
         this.SizeChanged += (_, _) => UpdateWorkspaceSwitcherPosition();
         this.SizeChanged += (_, _) => { if (_sideOpen) RecachePanelHome(); };
+        this.SizeChanged += (_, _) => ReclampVisibleDialogs();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(CustomTitleBar);
@@ -228,19 +246,23 @@ public sealed partial class MainWindow : Window
             {
                 if (App.CurrentTheme != "跟随系统") return;
                 if (LockScreenFrame.Visibility == Visibility.Visible) { _themeChangedWhileLocked = true; return; }
+                if (IsWelcomeCarouselUp) return;
                 ShowThemeRestartOverlay();
             };
 
             root.KeyDown += (_, e) =>
             {
                 if (e.Key != Windows.System.VirtualKey.Escape) return;
-                if (ThemeRestartOverlay.Visibility == Visibility.Visible) { HideThemeRestartOverlay(); e.Handled = true; }
+                if (AutoUpdateOverlay.Visibility == Visibility.Visible) { AutoUpdateCancel_Click(this, new RoutedEventArgs()); e.Handled = true; }
+                else if (ThemeRestartOverlay.Visibility == Visibility.Visible) { HideThemeRestartOverlay(); e.Handled = true; }
                 else if (SaveFailedOverlay.Visibility == Visibility.Visible) { HideSaveFailedDialog(); e.Handled = true; }
             };
 
 
+
+
             var ctrlK = new KeyboardAccelerator { Key = Windows.System.VirtualKey.K, Modifiers = Windows.System.VirtualKeyModifiers.Control };
-            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus() && LockScreenFrame.Visibility != Visibility.Visible) OpenSearchPage(); };
+            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus() && LockScreenFrame.Visibility != Visibility.Visible && !IsWelcomeCarouselUp) OpenSearchPage(); };
             root.KeyboardAccelerators.Add(ctrlK);
             root.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
 
@@ -285,6 +307,12 @@ public sealed partial class MainWindow : Window
 
         var langHint = App.LoadLanguageHint();
         App.ApplyLanguage(langHint ?? "");
+
+
+
+
+
+        Services.AutoBackupService.RecoverInterruptedRestore();
         Services.LoadResult? loadResult = null;
         if (App.Store is not { IsLoaded: true })
         {
@@ -417,6 +445,9 @@ public sealed partial class MainWindow : Window
         Services.AutoBackupService.SyncAutoBackupTimer(DispatcherQueue);
 
 
+        Services.UpdateAutoCheckService.SyncAutoCheckTimer();
+
+
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
@@ -488,12 +519,16 @@ public sealed partial class MainWindow : Window
 
 
 
+    public bool HasTrayIcon => _trayIcon != null;
 
 
 
-private void CreateTrayIcon()
+
+
+
+private bool CreateTrayIcon()
     {
-        if (_trayIcon != null) return;
+        if (_trayIcon != null) return true;
 
 
 
@@ -538,11 +573,15 @@ private void CreateTrayIcon()
             created.ForceCreate();
             _trayIcon = created;
         }
-        catch
+        catch (Exception ex)
         {
+
+
+            Services.CrashLogger.LogNote("MainWindow.CreateTrayIcon", ex.ToString());
             created?.Dispose();
             _trayIcon = null;
         }
+        return _trayIcon != null;
     }
 
     private void RemoveTrayIcon()
@@ -607,7 +646,39 @@ private void CreateTrayIcon()
     public static void ReleaseSingleInstance()
     {
         try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+
+
+
+
+
+
+        _singleInstanceMutex?.Dispose();
         _singleInstanceMutex = null;
+    }
+
+
+
+
+
+
+    internal static bool RestartNow()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return false;
+            ReleaseSingleInstance();
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
+        }
+        catch
+        {
+
+            AcquireSingleInstance();
+            System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
+            return false;
+        }
+        if (App.MainWindow is { } mw) { mw.SetRestarting(); mw.ExitApp(saveFirst: false); }
+        return true;
     }
 
 
@@ -679,12 +750,18 @@ private void CreateTrayIcon()
 
 
 
-public void BeginUpdateExit() => _isTrayExit = true;
+public void BeginUpdateExit()
+{
+    Services.UpdateAutoCheckService.CancelInFlight();
+    _isTrayExit = true;
+}
 
 private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (!_isTrayExit && CloseBehavior == "托盘驻留")
+        if (!_isTrayExit && CloseBehavior == "托盘驻留" && _trayIcon != null)
         {
+
+
             args.Cancel = true;
             sender.Hide();
             return;
@@ -699,6 +776,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         }
         args.Cancel = true;
         _closingHandled = true;
+        Services.UpdateAutoCheckService.CancelInFlight();
 
         if (RootFrame.Content is DiaryEditorPage editor)
         {
@@ -741,6 +819,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (_isTrayExit) { _closeAllowed = true; this.Close(); return; }
         try { if (App.Store?.SaveSync() == false) { _closeAllowed = false; _closingHandled = false; return; } }
         catch { _closeAllowed = false; _closingHandled = false; return; }
+        try { Services.AutoBackupService.TakeExitSnapshotIfDue(); } catch { }
         _closeAllowed = true;
         this.Close();
     }
@@ -752,20 +831,27 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private bool _qcAnimating;
 
 
-    public void ApplyQuickCaptureHotkey()
+
+    public bool ApplyQuickCaptureHotkey()
     {
         Services.GlobalHotkeyService.Unregister(Services.GlobalHotkeyService.IdQuickCapture);
         var s = App.Store?.Database.AppSettings;
-        if (s is not { QuickCaptureEnabled: true }) return;
+        if (s is not { QuickCaptureEnabled: true }) return true;
         var (mods, vk) = Services.GlobalHotkeyService.ParsePreset(s.QuickCaptureHotkey);
         if (!Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdQuickCapture, mods, vk))
+        {
             App.ShowToast(App.GetString("QuickCapture_HotkeyConflict"), ToastTone.Error);
+            return false;
+        }
+        return true;
     }
 
     private void OnQuickCaptureHotkey()
     {
 
         if (LockScreenFrame.Visibility == Visibility.Visible) { ShowMainWindow(); return; }
+        if (IsWelcomeCarouselUp) return;
+        if (App.Store?.IsSaveSuppressed == true) return;
         ShowQuickCapture();
     }
 
@@ -777,6 +863,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void ShowQuickCapture()
     {
+
+
+        if (LockScreenFrame.Visibility == Visibility.Visible || IsWelcomeCarouselUp) return;
+        if (AutoUpdateOverlay.Visibility == Visibility.Visible || ThemeRestartOverlay.Visibility == Visibility.Visible) return;
+        if (_veilCount > 0) return;
         if (QuickCaptureOverlay.Visibility == Visibility.Visible) { QuickCaptureBox.Focus(FocusState.Programmatic); QuickCaptureBox.SelectAll(); return; }
         _qcPrevForeground = GetForegroundWindow();
         ShowMainWindow();
@@ -784,6 +875,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         SetQcMode("todo");
         QuickCaptureHint.Text = App.GetString("QuickCapture_Hint");
         QuickCaptureOverlay.Visibility = Visibility.Visible;
+
+
+        DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, QuickCaptureOverlay, QuickCaptureBar, _dialogWidthFit);
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) }; Storyboard.SetTarget(si, QuickCaptureScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) }; Storyboard.SetTarget(di, QuickCaptureBar); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
@@ -893,7 +987,18 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
             if (RootFrame.Content is DiaryEditorPage pendingEditor)
             {
-                await FlushEditorForExitAsync(pendingEditor);
+
+
+
+
+
+
+                var (_, editorRefused) = await FlushEditorForExitAsync(pendingEditor);
+                if (editorRefused && pendingEditor.HasUnsavedEdits)
+                {
+                    _isTrayExit = false;
+                    return;
+                }
             }
             if (saveFirst)
             {
@@ -922,6 +1027,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                     }
                 }
             }
+
+
+            try { Services.AutoBackupService.TakeExitSnapshotIfDue(); } catch { }
 
 
 
@@ -977,6 +1085,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _autoLockTimer;
     private int _lockStrikes;
+    private bool _lockSuppressWarned;
 
     private void StartAutoLockWatcher()
     {
@@ -994,6 +1103,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (LockScreenFrame.Visibility == Visibility.Visible) return;
         if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return;
+        if (IsRestoreBarrierBlockingLock(userInitiated: false)) return;
         var st = App.Store.Database.AppSettings;
 
 
@@ -1034,13 +1144,37 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (LockScreenFrame.Visibility == Visibility.Visible) return;
         if (_lockInProgress) return;
         if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return;
+        if (IsRestoreBarrierBlockingLock(userInitiated: true)) return;
         _lockInProgress = true;
         _ = LockNowCoreAsync();
     }
 
 
 
-    private void BindStoreSaveFailed()
+
+
+
+    private bool IsRestoreBarrierBlockingLock(bool userInitiated)
+    {
+        if (App.Store is not { IsSaveSuppressed: true })
+        {
+            _lockSuppressWarned = false;
+            return false;
+        }
+        if (userInitiated || !_lockSuppressWarned)
+        {
+            _lockSuppressWarned = true;
+            App.ShowToast(App.GetString("Common_Toast_RestorePending"), ToastTone.Error);
+            Services.CrashLogger.LogNote("MainWindow.Lock",
+                "lock refused: a restore is pending a restart (disk holds the restored vault, memory still holds the old one)");
+        }
+        return true;
+    }
+
+
+
+
+    public void BindStoreSaveFailed()
     {
         if (App.Store is { } store)
         {
@@ -1050,6 +1184,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     }
 
     private void OnStoreSaveFailed(string message) => DispatcherQueue.TryEnqueue(ShowSaveFailedDialog);
+
+
+    private void CloseModalSurfacesForLock()
+    {
+        DenyQueuedMcpAuthorizations();
+        if (McpAuthorizeOverlay.Visibility == Visibility.Visible || _mcpAuthorizeResult != null)
+            CloseMcpAuthorizeDialog(invokeResult: true, allowed: false);
+        if (MigrateFormatOverlay.Visibility == Visibility.Visible)
+            HideMigrateFormatDialog();
+    }
 
     private bool _lockInProgress;
     private bool _carouselInterruptedByLock;
@@ -1090,6 +1234,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             ResetMeltVisual(WelcomeMeltBlob0);
             ResetMeltVisual(WelcomeMeltBlob1);
             ResetMeltVisual(WelcomeMeltBlob2);
+
+
+
+            CloseModalSurfacesForLock();
             ShowLockScreen();
 
 
@@ -1158,6 +1306,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 ApplyVisibleTabs(unlockedTabs.ToHashSet());
             TrashPage.CleanupExpired();
             Services.AutoBackupService.SyncAutoBackupTimer(DispatcherQueue);
+            Services.UpdateAutoCheckService.SyncAutoCheckTimer();
             if (Content is FrameworkElement root) App.ApplyLocalizedTexts(root);
 
 
@@ -1172,6 +1321,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             }
             else
             {
+
+
+                WelcomeOverlay.Visibility = Visibility.Visible;
                 WelcomeEntryAnimation.Begin();
             }
         }
@@ -1182,6 +1334,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (App.Store is { NeedsFormatMigration: true } && !App.Store.Database.AppSettings.GcmMigrationRejected)
             ShowMigrateFormatDialog();
         else if (App.Store is { NeedsKdfMigration: true } && !App.Store.Database.AppSettings.KdfMigrationRejected)
+            ShowMigrateFormatDialog();
+        else if (App.Store is { NeedsV5Migration: true } && !App.Store.Database.AppSettings.V5MigrationRejected)
             ShowMigrateFormatDialog();
 
 
@@ -1270,6 +1424,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private bool _migrateFailed;
     private bool _migrateInFlight;
     private bool _migrateIsKdf;
+    private bool _migrateIsV5;
 
     public void ShowMigrateFormatDialog()
     {
@@ -1277,14 +1432,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
         _migrateIsKdf = App.Store is { NeedsKdfMigration: true };
-        MigrateFormatMessage.Text = App.GetString(_migrateIsKdf ? "Security_Migrate_Kdf_Body" : "Security_Migrate_Body");
+        _migrateIsV5 = App.Store is { NeedsV5Migration: true };
+        MigrateFormatMessage.Text = App.GetString(_migrateIsV5 ? "Security_Migrate_V5_Body"
+            : _migrateIsKdf ? "Security_Migrate_Kdf_Body" : "Security_Migrate_Body");
         MigrateFormatMessage.Foreground = App.GetBrush("AppTextSecondaryBrush");
-        MigrateFormatTitle.Text = App.GetString(_migrateIsKdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
+        MigrateFormatTitle.Text = App.GetString(_migrateIsV5 ? "Security_Migrate_V5_Title"
+            : _migrateIsKdf ? "Security_Migrate_Kdf_Title" : "Security_Migrate_Title");
         MigrateLaterButton.Visibility = Visibility.Visible;
         MigrateConfirmText.Text = App.GetString("Security_Migrate_Confirm");
         MigrateFormatDialogTransform.ScaleX = 0.94; MigrateFormatDialogTransform.ScaleY = 0.94; MigrateFormatDialogTransform.TranslateY = 24;
         MigrateFormatDialog.Opacity = 0;
-        MigrateFormatOverlay.Visibility = Visibility.Visible;
+        MigrateFormatOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, MigrateFormatOverlay, MigrateFormatDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, MigrateFormatScrim); Storyboard.SetTargetProperty(da, "Opacity"); sb.Children.Add(da);
@@ -1312,7 +1470,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
         if (App.Store?.Database.AppSettings is { } s)
         {
-            if (_migrateIsKdf) s.KdfMigrationRejected = true; else s.GcmMigrationRejected = true;
+
+
+
+
+
+            if (_migrateIsV5) { s.V5MigrationRejected = true; if (_migrateIsKdf) s.KdfMigrationRejected = true; }
+            else if (_migrateIsKdf) { s.KdfMigrationRejected = true; }
+            else { s.GcmMigrationRejected = true; }
             App.Store.SaveAsync();
         }
         HideMigrateFormatDialog();
@@ -1333,7 +1498,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         try
         {
             ok = await System.Threading.Tasks.Task.Run(() =>
-                _migrateIsKdf ? App.Store?.MigrateKdf() == true : App.Store?.MigrateFormat() == true);
+                _migrateIsV5 ? App.Store?.MigrateToV5() == true
+                : _migrateIsKdf ? App.Store?.MigrateKdf() == true : App.Store?.MigrateFormat() == true);
         }
         catch { ok = false; }
         finally
@@ -1342,6 +1508,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             MigrateConfirmButton.IsEnabled = true;
             MigrateLaterButton.IsEnabled = true;
         }
+
+        if (LockScreenFrame.Visibility == Visibility.Visible) return;
         if (ok)
         {
             _settingsPage?.UpdatePrivacyLockUI();
@@ -1362,7 +1530,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         MigrateFormatMessage.Text = App.GetString("Security_Migrate_Failed");
         MigrateFormatMessage.Foreground = App.GetBrush("AppDangerTextBrush");
         MigrateLaterButton.Visibility = Visibility.Collapsed;
-        MigrateConfirmText.Text = App.GetString("Common_Button_GotIt");
+        MigrateConfirmText.Text = App.GetString("Common_Button_Confirm");
     }
 
     private void UpdateWelcomeLayout(double w, double h)
@@ -1435,7 +1603,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         MenuSidePanelTranslate.X = 0;
         _panelHome = MenuSidePanel.TransformToVisual(_sideRoot)
                          .TransformBounds(new Windows.Foundation.Rect(0, 0, MenuSidePanel.ActualWidth, MenuSidePanel.ActualHeight));
-        MenuSidePanelTranslate.X = _edgeSign * -MenuSidePanel.ActualWidth;
+        MenuSidePanelTranslate.X = _edgeSign * MenuSidePanel.ActualWidth;
         StartSideTransition(Math.Min(_sideProgress + 1.0, 2.0));
         EnsureSideRendering();
     }
@@ -1650,10 +1818,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (!_trashChanged) return;
         _trashChanged = false;
-        _memoPage = new BasicMemoPage();
-        _planPage = new PlanPage();
-        _filePathPage = new FilePathPage();
-        _diaryPage = new DiaryPage();
+
+
+
+        if (_memoPage is not null) _memoPage = RebuildPage(_memoPage, new BasicMemoPage());
+        if (_planPage is not null) _planPage = RebuildPage(_planPage, new PlanPage());
+        if (_filePathPage is not null) _filePathPage = RebuildPage(_filePathPage, new FilePathPage());
+        if (_diaryPage is not null) _diaryPage = RebuildPage(_diaryPage, new DiaryPage());
         _memoStale = _planStale = _fileStale = _diaryStale = false;
     }
 
@@ -1735,10 +1906,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
         var shown = RootFrame.Content;
-        if (_memoPage is not null && !ReferenceEquals(_memoPage, shown)) _memoPage = new BasicMemoPage();
-        if (_planPage is not null && !ReferenceEquals(_planPage, shown)) _planPage = new PlanPage();
-        if (_filePathPage is not null && !ReferenceEquals(_filePathPage, shown)) _filePathPage = new FilePathPage();
-        if (_diaryPage is not null && !ReferenceEquals(_diaryPage, shown)) _diaryPage = new DiaryPage();
+
+
+
+        if (_memoPage is not null && !ReferenceEquals(_memoPage, shown)) _memoPage = RebuildPage(_memoPage, new BasicMemoPage());
+        if (_planPage is not null && !ReferenceEquals(_planPage, shown)) _planPage = RebuildPage(_planPage, new PlanPage());
+        if (_filePathPage is not null && !ReferenceEquals(_filePathPage, shown)) _filePathPage = RebuildPage(_filePathPage, new FilePathPage());
+        if (_diaryPage is not null && !ReferenceEquals(_diaryPage, shown)) _diaryPage = RebuildPage(_diaryPage, new DiaryPage());
         _memoStale = _planStale = _fileStale = _diaryStale = false;
 
         switch (shown)
@@ -1750,6 +1924,21 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         }
 
         UpdateWorkspaceSwitcher();
+    }
+
+
+
+
+
+    private T RebuildPage<T>(T oldPage, T freshPage) where T : class
+    {
+        if (ReferenceEquals(_previousContent, oldPage)) _previousContent = freshPage;
+
+
+
+        if (ReferenceEquals(_preSearchContent, oldPage)) _preSearchContent = freshPage;
+        if (ReferenceEquals(_preTrashContent, oldPage)) _preTrashContent = freshPage;
+        return freshPage;
     }
 
 
@@ -1834,8 +2023,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             NavBar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(visibleItems[i], i);
         }
-        _navIndicatorPlaced = false;
         NavIndicator.Opacity = 0;
+        RelocateNavGlow();
         UpdateNavBarVisibility();
     }
 
@@ -2842,6 +3031,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+
+
     private bool BeginWelcomeMelt(Windows.Foundation.Point pt)
     {
         var root = (FrameworkElement)Content;
@@ -2854,9 +3045,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             PaintMeltBlob(WelcomeMeltBlob1, pt, brand, 0.62f, 0.28f);
             PaintMeltBlob(WelcomeMeltBlob2, pt, brand, 0.45f, 0.20f);
             WelcomeMeltLayer.Visibility = Visibility.Visible;
-            SpreadBlob(WelcomeMeltBlob0, far * 1.55, 0, 1650);
-            SpreadBlob(WelcomeMeltBlob1, far * 1.40, 180, 1850);
-            SpreadBlob(WelcomeMeltBlob2, far * 1.75, 360, 2050);
+
+
+
+            SpreadBlob(WelcomeMeltBlob0, far * 1.55, 0, 1560);
+            SpreadBlob(WelcomeMeltBlob1, far * 1.40, 140, 1420);
+            SpreadBlob(WelcomeMeltBlob2, far * 1.75, 280, 1280);
         }
         catch (Exception ex)
         {
@@ -2896,6 +3090,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 _welcomeFading = false;
                 return;
             }
+            _welcomeFading = false;
             WelcomeExitCommit();
             WelcomeOverlay.Visibility = Visibility.Collapsed;
             ShowMainContent();
@@ -2939,9 +3134,32 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (sender is Button button && button.Tag is string tag)
         {
+
+            if (IsTabAlreadyActive(tag)) { ScrollActiveTabToTop(tag); return; }
             NavigateToPage(tag);
             UpdateNavSelection(button);
             WelcomeOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+
+    private bool IsTabAlreadyActive(string tag) => tag switch
+    {
+        "Memo" => ReferenceEquals(RootFrame.Content, _memoPage),
+        "File" => ReferenceEquals(RootFrame.Content, _filePathPage),
+        "Plan" => ReferenceEquals(RootFrame.Content, _planPage),
+        "Diary" => ReferenceEquals(RootFrame.Content, _diaryPage),
+        _ => false,
+    };
+
+    private void ScrollActiveTabToTop(string tag)
+    {
+        switch (tag)
+        {
+            case "Memo": _memoPage.ScrollToMain(); break;
+            case "File": _filePathPage.ScrollToMain(); break;
+            case "Plan": _planPage.ScrollToMain(); break;
+            case "Diary": _diaryPage.ScrollToMain(); break;
         }
     }
 
@@ -2982,6 +3200,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (App.Store is not { IsLoaded: true }) return;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+        if (IsWelcomeCarouselUp) return;
         if (!IsTabVisible("File")) { RefuseHiddenTabAction("File"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -2999,6 +3218,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (App.Store is not { IsLoaded: true }) return;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+        if (IsWelcomeCarouselUp) return;
         if (!IsTabVisible("Diary")) { RefuseHiddenTabAction("Diary"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3015,6 +3235,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (App.Store is not { IsLoaded: true }) return;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+        if (IsWelcomeCarouselUp) return;
         if (!IsTabVisible("Plan")) { RefuseHiddenTabAction("Plan"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3031,6 +3252,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (App.Store is not { IsLoaded: true }) return;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+        if (IsWelcomeCarouselUp) return;
         if (!IsTabVisible("Plan")) { RefuseHiddenTabAction("Plan"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3120,10 +3342,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+    private bool IsWelcomeCarouselUp => WelcomeCarousel.Visibility == Visibility.Visible;
+
+
+
+
     private bool CanInvokeGlobalShortcut()
     {
         if (LockScreenFrame.Visibility == Visibility.Visible) return false;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return false;
+        if (IsWelcomeCarouselUp) return false;
         if (IsFullscreenPage(RootFrame.Content)) return false;
 
 
@@ -3192,9 +3420,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 _planPage?.ShowNewNoteDialog();
                 break;
             case "new_diary":
+                if (!IsTabVisible("Diary")) { RefuseHiddenTabAction("Diary"); break; }
                 NavigateToEditor();
                 break;
             case "new_document":
+                if (!IsTabVisible("Diary")) { RefuseHiddenTabAction("Diary"); break; }
                 NavigateToEditor(null, "markdown");
                 break;
             case "open_settings":
@@ -3417,16 +3647,83 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+
+
+
+
+
+    private bool _navGlowRetryHooked;
+    private EventHandler<object>? _navGlowRetryHandler;
+
     private void WireNavGlowRelocation()
     {
-        NavBar.SizeChanged += (_, _) =>
-        {
-            if (_selectedNavButton == null) return;
-            _navIndicatorPlaced = false;
-            UpdateNavIndicator(_selectedNavButton);
-        };
+        NavBar.SizeChanged += (_, _) => RelocateNavGlow();
     }
 
+
+
+    private void RelocateNavGlow()
+    {
+        if (SilentPlaceNavGlow()) return;
+        HookNavGlowRetry(animate: false);
+    }
+
+
+    private bool SilentPlaceNavGlow()
+    {
+        var selected = _selectedNavButton;
+        if (selected == null) return false;
+        if (NavBar.Visibility != Visibility.Visible || selected.Visibility != Visibility.Visible
+            || selected.ActualWidth < 1) return false;
+        var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
+        SetNavGlowX(pt.X);
+        NavIndicator.Width = selected.ActualWidth;
+        NavIndicator.Opacity = 1;
+        _navIndicatorPlaced = true;
+        return true;
+    }
+
+
+
+
+    private void HookNavGlowRetry(bool animate)
+    {
+        if (_navGlowRetryHooked) return;
+        _navGlowRetryHooked = true;
+        void Unhook()
+        {
+            var h = _navGlowRetryHandler;
+            if (h != null) NavBar.LayoutUpdated -= h;
+            _navGlowRetryHandler = null;
+            _navGlowRetryHooked = false;
+        }
+        EventHandler<object> handler = (_, _) =>
+        {
+            if (NavBar.Visibility != Visibility.Visible)
+            {
+                Unhook();
+                return;
+            }
+            if (animate)
+            {
+                var sel = _selectedNavButton;
+                if (sel == null || sel.Visibility != Visibility.Visible || sel.ActualWidth < 1) return;
+                Unhook();
+                UpdateNavIndicator(sel);
+                return;
+            }
+            if (!SilentPlaceNavGlow()) return;
+            Unhook();
+        };
+        _navGlowRetryHandler = handler;
+        NavBar.LayoutUpdated += handler;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (!_navGlowRetryHooked) return;
+            if (!SilentPlaceNavGlow()) return;
+            Unhook();
+        });
+    }
 
 
 
@@ -3436,9 +3733,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             || selected.Visibility != Visibility.Visible || selected.ActualWidth < 1)
         {
 
-            var pending = selected;
-            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-                () => { if (pending != null && NavBar.Visibility == Visibility.Visible && ReferenceEquals(_selectedNavButton, pending) && pending.Visibility == Visibility.Visible && pending.ActualWidth >= 1) UpdateNavIndicator(pending); });
+            HookNavGlowRetry(animate: true);
             return;
         }
         var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
@@ -3629,6 +3924,20 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         catch { }
     }
 
+
+    private const string TitleEasterEggUrl = "https://novara.xin/easteregg.html";
+
+    private void TitleBrandButton_Click(object sender, RoutedEventArgs e)
+    {
+
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(TitleEasterEggUrl) { UseShellExecute = true }); }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("MainWindow.TitleBrandButton", ex.Message);
+        }
+    }
+
     private void WorkspaceSwitcherButton_Click(object sender, RoutedEventArgs e)
     {
         var ws = App.Store?.Database.AppSettings.Workspaces;
@@ -3686,6 +3995,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         foreach (var b in new[] { NavMemo, NavFile, NavPlan, NavDiary })
             if (b.Visibility == Visibility.Visible) count++;
         NavBar.Visibility = count <= 1 ? Visibility.Collapsed : Visibility.Visible;
+
+
+
+
+
+        if (NavBar.Visibility == Visibility.Visible) RelocateNavGlow();
     }
 
     public void ReloadPages()
@@ -3708,7 +4023,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _preSearchContent = null;
         _preTrashContent = null;
         _trashChanged = false;
-        if (RootFrame.Content is SettingsPage or DiaryEditorPage or SearchPage or TrashPage)
+        if (RootFrame.Content is SettingsPage or ToolsPage or DiaryEditorPage or SearchPage or TrashPage)
         {
             var (tab, nav) = ResolveNavTarget(_selectedNavButton?.Tag as string ?? "Memo");
             NavigateToPage(tab);
@@ -3757,6 +4072,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void NavigateBackFromEditor()
     {
+
+
+
+        if (!IsTabVisible("Diary"))
+        {
+            var (tab, nav) = ResolveNavTarget("Diary");
+            NavigateToPage(tab);
+            UpdateNavSelection(nav);
+            _diaryEditorPage?.ClearContent();
+            return;
+        }
         var fadeOut = new Storyboard();
         var oa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(120), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, RootFrame);
@@ -3792,6 +4118,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void NavigateToTools(bool openWorkspace = false)
     {
         _toolsPage ??= new ToolsPage();
+
+
+
+        if (ReferenceEquals(RootFrame.Content, _toolsPage))
+        {
+            if (openWorkspace) _toolsPage.OpenWorkspaceManagement();
+            return;
+        }
         _previousContent = RootFrame.Content;
         BottomToolbarPanel.Visibility = Visibility.Collapsed;
 
@@ -3821,6 +4155,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void NavigateToSettings()
     {
         _settingsPage ??= new SettingsPage();
+
+
+        if (ReferenceEquals(RootFrame.Content, _settingsPage)) return;
         _previousContent = RootFrame.Content;
 
 
@@ -3925,7 +4262,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _corruptDialogIsIoError = true;
         StoreCorruptTitleText.Text = App.GetString("Store_IoError_Title");
         StoreCorruptDetailText.Text = App.GetString("Store_Err_IoFail");
-        StoreCorruptConfirmText.Text = App.GetString("Common_Ok");
+        StoreCorruptConfirmText.Text = App.GetString("Common_Button_Confirm");
         StoreCorruptConfirmButton.Background = App.GetBrush("AppSurfaceBrush");
         StoreCorruptConfirmButton.Foreground = App.GetBrush("AppTextPrimaryBrush");
         ShowCorruptDialogCore();
@@ -3933,9 +4270,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void ShowCorruptDialogCore()
     {
+
+
+
+
+        _corruptHideSb?.Stop();
+        _corruptHideSb = null;
+        _animCorruptHide = false;
         StoreCorruptDialogTransform.ScaleX = 0.94; StoreCorruptDialogTransform.ScaleY = 0.94; StoreCorruptDialogTransform.TranslateY = 24;
         StoreCorruptDialog.Opacity = 0;
-        StoreCorruptOverlay.Visibility = Visibility.Visible;
+        StoreCorruptOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, StoreCorruptOverlay, StoreCorruptDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, StoreCorruptDialog); Storyboard.SetTargetProperty(da, "Opacity");
@@ -3969,55 +4313,83 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(ty, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
         sb.Children.Add(ty);
-        sb.Completed += (_, _) => { StoreCorruptOverlay.Visibility = Visibility.Collapsed; _animCorruptHide = false; };
+        _corruptHideSb = sb;
+        sb.Completed += (_, _) =>
+        {
+            _animCorruptHide = false;
+            if (!ReferenceEquals(_corruptHideSb, sb)) return;
+            _corruptHideSb = null;
+            StoreCorruptOverlay.Visibility = Visibility.Collapsed;
+        };
         sb.Begin();
     }
 
-    private void StoreCorruptConfirm_Click(object sender, RoutedEventArgs e)
+    private async void StoreCorruptConfirm_Click(object sender, RoutedEventArgs e)
     {
-        if (_corruptDialogIsIoError) { HideCorruptStoreDialog(); return; }
 
 
 
-        try { AutoBackupService.CreateSnapshot(isManual: true); } catch { }
-
-
-
-        var reset = App.Store?.ResetDatabase();
-        if (reset == null || reset.Status != LoadStatus.EmptyCreated)
-        {
-            HideCorruptStoreDialog();
-            return;
-        }
+        if (_rebuildInFlight) return;
+        _rebuildInFlight = true;
+        StoreCorruptConfirmButton.IsEnabled = false;
         try
         {
-            Novara.Services.PasswordService.Delete();
-            Novara.Services.PasswordService.DeleteLockout();
-            Novara.Services.WindowsHelloService.Disable();
-            Novara.Services.SyncService.MarkRestorePendingConfirm();
+            if (_corruptDialogIsIoError) { HideCorruptStoreDialog(); return; }
+
+
+
+
+
+
+            try { await System.Threading.Tasks.Task.Run(() => AutoBackupService.CreateSnapshot(isManual: true)); } catch { }
+
+
+
+            var reset = App.Store?.ResetDatabase();
+            if (reset == null || reset.Status != LoadStatus.EmptyCreated)
+            {
+                HideCorruptStoreDialog();
+                return;
+            }
+            try
+            {
+                Novara.Services.PasswordService.Delete();
+                Novara.Services.PasswordService.DeleteLockout();
+                Novara.Services.WindowsHelloService.Disable();
+                Novara.Services.SyncService.MarkRestorePendingConfirmOrWarn("corrupt-store rebuild");
+            }
+            finally
+            {
+                HideCorruptStoreDialog();
+                if (LockScreenFrame.Visibility == Visibility.Visible)
+                {
+                    LockScreenFrame.Visibility = Visibility.Collapsed;
+                    LockScreenFrame.Content = null;
+                    WelcomeEntryAnimation.Begin();
+                }
+                else
+                {
+                    ShowMainContent();
+                }
+            }
         }
         finally
         {
-            HideCorruptStoreDialog();
-            if (LockScreenFrame.Visibility == Visibility.Visible)
-            {
-                LockScreenFrame.Visibility = Visibility.Collapsed;
-                LockScreenFrame.Content = null;
-                WelcomeEntryAnimation.Begin();
-            }
-            else
-            {
-                ShowMainContent();
-            }
+            _rebuildInFlight = false;
+            StoreCorruptConfirmButton.IsEnabled = true;
         }
     }
+
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs((Grid)Content, _dialogMap, widthFit: _dialogWidthFit);
 
     private void ShowSaveFailedDialog()
     {
         _animSaveFailedHide = false;
+        _saveFailedHideSb = null;
         SaveFailedDialogTransform.ScaleX = 0.94; SaveFailedDialogTransform.ScaleY = 0.94; SaveFailedDialogTransform.TranslateY = 24;
         SaveFailedDialog.Opacity = 0;
-        SaveFailedOverlay.Visibility = Visibility.Visible;
+        SaveFailedOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, SaveFailedOverlay, SaveFailedDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, SaveFailedDialog); Storyboard.SetTargetProperty(da, "Opacity");
@@ -4051,7 +4423,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(ty, SaveFailedDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
         sb.Children.Add(ty);
-        sb.Completed += (_, _) => { SaveFailedOverlay.Visibility = Visibility.Collapsed; _animSaveFailedHide = false; };
+        _saveFailedHideSb = sb;
+        sb.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_saveFailedHideSb, sb)) return;
+            _saveFailedHideSb = null;
+            SaveFailedOverlay.Visibility = Visibility.Collapsed;
+            _animSaveFailedHide = false;
+        };
         sb.Begin();
     }
 
@@ -4062,8 +4441,170 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-private void ShowThemeRestartOverlay()
+
+
+
+
+
+    private bool CanShowAutoUpdateReminder()
+        => !_restarting
+           && LockScreenFrame.Visibility != Visibility.Visible
+           && WelcomeOverlay.Visibility != Visibility.Visible
+           && !IsWelcomeCarouselUp
+           && McpAuthorizeOverlay.Visibility != Visibility.Visible
+           && ThemeRestartOverlay.Visibility != Visibility.Visible
+           && QuickCaptureOverlay.Visibility != Visibility.Visible
+           && StoreCorruptOverlay.Visibility != Visibility.Visible
+           && SaveFailedOverlay.Visibility != Visibility.Visible
+           && MigrateFormatOverlay.Visibility != Visibility.Visible
+           && _veilCount == 0;
+
+
+
+    public bool ShowAutoUpdateReminder(Novara.Services.UpdateService.LatestRelease rel)
     {
+        if (AutoUpdateOverlay.Visibility == Visibility.Visible || _autoUpdateAnimating) return true;
+        if (!CanShowAutoUpdateReminder()) return false;
+        _autoUpdateRelease = rel;
+        _autoUpdateHiding = false;
+        _autoUpdateHideSb = null;
+
+        AutoUpdateTitleText.Text = string.Format(App.GetString("Update_Auto_Title"), Novara.Services.UpdatePolicy.FormatDisplayVersion(rel.Version));
+        AutoUpdateBodyText.Text = string.Format(App.GetString("Update_Auto_Body"),
+            Novara.Services.UpdateService.CurrentVersion, Novara.Services.UpdatePolicy.FormatDisplayVersion(rel.Version));
+        AutoUpdateUpdateText.Text = App.GetString("Update_Btn_Install");
+        _autoUpdateAnimating = true;
+        _autoUpdateDismissPending = false;
+        AutoUpdateScrim.Opacity = 0;
+        AutoUpdateDialog.Opacity = 0;
+        AutoUpdateDialogTransform.ScaleX = 0.92; AutoUpdateDialogTransform.ScaleY = 0.92; AutoUpdateDialogTransform.TranslateY = 20;
+        AutoUpdateOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, AutoUpdateOverlay, AutoUpdateDialog, _dialogWidthFit);
+        var sb = new Storyboard();
+        var sa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
+        Storyboard.SetTarget(sa, AutoUpdateScrim); Storyboard.SetTargetProperty(sa, "Opacity");
+        sb.Children.Add(sa);
+        var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        Storyboard.SetTarget(da, AutoUpdateDialog); Storyboard.SetTargetProperty(da, "Opacity");
+        sb.Children.Add(da);
+        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(xa, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
+        sb.Children.Add(xa);
+        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(ya, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
+        sb.Children.Add(ya);
+        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(ty, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
+        sb.Children.Add(ty);
+        sb.Completed += (_, _) =>
+        {
+            _autoUpdateAnimating = false;
+
+            if (_autoUpdateDismissPending) { _autoUpdateDismissPending = false; HideAutoUpdateOverlay(); }
+        };
+        sb.Begin();
+
+
+        DispatcherQueue.TryEnqueue(() => AutoUpdateCancelButton.Focus(FocusState.Programmatic));
+        return true;
+    }
+
+
+    public void DismissAutoUpdateReminder()
+    {
+        _autoUpdateRelease = null;
+        if (AutoUpdateOverlay.Visibility != Visibility.Visible) return;
+
+
+        if (_autoUpdateAnimating) { _autoUpdateDismissPending = true; return; }
+        if (_autoUpdateHiding) return;
+        HideAutoUpdateOverlay();
+    }
+
+    private void HideAutoUpdateOverlay()
+    {
+        if (_autoUpdateHiding) return;
+        _autoUpdateHiding = true;
+        var sb = new Storyboard();
+        var sa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(sa, AutoUpdateScrim); Storyboard.SetTargetProperty(sa, "Opacity");
+        sb.Children.Add(sa);
+        var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(da, AutoUpdateDialog); Storyboard.SetTargetProperty(da, "Opacity");
+        sb.Children.Add(da);
+        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(xa, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
+        sb.Children.Add(xa);
+        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(ya, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
+        sb.Children.Add(ya);
+        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(ty, AutoUpdateDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
+        sb.Children.Add(ty);
+        sb.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_autoUpdateHideSb, sb)) return;
+            _autoUpdateHideSb = null;
+            AutoUpdateOverlay.Visibility = Visibility.Collapsed;
+            _autoUpdateHiding = false;
+            _autoUpdateDismissPending = false;
+        };
+        _autoUpdateHideSb = sb;
+        sb.Begin();
+    }
+
+    private void AutoUpdateScrim_Tapped(object sender, TappedRoutedEventArgs e) => AutoUpdateCancel_Click(sender, e);
+
+
+    private void AutoUpdateOverlay_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Escape) return;
+        e.Handled = true;
+        AutoUpdateCancel_Click(this, new RoutedEventArgs());
+    }
+
+
+
+    private void AutoUpdateCancel_Click(object sender, RoutedEventArgs e)
+    {
+        var rel = _autoUpdateRelease;
+        if (App.Store is { IsLoaded: true } store && rel is not null)
+        {
+            store.Database.AppSettings.UpdatePendingVersion = rel.Version;
+
+
+            if (!store.SaveSync())
+                Services.CrashLogger.LogNote("AutoUpdate", "pending version save failed");
+
+            _settingsPage?.NotifyPendingVersionChanged();
+        }
+        Services.UpdateAutoCheckService.ClearPendingRelease();
+        HideAutoUpdateOverlay();
+    }
+
+
+
+    private void AutoUpdateUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        var rel = _autoUpdateRelease;
+        Services.UpdateAutoCheckService.ClearPendingRelease();
+        HideAutoUpdateOverlay();
+        if (rel == null) return;
+        Pages.SettingsPage.PendingAutoUpdateRelease = rel;
+        if (RootFrame.Content is Pages.SettingsPage sp) sp.ConsumeQueuedUpdate();
+        else NavigateToSettings();
+    }
+
+    private void ShowThemeRestartOverlay()
+    {
+
+
+        if (AutoUpdateOverlay.Visibility == Visibility.Visible || _autoUpdateAnimating) return;
+        if (QuickCaptureOverlay.Visibility == Visibility.Visible) return;
+
+
+
+        _themeRestartHiding = false;
+        _themeRestartHideSb = null;
         if (_themeRestartAnimating) return;
         _themeRestartAnimating = true;
         ThemeRestartScrim.Opacity = 0;
@@ -4071,7 +4612,7 @@ private void ShowThemeRestartOverlay()
 
         ThemeRestartDialog.Opacity = 0;
         ThemeRestartDialogTransform.ScaleX = 0.92; ThemeRestartDialogTransform.ScaleY = 0.92; ThemeRestartDialogTransform.TranslateY = 20;
-        ThemeRestartOverlay.Visibility = Visibility.Visible;
+        ThemeRestartOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, ThemeRestartOverlay, ThemeRestartDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var sa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
         Storyboard.SetTarget(sa, ThemeRestartScrim); Storyboard.SetTargetProperty(sa, "Opacity");
@@ -4096,8 +4637,11 @@ private void ShowThemeRestartOverlay()
     {
 
 
-        if (_themeRestartAnimating) return;
-        _themeRestartAnimating = true;
+
+
+        if (_themeRestartHiding) return;
+        _themeRestartHiding = true;
+        _themeRestartCancelled = true;
         var sb = new Storyboard();
         var sa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(sa, ThemeRestartScrim); Storyboard.SetTargetProperty(sa, "Opacity");
@@ -4114,7 +4658,14 @@ private void ShowThemeRestartOverlay()
         var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
         sb.Children.Add(ty);
-        sb.Completed += (_, _) => { ThemeRestartOverlay.Visibility = Visibility.Collapsed; _themeRestartAnimating = false; };
+        sb.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_themeRestartHideSb, sb)) return;
+            _themeRestartHideSb = null;
+            ThemeRestartOverlay.Visibility = Visibility.Collapsed;
+            _themeRestartHiding = false;
+        };
+        _themeRestartHideSb = sb;
         sb.Begin();
     }
 
@@ -4122,6 +4673,7 @@ private void ShowThemeRestartOverlay()
     {
         if (_restarting) return;
         _restarting = true;
+        _themeRestartCancelled = false;
 
 
 
@@ -4130,7 +4682,7 @@ private void ShowThemeRestartOverlay()
         if (RootFrame.Content is DiaryEditorPage pendingEditor)
         {
             await FlushEditorForExitAsync(pendingEditor);
-            if (ThemeRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; }
+            if (_themeRestartCancelled) { _restarting = false; return; }
         }
 
         HideThemeRestartOverlay();
@@ -4181,15 +4733,46 @@ private void ShowThemeRestartOverlay()
     private Microsoft.UI.Xaml.DispatcherTimer? _mcpAuthorizeTimer;
 
 
-    private readonly List<(string ClientPath, Action<bool> Result)> _mcpAuthorizeQueue = new();
+
+
+    private readonly List<(string ClientPath, Action<bool> Result, DateTimeOffset EnqueuedAt)> _mcpAuthorizeQueue = new();
     private const int McpAuthorizeQueueLimit = 8;
+    private static readonly TimeSpan McpAuthorizeQueueMaxAge = TimeSpan.FromSeconds(100);
+
+    private void DrainMcpAuthorizeQueue()
+    {
+        while (_mcpAuthorizeQueue.Count > 0)
+        {
+            var next = _mcpAuthorizeQueue[0];
+            _mcpAuthorizeQueue.RemoveAt(0);
+            if (DateTimeOffset.UtcNow - next.EnqueuedAt > McpAuthorizeQueueMaxAge)
+            {
+                try { next.Result(false); } catch { }
+                continue;
+            }
+            ShowMcpAuthorizeDialog(next.ClientPath, next.Result);
+            return;
+        }
+    }
+
+    private void DenyQueuedMcpAuthorizations()
+    {
+        while (_mcpAuthorizeQueue.Count > 0)
+        {
+            var queued = _mcpAuthorizeQueue[0];
+            _mcpAuthorizeQueue.RemoveAt(0);
+            try { queued.Result(false); } catch { }
+        }
+    }
 
     private void QueueOrShowMcpAuthorize(string clientPath, Action<bool> onResult)
     {
+
+        if (LockScreenFrame.Visibility == Visibility.Visible) { onResult(false); return; }
         bool busy = _mcpAuthorizeResult != null || _mcpAuthorizeAnimating || McpAuthorizeOverlay.Visibility == Visibility.Visible;
         if (!busy) { ShowMcpAuthorizeDialog(clientPath, onResult); return; }
         if (_mcpAuthorizeQueue.Count >= McpAuthorizeQueueLimit) { onResult(false); return; }
-        _mcpAuthorizeQueue.Add((clientPath, onResult));
+        _mcpAuthorizeQueue.Add((clientPath, onResult, DateTimeOffset.UtcNow));
     }
 
 
@@ -4213,13 +4796,26 @@ private void ShowThemeRestartOverlay()
     {
 
 
-        if (WelcomeOverlay.Visibility == Visibility.Visible) { onResult?.Invoke(false); return; }
+
+
+        if (WelcomeOverlay.Visibility == Visibility.Visible || IsWelcomeCarouselUp)
+        {
+            onResult?.Invoke(false);
+            DrainMcpAuthorizeQueue();
+            return;
+        }
+        if (LockScreenFrame.Visibility == Visibility.Visible)
+        {
+            onResult?.Invoke(false);
+            DrainMcpAuthorizeQueue();
+            return;
+        }
         _mcpAuthorizeResult = onResult;
         McpAuthorizePath.Text = clientPath;
         McpAuthorizePath.Visibility = string.IsNullOrEmpty(clientPath) ? Visibility.Collapsed : Visibility.Visible;
         McpAuthorizeDialogTransform.ScaleX = 0.94; McpAuthorizeDialogTransform.ScaleY = 0.94; McpAuthorizeDialogTransform.TranslateY = 24;
         McpAuthorizeDialog.Opacity = 0;
-        McpAuthorizeOverlay.Visibility = Visibility.Visible;
+        McpAuthorizeOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, McpAuthorizeOverlay, McpAuthorizeDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, McpAuthorizeScrim); Storyboard.SetTargetProperty(da, "Opacity"); sb.Children.Add(da);
@@ -4248,12 +4844,7 @@ private void ShowThemeRestartOverlay()
         sb.Completed += (_, _) =>
         {
             McpAuthorizeOverlay.Visibility = Visibility.Collapsed; _mcpAuthorizeAnimating = false;
-            if (_mcpAuthorizeQueue.Count > 0)
-            {
-                var next = _mcpAuthorizeQueue[0];
-                _mcpAuthorizeQueue.RemoveAt(0);
-                ShowMcpAuthorizeDialog(next.ClientPath, next.Result);
-            }
+            DrainMcpAuthorizeQueue();
         };
         sb.Begin();
 
@@ -4265,7 +4856,8 @@ private void ShowThemeRestartOverlay()
     {
 
 
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+        if (WelcomeOverlay.Visibility == Visibility.Visible || IsWelcomeCarouselUp) return;
+        if (LockScreenFrame.Visibility == Visibility.Visible) return;
 
 
         var path = McpAuthorizePath.Text;

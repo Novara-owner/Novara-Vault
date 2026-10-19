@@ -36,8 +36,11 @@ public sealed partial class DiaryPage : Page
     private readonly Dictionary<DiaryEntry, Viewbox> _diaryPinIcons = new();
     private readonly Dictionary<DiaryEntry, Viewbox> _diaryStarIcons = new();
 
-    private readonly Storyboard _deleteConfirmShowStoryboard = new();
-    private readonly Storyboard _deleteConfirmHideStoryboard = new();
+
+    private readonly System.Collections.Generic.Dictionary<Grid, int> _dialogGens = new();
+    private readonly System.Collections.Generic.Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+    private readonly DialogUi.DialogScrollFit _dialogScrollFit = new();
 
 
     private Border? _dragCard;
@@ -55,15 +58,25 @@ public sealed partial class DiaryPage : Page
     private int _autoScrollFrame;
     private bool _autoScrollActive;
 
+
+    internal async void ScrollToMain()
+    {
+        await Services.SmoothScroller.ScrollToTopAsync(DiaryScrollViewer);
+    }
+
     public DiaryPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         KeyDown += Page_KeyDown;
 
         _diaries = (App.Store?.Database.DiaryItems ?? new List<DiaryEntry>()).Where(x => !x.IsDeleted).ToList();
         _emptyAreaMenu = BuildEmptyAreaMenu();
-        _cardContextMenu = BuildCardContextMenu();        InitDeleteConfirmAnimations();
+        _cardContextMenu = BuildCardContextMenu();
+        RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs();
+
+        DeleteConfirmOverlay.ContextRequested += (_, e) => e.Handled = true;
 
         Loaded += Page_Loaded;
 
@@ -73,7 +86,7 @@ public sealed partial class DiaryPage : Page
 
 
             _loadCts?.Cancel();
-            _deleteConfirmHideStoryboard.Stop();
+            _dialogGens.Clear(); _dialogMap.Clear();
             DeleteConfirmOverlay.Visibility = Visibility.Collapsed;
             _currentMenuTarget = null;
             DialogDepth.VeilClear();
@@ -139,8 +152,11 @@ public sealed partial class DiaryPage : Page
         DiaryList.Children.Clear();
         EmptyHint.Visibility = Visibility.Collapsed;
 
-        var diaries = _diaries;
-        if (diaries.Count == 0) { _loadCts = null; _hasLoaded = true; UpdateEmptyHint(); return; }
+
+
+
+        var diaries = _diaries.Where(d => !d.IsDeleted).ToList();
+        if (diaries.Count == 0) { cts.Dispose(); _loadCts = null; _hasLoaded = true; UpdateEmptyHint(); return; }
 
         var sorted = diaries
             .OrderByDescending(d => d.IsPinned)
@@ -205,7 +221,7 @@ public sealed partial class DiaryPage : Page
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
             BorderBrush = App.GetBrush("AppBorderBrush"),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(20, 18, 20, 18),
+            Padding = new Thickness(20, 12, 20, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             RenderTransform = new TranslateTransform(),
             Tag = entry
@@ -244,7 +260,7 @@ public sealed partial class DiaryPage : Page
         {
 
             Text = App.DiaryTitleText(entry.Title),
-            FontSize = 15,
+            FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             CharacterSpacing = App.GetCharacterSpacing(App.DiaryTitleText(entry.Title), 180),
             Foreground = App.GetBrush("AppTextPrimaryBrush"),
@@ -258,7 +274,8 @@ public sealed partial class DiaryPage : Page
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = 4
+            Spacing = 4,
+            Margin = new Thickness(12, 0, 0, 0)
         };
         Grid.SetColumn(iconStack, 1);
         titleRow.Children.Add(iconStack);
@@ -314,7 +331,7 @@ public sealed partial class DiaryPage : Page
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, 6, 0, 0),
             Spacing = 36
         };
         var createdText = string.Format(App.GetString("Diary_Created_At"), entry.CreatedAt.ToString("yyyy-MM-dd HH:mm"));
@@ -1147,7 +1164,11 @@ public sealed partial class DiaryPage : Page
         }
         catch (Exception ex)
         {
+
+
             System.Diagnostics.Debug.WriteLine($"导出 Markdown 失败: {ex.Message}");
+            Services.CrashLogger.LogNote("DiaryExportMarkdown", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
         }
     }
 
@@ -1176,7 +1197,7 @@ public sealed partial class DiaryPage : Page
             var path = picked = FilePicker.PickSaveFile(SanitizeFileName(entry.Title), new[] { ("PNG", new[] { ".png" }) });
             if (path == null) return;
 
-            var logo = ImageExportService.TryReadLogoSvg();
+            var logo = ImageExportService.TryReadLogoBrandHtml();
             var exportedAt = DateTime.Now;
             string content = HtmlSanitizer.Sanitize(entry.Content ?? "");
             string title = App.DiaryTitleText(entry.Title);
@@ -1278,82 +1299,23 @@ public sealed partial class DiaryPage : Page
 
 
 
-    private void InitDeleteConfirmAnimations()
-    {
-
-        var scrimFadeIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(scrimFadeIn, DeleteConfirmScrim);
-        Storyboard.SetTargetProperty(scrimFadeIn, "Opacity");
-        _deleteConfirmShowStoryboard.Children.Add(scrimFadeIn);
-
-        var dialogFadeIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(dialogFadeIn, DeleteConfirmDialog);
-        Storyboard.SetTargetProperty(dialogFadeIn, "Opacity");
-        _deleteConfirmShowStoryboard.Children.Add(dialogFadeIn);
-
-        var scaleXIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(scaleXIn, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(scaleXIn, "ScaleX");
-        _deleteConfirmShowStoryboard.Children.Add(scaleXIn);
-
-        var scaleYIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(scaleYIn, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(scaleYIn, "ScaleY");
-        _deleteConfirmShowStoryboard.Children.Add(scaleYIn);
-
-        var slideUp = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(slideUp, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(slideUp, "TranslateY");
-        _deleteConfirmShowStoryboard.Children.Add(slideUp);
-
-
-        var scrimFadeOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(scrimFadeOut, DeleteConfirmScrim);
-        Storyboard.SetTargetProperty(scrimFadeOut, "Opacity");
-        _deleteConfirmHideStoryboard.Children.Add(scrimFadeOut);
-
-        var dialogFadeOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(dialogFadeOut, DeleteConfirmDialog);
-        Storyboard.SetTargetProperty(dialogFadeOut, "Opacity");
-        _deleteConfirmHideStoryboard.Children.Add(dialogFadeOut);
-
-        var scaleXOut = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(scaleXOut, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(scaleXOut, "ScaleX");
-        _deleteConfirmHideStoryboard.Children.Add(scaleXOut);
-
-        var scaleYOut = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(scaleYOut, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(scaleYOut, "ScaleY");
-        _deleteConfirmHideStoryboard.Children.Add(scaleYOut);
-
-        var slideDown = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(slideDown, DeleteConfirmDialogTransform);
-        Storyboard.SetTargetProperty(slideDown, "TranslateY");
-        _deleteConfirmHideStoryboard.Children.Add(slideDown);
-
-        _deleteConfirmHideStoryboard.Completed += (_, _) =>
-        {
-            DeleteConfirmOverlay.Visibility = Visibility.Collapsed;
-        };
-    }
-
     private void OpenDeleteConfirmDialog()
     {
-        DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
-        DeleteConfirmDialog.Opacity = 0;
-        DeleteConfirmScrim.Opacity = 0;
-        DeleteConfirmOverlay.Visibility = Visibility.Visible;
+
+
+
+        DialogUi.ShowOverlay(RootGrid, _dialogGens, _dialogMap, DeleteConfirmOverlay, DeleteConfirmDialog, DeleteConfirmDialogTransform, _dialogWidthFit);
         DialogDepth.VeilShow();
-        _deleteConfirmShowStoryboard.Stop();
-        _deleteConfirmShowStoryboard.Begin();
     }
+
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs(RootGrid, _dialogMap, _dialogScrollFit, _dialogWidthFit);
 
     private void CloseDeleteConfirmDialog()
     {
         DialogDepth.VeilHide();
-        _deleteConfirmHideStoryboard.Begin();
         _currentMenuTarget = null;
+        DialogUi.HideOverlay(RootGrid, _dialogGens, _dialogMap, DeleteConfirmOverlay, DeleteConfirmDialog, DeleteConfirmDialogTransform, () => { });
     }
 
     private void DeleteConfirmCloseButton_Click(object sender, RoutedEventArgs e) => CloseDeleteConfirmDialog();

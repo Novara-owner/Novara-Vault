@@ -147,8 +147,25 @@ public class SyncHostTests
     public void ValidateWebRoot_AcceptsAWebRootBelowTheDataDirectory()
     {
 
+
         var data = Path.Combine(Path.GetTempPath(), "novara-data");
         Assert.Null(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "site"), data));
+    }
+
+    [Fact]
+    public void ValidateWebRoot_RefusesAWebRootInsideThePayloadDirectory()
+    {
+
+
+
+        var data = Path.Combine(Path.GetTempPath(), "novara-data-v11-255");
+
+        Assert.NotNull(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "spaces"), data));
+        Assert.NotNull(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "spaces", "sp1", "blobs"), data));
+
+
+
+        Assert.Null(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "spaces-backup"), data));
     }
 
     [Fact]
@@ -216,10 +233,16 @@ public class SyncHostTests
 
 
 
+
+
+
+
+
         try
         {
             Directory.CreateSymbolicLink(linkPath, targetPath);
-            if (Directory.Exists(linkPath)) return true;
+            if (IsDirectoryLink(linkPath)) return true;
+            try { if (Directory.Exists(linkPath)) Directory.Delete(linkPath); } catch { }
         }
         catch (Exception) { }
 
@@ -234,9 +257,17 @@ public class SyncHostTests
                 RedirectStandardError = true,
             })!;
             process.WaitForExit();
-            return process.ExitCode == 0 && Directory.Exists(linkPath);
+            return process.ExitCode == 0 && IsDirectoryLink(linkPath);
         }
         catch (Exception) { return false; }
+    }
+
+
+
+    private static bool IsDirectoryLink(string path)
+    {
+        try { return Directory.Exists(path) && File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint); }
+        catch { return false; }
     }
 
 

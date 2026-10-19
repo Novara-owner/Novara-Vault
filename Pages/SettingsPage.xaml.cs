@@ -21,8 +21,11 @@ public sealed partial class SettingsPage : Page
 
 
 
+    private readonly DialogUi.DialogScrollFit _dialogScrollFit = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+
     private void ShowOverlay(Grid overlay, Border dialog, CompositeTransform transform)
-        => DialogUi.ShowOverlay(SettingsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform);
+        => DialogUi.ShowOverlay(SettingsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform, _dialogWidthFit);
 
 
 
@@ -35,9 +38,9 @@ public sealed partial class SettingsPage : Page
 
 
     private void RegisterDialogClamp(Grid overlay, Border dialog)
-        => DialogUi.RegisterDialogClamp(SettingsRoot, _overlayDialogs, overlay, dialog);
+        => DialogUi.RegisterDialogClamp(SettingsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, _dialogWidthFit);
     private void ReclampVisibleDialogs()
-        => DialogUi.ReclampVisibleDialogs(SettingsRoot, _overlayDialogs);
+        => DialogUi.ReclampVisibleDialogs(SettingsRoot, _overlayDialogs, _dialogScrollFit, _dialogWidthFit);
     private void HideOverlay(Grid overlay, Border dialog, CompositeTransform transform, Action onCompleted)
         => DialogUi.HideOverlay(SettingsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform, onCompleted);
 
@@ -57,6 +60,11 @@ public sealed partial class SettingsPage : Page
     private bool _themeRestartAnimating;
 
 
+
+    private bool _themeRestartHiding;
+    private bool _languageRestartHiding;
+
+
     private bool _animAutoLockSync;
     private bool _animQuickCaptureInfo;
     private bool _autoLockOnSystemLock;
@@ -70,13 +78,22 @@ public sealed partial class SettingsPage : Page
     private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
 
+
+    internal async void ScrollToMain()
+    {
+        await Services.SmoothScroller.ScrollToTopAsync(SettingsMainScroll);
+    }
+
+    private void Title_Tapped(object sender, TappedRoutedEventArgs e) => ScrollToMain();
+
     public SettingsPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         SettingsTitleText.Text = App.GetString("Setting_Title_Page");
 
-        FooterBrandText.Text = "Novara";
-        FooterVersionText.Text = "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+        FooterBrandText.Text = "Version";
+        FooterVersionText.Text = Novara.Services.UpdateService.CurrentVersion;
         UpdateCheckButtonText.Text = App.GetString("Setting_Update_Button");
         EdgeMenuTitleText.Text = App.GetString("Setting_EdgeMenu_Title");
         UpdateTitleText.Text = App.GetString("Setting_Update_Title");
@@ -117,6 +134,7 @@ public sealed partial class SettingsPage : Page
 
             _animSetPwd = _animChangePwd = _animCloseLock = _animWarn = false;
             _themeRestartAnimating = _languageRestartAnimating = false;
+            _themeRestartHiding = _languageRestartHiding = false;
             _animAutoLockSync = false;
             _animQuickCaptureInfo = false;
             _animWinHello = false;
@@ -168,6 +186,7 @@ public sealed partial class SettingsPage : Page
             UpdateEdgeMenuButton();
             UpdateTabsButton();
             RefreshUpdateDot();
+            ConsumeQueuedUpdate();
             App.MainWindow?.ApplyVisibleTabs(_visibleTabs);
         };
     }
@@ -201,7 +220,7 @@ public sealed partial class SettingsPage : Page
         if (PrivacyLockWarningOverlay.Visibility == Visibility.Visible) { HidePrivacyLockWarningDialog(); e.Handled = true; return; }
         if (LanguageRestartOverlay.Visibility == Visibility.Visible) { _pendingLanguage = null; HideLanguageRestartOverlay(); e.Handled = true; return; }
         if (ThemeRestartOverlay.Visibility == Visibility.Visible) { _pendingTheme = string.Empty; _pendingAnimationToggle = null; HideThemeRestartOverlay(); e.Handled = true; return; }
-        if (ChangePasswordOverlay.Visibility == Visibility.Visible) { HideChangePasswordDialog(); e.Handled = true; return; }
+        if (ChangePasswordOverlay.Visibility == Visibility.Visible) { if (_changePwdInFlight) { e.Handled = true; return; } HideChangePasswordDialog(); e.Handled = true; return; }
         if (ClosePrivacyLockOverlay.Visibility == Visibility.Visible) { HideClosePrivacyLockDialog(); e.Handled = true; return; }
         if (SetPasswordOverlay.Visibility == Visibility.Visible) { if (_setPwdInFlight) { e.Handled = true; return; } HideSetPasswordDialog(); e.Handled = true; return; }
 
@@ -322,6 +341,7 @@ public sealed partial class SettingsPage : Page
 
 private void ShowThemeRestartOverlay()
     {
+        _themeRestartHiding = false;
         if (_themeRestartAnimating) return;
         _themeRestartAnimating = true;
 
@@ -363,8 +383,10 @@ private void ShowThemeRestartOverlay()
 
 
 
-        if (_themeRestartAnimating) return;
-        _themeRestartAnimating = true;
+
+
+        if (_themeRestartHiding) return;
+        _themeRestartHiding = true;
         var sb = new Storyboard();
         var sa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(sa, ThemeRestartScrim); Storyboard.SetTargetProperty(sa, "Opacity");
@@ -381,7 +403,7 @@ private void ShowThemeRestartOverlay()
         var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
         sb.Children.Add(ty);
-        sb.Completed += (_, _) => { ThemeRestartOverlay.Visibility = Visibility.Collapsed; _themeRestartAnimating = false; };
+        sb.Completed += (_, _) => { ThemeRestartOverlay.Visibility = Visibility.Collapsed; _themeRestartHiding = false; };
         sb.Begin();
     }
 
@@ -448,24 +470,10 @@ private void ShowThemeRestartOverlay()
 
 
 
+
     private void RestartAppNow()
     {
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) { _restarting = false; return; }
-            Novara.MainWindow.ReleaseSingleInstance();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
-        }
-        catch
-        {
-
-            Novara.MainWindow.AcquireSingleInstance();
-            System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
-            _restarting = false;
-            return;
-        }
-        if (App.MainWindow is { } mw) { mw.SetRestarting(); mw.ExitApp(saveFirst: false); }
+        if (!MainWindow.RestartNow()) _restarting = false;
     }
 
     private void ThemeRestartCancel_Click(object sender, RoutedEventArgs e)
@@ -654,7 +662,7 @@ private void ShowSetPasswordDialog()
 
         SetPasswordBox.Text = "";
         SetPasswordConfirmBox.Text = "";
-        SetPasswordLockoutCheckBox.IsChecked = false;
+        SetPasswordLockoutCheckBox.IsChecked = PasswordService.IsLockoutEnabled();
         SetPasswordDialogTransform.ScaleX = 0.94; SetPasswordDialogTransform.ScaleY = 0.94; SetPasswordDialogTransform.TranslateY = 24;
         SetPasswordDialog.Opacity = 0;
         SetPasswordScrim.Opacity = 0;
@@ -684,7 +692,15 @@ private void ShowSetPasswordDialog()
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, SetPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, SetPasswordDialogTransform);
-        sb.Completed += (_, _) => { SetPasswordOverlay.Visibility = Visibility.Collapsed; _animSetPwd = false; };
+        sb.Completed += (_, _) =>
+        {
+            SetPasswordOverlay.Visibility = Visibility.Collapsed;
+
+
+            SetPasswordBox.Text = "";
+            SetPasswordConfirmBox.Text = "";
+            _animSetPwd = false;
+        };
         sb.Begin();
     }
 
@@ -730,18 +746,32 @@ private void ShowSetPasswordDialog()
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ChangePasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, ChangePasswordDialogTransform);
-        sb.Completed += (_, _) => { ChangePasswordOverlay.Visibility = Visibility.Collapsed; _animChangePwd = false; };
+        sb.Completed += (_, _) =>
+        {
+            ChangePasswordOverlay.Visibility = Visibility.Collapsed;
+
+
+            ChangePasswordOldBox.Text = "";
+            ChangePasswordNewBox.Text = "";
+            ChangePasswordConfirmBox.Text = "";
+            _animChangePwd = false;
+        };
         sb.Begin();
     }
 
-    private void ChangePasswordClose_Click(object sender, RoutedEventArgs e) => HideChangePasswordDialog();
+    private void ChangePasswordClose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_changePwdInFlight) return;
+        HideChangePasswordDialog();
+    }
 
     private void ChangePasswordScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
+        if (_changePwdInFlight) return;
         if (ReferenceEquals(e.OriginalSource, ChangePasswordScrim)) HideChangePasswordDialog();
     }
 
-    private void ChangePasswordConfirm_Click(object sender, RoutedEventArgs e)
+    private async void ChangePasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
         var oldPw = ChangePasswordOldBox.Text.Trim();
         var newPw = ChangePasswordNewBox.Text.Trim();
@@ -774,23 +804,71 @@ private void ShowSetPasswordDialog()
 
 
 
-        if (!PasswordService.Verify(oldPw)) { FlashTextBox(ChangePasswordOldBox); return; }
-        if (!PasswordService.StageChange(newPw)) { FlashTextBox(ChangePasswordConfirmBox); return; }
-        if (App.Store?.Reencrypt(newPw) == false) { PasswordService.DiscardStaged(); FlashTextBox(ChangePasswordConfirmBox); return; }
-        if (!PasswordService.PromoteStaged())
+
+
+
+
+
+
+
+        if (_changePwdInFlight) return;
+        _changePwdInFlight = true;
+        ChangePasswordConfirmButton.IsEnabled = false;
+        ChangePasswordCancelButton.IsEnabled = false;
+        int changeStage;
+        try
         {
-            if (App.Store?.Reencrypt(oldPw) != true)
+            changeStage = await System.Threading.Tasks.Task.Run(() =>
             {
 
 
+                if (PasswordService.IsLockoutActive(out _)) return 6;
+                if (!PasswordService.Verify(oldPw))
+                {
+                    PasswordService.RegisterFailedAttempt();
+                    return PasswordService.IsLockoutActive(out _) ? 6 : 1;
+                }
+                PasswordService.RegisterSuccessfulAttempt();
+                if (!PasswordService.StageChange(newPw)) return 2;
+                if (App.Store?.Reencrypt(newPw) == false) { PasswordService.DiscardStaged(); return 3; }
+                if (PasswordService.PromoteStaged()) return 0;
+
+                if (App.Store?.Reencrypt(oldPw) != true) return 5;
+                PasswordService.DiscardStaged();
+                return 4;
+            });
+        }
+        catch (Exception ex)
+        {
+
+            Services.CrashLogger.LogNote("ChangePassword", ex.Message);
+            changeStage = 3;
+        }
+        finally
+        {
+            _changePwdInFlight = false;
+            ChangePasswordConfirmButton.IsEnabled = true;
+            ChangePasswordCancelButton.IsEnabled = true;
+        }
+
+        if (changeStage == 6) { App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error); FlashTextBox(ChangePasswordOldBox); return; }
+        if (changeStage == 1) { FlashTextBox(ChangePasswordOldBox); return; }
+
+        if (changeStage == 2 || changeStage == 3) { FlashTextBox(ChangePasswordConfirmBox); return; }
+        if (changeStage == 4)
+        {
+            FlashTextBox(ChangePasswordConfirmBox);
+            return;
+        }
+        if (changeStage == 5)
+        {
 
 
-                System.Diagnostics.Debug.WriteLine("改密回滚失败：数据库与密码文件不一致（暂存记录保留，启动时可恢复）");
-                FlashTextBox(ChangePasswordOldBox);
-                FlashTextBox(ChangePasswordConfirmBox);
-                return;
-            }
-            PasswordService.DiscardStaged();
+
+
+
+            Services.CrashLogger.LogNote("ChangePasswordRollbackFailed", "数据库与密码文件不一致（暂存记录保留，启动时可恢复）");
+            FlashTextBox(ChangePasswordOldBox);
             FlashTextBox(ChangePasswordConfirmBox);
             return;
         }
@@ -856,7 +934,7 @@ private void ShowSetPasswordDialog()
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ClosePrivacyLockDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, ClosePrivacyLockDialogTransform);
-        sb.Completed += (_, _) => { ClosePrivacyLockOverlay.Visibility = Visibility.Collapsed; _animCloseLock = false; };
+        sb.Completed += (_, _) => { ClosePrivacyLockOverlay.Visibility = Visibility.Collapsed; _animCloseLock = false; ClosePrivacyLockPasswordBox.Text = ""; };
         sb.Begin();
     }
 
@@ -867,8 +945,9 @@ private void ShowSetPasswordDialog()
         if (ReferenceEquals(e.OriginalSource, ClosePrivacyLockScrim)) HideClosePrivacyLockDialog();
     }
 
-    private void ClosePrivacyLockConfirm_Click(object sender, RoutedEventArgs e)
+    private async void ClosePrivacyLockConfirm_Click(object sender, RoutedEventArgs e)
     {
+        if (_closeLockVerifyInFlight) return;
         var oldPw = ClosePrivacyLockPasswordBox.Text.Trim();
 
         if (oldPw.Length < 6)
@@ -877,7 +956,38 @@ private void ShowSetPasswordDialog()
             return;
         }
 
-        if (!PasswordService.Verify(oldPw)) { FlashTextBox(ClosePrivacyLockPasswordBox); return; }
+        if (PasswordService.IsLockoutActive(out _))
+        {
+            App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error);
+            FlashTextBox(ClosePrivacyLockPasswordBox);
+            return;
+        }
+
+
+
+        _closeLockVerifyInFlight = true;
+        var confirmButton = sender as Button;
+        if (confirmButton != null) confirmButton.IsEnabled = false;
+        bool verified;
+        try { verified = await System.Threading.Tasks.Task.Run(() => PasswordService.Verify(oldPw)); }
+        catch { verified = false; }
+        finally
+        {
+            _closeLockVerifyInFlight = false;
+            if (confirmButton != null) confirmButton.IsEnabled = true;
+        }
+        if (!verified)
+        {
+            PasswordService.RegisterFailedAttempt();
+            if (PasswordService.IsLockoutActive(out _))
+                App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error);
+            FlashTextBox(ClosePrivacyLockPasswordBox);
+            return;
+        }
+        PasswordService.RegisterSuccessfulAttempt();
+
+
+        if (_animCloseLock || ClosePrivacyLockOverlay.Visibility != Visibility.Visible) return;
         HideClosePrivacyLockDialog();
         ShowPrivacyLockWarningDialog();
     }
@@ -945,10 +1055,22 @@ private void ShowPrivacyLockWarningDialog()
     private void PrivacyLockWarningConfirm_Click(object sender, RoutedEventArgs e)
     {
 
+
+        if (_animWarn) return;
+
+
+
+
+
+
+        var settings = App.Store?.Database.AppSettings;
+        var previousLockFlag = settings?.PrivacyLockEnabled ?? false;
+        if (settings != null) settings.PrivacyLockEnabled = false;
         if (App.Store?.DisableEncryption() != true)
         {
 
 
+            if (settings != null) settings.PrivacyLockEnabled = previousLockFlag;
             PrivacyLockWarningErrorText.Visibility = Visibility.Visible;
             return;
         }
@@ -973,7 +1095,7 @@ private void ShowPrivacyLockWarningDialog()
         UpdateAutoLockCard();
 
 
-        MigrateFormatEntryButton.Visibility = App.Store is { IsEncrypted: true } && (App.Store.NeedsFormatMigration || App.Store.NeedsKdfMigration)
+        MigrateFormatEntryButton.Visibility = App.Store is { IsEncrypted: true } && (App.Store.NeedsFormatMigration || App.Store.NeedsKdfMigration || App.Store.NeedsV5Migration)
             ? Visibility.Visible : Visibility.Collapsed;
 
         _winHelloEnabled = WindowsHelloService.IsEnabled();
@@ -1005,6 +1127,19 @@ private void ShowPrivacyLockWarningDialog()
             _closeBehavior = "托盘驻留";
             UpdateCloseBehaviorButton();
             if (App.MainWindow is { } mw) mw.CloseBehavior = _closeBehavior;
+
+
+
+            if (App.MainWindow is { HasTrayIcon: false })
+            {
+                Services.CrashLogger.LogNote("SettingsPage.CloseBehavior", "tray icon creation failed - rolled back to direct exit");
+                _closeBehavior = "直接退出";
+                UpdateCloseBehaviorButton();
+                if (App.MainWindow is { } rollbackMw) rollbackMw.CloseBehavior = _closeBehavior;
+                PersistSetting(s => s.CloseBehavior = _closeBehavior);
+                App.ShowToast(App.GetString("Setting_ExitBehavior_TrayFail"), ToastTone.Error);
+                return;
+            }
             PersistSetting(s => s.CloseBehavior = _closeBehavior);
             App.ShowToast(App.GetString("Common_Toast_Switched"));
         };
@@ -1061,6 +1196,7 @@ private void ShowPrivacyLockWarningDialog()
 
     private void ShowLanguageRestartOverlay()
     {
+        _languageRestartHiding = false;
         if (_languageRestartAnimating) return;
         _languageRestartAnimating = true;
         LanguageRestartScrim.Opacity = 0;
@@ -1093,8 +1229,9 @@ private void ShowPrivacyLockWarningDialog()
     private void HideLanguageRestartOverlay()
     {
 
-        if (_languageRestartAnimating) return;
-        _languageRestartAnimating = true;
+
+        if (_languageRestartHiding) return;
+        _languageRestartHiding = true;
         var sb = new Storyboard();
         var sa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(sa, LanguageRestartScrim); Storyboard.SetTargetProperty(sa, "Opacity");
@@ -1111,7 +1248,7 @@ private void ShowPrivacyLockWarningDialog()
         var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(ty, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
         sb.Children.Add(ty);
-        sb.Completed += (_, _) => { LanguageRestartOverlay.Visibility = Visibility.Collapsed; _languageRestartAnimating = false; };
+        sb.Completed += (_, _) => { LanguageRestartOverlay.Visibility = Visibility.Collapsed; _languageRestartHiding = false; };
         sb.Begin();
     }
 
@@ -1271,13 +1408,30 @@ private void ShowPrivacyLockWarningDialog()
         menu.ShowAt(QuickCaptureSwitchButton, new Windows.Foundation.Point(0, QuickCaptureSwitchButton.ActualHeight + 4));
     }
 
-    private void SetQuickCaptureEnabled(bool on)
+    private bool SetQuickCaptureEnabled(bool on)
     {
-        var s = App.Store?.Database.AppSettings; if (s == null) return;
+        var s = App.Store?.Database.AppSettings; if (s == null) return false;
+        var previous = s.QuickCaptureEnabled;
         s.QuickCaptureEnabled = on;
+        if (on)
+        {
+
+
+            if (App.MainWindow?.ApplyQuickCaptureHotkey() != true)
+            {
+                s.QuickCaptureEnabled = previous;
+                ApplyQuickCaptureState();
+                _ = App.Store?.SaveSync();
+                return false;
+            }
+        }
+        else
+        {
+            App.MainWindow?.ApplyQuickCaptureHotkey();
+        }
         ApplyQuickCaptureState();
         _ = App.Store?.SaveAsync();
-        App.MainWindow?.ApplyQuickCaptureHotkey();
+        return true;
     }
 
     private void ShowQuickCaptureInfoDialog()
@@ -1297,9 +1451,10 @@ private void ShowPrivacyLockWarningDialog()
     { if (ReferenceEquals(e.OriginalSource, QuickCaptureInfoScrim)) HideQuickCaptureInfoDialog(); }
     private void QuickCaptureInfoOk_Click(object sender, RoutedEventArgs e)
     {
-        SetQuickCaptureEnabled(true);
+
+        var enabled = SetQuickCaptureEnabled(true);
         HideQuickCaptureInfoDialog();
-        App.ShowToast(App.GetString("Common_Toast_Created"));
+        if (enabled) App.ShowToast(App.GetString("Common_Toast_Created"));
     }
 
     private void QuickCaptureHotkeyButton_Click(object sender, RoutedEventArgs e)
@@ -1536,8 +1691,14 @@ private void ShowPrivacyLockWarningDialog()
 
     private void WindowsHelloGotoSettings_Click(object sender, RoutedEventArgs e)
     {
+
+
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:signinoptions") { UseShellExecute = true }); }
-        catch { }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("SettingsPage.WindowsHelloGotoSettings", ex.Message);
+        }
     }
 
 
@@ -1546,8 +1707,13 @@ private void ShowPrivacyLockWarningDialog()
     private void WebsiteButton_Click(object sender, RoutedEventArgs e)
     {
 
+
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://novara.xin") { UseShellExecute = true }); }
-        catch { }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("SettingsPage.WebsiteButton", ex.Message);
+        }
     }
 
 
@@ -1556,8 +1722,13 @@ private void ShowPrivacyLockWarningDialog()
 
     private void Footer_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
+
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(EasterEggUrl) { UseShellExecute = true }); }
-        catch { }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("SettingsPage.Footer_Tapped", ex.Message);
+        }
     }
 
     private async void SetPasswordConfirm_Click(object sender, RoutedEventArgs e)
@@ -1593,6 +1764,12 @@ private void ShowPrivacyLockWarningDialog()
         SetPasswordConfirmButton.IsEnabled = false;
         SetPasswordCancelButton.IsEnabled = false;
         bool created, encrypted;
+
+
+
+        var settingsForLock = App.Store?.Database.AppSettings;
+        var previousLockFlag = settingsForLock?.PrivacyLockEnabled ?? false;
+        if (settingsForLock != null) settingsForLock.PrivacyLockEnabled = true;
         try
         {
             var outcome = await System.Threading.Tasks.Task.Run(() =>
@@ -1611,10 +1788,16 @@ private void ShowPrivacyLockWarningDialog()
             SetPasswordCancelButton.IsEnabled = true;
         }
 
-        if (!created) { FlashTextBox(SetPasswordBox); return; }
+        if (!created)
+        {
+            if (settingsForLock != null) settingsForLock.PrivacyLockEnabled = previousLockFlag;
+            FlashTextBox(SetPasswordBox);
+            return;
+        }
         PasswordService.SetLockoutEnabled(SetPasswordLockoutCheckBox.IsChecked == true);
         if (!encrypted)
         {
+            if (settingsForLock != null) settingsForLock.PrivacyLockEnabled = previousLockFlag;
 
 
             PasswordService.Delete();
@@ -1636,8 +1819,10 @@ private void ShowPrivacyLockWarningDialog()
 
     private bool _animSetPwd;
     private bool _setPwdInFlight;
+    private bool _changePwdInFlight;
     private bool _animChangePwd;
     private bool _animCloseLock;
+    private bool _closeLockVerifyInFlight;
     private bool _animWarn;
     private bool _animWarnShow;
 
@@ -1727,10 +1912,17 @@ private void ShowPrivacyLockWarningDialog()
 
 
 
+
+
     private Novara.Services.UpdateService.LatestRelease? _latestRelease;
     private System.Threading.CancellationTokenSource? _updateDownloadCts;
     private bool _updateBusy;
     private bool _updateDownloading;
+    private bool _suppressAutoCheckEvent;
+
+
+
+    public static Novara.Services.UpdateService.LatestRelease? PendingAutoUpdateRelease;
 
     private async void UpdateCheckButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1741,21 +1933,37 @@ private void ShowPrivacyLockWarningDialog()
             var result = await Novara.Services.UpdateService.CheckLatestAsync(System.Threading.CancellationToken.None);
             if (result.Error != null)
             {
-                if (result.Error != "cancelled") App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), result.Error), ToastTone.Error);
+                if (result.Error != "cancelled")
+                {
+
+                    Novara.Services.CrashLogger.LogNote("UpdateCheck", result.Error);
+                    App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), LocalizeUpdateError(result.Error)), ToastTone.Error);
+                }
                 return;
             }
+            Services.UpdateAutoCheckService.NotifyManualCheckSucceeded();
+
+
+            if (!IsLoaded) return;
             if (result.Latest == null || !result.HasNewer)
             {
                 RefreshUpdateDot();
                 UpdateUpToDateTitleText.Text = App.GetString("Update_Latest_Title");
                 UpdateUpToDateBodyText.Text = string.Format(App.GetString("Update_Latest_Body"), Novara.Services.UpdateService.CurrentVersion);
                 UpdateUpToDateCloseText.Text = App.GetString("Update_Btn_Cancel");
+
+                _suppressAutoCheckEvent = true;
+                UpdateAutoCheckCheckBox.Content = App.GetString("Update_AutoCheck_Label");
+                UpdateAutoCheckCheckBox.IsChecked = App.Store is { IsLoaded: true } s && s.Database.AppSettings.AutoCheckUpdates;
+                _suppressAutoCheckEvent = false;
                 RegisterDialogClamp(UpdateUpToDateOverlay, UpdateUpToDateDialog);
                 ShowOverlay(UpdateUpToDateOverlay, UpdateUpToDateDialog, UpdateUpToDateDialogTransform);
                 return;
             }
             _latestRelease = result.Latest;
-            UpdateNewTitleText.Text = string.Format(App.GetString("Update_New_Title"), _latestRelease.Version);
+
+
+            UpdateNewTitleText.Text = string.Format(App.GetString("Update_New_Title"), Novara.Services.UpdatePolicy.FormatDisplayVersion(_latestRelease.Version));
             UpdateNewDateText.Text = string.IsNullOrEmpty(_latestRelease.Date) ? "" : string.Format(App.GetString("Update_New_Date"), _latestRelease.Date);
             var lang = App.CurrentLanguage;
             var notes = (lang == "zh-CN" || lang == "zh-TW")
@@ -1765,10 +1973,16 @@ private void ShowPrivacyLockWarningDialog()
             ResetUpdateInstallUi();
             RegisterDialogClamp(UpdateDialogOverlay, UpdateDialog);
             ShowOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform);
+
+
+
+
+            _dialogScrollFit.Fit(UpdateNotesScroll, 250, SettingsRoot.ActualHeight);
         }
         catch (Exception ex)
         {
-            App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), ex.Message), ToastTone.Error);
+            Novara.Services.CrashLogger.LogNote("UpdateCheck", ex.Message);
+            App.ShowToast(string.Format(App.GetString("Update_Fail_Check"), LocalizeUpdateError(ex.Message)), ToastTone.Error);
         }
         finally
         {
@@ -1776,13 +1990,41 @@ private void ShowPrivacyLockWarningDialog()
         }
     }
 
-    private async void UpdateUpgrade_Click(object sender, RoutedEventArgs e)
+
+    private static string LocalizeUpdateError(string error)
+    {
+        if (string.Equals(error, "timeout", StringComparison.OrdinalIgnoreCase)
+            || error.StartsWith("network:", StringComparison.OrdinalIgnoreCase))
+            return App.GetString("Update_Err_Network");
+        if (error.Contains("http:", StringComparison.OrdinalIgnoreCase))
+        {
+            if (error.Contains("http:404", StringComparison.OrdinalIgnoreCase)) return App.GetString("Update_Err_NotFound");
+            if (error.Contains("http:401", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("http:403", StringComparison.OrdinalIgnoreCase))
+                return App.GetString("Update_Err_Forbidden");
+            if (error.Contains("http:429", StringComparison.OrdinalIgnoreCase)
+                || error.Contains("http:5", StringComparison.OrdinalIgnoreCase))
+                return App.GetString("Update_Err_Server");
+        }
+        if (error.Contains("signature", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("manifest", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("json", StringComparison.OrdinalIgnoreCase))
+            return App.GetString("Update_Err_BadData");
+        return App.GetString("Update_Err_Generic");
+    }
+
+    private void UpdateUpgrade_Click(object sender, RoutedEventArgs e) => StartUpdateDownload();
+
+
+
+    private async void StartUpdateDownload()
     {
         if (_latestRelease == null || _updateBusy) return;
         _updateBusy = true;
         UpdateInstallButton.IsEnabled = false;
         UpdateProgressBar.Visibility = Visibility.Visible;
         UpdateStatusText.Visibility = Visibility.Visible;
+        _dialogScrollFit.Fit(UpdateNotesScroll, 300, SettingsRoot.ActualHeight);
         UpdateProgressBar.Value = 0;
         UpdateStatusText.Text = string.Format(App.GetString("Update_Downloading"), 0);
         _updateDownloadCts = new System.Threading.CancellationTokenSource();
@@ -1796,6 +2038,10 @@ private void ShowPrivacyLockWarningDialog()
             });
             var file = await Novara.Services.UpdateService.DownloadAsync(_latestRelease, progress, _updateDownloadCts.Token);
             _updateDownloading = false;
+
+
+
+            UpdateCancelButton.IsEnabled = false;
             UpdateStatusText.Text = App.GetString("Update_Verifying");
             var actual = await System.Threading.Tasks.Task.Run(() => Novara.Services.UpdateService.Sha256Hex(file));
             var expected = _latestRelease.Sha256?.Trim();
@@ -1846,6 +2092,9 @@ private void ShowPrivacyLockWarningDialog()
     private void CancelUpdateInteraction()
     {
         if (_updateBusy && _updateDownloading) { _updateDownloadCts?.Cancel(); return; }
+
+
+        if (_updateBusy) return;
         HideUpdateDialog();
     }
 
@@ -1874,7 +2123,24 @@ private void ShowPrivacyLockWarningDialog()
         var db = App.Store?.Database;
         if (db == null) return;
         var pending = db.AppSettings.UpdatePendingVersion;
-        if (!string.IsNullOrEmpty(pending) && !Novara.Services.UpdateService.IsNewer(pending, Novara.Services.UpdateService.CurrentVersion))
+
+
+
+        bool shouldClear;
+        try
+        {
+
+            shouldClear = !string.IsNullOrEmpty(pending)
+                && Novara.Services.UpdatePolicy.IsWellFormedVersion(pending)
+                && !Novara.Services.UpdateService.IsNewer(pending, Novara.Services.UpdateService.CurrentVersion);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("RefreshUpdateDot: " + ex.Message);
+            Novara.Services.CrashLogger.LogNote("SettingsPage.RefreshUpdateDot", ex.Message);
+            shouldClear = false;
+        }
+        if (shouldClear)
         {
             db.AppSettings.UpdatePendingVersion = "";
             _ = App.Store!.SaveAsync();
@@ -1882,6 +2148,9 @@ private void ShowPrivacyLockWarningDialog()
         }
         UpdateAttentionDot.Visibility = string.IsNullOrEmpty(pending) ? Visibility.Collapsed : Visibility.Visible;
     }
+
+
+    public void NotifyPendingVersionChanged() => RefreshUpdateDot();
     private void HideUpdateUpToDateDialog() => HideOverlay(UpdateUpToDateOverlay, UpdateUpToDateDialog, UpdateUpToDateDialogTransform, () => { });
 
     private void ResetUpdateInstallUi()
@@ -1889,8 +2158,77 @@ private void ShowPrivacyLockWarningDialog()
         UpdateProgressBar.Visibility = Visibility.Collapsed;
         UpdateStatusText.Visibility = Visibility.Collapsed;
         UpdateCancelText.Text = App.GetString("Update_Btn_Cancel");
+        UpdateCancelButton.IsEnabled = true;
         UpdateInstallButton.IsEnabled = true;
         UpdateInstallText.Text = App.GetString("Update_Btn_Install");
+    }
+
+
+
+    public void ConsumeQueuedUpdate()
+    {
+        var rel = PendingAutoUpdateRelease;
+        if (rel == null) return;
+
+
+        if (_updateBusy)
+        {
+            App.ShowToast(App.GetString("Update_Busy_Retry"));
+            return;
+        }
+        PendingAutoUpdateRelease = null;
+        _latestRelease = rel;
+
+        UpdateNewTitleText.Text = string.Format(App.GetString("Update_New_Title"), Novara.Services.UpdatePolicy.FormatDisplayVersion(rel.Version));
+        UpdateNewDateText.Text = string.IsNullOrEmpty(rel.Date) ? "" : string.Format(App.GetString("Update_New_Date"), rel.Date);
+        var lang = App.CurrentLanguage;
+        var notes = (lang == "zh-CN" || lang == "zh-TW")
+            ? (rel.NotesZh ?? rel.NotesEn)
+            : (rel.NotesEn ?? rel.NotesZh);
+        UpdateNotesText.Text = notes ?? "";
+        ResetUpdateInstallUi();
+        RegisterDialogClamp(UpdateDialogOverlay, UpdateDialog);
+        ShowOverlay(UpdateDialogOverlay, UpdateDialog, UpdateDialogTransform);
+        _dialogScrollFit.Fit(UpdateNotesScroll, 250, SettingsRoot.ActualHeight);
+        StartUpdateDownload();
+    }
+
+
+
+
+
+
+    private void UpdateAutoCheckCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAutoCheckEvent) return;
+        var store = App.Store;
+        if (store is not { IsLoaded: true })
+        {
+            SyncAutoCheckCheckBoxToSetting();
+            return;
+        }
+        bool on = UpdateAutoCheckCheckBox.IsChecked == true;
+        var db = store.Database.AppSettings;
+        if (db.AutoCheckUpdates == on) return;
+        db.AutoCheckUpdates = on;
+        if (!store.SaveSync())
+        {
+            db.AutoCheckUpdates = !on;
+            SyncAutoCheckCheckBoxToSetting();
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+            return;
+        }
+        Services.UpdateAutoCheckService.SyncAutoCheckTimer();
+
+
+        if (on) Services.UpdateAutoCheckService.NotifyManualCheckSucceeded();
+    }
+
+    private void SyncAutoCheckCheckBoxToSetting()
+    {
+        _suppressAutoCheckEvent = true;
+        UpdateAutoCheckCheckBox.IsChecked = App.Store is { IsLoaded: true } s && s.Database.AppSettings.AutoCheckUpdates;
+        _suppressAutoCheckEvent = false;
     }
 
 

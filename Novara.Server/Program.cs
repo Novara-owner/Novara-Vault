@@ -6,9 +6,9 @@ var options = new SyncServerOptions
 {
     StorageRoot = Environment.GetEnvironmentVariable("NOVARA_SYNC_DATA") ?? "data",
     DefaultQuotaBytes = ReadLong("NOVARA_SYNC_QUOTA_BYTES", 500L * 1024 * 1024),
-    DefaultMaxVersions = (int)ReadLong("NOVARA_SYNC_MAX_VERSIONS", 10),
+    DefaultMaxVersions = ReadInt("NOVARA_SYNC_MAX_VERSIONS", 10),
     MaxPayloadBytes = ReadLong("NOVARA_SYNC_MAX_PAYLOAD_BYTES", 64L * 1024 * 1024),
-    MaxAuthFailures = (int)ReadLong("NOVARA_SYNC_MAX_AUTH_FAILURES", 10),
+    MaxAuthFailures = ReadInt("NOVARA_SYNC_MAX_AUTH_FAILURES", 10),
 };
 
 
@@ -24,10 +24,31 @@ if (SyncHostSetup.ValidateDataRoot(options.StorageRoot) is string dataProblem)
 
 
 
-var storeKind = (Environment.GetEnvironmentVariable("NOVARA_SYNC_STORE") ?? "sqlite").Trim().ToLowerInvariant();
-ISpaceStore store = storeKind is "file" or "json"
-    ? new FileSpaceStore(options.StorageRoot)
-    : new SqliteSpaceStore(options.StorageRoot);
+
+
+
+var storeSetting = Environment.GetEnvironmentVariable("NOVARA_SYNC_STORE");
+var storeKind = string.IsNullOrWhiteSpace(storeSetting) ? "sqlite" : storeSetting.Trim().ToLowerInvariant();
+if (storeKind is not ("sqlite" or "file" or "json"))
+{
+    Console.Error.WriteLine($"NovaraSync: unknown NOVARA_SYNC_STORE '{storeSetting}' - expected 'sqlite' or 'file'.");
+    return 1;
+}
+ISpaceStore store;
+try
+{
+    store = storeKind is "file" or "json"
+        ? new FileSpaceStore(options.StorageRoot)
+        : new SqliteSpaceStore(options.StorageRoot);
+}
+catch (Exception ex)
+{
+
+
+
+    Console.Error.WriteLine($"storage backend failed to initialize ({storeKind}): {ex.Message}");
+    return 1;
+}
 var service = new SpaceService(store, options);
 
 
@@ -47,10 +68,18 @@ if (args.Length > 0 && !args[0].StartsWith('-'))
 
 
 
-var webRoot = Environment.GetEnvironmentVariable("NOVARA_SYNC_WEB_ROOT")
-    ?? Path.Combine(AppContext.BaseDirectory, "Novara.Web");
+var webRootSetting = Environment.GetEnvironmentVariable("NOVARA_SYNC_WEB_ROOT");
+var webRoot = webRootSetting ?? Path.Combine(AppContext.BaseDirectory, "Novara.Web");
 if (!Directory.Exists(webRoot))
 {
+
+
+
+    if (!string.IsNullOrWhiteSpace(webRootSetting))
+    {
+        Console.Error.WriteLine($"NovaraSync: NOVARA_SYNC_WEB_ROOT points at a directory that does not exist: {webRootSetting}");
+        return 1;
+    }
     webRoot = null;
 }
 else if (SyncHostSetup.ValidateWebRoot(webRoot, options.StorageRoot) is string webProblem)
@@ -83,4 +112,30 @@ app.Run();
 return 0;
 
 static long ReadLong(string name, long fallback)
-    => long.TryParse(Environment.GetEnvironmentVariable(name), out var value) && value > 0 ? value : fallback;
+{
+    var raw = Environment.GetEnvironmentVariable(name);
+    if (string.IsNullOrWhiteSpace(raw)) return fallback;
+    if (long.TryParse(raw, out var value) && value > 0) return value;
+
+
+    Console.Error.WriteLine($"NovaraSync: ignoring {name}={raw} (expected a positive integer) - using {fallback}.");
+    return fallback;
+}
+
+
+
+
+
+
+static int ReadInt(string name, int fallback)
+{
+    var raw = Environment.GetEnvironmentVariable(name);
+    if (!long.TryParse(raw, out var value) || value <= 0 || value > int.MaxValue)
+    {
+
+        if (!string.IsNullOrWhiteSpace(raw))
+            Console.Error.WriteLine($"NovaraSync: ignoring {name}={raw} (expected 1..{int.MaxValue}) - using {fallback}.");
+        return fallback;
+    }
+    return (int)value;
+}

@@ -35,6 +35,7 @@ public static class ToastService
         catch (Exception ex)
         {
             Debug.WriteLine("ToastService 注册失败: " + ex.Message);
+            CrashLogger.LogNote("ToastService.Register", ex.Message);
         }
     }
 
@@ -53,6 +54,7 @@ public static class ToastService
         catch (Exception ex)
         {
             Debug.WriteLine("ToastService 发送失败: " + ex.Message);
+            CrashLogger.LogNote("ToastService.Show", ex.Message);
         }
     }
 

@@ -30,13 +30,14 @@ public sealed partial class ToolsPage : Page
 
 
     private readonly DialogUi.DialogScrollFit _dialogScrollFit = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
 
     private void FitDialogScroll(ScrollViewer scroll, double fallbackChrome)
         => _dialogScrollFit.Fit(scroll, fallbackChrome, ToolsRoot.ActualHeight);
 
 
     private void ShowOverlay(Grid overlay, Border dialog, CompositeTransform transform)
-        => DialogUi.ShowOverlay(ToolsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform);
+        => DialogUi.ShowOverlay(ToolsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform, _dialogWidthFit);
 
 
 
@@ -45,9 +46,9 @@ public sealed partial class ToolsPage : Page
 
 
     private void RegisterDialogClamp(Grid overlay, Border dialog)
-        => DialogUi.RegisterDialogClamp(ToolsRoot, _overlayDialogs, overlay, dialog);
+        => DialogUi.RegisterDialogClamp(ToolsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, _dialogWidthFit);
     private void ReclampVisibleDialogs()
-        => DialogUi.ReclampVisibleDialogs(ToolsRoot, _overlayDialogs, _dialogScrollFit);
+        => DialogUi.ReclampVisibleDialogs(ToolsRoot, _overlayDialogs, _dialogScrollFit, _dialogWidthFit);
     private void HideOverlay(Grid overlay, Border dialog, CompositeTransform transform, Action onCompleted)
         => DialogUi.HideOverlay(ToolsRoot, _overlayAnimGens, _overlayDialogs, overlay, dialog, transform, onCompleted);
 
@@ -84,6 +85,7 @@ public sealed partial class ToolsPage : Page
 
     private bool _animEncExport;
     private bool _animEncImportPwd;
+    private bool _encImportInFlight;
     private bool _animConnectPwd;
     private bool _animConnectIntro;
     private string? _pendingEncImportPath;
@@ -93,7 +95,6 @@ public sealed partial class ToolsPage : Page
 
     private bool PrivacyLockEnabledNow => App.Store?.Database.AppSettings.PrivacyLockEnabled == true;
     private bool _animResetConfirm;
-    private bool _animResetPwd;
     private bool _animImportPwd;
     private bool _animImportConfirm;
     private bool _animImportResult;
@@ -102,12 +103,21 @@ public sealed partial class ToolsPage : Page
     private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
     private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
 
+
+    internal async void ScrollToMain()
+    {
+        await Services.SmoothScroller.ScrollToTopAsync(ToolsMainScroll);
+    }
+
+    private void Title_Tapped(object sender, TappedRoutedEventArgs e) => ScrollToMain();
+
     public ToolsPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         ToolsTitleText.Text = App.GetString("Tools_Title_Page");
-        FooterBrandText.Text = "Novara";
-        FooterVersionText.Text = "v" + (GetType().Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+        FooterBrandText.Text = "Version";
+        FooterVersionText.Text = Novara.Services.UpdateService.CurrentVersion;
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         AssignToolCardTexts();
 
@@ -212,7 +222,6 @@ public sealed partial class ToolsPage : Page
             PageWipeFinalCd.Reset();
             ResetConfirmCd.Reset();
             ResetConfirmOverlay.Visibility = Visibility.Collapsed;
-            ResetPasswordOverlay.Visibility = Visibility.Collapsed;
             SyncAdoptOverlay.Visibility = Visibility.Collapsed;
             SyncAuditOverlay.Visibility = Visibility.Collapsed;
             SyncAuditClearConfirmOverlay.Visibility = Visibility.Collapsed;
@@ -235,7 +244,7 @@ public sealed partial class ToolsPage : Page
             WorkspaceEditOverlay.Visibility = Visibility.Collapsed;
             WorkspaceManageOverlay.Visibility = Visibility.Collapsed;
 
-            _animResetConfirm = _animResetPwd = _animImportPwd = _animImportConfirm = _animImportResult = false;
+            _animResetConfirm = _animImportPwd = _animImportConfirm = _animImportResult = false;
             _animBackupIntro = _animBackupNow = _animBackupAuto = _animBackupRestore = _animBackupDelete = _animBackupRestoreConfirm = _animBackupDeleteConfirm = false;
             _animExportMdNotice = _animExportOptions = false;
             _animMcpConfig = _animMcpResetConfirm = _animMcpCopy = _animMcpDeleteConfirm = _animMcpRevokeConfirm = false;
@@ -250,6 +259,8 @@ public sealed partial class ToolsPage : Page
             _readAccessToken = null;
             _pendingImportPath = null;
             _importedSpaceKey = null;
+            SyncKeySavedBox.Text = "";
+            SyncKeyImportResultBox.Text = "";
             _animSyncKeyImportPwd = _animSyncKeyImportResult = false;
             _editorAccessToken = null;
             _animSyncDeviceCenter = _animSyncDeviceRevokeConfirm = _animSyncDeviceResetConfirm = false;
@@ -277,6 +288,13 @@ public sealed partial class ToolsPage : Page
             _pendingDeleteIsClearAll = false;
             _pendingReloadAfterImport = false;
 
+            _pendingMcpPermPath = null;
+            _pendingWorkspaceManage = false;
+
+
+            _overlayAnimGens.Clear();
+            _overlayDialogs.Clear();
+
 
 
 
@@ -289,6 +307,15 @@ public sealed partial class ToolsPage : Page
             _animSyncReadAccess = _animSyncReadAccessRevoke = false;
             _animSyncEditAccess = _animSyncEditAccessRevoke = false;
             _animSyncConnInfo = false;
+
+
+
+            _syncKeyFlowInFlight = false;
+            _readAccessInFlight = false;
+            _editAccessInFlight = false;
+            _deviceActionInFlight = false;
+            _encImportInFlight = false;
+            _unpairInFlight = false;
 
 
 
@@ -317,7 +344,7 @@ public sealed partial class ToolsPage : Page
         DeployHelpText.Text = App.GetString("Connect_DeployHelp");
         ConnectConfirmText.Text = App.GetString("Common_Button_Confirm");
         ConnectPwdTitle.Text = App.GetString("Connect_Pwd_Title");
-        ConnectPwdDesc.Text = App.GetString("Connect_Pwd_Desc");
+        ConnectPwdDesc.Text = App.GetString(PrivacyLockEnabledNow ? "Connect_Pwd_Desc" : "Connect_Pwd_Desc_NoLock");
         ConnectPwdUseLock.Content = App.GetString("Setting_EncBackup_UseLock");
         ConnectPwdPasswordBox.PlaceholderText = App.GetString("Connect_Pwd_PasswordHint");
         ConnectPwdConfirmBox.PlaceholderText = App.GetString("Connect_Pwd_ConfirmHint");
@@ -402,7 +429,13 @@ public sealed partial class ToolsPage : Page
             e.Handled = true;
             return;
         }
-        if (ResetPasswordOverlay.Visibility == Visibility.Visible) { HideResetPasswordDialog(); e.Handled = true; return; }
+
+
+
+
+
+        if (EncImportPwdOverlay.Visibility == Visibility.Visible) { HideEncImportPwdDialog(); e.Handled = true; return; }
+        if (EncExportOverlay.Visibility == Visibility.Visible) { HideEncExportDialog(); e.Handled = true; return; }
         if (ExportPlainWarnOverlay.Visibility == Visibility.Visible) { _pendingPlainExportContinue = null; HidePlainExportWarnDialog(); e.Handled = true; return; }
         if (ExportOptionsOverlay.Visibility == Visibility.Visible) { HideExportOptionsDialog(); e.Handled = true; return; }
         if (ImportExportPasswordOverlay.Visibility == Visibility.Visible) { HideImportExportPasswordDialog(); e.Handled = true; return; }
@@ -445,6 +478,7 @@ public sealed partial class ToolsPage : Page
 
 
         _animNetActivity = false;
+        _netActivityClearArmed = false;
         NetActivityPanelTitle.Text = App.GetString("NetActivity_Panel");
         NetActivityClearText.Text = App.GetString("NetActivity_Clear");
         RenderNetActivityList();
@@ -458,6 +492,7 @@ public sealed partial class ToolsPage : Page
         var recent = Services.NetworkActivityService.Recent;
         if (recent.Count == 0)
         {
+            NetActivityClearButton.Visibility = Visibility.Collapsed;
             NetActivityList.Children.Add(new TextBlock
             {
                 Text = App.GetString("NetActivity_Empty"),
@@ -466,6 +501,7 @@ public sealed partial class ToolsPage : Page
             });
             return;
         }
+        NetActivityClearButton.Visibility = Visibility.Visible;
         foreach (var it in recent)
         {
             var row = new Grid { ColumnSpacing = 10 };
@@ -500,10 +536,21 @@ public sealed partial class ToolsPage : Page
         }
     }
 
+    private bool _netActivityClearArmed;
+
     private void NetActivityClear_Click(object sender, RoutedEventArgs e)
     {
+        if (!_netActivityClearArmed)
+        {
+            _netActivityClearArmed = true;
+            NetActivityClearText.Text = App.GetString("NetActivity_ClearConfirm");
+            return;
+        }
+        _netActivityClearArmed = false;
+        NetActivityClearText.Text = App.GetString("NetActivity_Clear");
         Services.NetworkActivityService.ClearRecent();
         RenderNetActivityList();
+        App.ShowToast(App.GetString("Common_Toast_Cleared"));
     }
 
     private void NetActivityClose_Click(object sender, RoutedEventArgs e) => HideNetActivityPanel();
@@ -517,6 +564,8 @@ public sealed partial class ToolsPage : Page
     {
         if (_animNetActivity) return;
         _animNetActivity = true;
+        _netActivityClearArmed = false;
+        NetActivityClearText.Text = App.GetString("NetActivity_Clear");
         HideOverlay(NetActivityOverlay, NetActivityDialog, NetActivityDialogTransform, () => _animNetActivity = false);
     }
 
@@ -581,7 +630,7 @@ public sealed partial class ToolsPage : Page
             var delBtn = new Button
             {
                 Width = 64, Height = 30,
-                Style = (Style)Resources["McpDangerButtonStyle"],
+                Style = (Style)Application.Current.Resources["NovaraDangerButtonStyle"],
                 CornerRadius = new CornerRadius(8),
                 VerticalAlignment = VerticalAlignment.Center,
                 Content = new TextBlock { Text = App.GetString("Workspace_Delete"), FontSize = 13, Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
@@ -676,6 +725,8 @@ public sealed partial class ToolsPage : Page
 
     private void WorkspaceEditConfirm_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animWorkspaceEdit) return;
         var name = WorkspaceNameTextBox.Text.Trim();
         if (string.IsNullOrEmpty(name)) return;
         var s = App.Store?.Database.AppSettings;
@@ -873,6 +924,8 @@ public sealed partial class ToolsPage : Page
     { if (ReferenceEquals(e.OriginalSource, PageWipeFinalScrim)) HidePageWipeFinalDialog(); }
     private void PageWipeFinalOk_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animPageWipeFinal) return;
         HidePageWipeFinalDialog();
         PerformPageWipe(_pageWipePage, soft: false);
     }
@@ -898,6 +951,7 @@ public sealed partial class ToolsPage : Page
     { if (ReferenceEquals(e.OriginalSource, PageGroupLossScrim)) HidePageGroupLossDialog(); }
     private void PageGroupLossOk_Click(object sender, RoutedEventArgs e)
     {
+        if (_animPageGroupLoss) return;
         HidePageGroupLossDialog();
         PerformPageWipe(0, soft: true);
     }
@@ -923,18 +977,27 @@ public sealed partial class ToolsPage : Page
         }
         else if (page == 2)
         {
+
+
+
+            var reminderIds = new List<Guid>();
             foreach (var t in db.TodoCards.Where(x => !x.IsDeleted).ToList())
             {
                 if (soft) { t.IsDeleted = true; t.DeletedAt = now; t.IsPinned = false; t.IsStarred = false; }
-                Services.ReminderScheduler.Teardown(t.Id, t.ReminderAt, t);
+                if (t.ReminderAt != null) { Services.ReminderScheduler.ClearFields(t); reminderIds.Add(t.Id); }
                 if (Services.StickySync.Contains(t.Id.ToString())) Services.StickySync.RemoveNote(t.Id.ToString());
             }
             foreach (var n in db.NoteCards.Where(x => !x.IsDeleted).ToList())
             {
                 if (soft) { n.IsDeleted = true; n.DeletedAt = now; n.IsPinned = false; n.IsStarred = false; }
-                Services.ReminderScheduler.Teardown(n.Id, n.ReminderAt, n);
+                if (n.ReminderAt != null) { Services.ReminderScheduler.ClearFields(n); reminderIds.Add(n.Id); }
                 if (Services.StickySync.Contains(n.Id.ToString())) Services.StickySync.RemoveNote(n.Id.ToString());
             }
+            if (reminderIds.Count > 0)
+                _ = System.Threading.Tasks.Task.Run(() =>
+                {
+                    foreach (var id in reminderIds) Services.ReminderScheduler.Cancel(id);
+                });
             if (!soft) { db.TodoCards.RemoveAll(x => true); db.NoteCards.RemoveAll(x => true); }
         }
         else
@@ -1020,15 +1083,24 @@ public sealed partial class ToolsPage : Page
 
     private void Footer_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
+
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(EasterEggUrl) { UseShellExecute = true }); }
-        catch { }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("ToolsPage.Footer_Tapped", ex.Message);
+        }
     }
 
     private void DeployHelp_Click(object sender, RoutedEventArgs e)
     {
 
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SnapshotGuideUrl) { UseShellExecute = true }); }
-        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error); }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("ToolsPage.DeployHelp", ex.Message);
+        }
     }
 
     private void ConnectConfirm_Click(object sender, RoutedEventArgs e)
@@ -1048,6 +1120,8 @@ public sealed partial class ToolsPage : Page
 
 
         ConnectPwdUseLock.Visibility = PrivacyLockEnabledNow ? Visibility.Visible : Visibility.Collapsed;
+
+        ConnectPwdDesc.Text = App.GetString(PrivacyLockEnabledNow ? "Connect_Pwd_Desc" : "Connect_Pwd_Desc_NoLock");
         ConnectPwdPasswordBox.Text = "";
         ConnectPwdConfirmBox.Text = "";
         ConnectPwdStrengthText.Visibility = Visibility.Collapsed;
@@ -1164,7 +1238,7 @@ public sealed partial class ToolsPage : Page
             if (path == null) return;
 
             var exportedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "10.3.0";
+            var version = Novara.Services.UpdateService.CurrentVersion;
             var html = template
                 .Replace("__CIPHER_BASE64__", cipher)
                 .Replace("__EXPORTED_AT__", exportedAt)
@@ -1299,71 +1373,35 @@ public sealed partial class ToolsPage : Page
         WindowsHelloService.Disable();
         Services.StickySync.ClearAllNotes();
 
+
+        var (snapshotsDeleted, snapshotsFailed) = AutoBackupService.ClearAll();
+
         if (remindersBefore is not null)
-            Services.ReminderScheduler.Reconcile(remindersBefore, new Dictionary<Guid, DateTime>());
+        {
+
+
+
+
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                if (remindersBefore is not null)
+                    Services.ReminderScheduler.Reconcile(remindersBefore, new Dictionary<Guid, DateTime>());
+            });
+        }
 
 
 
 
 
-        Services.SyncService.MarkRestorePendingConfirm();
-        App.ShowToast(App.GetString("Common_Toast_Reset"));
+        Services.SyncService.MarkRestorePendingConfirmOrWarn("reset/import");
+        if (snapshotsFailed > 0)
+        {
+            Services.CrashLogger.LogNote("Reset", $"snapshot clear incomplete: deleted={snapshotsDeleted} failed={snapshotsFailed}");
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
+        else App.ShowToast(App.GetString("Common_Toast_Reset"));
         App.MainWindow?.ReloadPages();
     }
-
-
-
-
-
-
-private void ShowResetPasswordDialog()
-    {
-        ResetPasswordBox.Text = "";
-        ResetPasswordDialogTransform.ScaleX = 0.94; ResetPasswordDialogTransform.ScaleY = 0.94; ResetPasswordDialogTransform.TranslateY = 24;
-        ResetPasswordDialog.Opacity = 0;
-        ResetPasswordScrim.Opacity = 0;
-        RegisterDialogClamp(ResetPasswordOverlay, ResetPasswordDialog);
-        ResetPasswordOverlay.Visibility = Visibility.Visible;
-        _animResetPwd = false;
-        var sb = new Storyboard();
-        var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(si, ResetPasswordScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
-        var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(di, ResetPasswordDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ResetPasswordDialogTransform);
-        sb.Begin();
-    }
-
-    private void HideResetPasswordDialog()
-    {
-        if (_animResetPwd) return;
-        _animResetPwd = true;
-        var sb = new Storyboard();
-        var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(so, ResetPasswordScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
-        var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(d, ResetPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ResetPasswordDialogTransform);
-        sb.Completed += (_, _) => { ResetPasswordOverlay.Visibility = Visibility.Collapsed; _animResetPwd = false; };
-        sb.Begin();
-    }
-
-    private void ResetPasswordClose_Click(object sender, RoutedEventArgs e) => HideResetPasswordDialog();
-
-    private void ResetPasswordScrim_Tapped(object sender, TappedRoutedEventArgs e)
-    {
-        if (ReferenceEquals(e.OriginalSource, ResetPasswordScrim)) HideResetPasswordDialog();
-    }
-
-    private void ResetPasswordConfirm_Click(object sender, RoutedEventArgs e)
-    {
-        var pw = ResetPasswordBox.Text.Trim();
-        if (pw.Length < 6) { FlashTextBox(ResetPasswordBox); return; }
-        if (!PasswordService.Verify(pw)) { FlashTextBox(ResetPasswordBox); return; }
-        HideResetPasswordDialog();
-        PerformReset();
-    }
-
 
     private void ImportExportButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1492,9 +1530,9 @@ private void ShowResetPasswordDialog()
             }
             var path = await PickImportFileAsync();
             if (path == null) return;
-            ImportBackupFlow(path);
+            await ImportBackupFlow(path);
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导入失败: {ex}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导入失败: {ex}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
     private System.Threading.Tasks.Task<string?> PickImportFileAsync()
@@ -1512,9 +1550,9 @@ private void ShowResetPasswordDialog()
                 path = await PickImportFileAsync();
                 if (path == null) return;
             }
-            ImportBackupFlow(path);
+            await ImportBackupFlow(path);
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导入失败: {ex}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导入失败: {ex}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
     private async System.Threading.Tasks.Task ExportBackupFlowAsync(bool includePaths)
@@ -1528,17 +1566,20 @@ private void ShowResetPasswordDialog()
             ShowImportResult(ok ? App.GetString("Setting_Export_Success") : App.GetString("Setting_Export_Fail"),
                 ok ? App.GetString("Setting_Export_SuccessDesc") : App.GetString("Setting_Export_FailDesc"));
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出失败: {ex}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出失败: {ex}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
-    private void ImportBackupFlow(string path)
+    private async System.Threading.Tasks.Task ImportBackupFlow(string path)
     {
 
 
 
 
 
-        if (AutoBackupService.CreateSnapshot(isManual: true) == null)
+
+
+
+        if (await System.Threading.Tasks.Task.Run(() => AutoBackupService.CreateSnapshot(isManual: true)) == null)
         {
             ShowImportResult(App.GetString("Setting_Import_Fail"), App.GetString("Setting_Import_BackupFail"));
             return;
@@ -1570,13 +1611,20 @@ private void ShowResetPasswordDialog()
 
 
 
-        Services.SyncService.MarkRestorePendingConfirm();
+        Services.SyncService.MarkRestorePendingConfirmOrWarn("reset/import");
         WindowsHelloService.Disable();
         Services.StickySync.ClearAllNotes();
 
 
+
+
+        var remindersAfter = Services.ReminderScheduler.Snapshot(App.Store?.Database);
         if (remindersBefore is not null)
-            Services.ReminderScheduler.Reconcile(remindersBefore, Services.ReminderScheduler.Snapshot(App.Store?.Database));
+            _ = System.Threading.Tasks.Task.Run(() =>
+            {
+                if (remindersBefore is not null)
+                    Services.ReminderScheduler.Reconcile(remindersBefore, remindersAfter);
+            });
 
         var imported = App.Store?.Database.AppSettings;
         if (imported != null)
@@ -1867,7 +1915,14 @@ private void ShowResetPasswordDialog()
                 ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"加密导出失败: {ex}"); }
+        catch (Exception ex)
+        {
+
+
+
+            Services.CrashLogger.LogNote("ToolsPageEncExport", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
     }
 
     private void ShowEncImportPwdDialog()
@@ -1885,7 +1940,7 @@ private void ShowResetPasswordDialog()
 
     private void HideEncImportPwdDialog()
     {
-        if (_animEncImportPwd) return;
+        if (_animEncImportPwd || _encImportInFlight) return;
         _animEncImportPwd = true;
         _pendingEncImportPath = null;
         HideOverlay(EncImportPwdOverlay, EncImportPwdDialog, EncImportPwdDialogTransform, () => _animEncImportPwd = false);
@@ -1899,15 +1954,37 @@ private void ShowResetPasswordDialog()
     private void EncImportPwdBox_TextChanged(object sender, TextChangedEventArgs e)
         => EncImportConfirmButton.IsEnabled = EncImportPwdBox.Text.Length > 0;
 
-    private void EncImportPwdConfirm_Click(object sender, RoutedEventArgs e)
+    private async void EncImportPwdConfirm_Click(object sender, RoutedEventArgs e)
     {
-        if (_animEncImportPwd) return;
+        if (_animEncImportPwd || _encImportInFlight) return;
         var pw = EncImportPwdBox.Text;
         if (pw.Length == 0) { FlashTextBox(EncImportPwdBox); return; }
         var path = _pendingEncImportPath;
         if (string.IsNullOrEmpty(path)) { HideEncImportPwdDialog(); return; }
         var remindersBefore = Services.ReminderScheduler.Snapshot(App.Store?.Database);
-        var result = App.Store?.ImportBackup(path, pw);
+
+
+        LoadResult? result = null;
+        var failed = false;
+        _encImportInFlight = true;
+        EncImportConfirmButton.IsEnabled = false;
+        try { result = await System.Threading.Tasks.Task.Run(() => App.Store?.ImportBackup(path, pw)); }
+        catch (Exception ex)
+        {
+            failed = true;
+            Services.CrashLogger.LogNote("EncImport", ex.Message);
+        }
+        finally
+        {
+            _encImportInFlight = false;
+            EncImportConfirmButton.IsEnabled = EncImportPwdBox.Text.Length > 0;
+        }
+        if (failed)
+        {
+            HideEncImportPwdDialog();
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+            return;
+        }
 
 
         if (result != null && result.Status == LoadStatus.Corrupted && result.Detail == Loc.T("Store_Err_BackupAuthFail"))
@@ -1985,13 +2062,7 @@ private void ShowResetPasswordDialog()
 
     private string BuildHtmlCollection()
     {
-        string logo = "";
-        try
-        {
-            var logoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "logo.svg");
-            if (System.IO.File.Exists(logoPath)) logo = System.IO.File.ReadAllText(logoPath);
-        }
-        catch { }
+        string logo = ImageExportService.TryReadLogoBrandHtml() ?? "";
 
         var db = App.Store?.Database;
         if (db == null) return "";
@@ -2015,7 +2086,8 @@ private void ShowResetPasswordDialog()
         sb.AppendLine("<style>");
         sb.AppendLine("body{font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;max-width:820px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.7;}");
         sb.AppendLine(".header{display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:2px solid #7276ff;margin-bottom:16px;}");
-        sb.AppendLine(".header svg{width:46px;height:46px;flex-shrink:0;}");
+
+
         sb.AppendLine(".logo{width:46px;height:46px;border-radius:12px;background:#7276ff;color:#fff;font-size:26px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}");
         sb.AppendLine(".brand{font-size:24px;font-weight:700;color:#7276ff;line-height:1.2;}");
         sb.AppendLine(".tagline{font-size:13px;color:#888;}");
@@ -2073,7 +2145,7 @@ private void ShowResetPasswordDialog()
             bool pdfOk = await ExportPdfViaWebView2Async(BuildHtmlCollection(), path);
             App.ShowToast(App.GetString(pdfOk ? "Common_Toast_Exported" : "Common_Toast_Failed"), pdfOk ? ToastTone.Success : ToastTone.Error);
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 PDF 合集失败: {ex.Message}"); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"导出 PDF 合集失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); }
     }
 
 
@@ -2145,7 +2217,7 @@ private void ShowResetPasswordDialog()
             var path = picked = FilePicker.PickSaveFile($"Novara_{App.GetString("Export_Section_Memo")}_{DateTime.Now:yyyyMMdd_HHmmss}", new[] { ("PNG", new[] { ".png" }) });
             if (path == null) return;
 
-            var logo = ImageExportService.TryReadLogoSvg();
+            var logo = ImageExportService.TryReadLogoBrandHtml();
             var exportedAt = DateTime.Now;
             string wide = ImageExportTemplates.BuildMemoCollectionHtml(db.MemoGroups, db.MemoEntries,
                 ImageExportTemplates.WideWidth, exportedAt, logo);
@@ -2339,12 +2411,32 @@ private void ShowResetPasswordDialog()
         _pendingVerifiedAction = flow;
     }
 
-    private void ImportExportPasswordConfirm_Click(object sender, RoutedEventArgs e)
+    private bool _importPwdVerifyInFlight;
+
+    private async void ImportExportPasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_animImportPwd) return;
+        if (_importPwdVerifyInFlight) return;
         var pw = ImportExportPasswordBox.Text.Trim();
         if (pw.Length < 6) { FlashTextBox(ImportExportPasswordBox); return; }
-        if (!PasswordService.Verify(pw)) { FlashTextBox(ImportExportPasswordBox); return; }
+
+
+        _importPwdVerifyInFlight = true;
+        var confirmButton = sender as Button;
+        if (confirmButton != null) confirmButton.IsEnabled = false;
+        bool verified;
+        try { verified = await System.Threading.Tasks.Task.Run(() => PasswordService.Verify(pw)); }
+        catch { verified = false; }
+        finally
+        {
+            _importPwdVerifyInFlight = false;
+            if (confirmButton != null) confirmButton.IsEnabled = true;
+        }
+        if (!verified) { FlashTextBox(ImportExportPasswordBox); return; }
+
+
+
+        if (_animImportPwd || ImportExportPasswordOverlay.Visibility != Visibility.Visible) return;
 
         if (_pendingVerifiedAction != null)
         {
@@ -2541,7 +2633,14 @@ private void ShowResetPasswordDialog()
             PopulateCsvImportPreview(_csvImportResult);
             ShowCsvImportPreview(_csvImportResult.IsNovaraFormat);
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CSV 导入失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+
+            _csvImportText = "";
+            _csvImportResult = null;
+            CsvImportPreviewList.Children.Clear();
+            System.Diagnostics.Debug.WriteLine($"CSV 导入失败: {ex.Message}"); App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
     }
 
     private void PopulateCsvImportPreview(CsvImportResult result)
@@ -2604,7 +2703,18 @@ private void ShowResetPasswordDialog()
 
     private void CsvImportPreviewConfirm_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_csvImportText)) return;
+
+
+
+
+        if (_animCsvPreview) return;
+        if (string.IsNullOrEmpty(_csvImportText))
+        {
+
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+            HideCsvImportPreview();
+            return;
+        }
 
 
 
@@ -3016,13 +3126,23 @@ private void ShowResetPasswordDialog()
         _animBackupNow = true;
         HideOverlay(BackupNowOverlay, BackupNowDialog, BackupNowDialogTransform, () => _animBackupNow = false);
     }
-    private void BackupNowConfirm_Click(object sender, RoutedEventArgs e)
+    private bool _backupNowBusy;
+    private async void BackupNowConfirm_Click(object sender, RoutedEventArgs e)
     {
-        var snapshot = AutoBackupService.CreateSnapshot(isManual: true);
-        HideBackupNowDialog();
-        UpdateBackupUI();
-        if (snapshot == null) { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); return; }
-        App.ShowToast(App.GetString("Common_Toast_Created"));
+        if (_backupNowBusy) return;
+        _backupNowBusy = true;
+        try
+        {
+
+
+            HideBackupNowDialog();
+            UpdateBackupUI();
+            var snapshot = await System.Threading.Tasks.Task.Run(() => AutoBackupService.CreateSnapshot(isManual: true));
+            UpdateBackupUI();
+            if (snapshot == null) { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); return; }
+            App.ShowToast(App.GetString("Common_Toast_Created"));
+        }
+        finally { _backupNowBusy = false; }
     }
     private void BackupNowCancel_Click(object sender, RoutedEventArgs e) => HideBackupNowDialog();
     private void BackupNowClose_Click(object sender, RoutedEventArgs e) => HideBackupNowDialog();
@@ -3089,7 +3209,7 @@ private void ShowResetPasswordDialog()
     {
 
         _pendingRestoreSnapshot = GetCheckedSnapshot(BackupRestoreList);
-        if (string.IsNullOrEmpty(_pendingRestoreSnapshot)) return;
+        if (string.IsNullOrEmpty(_pendingRestoreSnapshot)) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst")); return; }
 
         HideBackupRestoreDialog();
         ShowBackupRestoreConfirmDialog();
@@ -3116,20 +3236,36 @@ private void ShowResetPasswordDialog()
         _pendingRestoreSnapshot = null;
         HideBackupRestoreConfirmDialog();
     }
-    private void BackupRestoreConfirmOk_Click(object sender, RoutedEventArgs e)
+    private bool _restoreInFlight;
+    private async void BackupRestoreConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+        if (_restoreInFlight) return;
         HideBackupRestoreConfirmDialog();
         if (string.IsNullOrEmpty(_pendingRestoreSnapshot)) return;
-        if (AutoBackupService.Restore(_pendingRestoreSnapshot))
+        var target = _pendingRestoreSnapshot;
+        _restoreInFlight = true;
+        bool ok;
+        string? restoreErrorKey = null;
+        try
         {
-            _pendingRestoreSnapshot = null;
+
+
+
+            var restore = await System.Threading.Tasks.Task.Run(() => AutoBackupService.Restore(target));
+            ok = restore.Ok;
+            restoreErrorKey = restore.ErrorKey;
+        }
+        catch { ok = false; restoreErrorKey = "Store_Err_IoFail"; }
+        finally { _restoreInFlight = false; }
+        _pendingRestoreSnapshot = null;
+        if (ok)
+        {
             UpdateBackupUI();
             ShowBackupRestartDialog();
         }
         else
         {
-            _pendingRestoreSnapshot = null;
-            App.ShowToast(App.GetString("Store_Err_IoFail"), ToastTone.Error);
+            App.ShowToast(App.GetString(restoreErrorKey ?? "Store_Err_IoFail"), ToastTone.Error);
         }
     }
     private void BackupRestoreConfirmCancel_Click(object sender, RoutedEventArgs e) => CancelBackupRestoreConfirm();
@@ -3156,7 +3292,7 @@ private void ShowResetPasswordDialog()
         _pendingDeleteIsClearAll = false;
         _pendingDeleteSnapshots.Clear();
         _pendingDeleteSnapshots.AddRange(GetCheckedSnapshots(BackupDeleteList));
-        if (_pendingDeleteSnapshots.Count == 0) return;
+        if (_pendingDeleteSnapshots.Count == 0) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst")); return; }
         HideBackupDeleteDialog();
         ShowBackupDeleteConfirmDialog();
     }
@@ -3187,24 +3323,44 @@ private void ShowResetPasswordDialog()
     }
     private void BackupDeleteConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+
+
+        if (_animBackupDeleteConfirm) return;
         HideBackupDeleteConfirmDialog();
+        (int Deleted, int Failed) result;
         if (_pendingDeleteIsClearAll)
         {
-            AutoBackupService.ClearAll();
+            result = AutoBackupService.ClearAll();
             _pendingDeleteSnapshots.Clear();
         }
         else
         {
-            AutoBackupService.DeleteSnapshots(_pendingDeleteSnapshots);
+            result = AutoBackupService.DeleteSnapshots(_pendingDeleteSnapshots);
             _pendingDeleteSnapshots.Clear();
         }
         UpdateBackupUI();
-        App.ShowToast(App.GetString("Common_Toast_Deleted"));
+
+        BuildBackupList(BackupDeleteList, singleSelect: false);
+        BuildBackupList(BackupRestoreList, singleSelect: true);
+        if (result.Failed == 0)
+            App.ShowToast(App.GetString("Common_Toast_Deleted"));
+        else if (result.Deleted == 0)
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        else
+            App.ShowToast(string.Format(App.GetString("Setting_Backup_Delete_Partial"), result.Deleted, result.Failed), ToastTone.Error);
     }
-    private void BackupDeleteConfirmCancel_Click(object sender, RoutedEventArgs e) => HideBackupDeleteConfirmDialog();
-    private void BackupDeleteConfirmClose_Click(object sender, RoutedEventArgs e) => HideBackupDeleteConfirmDialog();
+    private void BackupDeleteConfirmCancel_Click(object sender, RoutedEventArgs e) { ClearBackupDeletePending(); HideBackupDeleteConfirmDialog(); }
+    private void BackupDeleteConfirmClose_Click(object sender, RoutedEventArgs e) { ClearBackupDeletePending(); HideBackupDeleteConfirmDialog(); }
     private void BackupDeleteConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
-    { if (ReferenceEquals(e.OriginalSource, BackupDeleteConfirmScrim)) HideBackupDeleteConfirmDialog(); }
+    { if (ReferenceEquals(e.OriginalSource, BackupDeleteConfirmScrim)) { ClearBackupDeletePending(); HideBackupDeleteConfirmDialog(); } }
+
+
+
+    private void ClearBackupDeletePending()
+    {
+        _pendingDeleteSnapshots.Clear();
+        _pendingDeleteIsClearAll = false;
+    }
 
 
     private void ShowBackupRestartDialog() => ShowOverlay(BackupRestartOverlay, BackupRestartDialog, BackupRestartDialogTransform);
@@ -3214,34 +3370,37 @@ private void ShowResetPasswordDialog()
     }
 
 
+
     private void RestartApp(bool rollbackOnFail = false)
     {
         if (_restarting) return;
         _restarting = true;
-        try
+        if (!Novara.MainWindow.RestartNow())
         {
-            var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) { _restarting = false; HandleRestartFailure(rollbackOnFail); return; }
-            Novara.MainWindow.ReleaseSingleInstance();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
-        }
-        catch
-        {
-            System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
+
             _restarting = false;
             HandleRestartFailure(rollbackOnFail);
-            return;
         }
-        if (App.MainWindow is { } mw) { mw.SetRestarting(); mw.ExitApp(saveFirst: false); }
     }
 
 
-    private void HandleRestartFailure(bool rollbackOnFail)
+    private async void HandleRestartFailure(bool rollbackOnFail)
     {
         if (!rollbackOnFail) return;
-        BackupRestartOverlay.Visibility = Visibility.Collapsed;
-        if (AutoBackupService.RollbackLastRestore())
+
+
+
+
+        bool rolledBack;
+        try
         {
+
+            rolledBack = await System.Threading.Tasks.Task.Run(() => AutoBackupService.RollbackLastRestore());
+        }
+        catch { rolledBack = false; }
+        if (rolledBack)
+        {
+            BackupRestartOverlay.Visibility = Visibility.Collapsed;
             UpdateBackupUI();
             App.ShowToast(App.GetString("Setting_Backup_RestartFail_Rollback"), ToastTone.Error);
         }
@@ -3547,7 +3706,9 @@ private void ShowResetPasswordDialog()
             (App.GetString("Setting_Stats_Encryption"),
                 (App.Store is { IsEncrypted: true } ? App.GetString("Setting_Stats_EncOn") : App.GetString("Setting_Stats_EncOff")), true, false),
             (App.GetString("Setting_Stats_LastBackup"), lastBackup, true, false),
-            (App.GetString("Setting_Stats_SnapshotCount"), $"{snapshots.Count}/{Services.AutoBackupService.MaxSnapshots}", true, false),
+
+
+            (App.GetString("Setting_Stats_SnapshotCount"), snapshots.Count.ToString(), true, false),
             (App.GetString("Setting_Stats_Integrity"), integrityValue, true, integrityWarn),
             (App.GetString("Setting_Stats_Orphans"), orphanWarn ? orphans.ToString() : "✓", true, orphanWarn),
 
@@ -3663,6 +3824,7 @@ private void ShowResetPasswordDialog()
         McpCopyHintButtonText.Text = App.GetString("Setting_Mcp_Copy_Hint_Short");
         McpDeleteConfirmTitleText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Title");
         McpDeleteConfirmMessageText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Message");
+        McpDeleteConfirmHintText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Hint");
         McpDeleteConfirmCancelText.Text = App.GetString("Common_Button_Cancel");
         McpDeleteConfirmOkText.Text = App.GetString("Setting_Mcp_DeleteConfirm_Ok");
 
@@ -3710,15 +3872,17 @@ private void ShowResetPasswordDialog()
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) return;
         settings.McpEnabled = enabled;
+        Novara.Services.McpService.RecordMasterSwitch(deleteSwitch: false, enabled);
         if (enabled && string.IsNullOrEmpty(settings.McpToken))
         {
 
             settings.McpToken = GenerateToken();
-            settings.McpTokenGeneratedAt = DateTime.Now;
         }
         App.Store?.SaveAsync();
         UpdateMcpUI(animate: true);
         App.ShowToast(App.GetString("Common_Toast_Switched"));
+
+        if (enabled && Novara.Services.McpService.GetAuthorizedSnapshot().Count == 0) ShowMcpConfigDialog();
     }
 
     private void McpExpandButton_Click(object sender, RoutedEventArgs e)
@@ -3748,27 +3912,69 @@ private void ShowResetPasswordDialog()
         if (File.Exists(sideBySide)) return sideBySide;
 
 
+
+
+
+
+
+#if DEBUG
+        var configs = new[] { "Debug", "Release" };
+#else
+        var configs = new[] { "Release", "Debug" };
+#endif
         for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
         {
-            var candidate = Path.Combine(dir, "NovaraMCP", "bin", "x64", "Debug", "net8.0", "win-x64", "NovaraMCP.exe");
-            if (File.Exists(candidate)) return candidate;
-            candidate = Path.Combine(dir, "NovaraMCP", "bin", "Debug", "net8.0", "win-x64", "NovaraMCP.exe");
-            if (File.Exists(candidate)) return candidate;
+            foreach (var cfg in configs)
+            {
+                foreach (var layout in new[] { Path.Combine(dir, "NovaraMCP", "bin", "x64", cfg), Path.Combine(dir, "NovaraMCP", "bin", cfg) })
+                {
+                    var found = FindNewestTfmMcpExe(layout);
+                    if (found != null) return found;
+                }
+            }
             var parent = Directory.GetParent(dir)?.FullName;
             if (string.IsNullOrEmpty(parent) || parent == dir) break;
             dir = parent;
         }
-        return sideBySide;
+
+
+
+        return string.Empty;
     }
 
-    private void CopyToClipboard(string text)
+
+
+    private static string? FindNewestTfmMcpExe(string cfgDir)
+    {
+        if (!Directory.Exists(cfgDir)) return null;
+        string? best = null;
+        Version? bestVer = null;
+        try
+        {
+            foreach (var tfmDir in Directory.EnumerateDirectories(cfgDir, "net*"))
+            {
+                var head = Path.GetFileName(tfmDir).Substring("net".Length);
+                var dash = head.IndexOf('-');
+                if (dash >= 0) head = head[..dash];
+                if (!Version.TryParse(head, out var ver)) continue;
+                var exe = Path.Combine(tfmDir, "win-x64", "NovaraMCP.exe");
+                if (!File.Exists(exe)) continue;
+                if (bestVer == null || ver > bestVer) { best = exe; bestVer = ver; }
+            }
+        }
+        catch { return best; }
+        return best;
+    }
+
+    private bool CopyToClipboard(string text)
     {
         var dp = new DataPackage();
         dp.SetText(text);
 
 
-        try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); }
-        catch { App.ShowToast(App.GetString("Common_Toast_CopyFail")); }
+
+        try { Clipboard.SetContent(dp); App.ShowToast(App.GetString("Common_Toast_Copied")); return true; }
+        catch { App.ShowToast(App.GetString("Common_Toast_CopyFail"), ToastTone.Error); return false; }
     }
 
     private void BuildMcpAuthorizedList()
@@ -3829,7 +4035,7 @@ private void ShowResetPasswordDialog()
                 Height = 28,
                 MinWidth = 80,
                 Padding = new Thickness(10, 0, 10, 0),
-                Style = (Style)Resources["McpDangerButtonStyle"],
+                Style = (Style)Application.Current.Resources["NovaraDangerButtonStyle"],
                 CornerRadius = new CornerRadius(8),
                 VerticalAlignment = VerticalAlignment.Center,
                 Tag = path,
@@ -3869,6 +4075,7 @@ private void ShowResetPasswordDialog()
     { if (ReferenceEquals(e.OriginalSource, McpRevokeConfirmScrim)) HideMcpRevokeConfirmDialog(); }
     private void McpRevokeConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+        if (_animMcpRevokeConfirm) return;
         if (_pendingRevokePath != null)
         {
             if (Novara.Services.McpService.RevokeAuthorizedProcess(_pendingRevokePath))
@@ -3917,11 +4124,20 @@ private void ShowResetPasswordDialog()
 
     private void ApplyDeleteGate(bool masterOn)
     {
+
+
         McpPermChkMemoDelete.IsEnabled = masterOn;
         McpPermChkPathDelete.IsEnabled = masterOn;
         McpPermChkTodoDelete.IsEnabled = masterOn;
         McpPermChkNoteDelete.IsEnabled = masterOn;
         McpPermChkDiaryDelete.IsEnabled = masterOn;
+        var chk = masterOn ? Visibility.Visible : Visibility.Collapsed;
+        var locked = masterOn ? Visibility.Collapsed : Visibility.Visible;
+        McpPermChkMemoDelete.Visibility = chk;   McpPermLockedMemoDelete.Visibility = locked;
+        McpPermChkPathDelete.Visibility = chk;   McpPermLockedPathDelete.Visibility = locked;
+        McpPermChkTodoDelete.Visibility = chk;   McpPermLockedTodoDelete.Visibility = locked;
+        McpPermChkNoteDelete.Visibility = chk;   McpPermLockedNoteDelete.Visibility = locked;
+        McpPermChkDiaryDelete.Visibility = chk;  McpPermLockedDiaryDelete.Visibility = locked;
         McpPermDeleteHint.Visibility = masterOn ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -4004,7 +4220,16 @@ private void ShowResetPasswordDialog()
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) { HideMcpPermDialog(); return; }
         var bits = ReadMatrix();
+
+
+
+        var previousBits = McpService.ReadClientPermissions(path);
         McpService.SaveClientPermissions(path, bits);
+
+
+        var appliedBits = McpService.ReadClientPermissions(path);
+        if (previousBits != appliedBits)
+            McpService.RecordPermissionChange(path, $"permission matrix changed: 0x{(long)previousBits:X} -> 0x{(long)appliedBits:X}");
         PersistSetting(_ => { });
         BuildMcpAuthorizedList();
         HideMcpPermDialog();
@@ -4175,12 +4400,16 @@ private void ShowResetPasswordDialog()
     { if (ReferenceEquals(e.OriginalSource, McpAuditClearConfirmScrim)) HideMcpAuditClearConfirmDialog(); }
     private void McpAuditClearConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+        if (_animMcpAuditClear) return;
 
 
 
-        Novara.Services.McpAuditLog.ClearAllWithMarker();
+
+        var cleared = Novara.Services.McpAuditLog.ClearAllWithMarker();
         BuildMcpAuditList();
         HideMcpAuditClearConfirmDialog();
+
+        if (!cleared) App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
     }
 
 
@@ -4220,11 +4449,12 @@ private void ShowResetPasswordDialog()
     { if (ReferenceEquals(e.OriginalSource, McpResetConfirmScrim)) HideMcpResetConfirmDialog(); }
     private void McpResetConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+        if (_animMcpResetConfirm) return;
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) return;
         settings.McpToken = GenerateToken();
-        settings.McpTokenGeneratedAt = DateTime.Now;
         App.Store?.SaveAsync();
+        McpService.RecordTokenReset();
         HideMcpResetConfirmDialog();
         UpdateMcpUI();
         App.ShowToast(App.GetString("Common_Toast_Reset"));
@@ -4248,7 +4478,16 @@ private void ShowResetPasswordDialog()
     { if (ReferenceEquals(e.OriginalSource, McpCopyScrim)) HideMcpCopyDialog(); }
     private void McpCopyJson_Click(object sender, RoutedEventArgs e)
     {
-        CopyToClipboard(BuildMcpJson());
+
+
+
+        var exe = FindNovaraMcpExe();
+        if (string.IsNullOrEmpty(exe))
+        {
+            App.ShowToast(App.GetString("Setting_Mcp_ExeNotFound"), ToastTone.Error);
+            return;
+        }
+        CopyToClipboard(BuildMcpJson(exe));
         HideMcpCopyDialog();
     }
     private void McpCopyHint_Click(object sender, RoutedEventArgs e)
@@ -4292,6 +4531,7 @@ private void ShowResetPasswordDialog()
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) return;
         settings.McpDeleteEnabled = enabled;
+        Novara.Services.McpService.RecordMasterSwitch(deleteSwitch: true, enabled);
         App.Store?.SaveAsync();
         UpdateMcpDeletePermissionButton(enabled);
     }
@@ -4301,7 +4541,7 @@ private void ShowResetPasswordDialog()
 
 
         McpDeletePermissionButton.Style = on
-            ? (Style)Resources["McpDangerButtonStyle"]
+            ? (Style)Application.Current.Resources["NovaraDangerButtonStyle"]
             : (Style)Application.Current.Resources["NovaraOutlineButtonStyle"];
         McpDeletePermissionButton.Background = on
             ? App.GetBrush("AppDangerBrush")
@@ -4334,10 +4574,9 @@ private void ShowResetPasswordDialog()
     }
 
 
-    private string BuildMcpJson()
+    private string BuildMcpJson(string exe)
     {
         var settings = App.Store?.Database.AppSettings;
-        var exe = FindNovaraMcpExe();
         var token = settings?.McpToken ?? "";
 
 
@@ -4357,7 +4596,16 @@ private void ShowResetPasswordDialog()
         return System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
-    private string BuildMcpHint() => App.GetString("Setting_Mcp_Hint").Replace("{JSON}", BuildMcpJson());
+    private string BuildMcpHint()
+    {
+        var exe = FindNovaraMcpExe();
+        var hint = App.GetString("Setting_Mcp_Hint").Replace("{JSON}", BuildMcpJson(exe));
+
+
+        return string.IsNullOrEmpty(exe)
+            ? App.GetString("Setting_Mcp_ExeNotFound") + "\n\n" + hint
+            : hint;
+    }
 
 
 
@@ -4365,6 +4613,7 @@ private void ShowResetPasswordDialog()
 
     private bool _animSyncPair;
     private bool _animSyncUnpair;
+    private bool _unpairInFlight;
     private bool _animSyncConflict;
     private bool _animSyncAdopt;
     private bool _animSyncKeySaved;
@@ -4387,7 +4636,16 @@ private void ShowResetPasswordDialog()
     private string? _pendingImportPath;
     private string? _importedSpaceKey;
     private bool _animSyncKeyImportPwd;
+    private bool _syncKeyFlowInFlight;
     private bool _animSyncKeyImportResult;
+
+
+
+
+    private bool _syncPairInFlight;
+    private bool _readAccessInFlight;
+    private bool _editAccessInFlight;
+    private bool _deviceActionInFlight;
 
 
     private void OnSyncRoundCompleted(Services.SyncRoundOutcome outcome)
@@ -4635,11 +4893,14 @@ private void ShowResetPasswordDialog()
 
 
         else if (Services.SyncService.CredentialUnavailable) key = "Sync_Status_CredentialUnavailable";
+
+
+        else if (!state.Enabled) key = "Sync_Status_PairedOff";
         else if (Services.SyncService.IsSyncing) key = "Sync_Status_Syncing";
         else key = SyncOutcomeStatusKey(_lastSyncOutcome, fallback: state.Enabled ? "Sync_Status_Ready" : "Sync_Status_PairedOff");
         SyncDetailState.Text = App.GetString(key);
 
-        var attention = IsSyncPaired(state) && (Services.SyncService.KeyWrapStale
+        var attention = state.Enabled && IsSyncPaired(state) && (Services.SyncService.KeyWrapStale
             || Services.SyncService.CredentialUnavailable
             || _lastSyncOutcome?.Status is
             Services.SyncRoundStatus.Conflict or
@@ -4649,7 +4910,7 @@ private void ShowResetPasswordDialog()
 
 
 
-        var resolvable = IsSyncPaired(state) && _lastSyncOutcome?.Status == Services.SyncRoundStatus.Conflict;
+        var resolvable = state.Enabled && IsSyncPaired(state) && _lastSyncOutcome?.Status == Services.SyncRoundStatus.Conflict;
         SyncNowButtonText.Text = App.GetString(resolvable ? "Sync_Button_Resolve" : "Sync_Button_SyncNow");
 
         SyncAttentionDot.Visibility = attention ? Visibility.Visible : Visibility.Collapsed;
@@ -4710,7 +4971,14 @@ private void ShowResetPasswordDialog()
 
         if (IsSyncResolvable())
         {
-            await ShowSyncConflictDialogAsync();
+
+
+            try { await ShowSyncConflictDialogAsync(); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"V11-335: 冲突检视失败: {ex}");
+                App.ShowToast(App.GetString("Sync_Conflict_InspectFailed"), ToastTone.Error);
+            }
             return;
         }
 
@@ -4772,7 +5040,7 @@ private void ShowResetPasswordDialog()
         menu.Items.Add(MakeItem(App.GetString("Setting_Autostart_On"), enabled,
             () => { Services.SyncService.SetEnabled(true); UpdateSyncUI(animate: true); }));
         menu.Items.Add(MakeItem(App.GetString("Setting_Autostart_Off"), !enabled,
-            () => { Services.SyncService.SetEnabled(false); UpdateSyncUI(animate: true); }));
+            () => { Services.SyncService.SetEnabled(false); _lastSyncOutcome = null; UpdateSyncUI(animate: true); }));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(MakeItem(App.GetString("Sync_Button_Unpair"), false, ShowSyncUnpairDialog, danger: true));
         menu.ShowAt(SyncToggleButton, new Windows.Foundation.Point(0, SyncToggleButton.ActualHeight + 4));
@@ -4857,6 +5125,7 @@ private void ShowResetPasswordDialog()
 
     private void HideSyncPairDialog()
     {
+        if (_syncPairInFlight) return;
         if (_animSyncPair) return;
         _animSyncPair = true;
         HideOverlay(SyncPairOverlay, SyncPairDialog, SyncPairDialogTransform, () => _animSyncPair = false);
@@ -4870,7 +5139,11 @@ private void ShowResetPasswordDialog()
 
 
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(SyncGuideUrl) { UseShellExecute = true }); }
-        catch { App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error); }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Connect_DeployHelp_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("ToolsPage.SyncPairDeployHelp", ex.Message);
+        }
     }
 
     private void SyncPairClose_Click(object sender, RoutedEventArgs e) => HideSyncPairDialog();
@@ -4880,6 +5153,7 @@ private void ShowResetPasswordDialog()
     private async void SyncPairConfirm_Click(object sender, RoutedEventArgs e)
     {
         SyncPairConfirmButton.IsEnabled = false;
+        _syncPairInFlight = true;
         try
         {
             var deviceName = string.IsNullOrWhiteSpace(SyncPairDeviceBox.Text)
@@ -4893,6 +5167,7 @@ private void ShowResetPasswordDialog()
                 SyncPairKeyBox.Text.Trim(),
                 deviceName);
 
+            _syncPairInFlight = false;
             if (!result.Ok)
             {
 
@@ -4912,7 +5187,7 @@ private void ShowResetPasswordDialog()
             ShowSyncKeySavedDialog(result.SpaceKeyBase64);
         }
 
-        finally { UpdateSyncPairConfirmState(); }
+        finally { UpdateSyncPairConfirmState(); _syncPairInFlight = false; }
     }
 
 
@@ -4938,14 +5213,43 @@ private void ShowResetPasswordDialog()
     private void SyncUnpairScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, SyncUnpairScrim)) HideSyncUnpairDialog(); }
 
-    private void SyncUnpairConfirm_Click(object sender, RoutedEventArgs e)
+    private async void SyncUnpairConfirm_Click(object sender, RoutedEventArgs e)
     {
-        Services.SyncService.Unpair();
-        _lastSyncOutcome = null;
-        _revealedSpaceKey = null;
-        _syncKeyShown = false;
-        HideSyncUnpairDialog();
-        UpdateSyncUI(animate: true);
+        if (_unpairInFlight || _animSyncUnpair) return;
+        _unpairInFlight = true;
+        try
+        {
+            var state = Services.SyncService.State;
+            var deviceId = state.DeviceId;
+            var paired = !string.IsNullOrEmpty(state.SpaceId) && !string.IsNullOrEmpty(deviceId);
+            HideSyncUnpairDialog();
+            var serverInvalidated = true;
+            if (paired)
+            {
+
+
+
+                try
+                {
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var (ok, _) = await Services.SyncService.ResetTokenAsync(deviceId, cts.Token);
+                    serverInvalidated = ok;
+                }
+                catch (Exception ex)
+                {
+                    Services.CrashLogger.LogNote("SyncUnpair", ex.Message);
+                    serverInvalidated = false;
+                }
+            }
+            Services.SyncService.Unpair();
+            _lastSyncOutcome = null;
+            _revealedSpaceKey = null;
+            _syncKeyShown = false;
+            UpdateSyncUI(animate: true);
+            if (!serverInvalidated)
+                App.ShowToast(App.GetString("Sync_Unpair_ServerWarn"), ToastTone.Error);
+        }
+        finally { _unpairInFlight = false; }
     }
 
 
@@ -4958,7 +5262,12 @@ private void ShowResetPasswordDialog()
 
     private async Task ShowSyncConflictDialogAsync()
     {
-        if (_syncConflictBusy) return;
+        if (_syncConflictBusy)
+        {
+
+            App.ShowToast(App.GetString("Sync_Conflict_Busy"));
+            return;
+        }
         _syncConflictBusy = true;
         try
         {
@@ -4972,7 +5281,9 @@ private void ShowResetPasswordDialog()
             SyncExportLocalButton.IsEnabled = false;
             ShowOverlay(SyncConflictOverlay, SyncConflictDialog, SyncConflictDialogTransform);
 
-            var inspection = await Services.SyncService.InspectConflictAsync();
+            SyncConflictInspection inspection;
+            try { inspection = await Services.SyncService.InspectConflictAsync(); }
+            catch (Exception ex) { inspection = Services.SyncConflictInspection.Fail(ex.Message); }
             _syncConflict = inspection;
 
             if (!inspection.Success)
@@ -5018,9 +5329,9 @@ private void ShowResetPasswordDialog()
         {
             var row = new Grid { ColumnSpacing = 8 };
             row.ColumnDefinitions.Add(new ColumnDefinition());
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 86 });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 86 });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MinWidth = 86 });
 
             var label = new TextBlock
             {
@@ -5086,6 +5397,7 @@ private void ShowResetPasswordDialog()
 
 
 
+
     private async Task ExportConflictSideAsync(bool remote, byte[] remoteContainer, long version)
     {
         if (_pickerFlowBusy) return;
@@ -5116,15 +5428,24 @@ private void ShowResetPasswordDialog()
 
     private async void SyncKeepLocal_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animSyncConflict) return;
         if (_syncConflictBusy) return;
         _syncConflictBusy = true;
         SyncKeepLocalButton.IsEnabled = false;
         try
         {
-            HideSyncConflictDialog();
             var outcome = await Services.SyncService.ResolveKeepLocalAsync();
             _lastSyncOutcome = outcome;
             UpdateSyncUI();
+
+
+            if (outcome.Busy)
+            {
+                App.ShowToast(App.GetString("Sync_Conflict_Busy"), ToastTone.Error);
+                return;
+            }
+            HideSyncConflictDialog();
             App.ShowToast(App.GetString(outcome.Ok
                 ? "Sync_Conflict_Resolved_KeptLocal"
                 : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")), outcome.Ok ? ToastTone.Success : ToastTone.Error);
@@ -5140,6 +5461,8 @@ private void ShowResetPasswordDialog()
 
     private void SyncTakeRemote_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animSyncConflict) return;
         _animSyncAdopt = false;
         ShowOverlay(SyncAdoptOverlay, SyncAdoptDialog, SyncAdoptDialogTransform);
     }
@@ -5158,6 +5481,9 @@ private void ShowResetPasswordDialog()
 
     private async void SyncAdoptConfirm_Click(object sender, RoutedEventArgs e)
     {
+
+
+        if (_animSyncAdopt) return;
         if (_syncConflictBusy) return;
         _syncConflictBusy = true;
         SyncAdoptConfirmButton.IsEnabled = false;
@@ -5181,7 +5507,7 @@ private void ShowResetPasswordDialog()
             UpdateSyncUI();
             App.ShowToast(App.GetString(outcome.Status == Services.SyncRoundStatus.RollbackRejected
                 ? "Sync_Toast_Rollback"
-                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")), outcome.Status == Services.SyncRoundStatus.RollbackRejected ? ToastTone.Success : ToastTone.Error);
+                : SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error")), ToastTone.Error);
         }
         catch (Exception ex)
         {
@@ -5204,14 +5530,18 @@ private void ShowResetPasswordDialog()
     {
         if (_animSyncKeySaved) return;
         _animSyncKeySaved = true;
-        HideOverlay(SyncKeySavedOverlay, SyncKeySavedDialog, SyncKeySavedDialogTransform, () => _animSyncKeySaved = false);
+        HideOverlay(SyncKeySavedOverlay, SyncKeySavedDialog, SyncKeySavedDialogTransform, () =>
+        {
+            SyncKeySavedBox.Text = "";
+            _animSyncKeySaved = false;
+        });
     }
 
 
     private void SyncKeySavedConfirm_Click(object sender, RoutedEventArgs e)
     {
-        CopyToClipboard(SyncKeySavedBox.Text);
-        HideSyncKeySavedDialog();
+
+        if (CopyToClipboard(SyncKeySavedBox.Text)) HideSyncKeySavedDialog();
     }
 
     private void SyncKeySavedScrim_Tapped(object sender, TappedRoutedEventArgs e) => HideSyncKeySavedDialog();
@@ -5238,6 +5568,7 @@ private void ShowResetPasswordDialog()
 
     private void HideSyncKeyViewDialog()
     {
+        if (_syncKeyFlowInFlight) return;
         if (_animSyncKeyView) return;
         _animSyncKeyView = true;
         HideOverlay(SyncKeyViewOverlay, SyncKeyViewDialog, SyncKeyViewDialogTransform, () => _animSyncKeyView = false);
@@ -5251,11 +5582,16 @@ private void ShowResetPasswordDialog()
     private async void SyncKeyViewConfirm_Click(object sender, RoutedEventArgs e)
     {
         SyncKeyViewConfirmButton.IsEnabled = false;
+        _syncKeyFlowInFlight = true;
         try
         {
             var password = SyncKeyViewPasswordBox.Text;
 
             var revealed = await Task.Run(() => Services.SyncService.RevealSpaceKey(password));
+            _syncKeyFlowInFlight = false;
+
+
+            if (!IsLoaded || SyncKeyViewOverlay.Visibility != Visibility.Visible) { _revealedSpaceKey = null; return; }
             if (revealed is null)
             {
 
@@ -5270,7 +5606,7 @@ private void ShowResetPasswordDialog()
             RefreshSyncKeyRow();
             Services.SyncService.RecordKeyViewed();
         }
-        finally { SyncKeyViewConfirmButton.IsEnabled = true; }
+        finally { SyncKeyViewConfirmButton.IsEnabled = true; _syncKeyFlowInFlight = false; }
     }
 
 
@@ -5330,6 +5666,7 @@ private void ShowResetPasswordDialog()
 
     private void HideSyncKeyImportPwdDialog()
     {
+        if (_syncKeyFlowInFlight) return;
         if (_animSyncKeyImportPwd) return;
         _animSyncKeyImportPwd = true;
         SyncKeyImportPwdBox.Text = "";
@@ -5348,11 +5685,20 @@ private void ShowResetPasswordDialog()
         if (string.IsNullOrEmpty(path)) return;
 
         SyncKeyImportPwdConfirmButton.IsEnabled = false;
+        _syncKeyFlowInFlight = true;
         try
         {
             var password = SyncKeyImportPwdBox.Text;
 
             var outcome = await Task.Run(() => Services.SyncService.ImportSpaceKeyFile(path, password));
+            _syncKeyFlowInFlight = false;
+
+            if (!IsLoaded || SyncKeyImportPwdOverlay.Visibility != Visibility.Visible)
+            {
+                _importedSpaceKey = null;
+                SyncKeyImportResultBox.Text = "";
+                return;
+            }
             if (!outcome.Ok)
             {
 
@@ -5368,7 +5714,7 @@ private void ShowResetPasswordDialog()
             _animSyncKeyImportResult = false;
             ShowOverlay(SyncKeyImportResultOverlay, SyncKeyImportResultDialog, SyncKeyImportResultDialogTransform);
         }
-        finally { SyncKeyImportPwdConfirmButton.IsEnabled = true; }
+        finally { SyncKeyImportPwdConfirmButton.IsEnabled = true; _syncKeyFlowInFlight = false; }
     }
 
     private void HideSyncKeyImportResultDialog()
@@ -5575,10 +5921,13 @@ private void ShowResetPasswordDialog()
     private void SyncAuditClearConfirmOk_Click(object sender, RoutedEventArgs e)
     {
 
+        if (_animSyncAuditClear) return;
 
-        Services.SyncAuditLog.ClearAllWithMarker();
+
+        var cleared = Services.SyncAuditLog.ClearAllWithMarker();
         BuildSyncAuditList();
         HideSyncAuditClearConfirmDialog();
+        if (!cleared) App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
     }
 
 
@@ -5611,12 +5960,17 @@ private void ShowResetPasswordDialog()
 
     private void HideSyncReadAccessDialog()
     {
+        if (_readAccessInFlight) return;
         if (_animSyncReadAccess) return;
         _animSyncReadAccess = true;
         _readAccessToken = null;
         SyncReadAccessTokenBox.Text = "";
-        SyncReadAccessTokenPanel.Visibility = Visibility.Collapsed;
-        HideOverlay(SyncReadAccessOverlay, SyncReadAccessDialog, SyncReadAccessDialogTransform, () => _animSyncReadAccess = false);
+
+        HideOverlay(SyncReadAccessOverlay, SyncReadAccessDialog, SyncReadAccessDialogTransform, () =>
+        {
+            SyncReadAccessTokenPanel.Visibility = Visibility.Collapsed;
+            _animSyncReadAccess = false;
+        });
     }
 
 
@@ -5626,6 +5980,29 @@ private void ShowResetPasswordDialog()
     {
         try { await RefreshReadAccessStateAsync(); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"刷新只读访问状态失败（已忽略）: {ex}"); }
+    }
+
+
+
+    private async Task SafeRefreshEditAccessStateAsync()
+    {
+        try { await RefreshEditAccessStateAsync(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"刷新编辑访问状态失败: {ex}");
+            try { ShowEditAccessError(EditAccessMessage(ex.Message)); } catch { }
+        }
+    }
+
+
+
+    private static async Task SafeDispatchAsync(Func<Task> action, string context)
+    {
+        try { await action(); }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("ToolsPageDispatch", context + ": " + ex.Message);
+        }
     }
 
 
@@ -5688,11 +6065,17 @@ private void ShowResetPasswordDialog()
 
     private async void SyncReadAccessIssue_Click(object sender, RoutedEventArgs e)
     {
+
+
+
+        if (_animSyncReadAccess) return;
         SyncReadAccessIssueButton.IsEnabled = false;
         ShowReadAccessError("");
+        _readAccessInFlight = true;
         try
         {
             var outcome = await Services.SyncService.IssueReadTokenAsync();
+            _readAccessInFlight = false;
             if (!outcome.Ok)
             {
                 ShowReadAccessError(outcome.Unreachable
@@ -5702,12 +6085,16 @@ private void ShowResetPasswordDialog()
             }
 
             _readAccessToken = outcome.Token;
+
+
+
+            if (_animSyncReadAccess || SyncReadAccessOverlay.Visibility != Visibility.Visible) { _readAccessToken = null; return; }
             SyncReadAccessTokenBox.Text = Novara.Services.ReadTokenRules.Display(outcome.Token);
             SyncReadAccessTokenPanel.Visibility = Visibility.Visible;
             _readAccessConfigured = true;
             ApplyReadAccessState();
         }
-        finally { SyncReadAccessIssueButton.IsEnabled = true; }
+        finally { SyncReadAccessIssueButton.IsEnabled = true; _readAccessInFlight = false; }
     }
 
     private void SyncReadAccessTokenCopy_Click(object sender, RoutedEventArgs e)
@@ -5736,20 +6123,33 @@ private void ShowResetPasswordDialog()
     private void SyncReadAccessRevokeConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, SyncReadAccessRevokeConfirmScrim)) HideSyncReadAccessRevokeConfirmDialog(); }
 
-    private void SyncReadAccessRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = RevokeReadAccessAsync();
+    private void SyncReadAccessRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = SafeDispatchAsync(RevokeReadAccessAsync, "revoke read access");
 
     private async Task RevokeReadAccessAsync()
     {
-        HideSyncReadAccessRevokeConfirmDialog();
 
-        var (ok, message) = await Services.SyncService.RevokeReadTokenAsync();
-        if (!ok) { ShowReadAccessError(ReadAccessMessage(message)); return; }
 
-        _readAccessConfigured = false;
-        _readAccessToken = null;
-        SyncReadAccessTokenBox.Text = "";
-        SyncReadAccessTokenPanel.Visibility = Visibility.Collapsed;
-        ApplyReadAccessState();
+        if (_animSyncReadAccessRevoke) return;
+
+
+        if (_animSyncReadAccess) return;
+        _readAccessInFlight = true;
+        try
+        {
+            HideSyncReadAccessRevokeConfirmDialog();
+
+            var (ok, message) = await Services.SyncService.RevokeReadTokenAsync();
+            _readAccessInFlight = false;
+            if (!ok) { ShowReadAccessError(ReadAccessMessage(message)); return; }
+            if (_animSyncReadAccess || SyncReadAccessOverlay.Visibility != Visibility.Visible) return;
+
+            _readAccessConfigured = false;
+            _readAccessToken = null;
+            SyncReadAccessTokenBox.Text = "";
+            SyncReadAccessTokenPanel.Visibility = Visibility.Collapsed;
+            ApplyReadAccessState();
+        }
+        finally { _readAccessInFlight = false; }
     }
 
     private void SyncReadAccessClose_Click(object sender, RoutedEventArgs e) => HideSyncReadAccessDialog();
@@ -5776,17 +6176,22 @@ private void ShowResetPasswordDialog()
         ShowOverlay(SyncEditAccessOverlay, SyncEditAccessDialog, SyncEditAccessDialogTransform);
 
         FitDialogScroll(SyncEditAccessScroll, 190);
-        _ = RefreshEditAccessStateAsync();
+        _ = SafeRefreshEditAccessStateAsync();
     }
 
     private void HideSyncEditAccessDialog()
     {
+        if (_editAccessInFlight) return;
         if (_animSyncEditAccess) return;
         _animSyncEditAccess = true;
         _editorAccessToken = null;
         SyncEditAccessTokenBox.Text = "";
-        SyncEditAccessTokenPanel.Visibility = Visibility.Collapsed;
-        HideOverlay(SyncEditAccessOverlay, SyncEditAccessDialog, SyncEditAccessDialogTransform, () => _animSyncEditAccess = false);
+
+        HideOverlay(SyncEditAccessOverlay, SyncEditAccessDialog, SyncEditAccessDialogTransform, () =>
+        {
+            SyncEditAccessTokenPanel.Visibility = Visibility.Collapsed;
+            _animSyncEditAccess = false;
+        });
     }
 
     private async Task RefreshEditAccessStateAsync()
@@ -5830,11 +6235,15 @@ private void ShowResetPasswordDialog()
 
     private async void SyncEditAccessIssue_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animSyncEditAccess) return;
         SyncEditAccessIssueButton.IsEnabled = false;
         ShowEditAccessError("");
+        _editAccessInFlight = true;
         try
         {
             var outcome = await Services.SyncService.IssueEditorDeviceAsync();
+            _editAccessInFlight = false;
             if (!outcome.Ok)
             {
                 ShowEditAccessError(outcome.Unreachable
@@ -5845,12 +6254,14 @@ private void ShowResetPasswordDialog()
 
             _editorAccessToken = outcome.Token;
 
+            if (_animSyncEditAccess || SyncEditAccessOverlay.Visibility != Visibility.Visible) { _editorAccessToken = null; return; }
+
             SyncEditAccessTokenBox.Text = outcome.Token;
             SyncEditAccessTokenPanel.Visibility = Visibility.Visible;
             _editorAccessConfigured = true;
             ApplyEditAccessState();
         }
-        finally { SyncEditAccessIssueButton.IsEnabled = true; }
+        finally { SyncEditAccessIssueButton.IsEnabled = true; _editAccessInFlight = false; }
     }
 
     private void SyncEditAccessTokenCopy_Click(object sender, RoutedEventArgs e)
@@ -5876,20 +6287,29 @@ private void ShowResetPasswordDialog()
     private void SyncEditAccessRevokeConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, SyncEditAccessRevokeConfirmScrim)) HideSyncEditAccessRevokeConfirmDialog(); }
 
-    private void SyncEditAccessRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = RevokeEditAccessAsync();
+    private void SyncEditAccessRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = SafeDispatchAsync(RevokeEditAccessAsync, "revoke edit access");
 
     private async Task RevokeEditAccessAsync()
     {
-        HideSyncEditAccessRevokeConfirmDialog();
+        if (_animSyncEditAccessRevoke) return;
+        if (_animSyncEditAccess) return;
+        _editAccessInFlight = true;
+        try
+        {
+            HideSyncEditAccessRevokeConfirmDialog();
 
-        var (ok, message) = await Services.SyncService.RevokeEditorDeviceAsync();
-        if (!ok) { ShowEditAccessError(EditAccessMessage(message)); return; }
+            var (ok, message) = await Services.SyncService.RevokeEditorDeviceAsync();
+            _editAccessInFlight = false;
+            if (!ok) { ShowEditAccessError(EditAccessMessage(message)); return; }
+            if (_animSyncEditAccess || SyncEditAccessOverlay.Visibility != Visibility.Visible) return;
 
-        _editorAccessConfigured = false;
-        _editorAccessToken = null;
-        SyncEditAccessTokenBox.Text = "";
-        SyncEditAccessTokenPanel.Visibility = Visibility.Collapsed;
-        ApplyEditAccessState();
+            _editorAccessConfigured = false;
+            _editorAccessToken = null;
+            SyncEditAccessTokenBox.Text = "";
+            SyncEditAccessTokenPanel.Visibility = Visibility.Collapsed;
+            ApplyEditAccessState();
+        }
+        finally { _editAccessInFlight = false; }
     }
 
     private void SyncEditAccessClose_Click(object sender, RoutedEventArgs e) => HideSyncEditAccessDialog();
@@ -5936,11 +6356,16 @@ private void ShowResetPasswordDialog()
 
     private void HideSyncDeviceCenterDialog()
     {
+        if (_deviceActionInFlight) return;
         if (_animSyncDeviceCenter) return;
         _animSyncDeviceCenter = true;
         _deviceActionTarget = null;
-        SyncDeviceCenterList.Children.Clear();
-        HideOverlay(SyncDeviceCenterOverlay, SyncDeviceCenterDialog, SyncDeviceCenterDialogTransform, () => _animSyncDeviceCenter = false);
+
+        HideOverlay(SyncDeviceCenterOverlay, SyncDeviceCenterDialog, SyncDeviceCenterDialogTransform, () =>
+        {
+            SyncDeviceCenterList.Children.Clear();
+            _animSyncDeviceCenter = false;
+        });
     }
 
     private void SyncDeviceCenterClose_Click(object sender, RoutedEventArgs e) => HideSyncDeviceCenterDialog();
@@ -6018,8 +6443,7 @@ private void ShowResetPasswordDialog()
 
 
 
-
-                Style = (Style)Resources["McpDangerButtonStyle"],
+                Style = (Style)Application.Current.Resources["NovaraDangerButtonStyle"],
             };
             var resetButton = new Button
             {
@@ -6031,16 +6455,14 @@ private void ShowResetPasswordDialog()
 
             if (device.Current || device.Revoked)
                 revokeButton.IsEnabled = false;
-            if (device.Revoked)
-
-
+            if (device.Current || device.Revoked)
                 resetButton.IsEnabled = false;
 
             revokeButton.Click += (_, _) =>
             {
                 _deviceActionTarget = device.DeviceId;
                 SyncDeviceRevokeConfirmMessageText.Text = App.GetString("Sync_DeviceCenter_RevokeMessage")
-                    .Replace("{device}", device.Name ?? device.DeviceId);
+                    .Replace("{device}", string.IsNullOrEmpty(device.Name) ? device.DeviceId : device.Name);
                 _animSyncDeviceRevokeConfirm = false;
                 ShowOverlay(SyncDeviceRevokeConfirmOverlay, SyncDeviceRevokeConfirmDialog, SyncDeviceRevokeConfirmDialogTransform);
             };
@@ -6048,7 +6470,7 @@ private void ShowResetPasswordDialog()
             {
                 _deviceActionTarget = device.DeviceId;
                 SyncDeviceResetConfirmMessageText.Text = App.GetString("Sync_DeviceCenter_ResetMessage")
-                    .Replace("{device}", device.Name ?? device.DeviceId);
+                    .Replace("{device}", string.IsNullOrEmpty(device.Name) ? device.DeviceId : device.Name);
                 _animSyncDeviceResetConfirm = false;
                 ShowOverlay(SyncDeviceResetConfirmOverlay, SyncDeviceResetConfirmDialog, SyncDeviceResetConfirmDialogTransform);
             };
@@ -6096,18 +6518,25 @@ private void ShowResetPasswordDialog()
     private void SyncDeviceRevokeConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, SyncDeviceRevokeConfirmScrim)) HideSyncDeviceRevokeConfirmDialog(); }
     private void SyncDeviceRevokeConfirmCancel_Click(object sender, RoutedEventArgs e) => HideSyncDeviceRevokeConfirmDialog();
-    private void SyncDeviceRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = DoRevokeDeviceAsync();
+    private void SyncDeviceRevokeConfirmOk_Click(object sender, RoutedEventArgs e) => _ = SafeDispatchAsync(DoRevokeDeviceAsync, "revoke device");
 
     private async Task DoRevokeDeviceAsync()
     {
-        var target = _deviceActionTarget;
-        HideSyncDeviceRevokeConfirmDialog();
-        if (string.IsNullOrEmpty(target)) return;
+        if (_animSyncDeviceRevokeConfirm) return;
+        _deviceActionInFlight = true;
+        try
+        {
+            var target = _deviceActionTarget;
+            HideSyncDeviceRevokeConfirmDialog();
+            if (string.IsNullOrEmpty(target)) return;
 
-        var (ok, message) = await Services.SyncService.RevokeDeviceAsync(target);
-        if (!ok) { ShowDeviceCenterError(DeviceCenterMessage(message)); return; }
+            var (ok, message) = await Services.SyncService.RevokeDeviceAsync(target);
+            _deviceActionInFlight = false;
+            if (!ok) { ShowDeviceCenterError(DeviceCenterMessage(message)); return; }
 
-        _ = RefreshDeviceListAsync();
+            _ = RefreshDeviceListAsync();
+        }
+        finally { _deviceActionInFlight = false; }
     }
 
 
@@ -6121,17 +6550,24 @@ private void ShowResetPasswordDialog()
     private void SyncDeviceResetConfirmScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, SyncDeviceResetConfirmScrim)) HideSyncDeviceResetConfirmDialog(); }
     private void SyncDeviceResetConfirmCancel_Click(object sender, RoutedEventArgs e) => HideSyncDeviceResetConfirmDialog();
-    private void SyncDeviceResetConfirmOk_Click(object sender, RoutedEventArgs e) => _ = DoResetDeviceTokenAsync();
+    private void SyncDeviceResetConfirmOk_Click(object sender, RoutedEventArgs e) => _ = SafeDispatchAsync(DoResetDeviceTokenAsync, "reset device token");
 
     private async Task DoResetDeviceTokenAsync()
     {
-        var target = _deviceActionTarget;
-        HideSyncDeviceResetConfirmDialog();
-        if (string.IsNullOrEmpty(target)) return;
+        if (_animSyncDeviceResetConfirm) return;
+        _deviceActionInFlight = true;
+        try
+        {
+            var target = _deviceActionTarget;
+            HideSyncDeviceResetConfirmDialog();
+            if (string.IsNullOrEmpty(target)) return;
 
-        var (ok, message) = await Services.SyncService.ResetTokenAsync(target);
-        if (!ok) { ShowDeviceCenterError(DeviceCenterMessage(message)); return; }
+            var (ok, message) = await Services.SyncService.ResetTokenAsync(target);
+            _deviceActionInFlight = false;
+            if (!ok) { ShowDeviceCenterError(DeviceCenterMessage(message)); return; }
 
-        _ = RefreshDeviceListAsync();
+            _ = RefreshDeviceListAsync();
+        }
+        finally { _deviceActionInFlight = false; }
     }
 }

@@ -80,10 +80,10 @@ public static class ApiDiagnoseService
         string? url, string? key, string? model,
         System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Diagnose", url ?? "");
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Diagnose", url ?? "");
         bool activityOk = false;
         try { var r = await DiagnoseAsyncCore(url, key, model, ct, handler); activityOk = r.Reachable; return r; }
-        finally { NetworkActivityService.End(activityOk); }
+        finally { NetworkActivityService.End(activity, activityOk); }
     }
 
     private static async System.Threading.Tasks.Task<ApiDiagnoseReport> DiagnoseAsyncCore(
@@ -139,7 +139,10 @@ public static class ApiDiagnoseService
         }
 
 
-        var chatReq = new ApiChatRequest { Model = report.Model, Prompt = "hi", MaxTokens = 1, Stream = false };
+
+
+
+        var chatReq = new ApiChatRequest { Model = report.Model, Prompt = "hi", MaxTokens = 1, Stream = false, ModelsEndpoint = probe.Endpoint };
         var chat = await ApiChatClient.ChatAsync(url, key, chatReq, ct, handler);
 
         if (chat.Ok)
@@ -149,7 +152,7 @@ public static class ApiDiagnoseService
             report.BalanceInfer = "ok";
             report.ModelReturned = chat.ModelReturned;
             report.MetadataHeaders = chat.Headers;
-            report.TokensConsumed += chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0;
+            report.TokensConsumed = ApiChatClient.SaturatingAdd(report.TokensConsumed, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0);
             report.Items.Add(new ApiDiagItem { Key = ItemReachability, Status = ApiDiagItemStatus.Pass, Summary = "ok", Evidence = modelsOk ? "models+chat" : "chat" });
             report.Items.Add(new ApiDiagItem { Key = ItemBalance, Status = ApiDiagItemStatus.Pass, Summary = "ok" });
         }
@@ -197,14 +200,14 @@ public static class ApiDiagnoseService
         report.LatencyMs = chat.LatencyMs;
         if (protocol == ApiChatProtocol.OpenAI)
         {
-            var streamReq = new ApiChatRequest { Model = report.Model, Prompt = "hi", MaxTokens = 1, Stream = true };
+            var streamReq = new ApiChatRequest { Model = report.Model, Prompt = "hi", MaxTokens = 1, Stream = true, ModelsEndpoint = probe.Endpoint };
             var s = await ApiChatClient.ChatAsync(url, key, streamReq, ct, handler);
             if (s.Ok)
             {
                 report.TtftMs = s.TtftMs;
                 report.TokensPerSecond = s.TokensPerSecond;
                 report.LatencyMs = s.LatencyMs;
-                report.TokensConsumed += s.Usage.HasUsage ? s.Usage.TotalTokens : 0;
+                report.TokensConsumed = ApiChatClient.SaturatingAdd(report.TokensConsumed, s.Usage.HasUsage ? s.Usage.TotalTokens : 0);
                 report.Items.Add(new ApiDiagItem { Key = ItemLatency, Status = ApiDiagItemStatus.Pass, Summary = "ok" });
             }
             else

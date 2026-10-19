@@ -64,6 +64,9 @@ public sealed record StoredEnvelope(string Json, VersionRecord Version);
 
 
 
+
+
+
 public sealed record SpaceSummary(
     string SpaceId,
     string Name,
@@ -232,10 +235,23 @@ public sealed class SpaceService
             devices.Count(d => d.Revoked),
             !string.IsNullOrEmpty(space.ReadTokenHash),
             devices.Any(d => string.Equals(d.DeviceId, EditorDeviceId, StringComparison.Ordinal) && !d.Revoked),
-            RetentionPolicy.UsedBytes(versions),
+
+
+
+
+
+            RetentionPolicy.UsedBytes(versions) + PhysicalChunkBytes(space.SpaceId),
             space.QuotaBytes,
             space.MaxVersions);
     }
+
+
+
+
+
+
+    private long PhysicalChunkBytes(string spaceId)
+        => _store.ChunkSizes(spaceId).Values.Sum();
 
 
 
@@ -478,8 +494,16 @@ public sealed class SpaceService
         });
 
 
-    public SyncResult<StoredEnvelope> GetData(SpaceRecord space, long version = 0)
+
+
+
+
+    public SyncResult<StoredEnvelope> GetData(SpaceRecord space, long version = 0, bool containerV5Capable = false, bool deviceAuth = false)
     {
+        if (space.ContainerGeneration == 5 && deviceAuth && !containerV5Capable)
+            return SyncResult<StoredEnvelope>.Fail(SyncErrorCode.UpgradeRequired,
+                "this space has been upgraded to the v5 container format — update this client");
+
         var versions = _store.GetVersions(space.SpaceId);
         var target = version <= 0 ? space.CurrentVersion : version;
         if (target <= 0) return SyncResult<StoredEnvelope>.Fail(SyncErrorCode.NotFound, "the space has no data yet");
@@ -492,6 +516,59 @@ public sealed class SpaceService
 
         return SyncResult<StoredEnvelope>.Ok(new StoredEnvelope(System.Text.Encoding.UTF8.GetString(blob), row));
     }
+
+
+
+    private static bool IsValidChunkId(string? chunkId) => Storage.BlobLayout.IsSafeChunkId(chunkId);
+
+
+
+    public SyncResult<bool> PutChunk(SpaceRecord space, string chunkId, byte[] data)
+    {
+        if (!IsValidChunkId(chunkId)) return SyncResult<bool>.Fail(SyncErrorCode.BadRequest, "chunk id must be 64 hex chars");
+        if (data is null || data.Length == 0) return SyncResult<bool>.Fail(SyncErrorCode.BadRequest, "chunk body is empty");
+
+        var gate = _locks.GetOrAdd(space.SpaceId, _ => new SemaphoreSlim(1, 1));
+        gate.Wait();
+        try
+        {
+            var fresh = _store.GetSpace(space.SpaceId);
+            if (fresh is null) return SyncResult<bool>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
+
+            var existing = _store.ChunkSizes(space.SpaceId);
+            var alreadyThere = existing.TryGetValue(chunkId, out var sameSize) && sameSize == data.Length;
+            if (!alreadyThere && fresh.QuotaBytes > 0)
+            {
+                var used = existing.Values.Sum() + data.Length;
+                if (used > fresh.QuotaBytes)
+                    return SyncResult<bool>.FailSized(SyncErrorCode.QuotaExceeded,
+                        "space quota exceeded (chunks)", fresh.QuotaBytes, used, fresh.CurrentVersion);
+            }
+
+            _store.WriteChunk(space.SpaceId, chunkId, data);
+            return SyncResult<bool>.Ok(true);
+        }
+        finally { gate.Release(); }
+    }
+
+
+    public SyncResult<byte[]> GetChunk(SpaceRecord space, string chunkId, bool containerV5Capable, bool deviceAuth)
+    {
+        if (space.ContainerGeneration == 5 && deviceAuth && !containerV5Capable)
+            return SyncResult<byte[]>.Fail(SyncErrorCode.UpgradeRequired,
+                "this space has been upgraded to the v5 container format — update this client");
+        if (!IsValidChunkId(chunkId)) return SyncResult<byte[]>.Fail(SyncErrorCode.BadRequest, "chunk id is not valid");
+
+        var data = _store.ReadChunk(space.SpaceId, chunkId);
+        return data is null
+            ? SyncResult<byte[]>.Fail(SyncErrorCode.NotFound, "chunk not found")
+            : SyncResult<byte[]>.Ok(data);
+    }
+
+
+    public ServerCapabilities Capabilities() => new(true);
+
+    public sealed record ServerCapabilities(bool ContainerV5);
 
     public SyncResult<IReadOnlyList<VersionInfo>> ListVersions(SpaceRecord space)
         => SyncResult<IReadOnlyList<VersionInfo>>.Ok(_store.GetVersions(space.SpaceId)
@@ -530,7 +607,8 @@ public sealed class SpaceService
 
 
 
-    public SyncResult<long> PutData(SpaceRecord space, DeviceRecord device, string envelopeJson, long baseVersion, bool force)
+    public SyncResult<long> PutData(SpaceRecord space, DeviceRecord device, string envelopeJson, long baseVersion, bool force,
+        bool containerV5Capable = false, IReadOnlyList<string>? chunkIds = null)
     {
         if (envelopeJson.Length > _options.MaxPayloadBytes)
             return SyncResult<long>.FailSized(SyncErrorCode.PayloadTooLarge,
@@ -542,6 +620,13 @@ public sealed class SpaceService
         {
             return SyncResult<long>.Fail(SyncErrorCode.BadRequest, e.Message);
         }
+
+
+
+        var containerVer = envelope.Crypto;
+        if (containerVer == 5 && !containerV5Capable)
+            return SyncResult<long>.Fail(SyncErrorCode.UpgradeRequired,
+                "container v5 requires an updated client");
 
         if (!string.Equals(envelope.Space, space.SpaceId, StringComparison.Ordinal))
             return SyncResult<long>.Fail(SyncErrorCode.BadRequest, "envelope space does not match the request path");
@@ -570,6 +655,13 @@ public sealed class SpaceService
                 _store.SaveSpace(fresh, requireExisting: true);
             }
 
+
+
+
+            if (containerVer != 5 && fresh.ContainerGeneration == 5)
+                return SyncResult<long>.Fail(SyncErrorCode.UpgradeRequired,
+                    "this space has been upgraded to the v5 container format — update this client");
+
             if (baseVersion != fresh.CurrentVersion)
                 return SyncResult<long>.Fail(SyncErrorCode.VersionConflict,
                     "base version is stale; re-base and retry", fresh.CurrentVersion);
@@ -581,6 +673,26 @@ public sealed class SpaceService
             var payload = System.Text.Encoding.UTF8.GetBytes(envelopeJson);
             var newVersion = envelope.Version;
 
+
+            var registeredChunkIds = containerVer == 5
+                ? (chunkIds ?? new List<string>()).Where(BlobLayout.IsSafeChunkId)
+                    .Select(c => c.ToLowerInvariant()).Distinct().ToList()
+                : new List<string>();
+
+
+
+            if (containerVer == 5 && registeredChunkIds.Count == 0)
+                return SyncResult<long>.Fail(SyncErrorCode.BadRequest,
+                    "a v5 manifest push must carry its chunk id list (X-Novara-Chunk-Ids)");
+
+
+
+
+            foreach (var cid in registeredChunkIds)
+                if (!_store.ChunkExists(space.SpaceId, cid))
+                    return SyncResult<long>.Fail(SyncErrorCode.BadRequest,
+                        $"manifest references chunk {cid} that this server does not have - upload it first");
+
             var row = new VersionRecord
             {
                 Version = newVersion,
@@ -589,6 +701,7 @@ public sealed class SpaceService
                 Sha256 = envelope.PayloadSha256,
                 Size = payload.Length,
                 Retained = true,
+                ChunkIds = registeredChunkIds,
             };
 
 
@@ -634,6 +747,20 @@ public sealed class SpaceService
                 }
             }
 
+
+
+
+
+            if (containerVer == 5 && fresh.ContainerGeneration != 5)
+            {
+
+
+
+
+                fresh.ContainerGeneration = 5;
+                fresh.UpdatedAt = DateTime.UtcNow;
+            }
+
             versions.Add(row);
             _store.WriteBlob(space.SpaceId, row, payload);
 
@@ -642,6 +769,12 @@ public sealed class SpaceService
                 _store.DeleteBlob(space.SpaceId, victim);
                 victim.Retained = false;
             }
+
+
+            var liveChunks = versions.Where(v => v.Retained)
+                .SelectMany(v => v.ChunkIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var removedId in _store.PruneChunks(space.SpaceId, liveChunks)) { }
+            chunkIds = null;
 
             _store.SaveVersions(space.SpaceId, versions);
             fresh.CurrentVersion = newVersion;
@@ -712,8 +845,11 @@ public sealed class SpaceService
     {
 
 
-        if (keyWrapJson.Length > _options.MaxPayloadBytes)
-            return SyncResult<long>.Fail(SyncErrorCode.PayloadTooLarge, "keywrap record exceeds the server limit");
+
+
+        if (keyWrapJson.Length > SyncServerOptions.KeyWrapMaxBytes)
+            return SyncResult<long>.Fail(SyncErrorCode.PayloadTooLarge,
+                "keywrap record exceeds the server limit");
 
         SyncKeyWrapRecord record;
         try { record = SyncJson.DeserializeKeyWrap(keyWrapJson); }

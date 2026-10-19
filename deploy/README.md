@@ -24,9 +24,9 @@
 | 环节 | 手段 |
 |---|---|
 | 传输 | TLS（Caddy）；服务端另有一道闸——`/api` 上的**非 HTTPS 且非回环**请求一律 403，见下 |
-| 载荷 | v4 容器，AES-256-GCM |
+| 载荷 | v4 整库容器 /（批 6 起）v5 清单容器 + 分区 chunk，AES-256-GCM |
 | 密钥交接 | SpaceKey 由**口令**包装后存于服务端 —— PBKDF2-SHA256，3,000,000 次迭代，salt 32B / nonce 12B / tag 16B |
-| 读取授权 | 只读令牌（120-bit，服务端只存 SHA-256；只允许 `GET space/keywrap` 与 `GET space/data`，其余 403） |
+| 读取授权 | 只读令牌（120-bit，服务端只存 SHA-256；只允许 `GET space/keywrap`、`GET space/data` 与 `GET space/chunks/{id}`，其余 403） |
 
 **服务端自己也会拒绝明文凭据**：NovaraSync 只讲 HTTP，TLS 由前置反代终止；如果反代没把 `X-Forwarded-Proto: https` 传进来（或有人直接用 `--urls http://0.0.0.0:5180` 暴露它），`/api` 请求会得到 **403 + `"https is required for api requests"`**，而不是默默收下凭据。回环地址豁免（本机调试与自检需要）。反代在另一台机器上时，还要把它的 IP 填进 `NOVARA_SYNC_TRUSTED_PROXIES`，否则它的转发头不被信任、同样会被这道闸拒掉。
 
@@ -178,9 +178,9 @@ novara.lan {
 | "链接不完整" | URL 里没有 `#s=<spaceId>` | 用桌面端复制的完整链接（从主屏图标启动也会这样，见 2.6） |
 | "令牌无效或已作废" | 抄错、已被重新生成或作废 | 重新复制；`I/L→1`、`O→0` 已自动折叠，无需手工纠正 |
 | "口令不正确" | 口令不是手机上的任何密码 | 是**包装 SpaceKey 的那个 Novara 解锁口令**，与桌面端"查看空间密钥"要求输入的一致 |
-| 打开链接跳到 `127.0.0.1` | 反代未传 `X-Forwarded-Proto/Host` | 用 `deploy/Caddyfile`；若反代在**另一台机器**，把它的 IP 填进 `NOVARA_SYNC_TRUSTED_PROXIES` |
+| 打开链接跳到 `127.0.0.1` | 旧版服务端或非本仓库反代用了绝对跳转（`/web` 的跳转现在是相对的，不再依赖转发头） | 新建链接用 `deploy/Caddyfile`；仍出现则确认服务端版本，与转发头无关 |
 | `/api` 返回 **403 "https is required for api requests"** | 请求在服务端看来不是 HTTPS：反代没传 `X-Forwarded-Proto`，或反代在另一台机器但没进 `NOVARA_SYNC_TRUSTED_PROXIES`，或直接明文暴露了 5180 端口 | 按 `deploy/Caddyfile` 补 `header_up X-Forwarded-Proto {http.request.scheme}`；跨机反代补 `NOVARA_SYNC_TRUSTED_PROXIES`；不要把明文端口开到网络上 |
-| 启动即退出，stderr 报 **refusing to start** | `NOVARA_SYNC_WEB_ROOT` 指向了包含数据目录的位置（例如整个应用根目录），静态托管会把密文库与 keywrap 暴露在 `/web` 下 | 指到纯站点目录（默认 `Novara.Web`），或把数据目录移出它 |
+| 启动即退出，stderr 报 **refusing to start** | `NOVARA_SYNC_WEB_ROOT` 指向了包含数据目录的位置（例如整个应用根目录），或落在了 `<数据目录>/spaces` 之内；静态托管会把密文库、chunk 与 keywrap 暴露在 `/web` 下 | 指到纯站点目录（默认 `Novara.Web`），或把站点/数据目录改成不含对方的兄弟目录 |
 | 不能安装 PWA / manifest 报错 | 反代改写了 `application/manifest+json` | 跑 `python Tools/web_selfcheck.py` 定位 |
 | Service Worker 未注册 | `sw.js` 的 MIME 不是 JavaScript；或缺 `viewer.js` 导致 `cache.addAll` 整体失败 | 同上 |
 
@@ -191,7 +191,7 @@ novara.lan {
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `NOVARA_SYNC_DATA` | `data` | 数据目录。**不要**让它落在 `NOVARA_SYNC_WEB_ROOT` 之内，否则服务端拒绝启动 |
-| `NOVARA_SYNC_WEB_ROOT` | 输出目录下的 `Novara.Web` | 站点目录；不存在则只跑 API。指向包含数据目录的路径会被**拒绝启动**；站点树内含 junction/符号链接同样被拒（：静态提供者跟着链接走） |
+| `NOVARA_SYNC_WEB_ROOT` | 输出目录下的 `Novara.Web` | 站点目录；不存在则只跑 API。指向包含数据目录的路径、或落在 `<数据目录>/spaces` 之内，都会**拒绝启动**；站点树内含 junction/符号链接同样被拒（：静态提供者跟着链接走） |
 | `NOVARA_SYNC_TRUSTED_PROXIES` | 空 | 逗号分隔的 IP；反代在**别的机器**上时才需要（回环默认已信任）。不填而跨机反代 → `/api` 会因"看起来是明文"被 403 |
 | `NOVARA_SYNC_ALLOWED_HOSTS` | 空 = 不过滤 | 逗号分隔的 Host 白名单；填了就只接受这些 Host（不匹配返回 400）。域名固定时**建议填**，是 Host 头注入的兜底。**只填主机名**：带端口或尾点的条目永远匹配不上（会让所有请求都 400），启动时会在 stderr 告警 |
 | `NOVARA_SYNC_STORE` | `sqlite` | `file` 可选零依赖 JSON 存储 |

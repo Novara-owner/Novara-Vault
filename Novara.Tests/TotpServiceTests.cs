@@ -115,6 +115,11 @@ public class TotpServiceTests
     [InlineData("otpauth://totp/x?secret=!!")]
     [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=MD5")]
     [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=4")]
+
+
+    [InlineData("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP&counter=1")]
+    [InlineData("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP")]
+    [InlineData("otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&counter=1")]
     public void ParseOtpAuthUri_Invalid_Rejected(string input)
         => Assert.False(TotpService.TryParse(input, out _));
 

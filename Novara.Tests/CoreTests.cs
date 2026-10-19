@@ -150,6 +150,7 @@ public class ApiProbeServiceTests
     [Theory]
     [InlineData(null, "(empty)")]
     [InlineData("short", "****")]
+    [InlineData("sk-1234567890", "****")]
     [InlineData("sk-abcdefghijklmnop", "sk-a…mnop")]
     public void MaskKey_ReturnsExpected(string? key, string expected)
     {

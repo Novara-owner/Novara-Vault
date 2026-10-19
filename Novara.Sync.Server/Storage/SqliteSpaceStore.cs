@@ -73,6 +73,10 @@ public sealed class SqliteSpaceStore : ISpaceStore
             "ALTER TABLE spaces ADD COLUMN read_token_hash TEXT NOT NULL DEFAULT '';"),
         ("devices", "kind",
             "ALTER TABLE devices ADD COLUMN kind INTEGER NOT NULL DEFAULT 0;"),
+        ("spaces", "container_generation",
+            "ALTER TABLE spaces ADD COLUMN container_generation INTEGER NOT NULL DEFAULT 4;"),
+        ("versions", "chunk_ids",
+            "ALTER TABLE versions ADD COLUMN chunk_ids TEXT NOT NULL DEFAULT '[]';"),
     };
 
     private readonly string _root;
@@ -114,26 +118,35 @@ public sealed class SqliteSpaceStore : ISpaceStore
     public SpaceRecord? GetSpace(string spaceId)
     {
         if (!BlobLayout.IsSafeId(spaceId)) return null;
-        using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = SpaceSelect + " WHERE space_id = $id;";
-        cmd.Parameters.AddWithValue("$id", spaceId);
 
-        using var reader = Guarded(() => cmd.ExecuteReader());
-        return reader.Read() ? ReadSpace(reader) : null;
+
+        return Guarded<SpaceRecord?>(() =>
+        {
+            using var cn = Open();
+            using var cmd = cn.CreateCommand();
+            cmd.CommandText = SpaceSelect + " WHERE space_id = $id;";
+            cmd.Parameters.AddWithValue("$id", spaceId);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadSpace(reader) : null;
+        });
     }
 
 
     public IReadOnlyList<SpaceRecord> ListSpaces()
     {
-        using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = SpaceSelect + " ORDER BY created_at, space_id;";
 
-        var spaces = new List<SpaceRecord>();
-        using var reader = Guarded(() => cmd.ExecuteReader());
-        while (reader.Read()) spaces.Add(ReadSpace(reader));
-        return spaces;
+        return Guarded(() =>
+        {
+            using var cn = Open();
+            using var cmd = cn.CreateCommand();
+            cmd.CommandText = SpaceSelect + " ORDER BY created_at, space_id;";
+
+            var spaces = new List<SpaceRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) spaces.Add(ReadSpace(reader));
+            return spaces;
+        });
     }
 
 
@@ -150,7 +163,9 @@ public sealed class SqliteSpaceStore : ISpaceStore
         RequireSafeId(spaceId);
 
         using (var cn = Open())
-        using (var tx = cn.BeginTransaction())
+
+
+        using (var tx = Guarded(() => cn.BeginTransaction()))
         {
             try
             {
@@ -190,7 +205,9 @@ public sealed class SqliteSpaceStore : ISpaceStore
         RequireSafeId(space.SpaceId);
 
         using var cn = Open();
-        using var tx = cn.BeginTransaction();
+
+
+        using var tx = Guarded(() => cn.BeginTransaction());
         try
         {
 
@@ -203,8 +220,8 @@ public sealed class SqliteSpaceStore : ISpaceStore
             cmd.CommandText = """
                 INSERT INTO spaces (space_id, name, created_at, updated_at, current_version,
                                     keywrap_version, keywrap_blob, enroll_hash, read_token_hash,
-                                    quota_bytes, max_versions)
-                VALUES ($id, $name, $created, $updated, $version, $kwv, $kwb, $enroll, $read, $quota, $max)
+                                    quota_bytes, max_versions, container_generation)
+                VALUES ($id, $name, $created, $updated, $version, $kwv, $kwb, $enroll, $read, $quota, $max, $gen)
                 ON CONFLICT(space_id) DO UPDATE SET
                     name = excluded.name,
                     updated_at = excluded.updated_at,
@@ -214,7 +231,8 @@ public sealed class SqliteSpaceStore : ISpaceStore
                     enroll_hash = excluded.enroll_hash,
                     read_token_hash = excluded.read_token_hash,
                     quota_bytes = excluded.quota_bytes,
-                    max_versions = excluded.max_versions;
+                    max_versions = excluded.max_versions,
+                    container_generation = excluded.container_generation;
                 """;
             cmd.Parameters.AddWithValue("$id", space.SpaceId);
             cmd.Parameters.AddWithValue("$name", space.Name);
@@ -227,6 +245,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
             cmd.Parameters.AddWithValue("$read", space.ReadTokenHash);
             cmd.Parameters.AddWithValue("$quota", space.QuotaBytes);
             cmd.Parameters.AddWithValue("$max", space.MaxVersions);
+            cmd.Parameters.AddWithValue("$gen", space.ContainerGeneration);
             cmd.ExecuteNonQuery();
             tx.Commit();
         }
@@ -242,30 +261,34 @@ public sealed class SqliteSpaceStore : ISpaceStore
     public IReadOnlyList<DeviceRecord> GetDevices(string spaceId)
     {
         if (!BlobLayout.IsSafeId(spaceId)) return Array.Empty<DeviceRecord>();
-        using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = """
+
+        return Guarded(() =>
+        {
+            using var cn = Open();
+            using var cmd = cn.CreateCommand();
+            cmd.CommandText = """
             SELECT device_id, name, token_hash, created_at, last_seen_at, revoked, kind
             FROM devices WHERE space_id = $id ORDER BY created_at, device_id;
             """;
-        cmd.Parameters.AddWithValue("$id", spaceId);
+            cmd.Parameters.AddWithValue("$id", spaceId);
 
-        var devices = new List<DeviceRecord>();
-        using var reader = Guarded(() => cmd.ExecuteReader());
-        while (reader.Read())
-        {
-            devices.Add(new DeviceRecord
+            var devices = new List<DeviceRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                DeviceId = reader.GetString(0),
-                Name = reader.GetString(1),
-                TokenHash = reader.GetString(2),
-                CreatedAt = ParseTime(reader.GetString(3)),
-                LastSeenAt = reader.IsDBNull(4) ? null : ParseTime(reader.GetString(4)),
-                Revoked = reader.GetInt64(5) != 0,
-                Kind = reader.GetInt64(6) == (long)DeviceKind.Editor ? DeviceKind.Editor : DeviceKind.Standard,
-            });
-        }
-        return devices;
+                devices.Add(new DeviceRecord
+                {
+                    DeviceId = reader.GetString(0),
+                    Name = reader.GetString(1),
+                    TokenHash = reader.GetString(2),
+                    CreatedAt = ParseTime(reader.GetString(3)),
+                    LastSeenAt = reader.IsDBNull(4) ? null : ParseTime(reader.GetString(4)),
+                    Revoked = reader.GetInt64(5) != 0,
+                    Kind = reader.GetInt64(6) == (long)DeviceKind.Editor ? DeviceKind.Editor : DeviceKind.Standard,
+                });
+            }
+            return devices;
+        });
     }
 
     public DeviceRecord? GetDevice(string spaceId, string deviceId)
@@ -277,7 +300,8 @@ public sealed class SqliteSpaceStore : ISpaceStore
         RequireSafeId(spaceId);
 
         using var cn = Open();
-        using var tx = cn.BeginTransaction();
+
+        using var tx = Guarded(() => cn.BeginTransaction());
         try
         {
 
@@ -339,31 +363,37 @@ public sealed class SqliteSpaceStore : ISpaceStore
     public IReadOnlyList<VersionRecord> GetVersions(string spaceId)
     {
         if (!BlobLayout.IsSafeId(spaceId)) return Array.Empty<VersionRecord>();
-        using var cn = Open();
-        using var cmd = cn.CreateCommand();
-        cmd.CommandText = """
-            SELECT version, created_at, device_id, sha256, size, is_conflict, conflict_of, retained
-            FROM versions WHERE space_id = $id ORDER BY version;
-            """;
-        cmd.Parameters.AddWithValue("$id", spaceId);
 
-        var versions = new List<VersionRecord>();
-        using var reader = Guarded(() => cmd.ExecuteReader());
-        while (reader.Read())
+
+        return Guarded(() =>
         {
-            versions.Add(new VersionRecord
+            using var cn = Open();
+            using var cmd = cn.CreateCommand();
+            cmd.CommandText = """
+                SELECT version, created_at, device_id, sha256, size, is_conflict, conflict_of, retained, chunk_ids
+                FROM versions WHERE space_id = $id ORDER BY version;
+                """;
+            cmd.Parameters.AddWithValue("$id", spaceId);
+
+            var versions = new List<VersionRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                Version = reader.GetInt64(0),
-                CreatedAt = ParseTime(reader.GetString(1)),
-                DeviceId = reader.GetString(2),
-                Sha256 = reader.GetString(3),
-                Size = reader.GetInt64(4),
-                IsConflict = reader.GetInt64(5) != 0,
-                ConflictOf = reader.GetInt64(6),
-                Retained = reader.GetInt64(7) != 0,
-            });
-        }
-        return versions;
+                versions.Add(new VersionRecord
+                {
+                    Version = reader.GetInt64(0),
+                    CreatedAt = ParseTime(reader.GetString(1)),
+                    DeviceId = reader.GetString(2),
+                    Sha256 = reader.GetString(3),
+                    Size = reader.GetInt64(4),
+                    IsConflict = reader.GetInt64(5) != 0,
+                    ConflictOf = reader.GetInt64(6),
+                    Retained = reader.GetInt64(7) != 0,
+                    ChunkIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(reader.GetString(8)) ?? new(),
+                });
+            }
+            return versions;
+        });
     }
 
 
@@ -373,7 +403,8 @@ public sealed class SqliteSpaceStore : ISpaceStore
         RequireSafeId(spaceId);
 
         using var cn = Open();
-        using var tx = cn.BeginTransaction();
+
+        using var tx = Guarded(() => cn.BeginTransaction());
         try
         {
 
@@ -394,8 +425,8 @@ public sealed class SqliteSpaceStore : ISpaceStore
                 insert.Transaction = tx;
                 insert.CommandText = """
                     INSERT INTO versions (space_id, version, created_at, device_id, sha256, size,
-                                          is_conflict, conflict_of, retained)
-                    VALUES ($space, $version, $created, $device, $sha, $size, $conflict, $of, $retained);
+                                          is_conflict, conflict_of, retained, chunk_ids)
+                    VALUES ($space, $version, $created, $device, $sha, $size, $conflict, $of, $retained, $chunks);
                     """;
                 insert.Parameters.AddWithValue("$space", spaceId);
                 insert.Parameters.AddWithValue("$version", version.Version);
@@ -406,6 +437,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
                 insert.Parameters.AddWithValue("$conflict", version.IsConflict ? 1 : 0);
                 insert.Parameters.AddWithValue("$of", version.ConflictOf);
                 insert.Parameters.AddWithValue("$retained", version.Retained ? 1 : 0);
+                insert.Parameters.AddWithValue("$chunks", System.Text.Json.JsonSerializer.Serialize(version.ChunkIds));
                 insert.ExecuteNonQuery();
             }
 
@@ -460,7 +492,7 @@ public sealed class SqliteSpaceStore : ISpaceStore
 
     private const string SpaceSelect = """
         SELECT space_id, name, created_at, updated_at, current_version, keywrap_version,
-               keywrap_blob, enroll_hash, read_token_hash, quota_bytes, max_versions
+               keywrap_blob, enroll_hash, read_token_hash, quota_bytes, max_versions, container_generation
         FROM spaces
         """;
 
@@ -478,12 +510,23 @@ public sealed class SqliteSpaceStore : ISpaceStore
         ReadTokenHash = reader.GetString(8),
         QuotaBytes = reader.GetInt64(9),
         MaxVersions = reader.GetInt32(10),
+        ContainerGeneration = reader.GetInt32(11),
     };
 
     private SqliteConnection Open()
     {
         var connection = new SqliteConnection(_connectionString);
-        connection.Open();
+
+
+
+
+
+        try { connection.Open(); }
+        catch (SqliteException e)
+        {
+            connection.Dispose();
+            throw new SpaceStoreException("failed to open the sync database", e);
+        }
         return connection;
     }
 
@@ -523,7 +566,10 @@ public sealed class SqliteSpaceStore : ISpaceStore
                 command.ExecuteNonQuery();
             }
         }
-        catch (SqliteException e)
+
+
+
+        catch (Exception e) when (e is SqliteException or SpaceStoreException)
         {
             throw new SpaceStoreException("failed to initialise the sync database", e);
         }
@@ -547,14 +593,28 @@ public sealed class SqliteSpaceStore : ISpaceStore
 
     private static T Guarded<T>(Func<T> action)
     {
+
+
+
+
+
+
         try { return action(); }
-        catch (SqliteException e) { throw new SpaceStoreException("corrupt metadata: sync database", e); }
+        catch (Exception e) when (e is SqliteException or System.Text.Json.JsonException
+                                      or FormatException or InvalidCastException or OverflowException)
+        {
+            throw new SpaceStoreException("corrupt metadata: sync database", e);
+        }
     }
 
     private static void Guarded(Action action)
     {
         try { action(); }
-        catch (SqliteException e) { throw new SpaceStoreException("corrupt metadata: sync database", e); }
+        catch (Exception e) when (e is SqliteException or System.Text.Json.JsonException
+                                      or FormatException or InvalidCastException or OverflowException)
+        {
+            throw new SpaceStoreException("corrupt metadata: sync database", e);
+        }
     }
 
     private static string FormatTime(DateTime value)
@@ -563,4 +623,24 @@ public sealed class SqliteSpaceStore : ISpaceStore
     private static DateTime ParseTime(string value)
         => DateTime.Parse(value, System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+
+
+
+    public void WriteChunk(string spaceId, string chunkId, byte[] data)
+        => BlobLayout.WriteChunk(_root, BlobLayout.IsSafeId(spaceId) ? spaceId : throw new ArgumentException("space id is not valid", nameof(spaceId)), chunkId.ToLowerInvariant(), data);
+
+    public byte[]? ReadChunk(string spaceId, string chunkId)
+        => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
+            ? BlobLayout.ReadChunk(_root, spaceId, chunkId.ToLowerInvariant())
+            : null;
+
+    public bool ChunkExists(string spaceId, string chunkId)
+        => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
+            && BlobLayout.ChunkExists(_root, spaceId, chunkId.ToLowerInvariant());
+
+    public Dictionary<string, long> ChunkSizes(string spaceId)
+        => BlobLayout.IsSafeId(spaceId) ? BlobLayout.ChunkSizes(_root, spaceId) : new Dictionary<string, long>();
+
+    public List<string> PruneChunks(string spaceId, ISet<string> keepChunkIds)
+        => BlobLayout.IsSafeId(spaceId) ? BlobLayout.PruneChunks(_root, spaceId, keepChunkIds) : new List<string>();
 }

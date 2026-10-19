@@ -379,6 +379,23 @@ public class SyncContractTests
         Assert.Equal(new List<string> { "备忘", "计划" }, local.VisibleTabs);
     }
 
+    [Fact]
+    public void BuildRoamingSettings_LeavesLocalPreferencesBehind()
+    {
+
+
+        var roaming = SyncFieldPolicy.BuildRoamingSettings(new AppSettings
+        {
+            Theme = "深色",
+            AutoCheckUpdates = true,
+            UpdatePendingVersion = "11.1.0",
+        });
+
+        Assert.Equal("深色", roaming.Theme);
+        Assert.False(roaming.AutoCheckUpdates);
+        Assert.Equal("", roaming.UpdatePendingVersion);
+    }
+
 
 
     [Fact]

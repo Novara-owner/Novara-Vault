@@ -1,13 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
 
-    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>Novara</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>10.3.0</Version>
+    <Version>11.0.0</Version>
     <Platforms>x64</Platforms>
 
 
@@ -33,27 +33,25 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
 
-    <WindowsSdkPackageVersion>10.0.19041.38</WindowsSdkPackageVersion>
 
 
 
-
-    <DefaultItemExcludes>$(DefaultItemExcludes);StickPoc\**;StickNoteHost\**;Novara.Core\**;Novara.Tests\**;NovaraMCP\**;Novara.Server\**;Novara.Sync.Server\**;_publish_tmp\**</DefaultItemExcludes> 
+    <DefaultItemExcludes>$(DefaultItemExcludes);StickNoteHost\**;Novara.Core\**;Novara.Tests\**;NovaraMCP\**;Novara.Server\**;Novara.Sync.Server\**;Tools\**;_publish_tmp\**</DefaultItemExcludes>
 
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.2.0" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250108002" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
-    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.3.0" />
-    <PackageReference Include="AngleSharp" Version="1.5.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+    <PackageReference Include="AngleSharp" Version="1.8.4" />
 
-    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.3.1" />
 
-    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="10.0.12" />
 
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
@@ -86,10 +84,13 @@
     <Content Include="Assets\128.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Assets\256.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Assets\Novara-R.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="Assets\logo.svg">
+    <Content Include="Assets\logo.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\logo.ico">

@@ -45,6 +45,18 @@ public class NovaraStore
     private const int BackupKdfIterationsMax = 5_000_000;
 
 
+
+
+
+    internal const byte FileVersionMainV5 = 5;
+    internal const int HeaderSizeV5 = 4 + 1 + 1 + 1 + 4 + 4 + 16 + 32;
+    internal const int V5AadLength = 31;
+    private const int V5IterationsMin = 1000;
+    private const int V5IterationsMax = 5_000_000;
+    private const int V5MemoryKiBMin = 8 * 1024;
+    private const int V5MemoryKiBMax = 4 * 1024 * 1024;
+
+
     private const int SaveDebounceMs = 300;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -64,6 +76,12 @@ public class NovaraStore
     private int _fileVersion = FileVersionLegacy;
     private bool _needsFormatMigration;
     private string? _password;
+
+    private byte _v5KdfAlgoId = CryptoService.V5KdfArgon2id;
+    private int _v5Iterations = CryptoService.Argon2idDefaultIterations;
+    private int _v5MemoryKiB = CryptoService.Argon2idDefaultMemoryKiB;
+    private byte[] _v5Salt = new byte[16];
+    private bool _v5FieldsInitialized;
 
     public NovaraDatabase Database { get; private set; } = new();
 
@@ -125,14 +143,61 @@ public class NovaraStore
     {
         if (_suppressSave) return false;
         if (!NeedsKdfMigration || string.IsNullOrEmpty(_password)) return false;
-        var oldVersion = _fileVersion;
-        _fileVersion = FileVersionKdfHardened;
-        if (!SaveSync())
+
+
+        _saveGate.Wait();
+        try
         {
-            _fileVersion = oldVersion;
-            return false;
+            var oldVersion = _fileVersion;
+            _fileVersion = FileVersionKdfHardened;
+            if (!SaveSyncCore())
+            {
+                _fileVersion = oldVersion;
+                return false;
+            }
+            return true;
         }
-        return true;
+        finally { _saveGate.Release(); }
+    }
+
+
+    public bool NeedsV5Migration
+        => _loaded && _encryptionFlag == FlagEncrypted
+           && (_fileVersion == FileVersionCurrent || _fileVersion == FileVersionKdfHardened);
+
+
+    internal byte FileVersionForTests => (byte)_fileVersion;
+
+
+    internal void SetFileVersionForTests(byte v) => _fileVersion = v;
+
+
+
+    public bool MigrateToV5()
+    {
+        if (_suppressSave) return false;
+        if (!NeedsV5Migration || string.IsNullOrEmpty(_password)) return false;
+
+        _saveGate.Wait();
+        try
+        {
+            var oldVersion = _fileVersion;
+            var oldFields = (_v5KdfAlgoId, _v5Iterations, _v5MemoryKiB, _v5Salt, _v5FieldsInitialized);
+            _v5KdfAlgoId = CryptoService.V5KdfArgon2id;
+            _v5Iterations = CryptoService.Argon2idDefaultIterations;
+            _v5MemoryKiB = CryptoService.Argon2idDefaultMemoryKiB;
+            _v5Salt = RandomNumberGenerator.GetBytes(16);
+            _v5FieldsInitialized = true;
+            _fileVersion = FileVersionMainV5;
+            if (!SaveSyncCore())
+            {
+                _fileVersion = oldVersion;
+                (_v5KdfAlgoId, _v5Iterations, _v5MemoryKiB, _v5Salt, _v5FieldsInitialized) = oldFields;
+                return false;
+            }
+            return true;
+        }
+        finally { _saveGate.Release(); }
     }
 
 
@@ -182,7 +247,7 @@ public class NovaraStore
 
 
 
-    private static void NormalizeTodoStates(TodoCard td)
+    internal static void NormalizeTodoStates(TodoCard td)
     {
         td.CheckedStates ??= new();
         td.SubTexts ??= new();
@@ -201,6 +266,113 @@ public class NovaraStore
         if (td.CheckedStates.Count > total) td.CheckedStates.RemoveRange(total, td.CheckedStates.Count - total);
     }
 
+
+
+
+
+
+    internal static void NormalizeIdsAndRefs(NovaraDatabase db)
+    {
+        db.AppSettings ??= new AppSettings();
+        db.AppSettings.Workspaces ??= new();
+        db.AppSettings.McpClientPermissions ??= new();
+        db.MemoGroups ??= new();
+        db.MemoEntries ??= new();
+        db.TodoCards ??= new();
+        db.NoteCards ??= new();
+        db.PathBackupItems ??= new();
+        db.DiaryItems ??= new();
+
+        var gseen = new HashSet<Guid>();
+        foreach (var g in db.MemoGroups)
+            if (!gseen.Add(g.Id)) { g.Id = Guid.NewGuid(); gseen.Add(g.Id); }
+        var eseen = new HashSet<Guid>();
+        foreach (var e in db.MemoEntries)
+        {
+            if (!eseen.Add(e.Id)) e.Id = Guid.NewGuid();
+            if (e.GroupId != null && !gseen.Contains(e.GroupId.Value)) e.GroupId = null;
+        }
+        var tseen = new HashSet<Guid>();
+        foreach (var t in db.TodoCards) if (!tseen.Add(t.Id)) t.Id = Guid.NewGuid();
+        var nseen = new HashSet<Guid>();
+        foreach (var n in db.NoteCards) if (!nseen.Add(n.Id)) n.Id = Guid.NewGuid();
+        var pseen = new HashSet<Guid>();
+        foreach (var p in db.PathBackupItems) if (!pseen.Add(p.Id)) p.Id = Guid.NewGuid();
+        var dseen = new HashSet<string>();
+        foreach (var d in db.DiaryItems) if (!dseen.Add(d.Id)) d.Id = Guid.NewGuid().ToString();
+
+
+        var wseen = new HashSet<string>();
+        foreach (var w in db.AppSettings.Workspaces)
+            if (!wseen.Add(w.Id)) { w.Id = Guid.NewGuid().ToString(); wseen.Add(w.Id); }
+        var permSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+
+        db.AppSettings.McpClientPermissions.RemoveAll(r => r == null || string.IsNullOrEmpty(r.Path) || !permSeen.Add(r.Path));
+
+
+
+        foreach (var e in db.MemoEntries) if (!string.IsNullOrEmpty(e.WorkspaceId) && !wseen.Contains(e.WorkspaceId)) e.WorkspaceId = "";
+        foreach (var t in db.TodoCards) if (!string.IsNullOrEmpty(t.WorkspaceId) && !wseen.Contains(t.WorkspaceId)) t.WorkspaceId = "";
+        foreach (var n in db.NoteCards) if (!string.IsNullOrEmpty(n.WorkspaceId) && !wseen.Contains(n.WorkspaceId)) n.WorkspaceId = "";
+        foreach (var d in db.DiaryItems) if (!string.IsNullOrEmpty(d.WorkspaceId) && !wseen.Contains(d.WorkspaceId)) d.WorkspaceId = "";
+        foreach (var p in db.PathBackupItems) if (!string.IsNullOrEmpty(p.WorkspaceId) && !wseen.Contains(p.WorkspaceId)) p.WorkspaceId = "";
+    }
+
+
+
+
+
+
+
+    public static int ReadContainerFlag(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (fs.Length < 6) return -1;
+            var head = new byte[6];
+            fs.ReadExactly(head);
+            if (BitConverter.ToUInt32(head, 0) != Magic) return -1;
+            var ver = head[4];
+            var flag = head[5];
+
+
+
+
+            switch (ver)
+            {
+                case FileVersionLegacy:
+                    return flag == FlagPlain || flag == FlagEncrypted ? flag : -1;
+                case FileVersionCurrent:
+                case FileVersionKdfHardened:
+                    return flag == FlagEncrypted ? flag : -1;
+                case FileVersionMainV5:
+                    if (fs.Length < HeaderSizeV5) return -1;
+                    if (flag == FlagEncrypted)
+                    {
+
+
+
+
+
+
+                        fs.Position = HeaderSizeV5;
+                        using var sha = System.Security.Cryptography.SHA256.Create();
+                        byte[] bodyHash = sha.ComputeHash(fs);
+                        fs.Position = HeaderSizeV5 - 32;
+                        byte[] expected = new byte[32];
+                        fs.ReadExactly(expected);
+                        if (!bodyHash.AsSpan().SequenceEqual(expected)) return -1;
+                    }
+                    return flag == FlagPlain || flag == FlagEncrypted ? flag : -1;
+                default:
+                    return -1;
+            }
+        }
+        catch { return -1; }
+    }
+
     public LoadResult Load()
     {
         try
@@ -210,38 +382,78 @@ public class NovaraStore
                 Database = new NovaraDatabase();
                 _encryptionFlag = FlagPlain;
                 _loaded = true;
-                SaveSync();
+                if (!SaveSync()) return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail"));
                 return new LoadResult(LoadStatus.EmptyCreated);
             }
 
             using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (fs.Length < HeaderSize) return Corrupted(Loc.T("Store_Err_HeaderIncomplete"));
 
-            var header = new byte[HeaderSize];
-            fs.ReadExactly(header);
-            if (BitConverter.ToUInt32(header, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
-            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent && header[4] != FileVersionKdfHardened) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
-            _fileVersion = header[4];
-            byte flag = header[5];
-            var md5Stored = header.AsSpan(6, 16).ToArray();
 
-            var body = new byte[fs.Length - HeaderSize];
-            fs.ReadExactly(body);
+            var head6 = new byte[6];
+            fs.ReadExactly(head6);
+            if (BitConverter.ToUInt32(head6, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
+            var ver = head6[4];
+            byte flag = head6[5];
+            if (ver != FileVersionLegacy && ver != FileVersionCurrent && ver != FileVersionKdfHardened && ver != FileVersionMainV5)
+                return Corrupted(string.Format(Loc.T("Store_Err_Version"), ver));
+            _fileVersion = ver;
+
+            int headerSize;
+            byte[] integrityStored;
+            if (ver == FileVersionMainV5)
+            {
+                if (fs.Length < HeaderSizeV5) return Corrupted(Loc.T("Store_Err_HeaderIncomplete"));
+                headerSize = HeaderSizeV5;
+                var v5header = new byte[HeaderSizeV5];
+                fs.Position = 0;
+                fs.ReadExactly(v5header);
+                integrityStored = v5header.AsSpan(31, 32).ToArray();
+
+                if (flag == FlagPlain
+                    && (v5header[6] != 0 || BitConverter.ToUInt32(v5header, 7) != 0 || BitConverter.ToUInt32(v5header, 11) != 0
+                        || !v5header.AsSpan(15, 16).SequenceEqual(stackalloc byte[16])))
+                    return Corrupted(string.Format(Loc.T("Store_Err_Version"), ver));
+            }
+            else
+            {
+                headerSize = HeaderSize;
+                var header = new byte[HeaderSize];
+                fs.Position = 0;
+                fs.ReadExactly(header);
+                integrityStored = header.AsSpan(6, 16).ToArray();
+            }
+
+
+
+
 
             if (flag == FlagEncrypted)
             {
-
                 _encryptionFlag = FlagEncrypted;
                 _loaded = false;
                 return new LoadResult(LoadStatus.Encrypted);
             }
             if (flag != FlagPlain) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), flag));
-            if (header[4] != FileVersionLegacy) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
-            _fileVersion = FileVersionLegacy;
+            if (ver != FileVersionLegacy && ver != FileVersionMainV5) return Corrupted(string.Format(Loc.T("Store_Err_Version"), ver));
 
-            var md5Actual = MD5.HashData(body);
-            if (!md5Stored.AsSpan().SequenceEqual(md5Actual))
-                return Corrupted(Loc.T("Store_Err_Md5Fail"));
+            var body = new byte[fs.Length - headerSize];
+            fs.ReadExactly(body);
+
+            if (ver == FileVersionMainV5)
+            {
+
+                if (!SHA256.HashData(body).AsSpan().SequenceEqual(integrityStored))
+                    return Corrupted(Loc.T("Store_Err_DigestFail"));
+                _fileVersion = FileVersionMainV5;
+            }
+            else
+            {
+                var md5Actual = MD5.HashData(body);
+                if (!integrityStored.AsSpan().SequenceEqual(md5Actual))
+                    return Corrupted(Loc.T("Store_Err_Md5Fail"));
+                _fileVersion = FileVersionLegacy;
+            }
 
             var db = JsonSerializer.Deserialize<NovaraDatabase>(body, JsonOptions);
             if (db == null) return Corrupted(Loc.T("Store_Err_Deserialize"));
@@ -278,6 +490,7 @@ public class NovaraStore
                 foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
             foreach (var td in db.TodoCards) NormalizeTodoStates(td);
+            NormalizeIdsAndRefs(db);
 
             Database = db;
             _encryptionFlag = FlagPlain;
@@ -304,24 +517,53 @@ public class NovaraStore
                 _password = null;
                 CryptoService.ClearKeyCache();
                 _loaded = true;
-                SaveSync();
+
+
+                if (!SaveSync()) return new LoadResult(LoadStatus.IoError, Loc.T("Store_Err_WriteFail"));
                 return new LoadResult(LoadStatus.EmptyCreated);
             }
             using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (fs.Length < HeaderSize) return Corrupted(Loc.T("Store_Err_HeaderIncomplete"));
-            var header = new byte[HeaderSize];
-            fs.ReadExactly(header);
-            if (BitConverter.ToUInt32(header, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
-            if (header[4] != FileVersionLegacy && header[4] != FileVersionCurrent && header[4] != FileVersionKdfHardened) return Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]));
-            _fileVersion = header[4];
-            if (header[5] == FlagPlain)
-                return header[4] != FileVersionLegacy
-                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), header[4]))
+
+            var head6 = new byte[6];
+            fs.ReadExactly(head6);
+            if (BitConverter.ToUInt32(head6, 0) != Magic) return Corrupted(Loc.T("Store_Err_BadMagic"));
+            var ver = head6[4];
+            if (ver != FileVersionLegacy && ver != FileVersionCurrent && ver != FileVersionKdfHardened && ver != FileVersionMainV5)
+                return Corrupted(string.Format(Loc.T("Store_Err_Version"), ver));
+            _fileVersion = ver;
+            if (head6[5] == FlagPlain)
+                return ver != FileVersionLegacy && ver != FileVersionMainV5
+                    ? Corrupted(string.Format(Loc.T("Store_Err_Version"), ver))
                     : new LoadResult(LoadStatus.WrongPassword, Loc.T("Store_Err_NotEncrypted"));
-            if (header[5] != FlagEncrypted) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), header[5]));
-            var md5Stored = header.AsSpan(6, 16).ToArray();
-            var body = new byte[fs.Length - HeaderSize];
+            if (head6[5] != FlagEncrypted) return Corrupted(string.Format(Loc.T("Store_Err_UnknownEnc"), head6[5]));
+
+            int headerSize;
+            byte[] integrityStored;
+            byte[]? v5Header = null;
+            if (ver == FileVersionMainV5)
+            {
+                if (fs.Length < HeaderSizeV5) return Corrupted(Loc.T("Store_Err_HeaderIncomplete"));
+                headerSize = HeaderSizeV5;
+                v5Header = new byte[HeaderSizeV5];
+                fs.Position = 0;
+                fs.ReadExactly(v5Header);
+                integrityStored = v5Header.AsSpan(31, 32).ToArray();
+            }
+            else
+            {
+                headerSize = HeaderSize;
+                var header = new byte[HeaderSize];
+                fs.Position = 0;
+                fs.ReadExactly(header);
+                integrityStored = header.AsSpan(6, 16).ToArray();
+            }
+            var body = new byte[fs.Length - headerSize];
             fs.ReadExactly(body);
+
+
+            if (ver == FileVersionMainV5 && !SHA256.HashData(body).AsSpan().SequenceEqual(integrityStored))
+                return Corrupted(Loc.T("Store_Err_DigestFail"));
 
 
 
@@ -349,39 +591,75 @@ public class NovaraStore
                     _ => Corrupted(Loc.T("Store_Err_SecurityMissing")),
                 };
             }
-            var salt = PasswordService.GetDeriveSalt();
-            if (salt == null) return Corrupted(Loc.T("Store_Err_SecurityMissing"));
-
             byte[] plain;
-            if (_fileVersion == FileVersionCurrent || _fileVersion == FileVersionKdfHardened)
+            if (_fileVersion == FileVersionMainV5)
             {
 
 
+                var iter = BitConverter.ToInt32(v5Header!.AsSpan(7, 4));
+                var mem = BitConverter.ToInt32(v5Header.AsSpan(11, 4));
+                var v5salt = v5Header.AsSpan(15, 16).ToArray();
+                var algo = v5Header![6];
 
-
-
+                var iterOk = algo == CryptoService.V5KdfArgon2id
+                    ? iter is >= 1 and <= 100
+                    : iter is >= V5IterationsMin and <= V5IterationsMax;
+                var memOk = algo == CryptoService.V5KdfArgon2id
+                    ? mem is >= V5MemoryKiBMin and <= V5MemoryKiBMax
+                    : mem == 0;
+                if (!iterOk || !memOk)
+                    return Corrupted(Loc.T("Store_Err_Version"));
                 try
                 {
-                    plain = _fileVersion == FileVersionKdfHardened
-                        ? CryptoService.DecryptGcm(body, password, salt, CryptoService.CurrentIterations)
-                        : CryptoService.DecryptGcm(body, password, salt);
+                    var key = algo == CryptoService.V5KdfArgon2id
+                        ? CryptoService.DeriveKeyArgon2id(password, v5salt, iter, mem)
+                        : CryptoService.DeriveKey(password, v5salt, iter);
+                    plain = CryptoService.DecryptGcmWithKey(body, key, v5Header.AsSpan(0, V5AadLength).ToArray());
                 }
-
-
-
-
-
 
                 catch { return DecryptFailedResult(); }
                 _needsFormatMigration = false;
+                _v5KdfAlgoId = algo;
+                _v5Iterations = iter;
+                _v5MemoryKiB = mem;
+                _v5Salt = v5salt;
+                _v5FieldsInitialized = true;
             }
             else
             {
-                try { plain = CryptoService.Decrypt(body, password, salt); }
-                catch { return DecryptFailedResult(); }
-                var md5Actual = MD5.HashData(plain);
-                if (!md5Stored.AsSpan().SequenceEqual(md5Actual)) return Corrupted(Loc.T("Store_Err_Md5Fail"));
-                _needsFormatMigration = true;
+                var salt = PasswordService.GetDeriveSalt();
+                if (salt == null) return Corrupted(Loc.T("Store_Err_SecurityMissing"));
+
+                if (_fileVersion == FileVersionCurrent || _fileVersion == FileVersionKdfHardened)
+                {
+
+
+
+
+
+                    try
+                    {
+                        plain = _fileVersion == FileVersionKdfHardened
+                            ? CryptoService.DecryptGcm(body, password, salt, CryptoService.CurrentIterations)
+                            : CryptoService.DecryptGcm(body, password, salt);
+                    }
+
+
+
+
+
+
+                    catch { return DecryptFailedResult(); }
+                    _needsFormatMigration = false;
+                }
+                else
+                {
+                    try { plain = CryptoService.Decrypt(body, password, salt); }
+                    catch { return DecryptFailedResult(); }
+                    var md5Actual = MD5.HashData(plain);
+                    if (!integrityStored.AsSpan().SequenceEqual(md5Actual)) return Corrupted(Loc.T("Store_Err_Md5Fail"));
+                    _needsFormatMigration = true;
+                }
             }
 
 
@@ -424,6 +702,7 @@ public class NovaraStore
                 foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
             foreach (var td in db.TodoCards) NormalizeTodoStates(td);
+            NormalizeIdsAndRefs(db);
 
             Database = db;
             _encryptionFlag = FlagEncrypted;
@@ -449,15 +728,28 @@ public class NovaraStore
         _saveGate.Wait();
         try
         {
+
+
+
+            var oldFlag = _encryptionFlag;
+            var oldVersion = _fileVersion;
+            var oldPassword = _password;
+            var oldFields = (_v5KdfAlgoId, _v5Iterations, _v5MemoryKiB, _v5Salt, _v5FieldsInitialized);
             _password = password;
             _encryptionFlag = FlagEncrypted;
-            _fileVersion = FileVersionKdfHardened;
+
+            _v5KdfAlgoId = CryptoService.V5KdfArgon2id;
+            _v5Iterations = CryptoService.Argon2idDefaultIterations;
+            _v5MemoryKiB = CryptoService.Argon2idDefaultMemoryKiB;
+            _v5Salt = RandomNumberGenerator.GetBytes(16);
+            _v5FieldsInitialized = true;
+            _fileVersion = FileVersionMainV5;
             if (!SaveSyncCore())
             {
-
-                _encryptionFlag = FlagPlain;
-                _fileVersion = FileVersionLegacy;
-                _password = null;
+                _encryptionFlag = oldFlag;
+                _fileVersion = oldVersion;
+                _password = oldPassword;
+                (_v5KdfAlgoId, _v5Iterations, _v5MemoryKiB, _v5Salt, _v5FieldsInitialized) = oldFields;
                 CryptoService.ClearKeyCache();
                 return false;
             }
@@ -580,6 +872,7 @@ public class NovaraStore
 
 
 
+
     private NovaraDatabase? CloneForExport(bool includeFilePathEntries)
     {
         try
@@ -598,6 +891,9 @@ public class NovaraStore
             copy.NoteCards?.RemoveAll(x => x.IsDeleted);
             copy.DiaryItems?.RemoveAll(x => x.IsDeleted);
             if (!includeFilePathEntries) copy.PathBackupItems?.Clear();
+
+
+            if (copy.AppSettings != null) StripMcpData(copy.AppSettings);
             return copy;
         }
         catch
@@ -705,6 +1001,29 @@ public class NovaraStore
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+    internal static void StripMcpData(AppSettings settings)
+    {
+        settings.McpToken = "";
+        settings.McpAllowedProcesses?.Clear();
+        settings.McpClientPermissions?.Clear();
+        settings.McpEnabled = false;
+        settings.McpDeleteEnabled = false;
+        settings.McpPermMigrated = false;
+        settings.McpDetailExpanded = true;
+    }
+
+
     private NovaraDatabase? CloneForSnapshot(bool includeMemo, bool includePaths, bool includePlan, bool includeDiary)
     {
         try
@@ -725,17 +1044,8 @@ public class NovaraStore
 
 
 
-            if (copy.AppSettings != null)
-            {
-                copy.AppSettings.McpToken = "";
-                copy.AppSettings.McpTokenGeneratedAt = null;
-                copy.AppSettings.McpAllowedProcesses?.Clear();
-                copy.AppSettings.McpClientPermissions?.Clear();
-                copy.AppSettings.McpEnabled = false;
-                copy.AppSettings.McpDeleteEnabled = false;
-                copy.AppSettings.McpPermMigrated = false;
-                copy.AppSettings.McpDetailExpanded = true;
-            }
+
+            if (copy.AppSettings != null) StripMcpData(copy.AppSettings);
             return copy;
         }
         catch { return null; }
@@ -868,40 +1178,8 @@ public class NovaraStore
                 foreach (var f in en.Fields) { f.Label ??= ""; f.Value ??= ""; }
             }
             foreach (var td in db.TodoCards) NormalizeTodoStates(td);
-            var gseen = new HashSet<Guid>();
-            foreach (var g in db.MemoGroups)
-                if (!gseen.Add(g.Id)) { g.Id = Guid.NewGuid(); gseen.Add(g.Id); }
-            var eseen = new HashSet<Guid>();
-            foreach (var e in db.MemoEntries)
-            {
-                if (!eseen.Add(e.Id)) e.Id = Guid.NewGuid();
-                if (e.GroupId != null && !gseen.Contains(e.GroupId.Value)) e.GroupId = null;
-            }
-            var tseen = new HashSet<Guid>();
-            foreach (var t in db.TodoCards) if (!tseen.Add(t.Id)) t.Id = Guid.NewGuid();
-            var nseen = new HashSet<Guid>();
-            foreach (var n in db.NoteCards) if (!nseen.Add(n.Id)) n.Id = Guid.NewGuid();
-            var pseen = new HashSet<Guid>();
-            foreach (var p in db.PathBackupItems) if (!pseen.Add(p.Id)) p.Id = Guid.NewGuid();
-            var dseen = new HashSet<string>();
-            foreach (var d in db.DiaryItems) if (!dseen.Add(d.Id)) d.Id = Guid.NewGuid().ToString();
 
-
-            var wseen = new HashSet<string>();
-            foreach (var w in db.AppSettings.Workspaces ?? new())
-                if (!wseen.Add(w.Id)) { w.Id = Guid.NewGuid().ToString(); wseen.Add(w.Id); }
-            var permSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-
-            db.AppSettings.McpClientPermissions?.RemoveAll(r => r == null || string.IsNullOrEmpty(r.Path) || !permSeen.Add(r.Path));
-
-
-
-            foreach (var e in db.MemoEntries) if (!string.IsNullOrEmpty(e.WorkspaceId) && !wseen.Contains(e.WorkspaceId)) e.WorkspaceId = "";
-            foreach (var t in db.TodoCards) if (!string.IsNullOrEmpty(t.WorkspaceId) && !wseen.Contains(t.WorkspaceId)) t.WorkspaceId = "";
-            foreach (var n in db.NoteCards) if (!string.IsNullOrEmpty(n.WorkspaceId) && !wseen.Contains(n.WorkspaceId)) n.WorkspaceId = "";
-            foreach (var d in db.DiaryItems) if (!string.IsNullOrEmpty(d.WorkspaceId) && !wseen.Contains(d.WorkspaceId)) d.WorkspaceId = "";
-            foreach (var p in db.PathBackupItems) if (!string.IsNullOrEmpty(p.WorkspaceId) && !wseen.Contains(p.WorkspaceId)) p.WorkspaceId = "";
+            NormalizeIdsAndRefs(db);
 
 
 
@@ -1142,39 +1420,76 @@ private bool WriteSnapshot()
             if (File.Exists(tmpPath)) File.SetAttributes(tmpPath, FileAttributes.Normal);
             using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                var header = new byte[HeaderSize];
+                var isV5 = _fileVersion == FileVersionMainV5;
+                var header = new byte[isV5 ? HeaderSizeV5 : HeaderSize];
                 BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
                 header[5] = _encryptionFlag;
-                if (_encryptionFlag == FlagEncrypted)
+                if (isV5 && _encryptionFlag == FlagEncrypted && (string.IsNullOrEmpty(_password) || !_v5FieldsInitialized))
+                    throw new InvalidOperationException(Loc.T("Store_Err_EncNoKey"));
+                if (isV5)
                 {
 
+                    header[4] = FileVersionMainV5;
+                    if (_encryptionFlag == FlagEncrypted)
+                    {
+                        header[6] = _v5KdfAlgoId;
+                        BitConverter.TryWriteBytes(header.AsSpan(7, 4), _v5Iterations);
+                        BitConverter.TryWriteBytes(header.AsSpan(11, 4), _v5MemoryKiB);
+                        _v5Salt.CopyTo(header, 15);
+                    }
 
-                    header[4] = _fileVersion == FileVersionKdfHardened ? FileVersionKdfHardened
-                              : _fileVersion == FileVersionCurrent ? FileVersionCurrent
-                              : FileVersionLegacy;
-                    if (header[4] == FileVersionLegacy) MD5.HashData(json).CopyTo(header, 6);
                 }
-                else
+                byte[] v5Cipher;
+                if (isV5 && _encryptionFlag == FlagEncrypted)
                 {
-                    header[4] = FileVersionLegacy;
-                    _fileVersion = FileVersionLegacy;
-                    MD5.HashData(json).CopyTo(header, 6);
+                    var key = _v5KdfAlgoId == CryptoService.V5KdfArgon2id
+                        ? CryptoService.DeriveKeyArgon2id(_password!, _v5Salt, _v5Iterations, _v5MemoryKiB)
+                        : CryptoService.DeriveKey(_password!, _v5Salt, _v5Iterations);
+                    v5Cipher = CryptoService.EncryptGcmWithKey(json, key, header.AsSpan(0, V5AadLength).ToArray());
+                    SHA256.HashData(v5Cipher).CopyTo(header, 31);
+                    fs.Write(header);
+                    fs.Write(v5Cipher);
                 }
-                fs.Write(header);
-                if (_encryptionFlag == FlagEncrypted)
+                else if (isV5)
                 {
 
-                    var salt = PasswordService.GetDeriveSalt();
-                    if (salt == null || string.IsNullOrEmpty(_password)) throw new InvalidOperationException(Loc.T("Store_Err_EncNoKey"));
-
-                    var cipher = _fileVersion == FileVersionLegacy
-                        ? CryptoService.Encrypt(json, _password, salt)
-                        : CryptoService.EncryptGcm(json, _password, salt, _fileVersion == FileVersionKdfHardened ? CryptoService.CurrentIterations : CryptoService.LegacyIterations);
-                    fs.Write(cipher);
-                }
-                else
-                {
+                    SHA256.HashData(json).CopyTo(header, 31);
+                    fs.Write(header);
                     fs.Write(json);
+                }
+                else
+                {
+                    if (_encryptionFlag == FlagEncrypted)
+                    {
+
+
+                        header[4] = _fileVersion == FileVersionKdfHardened ? FileVersionKdfHardened
+                                  : _fileVersion == FileVersionCurrent ? FileVersionCurrent
+                                  : FileVersionLegacy;
+                        if (header[4] == FileVersionLegacy) MD5.HashData(json).CopyTo(header, 6);
+                    }
+                    else
+                    {
+                        header[4] = FileVersionLegacy;
+                        _fileVersion = FileVersionLegacy;
+                        MD5.HashData(json).CopyTo(header, 6);
+                    }
+                    fs.Write(header);
+                    if (_encryptionFlag == FlagEncrypted)
+                    {
+
+                        var salt = PasswordService.GetDeriveSalt();
+                        if (salt == null || string.IsNullOrEmpty(_password)) throw new InvalidOperationException(Loc.T("Store_Err_EncNoKey"));
+
+                        var cipher = _fileVersion == FileVersionLegacy
+                            ? CryptoService.Encrypt(json, _password, salt)
+                            : CryptoService.EncryptGcm(json, _password, salt, _fileVersion == FileVersionKdfHardened ? CryptoService.CurrentIterations : CryptoService.LegacyIterations);
+                        fs.Write(cipher);
+                    }
+                    else
+                    {
+                        fs.Write(json);
+                    }
                 }
                 fs.Flush(true);
             }

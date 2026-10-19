@@ -28,6 +28,8 @@ public static class DatabaseHealth
 
 
 
+
+
     public static DataFileIntegrity VerifyDataFile(string path)
     {
         try
@@ -42,8 +44,30 @@ public static class DatabaseHealth
             var flag = header[5];
 
 
-            if (ver != NovaraStore.FileVersionLegacy && ver != NovaraStore.FileVersionCurrent && ver != NovaraStore.FileVersionKdfHardened)
+            if (ver != NovaraStore.FileVersionLegacy && ver != NovaraStore.FileVersionCurrent
+                && ver != NovaraStore.FileVersionKdfHardened && ver != NovaraStore.FileVersionMainV5)
                 return DataFileIntegrity.Failed;
+
+
+
+
+
+
+
+            if (ver == NovaraStore.FileVersionMainV5)
+            {
+                if (fs.Length < NovaraStore.HeaderSizeV5) return DataFileIntegrity.Failed;
+                if (flag != NovaraStore.FlagPlain && flag != NovaraStore.FlagEncrypted) return DataFileIntegrity.Failed;
+                var v5h = new byte[NovaraStore.HeaderSizeV5];
+                fs.Position = 0;
+                fs.ReadExactly(v5h);
+                var v5Stored = v5h.AsSpan(31, 32).ToArray();
+
+                if (flag == NovaraStore.FlagEncrypted && fs.Length < NovaraStore.HeaderSizeV5 + 12 + 16) return DataFileIntegrity.Failed;
+                fs.Position = NovaraStore.HeaderSizeV5;
+                if (!SHA256.HashData(fs).AsSpan().SequenceEqual(v5Stored)) return DataFileIntegrity.Failed;
+                return flag == NovaraStore.FlagEncrypted ? DataFileIntegrity.EncryptedStructured : DataFileIntegrity.DigestVerified;
+            }
 
             if (flag == NovaraStore.FlagEncrypted)
             {

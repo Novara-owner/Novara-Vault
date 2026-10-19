@@ -19,8 +19,6 @@ public static class McpService
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    private static CancellationTokenSource? _cts;
-    private static Thread? _thread;
     private static readonly object _gate = new();
     private static bool _started;
 
@@ -31,20 +29,10 @@ public static class McpService
             if (_started) return;
             _started = true;
         }
-        _cts = new CancellationTokenSource();
-        _thread = new Thread(() => ServerLoop(_cts.Token)) { IsBackground = true, Name = "McpServer" };
-        _thread.Start();
-    }
 
-    public static void Stop()
-    {
-        lock (_gate)
-        {
-            if (!_started) return;
-            _started = false;
-        }
-        _cts?.Cancel();
-        _cts = null;
+
+        var cts = new CancellationTokenSource();
+        new Thread(() => ServerLoop(cts.Token)) { IsBackground = true, Name = "McpServer" }.Start();
     }
 
     private static void ServerLoop(CancellationToken ct)
@@ -87,7 +75,15 @@ public static class McpService
             using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 4096, leaveOpen: true)
             { AutoFlush = true, NewLine = "\n" };
 
-            var helloLine = ReadLineWithTimeout(reader, TimeSpan.FromSeconds(10));
+
+            var lineReader = new CappedLineReader(reader);
+
+            var helloLine = ReadLineWithTimeout(lineReader, TimeSpan.FromSeconds(10), HandshakeMaxLineChars, out var helloTooLong);
+            if (helloTooLong)
+            {
+                try { writer.WriteLine(JsonSerializer.Serialize(new HelloResp { Ok = false, Error = "握手内容过长" }, JsonOpts)); } catch { }
+                return;
+            }
             if (helloLine == null) return;
             var hello = JsonSerializer.Deserialize<HelloMsg>(helloLine, JsonOpts);
 
@@ -103,16 +99,34 @@ public static class McpService
 
             var clientPath = canonicalPath;
 
+
+
+            var handshakeToken = hello?.Token ?? "";
+
             while (!ct.IsCancellationRequested)
             {
-                var line = ReadLineWithTimeout(reader, TimeSpan.FromSeconds(60));
+                var line = ReadLineWithTimeout(lineReader, TimeSpan.FromSeconds(60), RequestMaxLineChars, out var lineTooLong);
+                if (lineTooLong)
+                {
+
+                    try
+                    {
+                        writer.WriteLine(JsonSerializer.Serialize(new RespMsg
+                        {
+                            Id = 0, Ok = false,
+                            Error = new RespError { Message = "请求过长" }
+                        }, JsonOpts));
+                    }
+                    catch { }
+                    break;
+                }
                 if (line == null) break;
 
                 try
                 {
                     var req = JsonSerializer.Deserialize<ReqMsg>(line, JsonOpts);
-                    if (req == null) continue;
-                    var resp = Execute(req, clientPath);
+                    if (req == null) { System.Diagnostics.Debug.WriteLine("V11-332: null/blank line from a pipe client (no reply, not audited - a direct-connect client could flood the user-visible list)"); continue; }
+                    var resp = Execute(req, clientPath, handshakeToken);
                     writer.WriteLine(JsonSerializer.Serialize(resp, JsonOpts));
                 }
                 catch (System.Text.Json.JsonException)
@@ -137,11 +151,54 @@ public static class McpService
     }
 
 
-    private static string? ReadLineWithTimeout(StreamReader reader, TimeSpan timeout)
+
+    private const int HandshakeMaxLineChars = 8 * 1024;
+    private const int RequestMaxLineChars = 4 * 1024 * 1024;
+
+    private static string? ReadLineWithTimeout(CappedLineReader reader, TimeSpan timeout, int maxChars, out bool tooLong)
     {
+        tooLong = false;
         using var cts = new CancellationTokenSource(timeout);
-        try { return reader.ReadLineAsync(cts.Token).GetAwaiter().GetResult(); }
+        try { return reader.ReadLineAsync(maxChars, cts.Token).GetAwaiter().GetResult(); }
         catch (OperationCanceledException) { return null; }
+        catch (System.IO.InvalidDataException) { tooLong = true; return null; }
+    }
+
+
+
+    private sealed class CappedLineReader
+    {
+        private readonly StreamReader _reader;
+        private readonly char[] _buffer = new char[4096];
+        private int _pos;
+        private int _len;
+
+        internal CappedLineReader(StreamReader reader) => _reader = reader;
+
+        internal async Task<string?> ReadLineAsync(int maxChars, CancellationToken ct)
+        {
+            var line = new StringBuilder();
+            while (true)
+            {
+                if (_pos >= _len)
+                {
+                    _len = await _reader.ReadAsync(_buffer.AsMemory(0, _buffer.Length), ct).ConfigureAwait(false);
+                    _pos = 0;
+                    if (_len == 0) return line.Length == 0 ? null : line.ToString();
+                }
+                var start = _pos;
+                while (_pos < _len && _buffer[_pos] != '\n') _pos++;
+                var count = _pos - start;
+                if (line.Length + count > maxChars) throw new System.IO.InvalidDataException("line exceeds the allowed length");
+                line.Append(_buffer, start, count);
+                if (_pos < _len && _buffer[_pos] == '\n')
+                {
+                    _pos++;
+                    if (line.Length > 0 && line[^1] == '\r') line.Length--;
+                    return line.ToString();
+                }
+            }
+        }
     }
 
     private static HelloResp Authorize(HelloMsg? hello, McpClientIdentity.AgentIdentity identity, out string canonicalPath)
@@ -183,7 +240,17 @@ public static class McpService
             return new HelloResp { Ok = false, Error = "数据库未解锁，请先在 Novara 中解锁" };
         }
 
-        var settings = store.Database.AppSettings;
+
+
+
+        var db = store.Database;
+        if (db == null)
+        {
+            Audit("auth_denied", clientPath, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
+            return new HelloResp { Ok = false, Error = "数据库未解锁，请先在 Novara 中解锁" };
+        }
+
+        var settings = db.AppSettings;
         if (!settings.McpEnabled)
         {
             Audit("auth_denied", clientPath, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
@@ -204,13 +271,13 @@ public static class McpService
         bool known;
         lock (WhitelistGate)
         {
-            known = clientPath.Length > 0 && store.Database.AppSettings.McpAllowedProcesses.Contains(clientPath);
+            known = clientPath.Length > 0 && db.AppSettings.McpAllowedProcesses.Contains(clientPath);
 
 
 
             if (!known && clientPath.Length > 0)
             {
-                var existing = store.Database.AppSettings.McpAllowedProcesses
+                var existing = db.AppSettings.McpAllowedProcesses
                     .FirstOrDefault(p => string.Equals(p, clientPath, StringComparison.OrdinalIgnoreCase));
                 if (!string.IsNullOrEmpty(existing)) { clientPath = existing; known = true; }
             }
@@ -230,18 +297,20 @@ public static class McpService
             bool addedNow = false;
             lock (WhitelistGate)
             {
-                if (clientPath.Length > 0 && !store.Database.AppSettings.McpAllowedProcesses.Contains(clientPath))
+                if (clientPath.Length > 0 && !db.AppSettings.McpAllowedProcesses.Contains(clientPath))
                 {
-                    store.Database.AppSettings.McpAllowedProcesses.Add(clientPath);
+                    db.AppSettings.McpAllowedProcesses.Add(clientPath);
                     addedNow = true;
                 }
 
 
                 if (clientPath.Length > 0)
-                    McpPermissions.EnsureDefaultRecord(store.Database.AppSettings, clientPath);
+                    McpPermissions.EnsureDefaultRecord(db.AppSettings, clientPath);
             }
             _ = store.SaveAsync();
-            if (addedNow) Audit("auth_new", clientPath);
+
+
+            if (addedNow) Audit("auth_new", clientPath, reason: identityMismatch ? $"自报身份与系统解析不一致：{reported}" : "");
         }
         else
         {
@@ -256,12 +325,22 @@ public static class McpService
 
 
 
+
+    private static readonly object AuthDeniedThrottleGate = new();
+    private static DateTimeOffset _lastAuthDeniedWrite = DateTimeOffset.MinValue;
+    private static int _suppressedAuthDenied;
+    private static readonly TimeSpan AuthDeniedThrottleWindow = TimeSpan.FromMinutes(1);
+
+
+
     public static void SeedDefaultPermission(string path)
     {
         lock (WhitelistGate)
         {
-            var settings = App.Store?.Database.AppSettings;
-            if (settings != null) McpPermissions.EnsureDefaultRecord(settings, path);
+
+
+            var db = App.Store?.Database;
+            if (db != null) McpPermissions.EnsureDefaultRecord(db.AppSettings, path);
         }
     }
 
@@ -275,8 +354,9 @@ public static class McpService
     {
         lock (WhitelistGate)
         {
-            var settings = App.Store?.Database.AppSettings;
-            if (settings == null) return;
+            var db = App.Store?.Database;
+            if (db == null) return;
+            var settings = db.AppSettings;
 
 
             var rec = settings.McpClientPermissions.FirstOrDefault(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
@@ -291,7 +371,8 @@ public static class McpService
     {
         lock (WhitelistGate)
         {
-            var settings = App.Store?.Database.AppSettings;
+            var db = App.Store?.Database;
+            var settings = db?.AppSettings;
             return (McpPerm)(settings?.McpClientPermissions
                 .FirstOrDefault(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase))?.Permissions ?? 0L);
         }
@@ -303,7 +384,9 @@ public static class McpService
     {
         lock (WhitelistGate)
         {
-            var settings = App.Store?.Database.AppSettings;
+            var db = App.Store?.Database;
+            if (db == null) return false;
+            var settings = db.AppSettings;
 
 
 
@@ -318,11 +401,25 @@ public static class McpService
     }
 
 
+
+    public static void RecordTokenReset()
+        => Audit("token_reset", "", reason: "MCP access token was regenerated; existing sessions are no longer valid");
+
+    public static void RecordPermissionChange(string clientPath, string detail)
+        => Audit("perm_change", clientPath, reason: detail);
+
+
+
+
+    public static void RecordMasterSwitch(bool deleteSwitch, bool enabled)
+        => Audit(deleteSwitch ? "delete_switch" : "master_switch", "", reason: enabled ? "switched on" : "switched off");
+
+
     public static List<string> GetAuthorizedSnapshot()
     {
         lock (WhitelistGate)
         {
-            var settings = App.Store?.Database.AppSettings;
+            var settings = App.Store?.Database?.AppSettings;
             return settings?.McpAllowedProcesses.ToList() ?? new List<string>();
         }
     }
@@ -330,8 +427,9 @@ public static class McpService
 
     private static readonly object ExecGate = new();
 
-    private static RespMsg Execute(ReqMsg req, string clientPath)
+    private static RespMsg Execute(ReqMsg req, string clientPath, string handshakeToken)
     {
+        req.Method ??= "";
         var store = App.Store;
         if (store == null || !store.IsLoaded)
         {
@@ -340,10 +438,29 @@ public static class McpService
         }
 
 
-        if (!store.Database.AppSettings.McpEnabled)
+
+
+        var entryDb = store.Database;
+        if (entryDb == null)
+        {
+            Audit("call", clientPath, req.Method, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
+            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "数据库未解锁，请先在 Novara 中解锁" } };
+        }
+
+
+        if (!entryDb.AppSettings.McpEnabled)
         {
             Audit("call", clientPath, req.Method, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "MCP 接口已关闭，请在 Novara 设置中开启" } };
+        }
+
+
+
+        var currentToken = entryDb.AppSettings.McpToken;
+        if (string.IsNullOrEmpty(currentToken) || !FixedTimeEquals(handshakeToken, currentToken))
+        {
+            Audit("call", clientPath, req.Method, ok: false, reason: "访问令牌已重置，请用最新配置重新连接");
+            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "访问令牌已重置，请用最新配置重新连接" } };
         }
         if (store.IsSaveSuppressed)
         {
@@ -382,7 +499,7 @@ public static class McpService
         var required = McpPermissions.RequiredFor(req.Method, req.Method is "read_item" or "list_items" or "search_items"
             ? validatedType
             : GetStr(req.Params, "type"));
-        var granted = McpPermissions.GetFor(store.Database.AppSettings, clientPath);
+        var granted = McpPermissions.GetFor(entryDb.AppSettings, clientPath);
         if ((granted & required) != required)
         {
             var denyReason = $"权限不足：需要 {McpPermissions.Describe(required)}";
@@ -445,14 +562,14 @@ public static class McpService
                 "create_todo" => McpLogic.CreateTodo(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "mainText"),
                     GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey"), currentWs),
                 "create_note" => McpLogic.CreateNote(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "iconKey"), currentWs),
-                "create_diary" => CreateDiary(store, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "format"), currentWs),
+                "create_diary" => CreateDiary(db, ReqStr(req.Params, "title"), ReqStr(req.Params, "content"), GetStr(req.Params, "format"), currentWs),
                 "create_path" => McpLogic.CreatePath(db, ReqStr(req.Params, "name"), ReqStr(req.Params, "path"), GetStr(req.Params, "note"), currentWs),
 
                 "update_memo" => UpdateMemo(db, ReqStr(req.Params, "id"), GetStr(req.Params, "name"), GetStr(req.Params, "type"),
                     GetStr(req.Params, "keyInfo"), GetFields(req.Params), clearGroup ? (Guid?)null : GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey"), clearGroup),
                 "update_todo" => UpdateTodo(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "mainText"),
-                    GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey")),
-                "update_note" => UpdateNote(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "content"), GetStr(req.Params, "iconKey")),
+                    GetStrings(req.Params, "subTexts"), GetStr(req.Params, "iconKey"), ref postGate),
+                "update_note" => UpdateNote(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "content"), GetStr(req.Params, "iconKey"), ref postGate),
                 "update_diary" => UpdateDiary(db, ReqStr(req.Params, "id"), GetStr(req.Params, "title"), GetStr(req.Params, "content")),
                 "update_path" => UpdatePath(db, ReqStr(req.Params, "id"), GetStr(req.Params, "name"), GetStr(req.Params, "path"), GetStr(req.Params, "note")),
 
@@ -563,6 +680,23 @@ public static class McpService
     {
         try
         {
+
+            if (ev == "auth_denied")
+            {
+                lock (AuthDeniedThrottleGate)
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    if (now - _lastAuthDeniedWrite < AuthDeniedThrottleWindow)
+                    {
+                        _suppressedAuthDenied++;
+                        return;
+                    }
+                    if (_suppressedAuthDenied > 0)
+                        reason = $"{reason}（此前 {_suppressedAuthDenied} 条同类拒绝已合并）";
+                    _suppressedAuthDenied = 0;
+                    _lastAuthDeniedWrite = now;
+                }
+            }
             var evt = new McpAuditEvent
             {
                 Ev = ev,
@@ -586,11 +720,13 @@ public static class McpService
 
 
 
-    private static string CreateDiary(NovaraStore store, string title, string content, string? format, string? workspaceId)
+
+
+    private static string CreateDiary(NovaraDatabase db, string title, string content, string? format, string? workspaceId)
     {
         var fmt = string.IsNullOrWhiteSpace(format) ? "markdown" : format.Trim().ToLowerInvariant();
         if (fmt == "html") content = HtmlSanitizer.Sanitize(content);
-        return McpLogic.CreateDiary(store.Database, title, content, fmt, workspaceId);
+        return McpLogic.CreateDiary(db, title, content, fmt, workspaceId);
     }
 
     private static object UpdateDiary(NovaraDatabase db, string id, string? title, string? content)
@@ -611,16 +747,74 @@ public static class McpService
         return true;
     }
 
-    private static object UpdateTodo(NovaraDatabase db, string id, string? title, string? mainText, List<string>? subTexts, string? iconKey)
+    private static object UpdateTodo(NovaraDatabase db, string id, string? title, string? mainText, List<string>? subTexts, string? iconKey, ref Action? postGate)
     {
         McpLogic.UpdateTodo(db, id, title, mainText, subTexts, iconKey);
+
+
+
+        if (Guid.TryParse(id, out var gid) && db.TodoCards.FirstOrDefault(x => x.Id == gid) is { } todo)
+        {
+            var items = BuildStickyTodoItems(todo.MainText ?? "", todo.SubTexts, todo.CheckedStates);
+            postGate += () => RunStickyOnUi(() =>
+            {
+                if (Services.StickySync.Contains(id))
+                    Services.StickySync.UpdateNote(id, "todo", todo.Title ?? "", "", items);
+            });
+        }
         return true;
     }
 
-    private static object UpdateNote(NovaraDatabase db, string id, string? title, string? content, string? iconKey)
+    private static object UpdateNote(NovaraDatabase db, string id, string? title, string? content, string? iconKey, ref Action? postGate)
     {
         McpLogic.UpdateNote(db, id, title, content, iconKey);
+        if (Guid.TryParse(id, out var gid) && db.NoteCards.FirstOrDefault(x => x.Id == gid) is { } note)
+        {
+            var finalTitle = note.Title ?? "";
+            var finalContent = note.Content ?? "";
+            postGate += () => RunStickyOnUi(() =>
+            {
+                if (Services.StickySync.Contains(id))
+                    Services.StickySync.UpdateNote(id, "note", finalTitle, finalContent);
+            });
+        }
         return true;
+    }
+
+
+
+
+
+
+
+
+    private static void RunStickyOnUi(Action action)
+    {
+        var dq = App.MainWindow?.DispatcherQueue;
+        if (dq is null) { action(); return; }
+        using var done = new System.Threading.ManualResetEventSlim(false);
+        if (dq.TryEnqueue(() => { try { action(); } finally { done.Set(); } }))
+        {
+            if (!done.Wait(TimeSpan.FromSeconds(5)))
+                System.Diagnostics.Debug.WriteLine("V11-284: 便签同步投递 UI 线程 5s 未完成（放弃等待，写盘可能稍后仍会落地）");
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("V11-284: 便签同步投递 UI 线程失败（DispatcherQueue 拒绝入队）");
+        }
+    }
+
+
+    private static List<Services.StickyTodoItem> BuildStickyTodoItems(string mainText, List<string>? subTexts, List<bool>? states)
+    {
+        var items = new List<Services.StickyTodoItem>
+        {
+            new() { Label = mainText ?? "", Checked = states is { Count: > 0 } && states[0] }
+        };
+        if (subTexts != null)
+            for (int i = 0; i < subTexts.Count; i++)
+                items.Add(new() { Label = subTexts[i], Checked = states is { Count: > 0 } && i + 1 < states.Count && states[i + 1] });
+        return items;
     }
 
     private static object UpdatePath(NovaraDatabase db, string id, string? name, string? path, string? note)

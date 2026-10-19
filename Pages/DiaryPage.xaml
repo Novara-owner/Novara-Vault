@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Novara.Pages.DiaryPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -28,10 +28,9 @@
 
         <ScrollViewer x:Name="DiaryScrollViewer"
                       VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      ContextRequested="RootGrid_ContextRequested">
+                      HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="DiaryList"
-                        Padding="40,12,40,20"
+                        Padding="40,8,40,20"
                         Spacing="12">
 
             </StackPanel>
@@ -74,7 +73,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right"
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
@@ -96,7 +95,7 @@
 
                     <Grid Grid.Row="2" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left"
-                                Width="160" Height="36"
+                                Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -106,7 +105,7 @@
                                        HorizontalAlignment="Center" />
                         </Button>
 
-                        <Button HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
                     </Grid>
                 </Grid>
             </Border>

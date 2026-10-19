@@ -73,6 +73,9 @@ public sealed class SyncApiClient : IDisposable
     private const string SpaceHeader = SyncApi.SpaceHeader;
     private const string DeviceHeader = SyncApi.DeviceHeader;
     private const string VersionHeader = SyncApi.VersionHeader;
+
+    private const string ContainerV5Header = SyncApi.ContainerV5Header;
+    private const string ChunkIdsHeader = SyncApi.ChunkIdsHeader;
     private const string KeyWrapVersionHeader = SyncApi.KeyWrapVersionHeader;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -165,7 +168,7 @@ public sealed class SyncApiClient : IDisposable
     public async Task<SyncApiResult<RemoteEnvelope>> GetDataAsync(long version = 0, CancellationToken ct = default)
     {
         var path = $"{SyncApi.ApiPrefix}/space/data" + (version > 0 ? $"?version={version.ToString(CultureInfo.InvariantCulture)}" : "");
-        var (reply, failure) = await ExecuteAsync(HttpMethod.Get, path, null, authenticated: true, ct).ConfigureAwait(false);
+        var (reply, failure) = await ExecuteAsync(HttpMethod.Get, path, null, authenticated: true, ct, timeoutOverride: DataDownloadTimeout).ConfigureAwait(false);
         if (failure is not null) return failure.To<RemoteEnvelope>();
 
 
@@ -179,10 +182,14 @@ public sealed class SyncApiClient : IDisposable
     }
 
 
-    public async Task<SyncApiResult<long>> PutDataAsync(string envelopeJson, long baseVersion, bool force = false, CancellationToken ct = default)
+    public async Task<SyncApiResult<long>> PutDataAsync(string envelopeJson, long baseVersion, bool force = false, CancellationToken ct = default,
+        IReadOnlyList<string>? chunkIds = null)
     {
         var path = $"{SyncApi.ApiPrefix}/space/data" + (force ? "?force=1" : "");
-        var (reply, failure) = await ExecuteAsync(HttpMethod.Put, path, envelopeJson, authenticated: true, ct, baseVersion).ConfigureAwait(false);
+        var dataTimeout = ComputeDataTimeout(Encoding.UTF8.GetByteCount(envelopeJson));
+
+        var (reply, failure) = await ExecuteAsync(HttpMethod.Put, path, envelopeJson, authenticated: true, ct, baseVersion, dataTimeout,
+            chunkIds: chunkIds).ConfigureAwait(false);
         if (failure is not null) return failure.To<long>();
 
 
@@ -301,6 +308,57 @@ public sealed class SyncApiClient : IDisposable
 
 
 
+
+
+
+
+
+    internal static TimeSpan ComputeDataTimeout(long payloadBytes)
+    {
+        const double BaseSeconds = 30.0, FloorBytesPerSecond = 32.0 * 1024.0, MaxSeconds = 1800.0;
+        var seconds = BaseSeconds + Math.Max(0, payloadBytes) / FloorBytesPerSecond;
+        return TimeSpan.FromSeconds(Math.Min(seconds, MaxSeconds));
+    }
+
+
+
+    internal static readonly TimeSpan DataDownloadTimeout = TimeSpan.FromSeconds(600);
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private const int MaxEnvelopeBodyBytes = 64 * 1024 * 1024;
+
+
+
+    private const int MaxChunkBytes = 512 * 1024 * 1024;
+
+    private static async Task<byte[]> ReadBytesCappedAsync(HttpContent content, int maxBytes, CancellationToken ct)
+    {
+        using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var ms = new MemoryStream();
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            total += read;
+            if (total > maxBytes) throw new InvalidOperationException($"response body exceeds the {maxBytes / (1024 * 1024)}MB safety limit");
+            ms.Write(buffer, 0, read);
+        }
+        return ms.ToArray();
+    }
+
+
     private sealed record Reply(int Status, string Body, HttpResponseHeaders Headers)
     {
         public string? Header(string name) => Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
@@ -334,8 +392,141 @@ public sealed class SyncApiClient : IDisposable
         }
     }
 
+
+
+    private ServerCapabilities? _capabilities;
+
+
+
+
+
+
+
+
+
+
+
+
+    public async Task<bool> SupportsContainerV5Async(CancellationToken ct)
+    {
+        if (_capabilities is { } cached) return cached.ContainerV5;
+        try
+        {
+            var activity = NetworkActivityService.Begin("NetActivity_Kind_Update", _baseUrl + SyncApi.ApiPrefix + SyncApi.CapabilitiesPath);
+            var ok = false;
+            try
+            {
+                using var resp = await _http.GetAsync(_baseUrl + SyncApi.ApiPrefix + SyncApi.CapabilitiesPath,
+                    HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode)
+                {
+
+
+                    using var doc = JsonDocument.Parse(await ApiChatClient.ReadBodyCapped(resp, ct, 64 * 1024).ConfigureAwait(false));
+                    var v5 = doc.RootElement.TryGetProperty("containerV5", out var el) && el.ValueKind == JsonValueKind.True;
+                    _capabilities = new ServerCapabilities(v5);
+                    ok = true;
+                    return v5;
+                }
+                return false;
+            }
+            finally { NetworkActivityService.End(activity, ok); }
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception) { return false; }
+    }
+
+    private sealed record ServerCapabilities(bool ContainerV5);
+
+
+    public async Task<SyncApiResult<bool>> PutChunkAsync(string chunkId, byte[] blob, CancellationToken ct)
+    {
+        var started = DateTimeOffset.UtcNow;
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Update", _baseUrl + $"{SyncApi.ApiPrefix}/space/chunks/{chunkId}");
+        var ok = false;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, _baseUrl + $"{SyncApi.ApiPrefix}/space/chunks/{chunkId}");
+            if (string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_deviceToken))
+                return SyncApiResult<bool>.Fail(SyncErrorCode.Unauthenticated, "device credentials are missing", null, 0);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _deviceToken);
+            request.Headers.TryAddWithoutValidation(SpaceHeader, _spaceId);
+            request.Headers.TryAddWithoutValidation(DeviceHeader, _deviceId);
+            request.Headers.TryAddWithoutValidation(ContainerV5Header, "1");
+            request.Content = new ByteArrayContent(blob);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+
+            timeoutCts.CancelAfter(ComputeDataTimeout(blob.Length));
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token).ConfigureAwait(false);
+            var status = (int)response.StatusCode;
+
+            var bodyText = await ApiChatClient.ReadBodyCapped(response, ct).ConfigureAwait(false);
+            ok = response.IsSuccessStatusCode;
+            if (!ok)
+            {
+                var failure = ParseError(bodyText, status);
+                return failure.Error is null
+                    ? SyncApiResult<bool>.Unreachable(failure.Message)
+                    : SyncApiResult<bool>.Fail(failure.Error.Value, failure.Message, failure.CurrentVersion, status);
+            }
+            return SyncApiResult<bool>.Ok(true, status);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        { return SyncApiResult<bool>.Unreachable("the sync server did not respond in time"); }
+        catch (HttpRequestException e)
+        { return SyncApiResult<bool>.Unreachable($"the sync server is unreachable: {e.Message}"); }
+        finally { NetworkActivityService.End(activity, ok); }
+    }
+
+
+    public async Task<SyncApiResult<byte[]>> GetChunkAsync(string chunkId, CancellationToken ct)
+    {
+        var started = DateTimeOffset.UtcNow;
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Update", _baseUrl + $"{SyncApi.ApiPrefix}/space/chunks/{chunkId}");
+        var ok = false;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, _baseUrl + $"{SyncApi.ApiPrefix}/space/chunks/{chunkId}");
+            if (string.IsNullOrEmpty(_deviceId) || string.IsNullOrEmpty(_deviceToken))
+                return SyncApiResult<byte[]>.Fail(SyncErrorCode.Unauthenticated, "device credentials are missing", null, 0);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _deviceToken);
+            request.Headers.TryAddWithoutValidation(SpaceHeader, _spaceId);
+            request.Headers.TryAddWithoutValidation(DeviceHeader, _deviceId);
+            request.Headers.TryAddWithoutValidation(ContainerV5Header, "1");
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+
+            timeoutCts.CancelAfter(DataDownloadTimeout);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token).ConfigureAwait(false);
+            var status = (int)response.StatusCode;
+            ok = response.IsSuccessStatusCode;
+            if (!ok)
+            {
+
+                var bodyText = await ApiChatClient.ReadBodyCapped(response, ct).ConfigureAwait(false);
+                var failure = ParseError(bodyText, status);
+                return failure.Error is null
+                    ? SyncApiResult<byte[]>.Unreachable(failure.Message)
+                    : SyncApiResult<byte[]>.Fail(failure.Error.Value, failure.Message, failure.CurrentVersion, status);
+            }
+
+
+            var bytes = await ReadBytesCappedAsync(response.Content, MaxChunkBytes, ct).ConfigureAwait(false);
+            return SyncApiResult<byte[]>.Ok(bytes, status);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        { return SyncApiResult<byte[]>.Unreachable("the sync server did not respond in time"); }
+        catch (HttpRequestException e)
+        { return SyncApiResult<byte[]>.Unreachable($"the sync server is unreachable: {e.Message}"); }
+        finally { NetworkActivityService.End(activity, ok); }
+    }
+
     private async Task<(Reply? Reply, Failure? Failure)> ExecuteAsync(
-        HttpMethod method, string path, string? jsonBody, bool authenticated, CancellationToken ct, long? ifMatch = null)
+        HttpMethod method, string path, string? jsonBody, bool authenticated, CancellationToken ct, long? ifMatch = null,
+        TimeSpan? timeoutOverride = null, IReadOnlyList<string>? chunkIds = null)
     {
         using var request = new HttpRequestMessage(method, _baseUrl + path);
 
@@ -347,6 +538,8 @@ public sealed class SyncApiClient : IDisposable
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _deviceToken);
             request.Headers.TryAddWithoutValidation(SpaceHeader, _spaceId);
             request.Headers.TryAddWithoutValidation(DeviceHeader, _deviceId);
+
+            request.Headers.TryAddWithoutValidation(ContainerV5Header, "1");
         }
         else
         {
@@ -356,15 +549,23 @@ public sealed class SyncApiClient : IDisposable
 
         if (ifMatch is not null)
             request.Headers.TryAddWithoutValidation("If-Match", ifMatch.Value.ToString(CultureInfo.InvariantCulture));
+        if (chunkIds is not null && chunkIds.Count > 0)
+            request.Headers.TryAddWithoutValidation(ChunkIdsHeader, string.Join(",", chunkIds));
         if (jsonBody is not null)
             request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+
+
+
+
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeoutOverride ?? _timeout);
 
         HttpResponseMessage response;
         try
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(_timeout);
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token).ConfigureAwait(false);
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -378,7 +579,20 @@ public sealed class SyncApiClient : IDisposable
         using (response)
         {
             var status = (int)response.StatusCode;
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+
+
+
+
+            string body;
+            try
+            {
+                body = await ApiChatClient.ReadBodyCapped(response, timeoutCts.Token, MaxEnvelopeBodyBytes).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return (null, new Failure(null, "the sync server did not respond in time", null, 0));
+            }
             if (response.IsSuccessStatusCode) return (new Reply(status, body, response.Headers), null);
             return (null, ParseError(body, status));
         }

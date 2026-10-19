@@ -44,6 +44,11 @@ public sealed class SyncState
 
 
 
+    public DateTime? LastAttemptAt { get; set; }
+
+
+
+
 
     public string KeyWrapJson { get; set; } = "";
 
@@ -59,4 +64,8 @@ public sealed class SyncState
 
 
     public bool RestorePendingConfirm { get; set; }
+
+
+
+    public Dictionary<string, string> ServerManifestPartitions { get; set; } = new(StringComparer.Ordinal);
 }

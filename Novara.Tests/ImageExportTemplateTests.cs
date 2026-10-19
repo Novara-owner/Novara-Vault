@@ -152,7 +152,7 @@ public class ImageExportTemplateTests
     }
 
     [Fact]
-    public void MemoHtml_LogoFallback_WhenSvgMissing()
+    public void MemoHtml_LogoFallback_WhenBrandLogoMissing()
     {
         var groups = new List<MemoGroup>();
         var entries = new List<MemoEntry> { Entry(null, "条目") };

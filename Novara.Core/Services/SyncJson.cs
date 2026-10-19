@@ -19,7 +19,22 @@ public static class SyncJson
     public static SyncState DeserializeState(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return new SyncState();
-        try { return JsonSerializer.Deserialize<SyncState>(json, Options) ?? new SyncState(); }
+        try
+        {
+            var state = JsonSerializer.Deserialize<SyncState>(json, Options) ?? new SyncState();
+
+
+
+
+            state.ServerUrl ??= "";
+            state.SpaceId ??= "";
+            state.DeviceId ??= "";
+            state.DeviceName ??= "";
+            state.LastPushedSha256 ??= "";
+            state.KeyWrapJson ??= "";
+            state.ServerManifestPartitions ??= new(StringComparer.Ordinal);
+            return state;
+        }
         catch (JsonException) { return new SyncState(); }
     }
 

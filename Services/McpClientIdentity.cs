@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
@@ -26,6 +27,16 @@ internal static class McpClientIdentity
         {
             if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientPid) || clientPid == 0)
                 return AgentIdentity.Unresolved("无法确认管道对端进程");
+
+
+
+
+
+            var clientImage = ImagePathOf((int)clientPid);
+            if (clientImage is null)
+                return AgentIdentity.Unresolved("无法确认管道客户端（NovaraMCP.exe）的映像路径");
+            var clientProblem = VerifyClientImage(clientImage);
+            if (clientProblem.Length > 0) return AgentIdentity.Unresolved(clientProblem);
 
             var parentPid = ParentPidOf((int)clientPid);
 
@@ -54,6 +65,86 @@ internal static class McpClientIdentity
                 : AgentIdentity.Resolved(imagePath);
         }
         catch { return AgentIdentity.Unresolved("无法确认客户端进程身份"); }
+    }
+
+
+
+
+
+    private static string VerifyClientImage(string clientImagePath)
+    {
+        var name = Path.GetFileName(clientImagePath);
+        if (!string.Equals(name, "NovaraMCP.exe", StringComparison.OrdinalIgnoreCase))
+            return $"连接的进程不是 NovaraMCP.exe（{name}），已拒绝：只有随 Novara 发布的 MCP 转发器可以接入";
+
+        var shipped = ShippedClientCandidates();
+        if (shipped.Count == 0)
+            return "无法定位随 Novara 发布的 NovaraMCP.exe，无法校验连接方身份（已拒绝）";
+
+        var full = Path.GetFullPath(clientImagePath);
+        foreach (var candidate in shipped)
+            if (string.Equals(candidate, full, StringComparison.OrdinalIgnoreCase)) return "";
+
+        var clientHash = HashFile(full);
+        if (clientHash == null) return "无法读取连接方映像以校验身份（已拒绝）";
+        foreach (var candidate in shipped)
+            if (string.Equals(HashFile(candidate), clientHash, StringComparison.Ordinal)) return "";
+        return "连接的 NovaraMCP.exe 与随 Novara 发布的版本不一致（已拒绝），请使用主程序目录中的 NovaraMCP.exe";
+    }
+
+
+
+
+    private static List<string> ShippedClientCandidates()
+    {
+        var found = new List<string>();
+        void Probe(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                foreach (var exe in new[]
+                         {
+                             Path.Combine(dir, "NovaraMCP.exe"),
+                             Path.Combine(dir, "win-x64", "NovaraMCP.exe"),
+                         })
+                    if (File.Exists(exe)) found.Add(Path.GetFullPath(exe));
+                foreach (var tfm in Directory.EnumerateDirectories(dir, "net*"))
+                {
+                    var exe = Path.Combine(tfm, "win-x64", "NovaraMCP.exe");
+                    if (File.Exists(exe)) found.Add(Path.GetFullPath(exe));
+                }
+            }
+            catch { }
+        }
+
+        try
+        {
+            Probe(AppContext.BaseDirectory);
+            for (var dir = Path.GetFullPath(AppContext.BaseDirectory); ; )
+            {
+                var project = Path.Combine(dir, "NovaraMCP");
+                if (File.Exists(Path.Combine(project, "NovaraMCP.csproj")))
+                    foreach (var cfg in new[] { "Debug", "Release" })
+                        foreach (var platform in new[] { Path.Combine("bin", "x64", cfg), Path.Combine("bin", cfg) })
+                            Probe(Path.Combine(project, platform));
+                var parent = Directory.GetParent(dir)?.FullName;
+                if (string.IsNullOrEmpty(parent) || parent == dir) break;
+                dir = parent;
+            }
+        }
+        catch { }
+        return found;
+    }
+
+    private static string? HashFile(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch { return null; }
     }
 
 

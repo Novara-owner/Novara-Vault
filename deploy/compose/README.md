@@ -122,7 +122,9 @@ docker compose pull
 docker compose up -d
 ```
 
-v4 容器格式与存储 schema 不变，数据天然向前兼容。**升级前先备份**（§3）。
+存储 schema 与容器格式是**向前演进**的：新增列由服务端**启动时自动补齐**（批 6 的 v5 分区容器即增加了 `containerGeneration` 与 `chunk_ids` 两列），旧数据不必手工迁移就能被新版读取。
+
+唯一不可逆的是**容器世代切换**：某个空间收到第一次 v5 推送后即固定为 v5 世代，此后不再接受 v4 整库推送，未自报 v5 能力的旧客户端会被服务端拒在 `upgrade_required`（数据不丢，但旧版客户端从此读不到这个空间——先确认所有设备都已升到新版）。**升级前先备份**（§3）。
 
 ---
 
@@ -136,7 +138,7 @@ v4 容器格式与存储 schema 不变，数据天然向前兼容。**升级前�
 | 容器报 `unhealthy`，但服务本身访问正常 | 健康检查被服务端自己的 Host 过滤拒掉了 | 已在镜像内修好（探测头取自 `NOVARA_SYNC_ALLOWED_HOSTS`）；若你自定义了该变量成多段形式，确认第一段是主机名 |
 | `docker compose ps` 里 novara-sync 一直 `starting` | 数据目录写不进去，或端口被占 | `docker compose logs novara-sync` 看第一行 |
 | Caddy 拿不到证书 | 80 端口没通到这台机器，或域名 A 记录不对 | `docker compose logs caddy`；确认 80/443 都可达 |
-| 打开链接跳到 `127.0.0.1` | 反代没转发 `X-Forwarded-Proto/Host` | 用仓库内的 `Caddyfile`；跨机反代把它的 IP 加进 `NOVARA_SYNC_TRUSTED_PROXIES` |
+| 打开链接跳到 `127.0.0.1` | 旧版服务端或非本仓库反代用了绝对跳转（`/web` 的跳转现在是相对的，不再依赖转发头） | 用仓库内的 `Caddyfile`；仍出现则确认服务端版本，与转发头无关 |
 | 直接访问 `http://<主机>:5180/healthz` 得到 **400** | Host 过滤在工作：`Host: <主机>:5180` 不在 `NOVARA_SYNC_ALLOWED_HOSTS` 里 | 这是预期的。健康检查由容器自己在内部做；要从宿主探测就带上 `-H "Host: <你的域名>"` |
 | `docker compose up` 报 `set NOVARA_DOMAIN in .env` | `.env` 没建或没填 | `cp .env.example .env` 后填 `NOVARA_DOMAIN` |
 

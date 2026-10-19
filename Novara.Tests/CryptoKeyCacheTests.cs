@@ -144,4 +144,24 @@ public class CryptoKeyCacheTests
         swHit.Stop();
         return (swMiss, swHit);
     }
+
+
+
+
+
+    [Fact]
+    public void EvictionChurn_AndClear_KeepEveryRoundTripExact()
+    {
+        var cases = new List<(byte[] Cipher, byte[] Plain, byte[] Salt, string Pw)>();
+        for (var i = 0; i < 8; i++)
+        {
+            var salt = Salt32();
+            var plain = Encoding.UTF8.GetBytes("{\"probe\":" + i + "}");
+            var pw = "pw-churn-" + i;
+            cases.Add((CryptoService.EncryptGcm(plain, pw, salt, 100_000), plain, salt, pw));
+        }
+        CryptoService.ClearKeyCache();
+        foreach (var (cipher, plain, salt, pw) in cases)
+            Assert.Equal(plain, CryptoService.DecryptGcm(cipher, pw, salt, 100_000));
+    }
 }

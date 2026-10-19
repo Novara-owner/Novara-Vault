@@ -99,9 +99,24 @@ public sealed class FileSpaceStore : ISpaceStore
     {
         RequireSafeId(spaceId);
         var dir = BlobLayout.SpaceDirectory(_root, spaceId);
-        if (!Directory.Exists(dir)) return;
-
         var parked = dir + ".deleting";
+
+
+
+        if (!Directory.Exists(dir))
+        {
+            if (Directory.Exists(parked))
+            {
+                try { Directory.Delete(parked, recursive: true); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    throw new SpaceStoreException(
+                        $"the space was deleted but its parked tree could not be removed: {parked}", e);
+                }
+            }
+            return;
+        }
+
         try
         {
             if (Directory.Exists(parked)) Directory.Delete(parked, recursive: true);
@@ -246,4 +261,24 @@ public sealed class FileSpaceStore : ISpaceStore
 
         File.Move(temp, path, overwrite: true);
     }
+
+
+
+    public void WriteChunk(string spaceId, string chunkId, byte[] data)
+        => BlobLayout.WriteChunk(_root, BlobLayout.IsSafeId(spaceId) ? spaceId : throw new ArgumentException("space id is not valid", nameof(spaceId)), chunkId.ToLowerInvariant(), data);
+
+    public byte[]? ReadChunk(string spaceId, string chunkId)
+        => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
+            ? BlobLayout.ReadChunk(_root, spaceId, chunkId.ToLowerInvariant())
+            : null;
+
+    public bool ChunkExists(string spaceId, string chunkId)
+        => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
+            && BlobLayout.ChunkExists(_root, spaceId, chunkId.ToLowerInvariant());
+
+    public Dictionary<string, long> ChunkSizes(string spaceId)
+        => BlobLayout.IsSafeId(spaceId) ? BlobLayout.ChunkSizes(_root, spaceId) : new Dictionary<string, long>();
+
+    public List<string> PruneChunks(string spaceId, ISet<string> keepChunkIds)
+        => BlobLayout.IsSafeId(spaceId) ? BlobLayout.PruneChunks(_root, spaceId, keepChunkIds) : new List<string>();
 }

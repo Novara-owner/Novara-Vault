@@ -140,6 +140,32 @@ public class McpLogicTests
         }, null, null));
     }
 
+
+
+    [Fact]
+    public void UpdateMemo_WhitespacePaddedSensitiveLabel_StillProtected()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateMemo(db, "GitHub", "账户", "alice", new List<McpFieldInput>
+        {
+            new() { Label = "密码", Value = "old-pass", CanCopy = true }
+        }, null, null);
+
+
+        Assert.Throws<McpError>(() => McpLogic.UpdateMemo(db, id, null, null, null, new List<McpFieldInput>
+        {
+            new() { Label = "密码 ", Value = "hacked", CanCopy = true }
+        }, null, null));
+
+        Assert.Equal("old-pass", db.MemoEntries.Single().Fields.Single().Value);
+
+
+        Assert.Throws<McpError>(() => McpLogic.UpdateMemo(db, id, null, null, null, new List<McpFieldInput>
+        {
+            new() { Label = " 密码", Value = "hacked", CanCopy = true }
+        }, null, null));
+    }
+
     [Fact]
     public void CreateListDelete_SoftDeleteAndListExcludesDeleted()
     {

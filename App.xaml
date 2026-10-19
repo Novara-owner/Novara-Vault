@@ -129,6 +129,22 @@
                     </LinearGradientBrush>
                     <Color x:Key="CarouselFadeColor">#FF2E2E35</Color>
                     <Color x:Key="CarouselFadeColorTransparent">#002E2E35</Color>
+
+                    <SolidColorBrush x:Key="AppScrollBarThumbFill" Color="#737276FF" />
+                    <SolidColorBrush x:Key="AppScrollBarThumbFillDisabled" Color="#407276FF" />
+                    <SolidColorBrush x:Key="AppScrollBarThumbBorderBrush" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackFill" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackFillPointerOver" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackFillDisabled" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackStroke" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackStrokePointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarTrackStrokeDisabled" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBackground" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBackgroundPointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBackgroundDisabled" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBorderBrush" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBorderBrushPointerOver" Color="#00000000" />
+                    <SolidColorBrush x:Key="AppScrollBarBorderBrushDisabled" Color="#00000000" />
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>

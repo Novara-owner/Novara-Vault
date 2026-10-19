@@ -81,7 +81,6 @@ public static class SyncDiff
 
 
 
-
         };
 
         return new SyncDiffSummary(partitions, RoamingSettingsDiffer(local.AppSettings, remote.AppSettings));
@@ -90,7 +89,31 @@ public static class SyncDiff
 
     private static bool RoamingSettingsDiffer(AppSettings? local, AppSettings? remote)
         => !string.Equals(local?.AppLanguage, remote?.AppLanguage, StringComparison.Ordinal)
-           || !string.Equals(local?.Theme, remote?.Theme, StringComparison.Ordinal);
+           || !string.Equals(local?.Theme, remote?.Theme, StringComparison.Ordinal)
+           || WorkspacesDiffer(local, remote);
+
+
+
+
+
+
+    private static bool WorkspacesDiffer(AppSettings? local, AppSettings? remote)
+    {
+        var rw = remote?.Workspaces;
+        if (rw is not { Count: > 0 }) return false;
+        var lw = local?.Workspaces;
+        if (lw is null || lw.Count != rw.Count) return true;
+        for (int i = 0; i < rw.Count; i++)
+        {
+            var a = lw[i]; var b = rw[i];
+            if (!string.Equals(a?.Id, b?.Id, StringComparison.Ordinal)
+                || !string.Equals(a?.Name, b?.Name, StringComparison.Ordinal)
+                || !string.Equals(a?.IconKey, b?.IconKey, StringComparison.Ordinal)
+                || a?.CreatedAt != b?.CreatedAt)
+                return true;
+        }
+        return false;
+    }
 
     private static SyncPartitionDiff Compare<T>(
         List<T> local, List<T> remote, SyncPartition partition, bool hasTombstone = true)

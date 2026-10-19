@@ -199,6 +199,11 @@ public static class SyncEnvelopeCodec
             };
             if (envelope.Sync != SyncEnvelope.CurrentSyncVersion)
                 throw new InvalidDataException($"unsupported sync envelope version: {envelope.Sync}");
+
+
+
+            if (envelope.Crypto is not (4 or 5))
+                throw new InvalidDataException($"unsupported sync envelope crypto generation: {envelope.Crypto}");
             if (envelope.Version < 1) throw new InvalidDataException("sync envelope version must be >= 1");
             if (envelope.Base < 0) throw new InvalidDataException("sync envelope base must be >= 0");
             return envelope;

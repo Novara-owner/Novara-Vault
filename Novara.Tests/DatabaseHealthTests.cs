@@ -148,4 +148,56 @@ public class DatabaseHealthTests : IDisposable
         h3p[4] = 3; h3p[5] = 0;
         Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(h3p, gcmBody)));
     }
+
+
+
+
+
+    private static byte[] V5Header(byte flag, byte[] body)
+    {
+        var header = new byte[63];
+        BitConverter.TryWriteBytes(header.AsSpan(0, 4), 0x41564F4E);
+        header[4] = 5; header[5] = flag;
+        SHA256.HashData(body).CopyTo(header, 31);
+        return header;
+    }
+
+    [Fact]
+    public void Verify_V5_Plaintext_DigestVerified_And_TamperedBody_Failed()
+    {
+        var body = JsonSerializer.SerializeToUtf8Bytes(NewDb(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.Equal(DataFileIntegrity.DigestVerified, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(0, body), body)));
+
+        var tampered = (byte[])body.Clone();
+        tampered[^1] ^= 0xFF;
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(0, body), tampered)));
+    }
+
+    [Fact]
+    public void Verify_V5_Encrypted_VerifiesHeaderHash_Too()
+    {
+        var cipher = new byte[12 + 16 + 32];
+        RandomNumberGenerator.Fill(cipher);
+        Assert.Equal(DataFileIntegrity.EncryptedStructured, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(1, cipher), cipher)));
+
+
+        var tampered = (byte[])cipher.Clone();
+        tampered[^1] ^= 0x01;
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(1, cipher), tampered)));
+    }
+
+    [Fact]
+    public void Verify_V5_HeaderOnly_TruncatedOrUnknownFlag_Failed()
+    {
+
+        var headerOnly = V5Header(0, [1, 2, 3]);
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(headerOnly, [])));
+
+        var cipher = new byte[12 + 16 - 1];
+        RandomNumberGenerator.Fill(cipher);
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(1, cipher), cipher)));
+
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(V5Header(2, [1, 2, 3]), [1, 2, 3])));
+        Assert.Equal(DataFileIntegrity.Failed, DatabaseHealth.VerifyDataFile(WriteDataFile(headerOnly[..40], [])));
+    }
 }

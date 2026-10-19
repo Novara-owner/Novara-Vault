@@ -30,6 +30,15 @@ public static class SyncApi
     public const string ReadScheme = "Novara-Read";
 
 
+    public const string ContainerV5Header = "X-Novara-Container-V5";
+
+
+    public const string ChunkIdsHeader = "X-Novara-Chunk-Ids";
+
+
+    public const string CapabilitiesPath = "/capabilities";
+
+
 
 
 
@@ -125,6 +134,8 @@ public sealed class DeviceInfo
 
 
 
+
+
 public enum SyncErrorCode
 {
     BadRequest,
@@ -137,6 +148,9 @@ public enum SyncErrorCode
     RateLimited,
     QuotaExceeded,
     ServerError,
+
+
+    UpgradeRequired,
 }
 
 
@@ -176,8 +190,9 @@ public static class SyncErrorCodes
         SyncErrorCode.RateLimited => "rate_limited",
         SyncErrorCode.QuotaExceeded => "quota_exceeded",
         SyncErrorCode.ServerError => "server_error",
+        SyncErrorCode.UpgradeRequired => "upgrade_required",
         _ => "error",
-    };
+};
 
 
     public static SyncErrorCode? FromWire(string? value) => value switch
@@ -192,6 +207,7 @@ public static class SyncErrorCodes
         "rate_limited" => SyncErrorCode.RateLimited,
         "quota_exceeded" => SyncErrorCode.QuotaExceeded,
         "server_error" => SyncErrorCode.ServerError,
+        "upgrade_required" => SyncErrorCode.UpgradeRequired,
         _ => null,
     };
 
@@ -207,6 +223,7 @@ public static class SyncErrorCodes
         SyncErrorCode.PayloadTooLarge => 413,
         SyncErrorCode.RateLimited => 429,
         SyncErrorCode.QuotaExceeded => 507,
+        SyncErrorCode.UpgradeRequired => 403,
         _ => 500,
-    };
+};
 }

@@ -181,7 +181,7 @@ public class SyncConflictResolverTests : IAsyncLifetime
 
 
     [Fact]
-    public async Task ExportedServerVersion_IsAV4Container_ThatOpensWithTheSpaceKey()
+    public async Task ExportedServerVersion_IsTheServerPayloadVerbatim_AndOpensWithTheSpaceKey()
     {
         var (left, store, state) = await SetUpConflictAsync();
         var inspection = await SyncConflictResolver.InspectAsync(store, state, left.SpaceKey, left.Client);
@@ -190,11 +190,17 @@ public class SyncConflictResolverTests : IAsyncLifetime
         Assert.True(SyncConflictResolver.ExportRemoteVersion(path, inspection.RemoteContainer).Success);
 
 
-        Assert.Equal(inspection.RemoteContainer, await File.ReadAllBytesAsync(path));
-        var payload = SyncJson.DeserializeDatabase(System.Text.Encoding.UTF8.GetString(
-            SyncContainer.Open(await File.ReadAllBytesAsync(path), left.SpaceKey)));
-        Assert.Equal(new[] { "b-only", "shared", "untouched" },
-            payload.MemoEntries.Where(e => !e.IsDeleted).Select(e => e.Name).OrderBy(n => n).ToArray());
+
+
+        var exported = await File.ReadAllBytesAsync(path);
+        Assert.Equal(inspection.RemoteContainer, exported);
+        Assert.True(SyncContainer.TryReadHeader(exported, out var containerVer, out _, out _));
+        Assert.Equal(SyncContainer.FileVersionManifest, containerVer);
+        var manifest = System.Text.Json.JsonSerializer.Deserialize<SyncEngine.SyncManifestV5>(
+            SyncContainer.OpenManifest(exported, left.SpaceKey), SyncEngine.ManifestOptions);
+        Assert.NotNull(manifest);
+        Assert.Equal(5, manifest!.Format);
+        Assert.Equal(SyncPartitions.Keys.Length, manifest.Partitions.Count);
     }
 
     [Fact]

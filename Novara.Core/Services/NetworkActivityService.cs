@@ -12,15 +12,28 @@ namespace Novara.Services;
 public static class NetworkActivityService
 {
     public sealed record ActivityEntry(DateTimeOffset Time, string KindKey, string Host, bool Success);
-    private sealed record Session(string KindKey, string Host);
+
+    internal sealed class Session
+    {
+        internal Session(string kindKey, string host) { KindKey = kindKey; Host = host; }
+        internal string KindKey { get; }
+        internal string Host { get; }
+    }
+
+
+
+    public sealed class ActivityHandle
+    {
+        internal ActivityHandle(Session session) => Session = session;
+        internal Session Session { get; }
+    }
 
     private static readonly object _gate = new();
     private static readonly List<ActivityEntry> _recent = new();
     private static readonly List<Session> _stack = new();
     private const int MaxEntries = 50;
 
-    public static event Action? StateChanged;
-    public static event Action? LogAppended;
+
 
     public static bool IsActive
     {
@@ -48,38 +61,28 @@ public static class NetworkActivityService
     public static void ClearRecent()
     {
         lock (_gate) _recent.Clear();
-        StateChanged?.Invoke();
     }
 
 
-    public static void Begin(string kindKey, string urlOrHost)
+    public static ActivityHandle Begin(string kindKey, string urlOrHost)
     {
-        lock (_gate)
-        {
-            _stack.Add(new Session(kindKey, ExtractHost(urlOrHost)));
-        }
-        StateChanged?.Invoke();
+        var session = new Session(kindKey, ExtractHost(urlOrHost));
+        lock (_gate) _stack.Add(session);
+        return new ActivityHandle(session);
     }
 
 
-    public static void End(bool success = true)
+    public static void End(ActivityHandle handle, bool success = true)
     {
-        ActivityEntry? entry = null;
+        if (handle is null) return;
         lock (_gate)
         {
-            if (_stack.Count > 0)
-            {
-                var s = _stack[^1];
-                _stack.RemoveAt(_stack.Count - 1);
-                entry = new ActivityEntry(DateTimeOffset.Now, s.KindKey, s.Host, success);
-                _recent.Insert(0, entry);
-                if (_recent.Count > MaxEntries) _recent.RemoveAt(_recent.Count - 1);
-            }
-        }
-        if (entry != null)
-        {
-            StateChanged?.Invoke();
-            LogAppended?.Invoke();
+            var index = _stack.LastIndexOf(handle.Session);
+            if (index < 0) return;
+            var s = _stack[index];
+            _stack.RemoveAt(index);
+            _recent.Insert(0, new ActivityEntry(DateTimeOffset.Now, s.KindKey, s.Host, success));
+            if (_recent.Count > MaxEntries) _recent.RemoveAt(_recent.Count - 1);
         }
     }
 

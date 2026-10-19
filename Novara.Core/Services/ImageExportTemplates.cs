@@ -22,7 +22,7 @@ public static class ImageExportTemplates
         IReadOnlyList<MemoEntry> entries,
         int width,
         DateTime exportedAt,
-        string? logoSvg)
+        string? logoBrandHtml)
     {
         var live = entries.Where(e => !e.IsDeleted).ToList();
         var groupIds = groups.Select(g => g.Id).ToHashSet();
@@ -39,8 +39,8 @@ public static class ImageExportTemplates
             .ToList();
 
         var sb = new StringBuilder();
-        AppendHtmlHead(sb, width, $"Novara {Loc.T("Export_Section_Memo")}", logoSvg, isWide: width >= 640);
-        sb.AppendLine("<div class=\"header\">" + HeaderBrandHtml(logoSvg) + "</div>");
+        AppendHtmlHead(sb, width, $"Novara {Loc.T("Export_Section_Memo")}", logoBrandHtml, isWide: width >= 640);
+        sb.AppendLine("<div class=\"header\">" + HeaderBrandHtml(logoBrandHtml) + "</div>");
         sb.AppendLine("<p class=\"meta\">" + Encode(string.Format(Loc.T("Export_ExportedAt"), exportedAt.ToString("yyyy-MM-dd HH:mm"))) + "</p>");
 
         foreach (var g in orderedGroups)
@@ -72,12 +72,12 @@ public static class ImageExportTemplates
         DateTime modifiedAt,
         int width,
         DateTime exportedAt,
-        string? logoSvg)
+        string? logoBrandHtml)
     {
         var sb = new StringBuilder();
         var isWide = width >= 640;
-        AppendHtmlHead(sb, width, Encode(string.IsNullOrWhiteSpace(title) ? Loc.T("Export_Untitled") : title), logoSvg, isWide);
-        sb.AppendLine("<div class=\"header\">" + HeaderBrandHtml(logoSvg) + "</div>");
+        AppendHtmlHead(sb, width, Encode(string.IsNullOrWhiteSpace(title) ? Loc.T("Export_Untitled") : title), logoBrandHtml, isWide);
+        sb.AppendLine("<div class=\"header\">" + HeaderBrandHtml(logoBrandHtml) + "</div>");
         sb.AppendLine("<div class=\"title\">" + Encode(string.IsNullOrWhiteSpace(title) ? Loc.T("Export_Untitled") : title) + "</div>");
         sb.AppendLine("<div class=\"dmeta\">" + Encode(Loc.T("Search_Created")) + " " + createdAt.ToString("yyyy-MM-dd HH:mm")
             + " · " + Encode(Loc.T("Search_Modified")) + " " + modifiedAt.ToString("yyyy-MM-dd HH:mm") + "</div>");
@@ -109,9 +109,9 @@ public static class ImageExportTemplates
         sb.AppendLine("</div>");
     }
 
-    private static string HeaderBrandHtml(string? logoSvg)
+    private static string HeaderBrandHtml(string? logoBrandHtml)
     {
-        var logoHtml = string.IsNullOrEmpty(logoSvg) ? "<span class=\"logo\">N</span>" : logoSvg;
+        var logoHtml = string.IsNullOrEmpty(logoBrandHtml) ? "<span class=\"logo\">N</span>" : logoBrandHtml;
         return logoHtml + "<div><div class=\"brand\">Novara</div><div class=\"tagline\">" + Encode(Loc.T("Export_Html_Tagline")) + "</div></div>";
     }
 
@@ -123,7 +123,7 @@ public static class ImageExportTemplates
 
 
 
-    private static void AppendHtmlHead(StringBuilder sb, int width, string title, string? logoSvg, bool isWide)
+    private static void AppendHtmlHead(StringBuilder sb, int width, string title, string? logoBrandHtml, bool isWide)
     {
         var pad = isWide ? 28 : 20;
         sb.AppendLine("<!DOCTYPE html>");
@@ -134,7 +134,6 @@ public static class ImageExportTemplates
         sb.AppendLine("<style>");
         sb.AppendLine($"body{{margin:0;padding:{pad}px {pad}px 24px;background:#f6f7f9;font-family:-apple-system,'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;color:#1c1c22;box-sizing:border-box;width:{width}px;}}");
         sb.AppendLine(".header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:2px solid #7276ff;}");
-        sb.AppendLine(".header svg{width:38px;height:38px;flex-shrink:0;}");
         sb.AppendLine(".logo{width:38px;height:38px;border-radius:10px;background:#7276ff;color:#fff;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}");
         sb.AppendLine(".brand{font-size:19px;font-weight:700;color:#7276ff;line-height:1.25;}");
         sb.AppendLine(".tagline{font-size:12px;color:#8a8a92;}");

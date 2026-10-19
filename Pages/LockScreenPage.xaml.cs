@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -33,6 +33,7 @@ public sealed partial class LockScreenPage : Page
     public LockScreenPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
 
 
         if (App.CurrentLanguage == "en-US")
@@ -45,10 +46,14 @@ public sealed partial class LockScreenPage : Page
 
 
         Novara.Services.DialogDepth.AttachPair(ForgotScrim, ForgotDialog, driveChrome: false);
+        LockRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         KeyDown += Page_KeyDown;
         Unloaded += (_, _) =>
         {
             _lockTimer?.Stop(); _lockTimer = null; _autoUnlockCts?.Cancel();
+
+            ForgotCd.Reset();
+            _forgotAnimating = false;
 
 
             WindowsHelloBreathing.Stop();
@@ -114,6 +119,19 @@ public sealed partial class LockScreenPage : Page
     private int _autoUnlockSeq;
     private static int _autoProbeCount;
 
+
+
+
+
+
+    private string? _lastLoadPw;
+    private System.Threading.Tasks.Task<LoadResult?>? _lastLoadTask;
+
+
+
+    private int _loadGeneration;
+    private int _loadConsumers;
+
     private void PasswordInput_PasswordChanged(object sender, RoutedEventArgs e)
     {
         if (_verifying) return;
@@ -128,16 +146,67 @@ public sealed partial class LockScreenPage : Page
         _ = CheckAutoUnlockAsync(pw, seq, _autoUnlockCts.Token);
     }
 
+
+
+
+
+    private (System.Threading.Tasks.Task<LoadResult?> Task, int Generation) RunStoreLoadAsync(string pw)
+    {
+        if (_lastLoadTask is { IsCompleted: false } && _lastLoadPw == pw)
+        {
+            _loadConsumers++;
+            return (_lastLoadTask, _loadGeneration);
+        }
+        _lastLoadPw = pw;
+        _loadGeneration++;
+        _loadConsumers = 1;
+        _lastLoadTask = System.Threading.Tasks.Task.Run(() => App.Store?.LoadWithPassword(pw));
+        return (_lastLoadTask, _loadGeneration);
+    }
+
+
+
+
+
+
+
+
+
+
+    private void RelockIfLoadIsOrphaned(int generation)
+    {
+        if (generation == _loadGeneration && _loadConsumers > 0) _loadConsumers--;
+        if (generation != _loadGeneration) return;
+        if (_loadConsumers > 0) return;
+        if (App.Store is { IsLoaded: true } && !_verifying && !_unlockStarted
+            && (_lastLoadTask is null || _lastLoadTask.IsCompleted))
+        {
+            App.RelockStore();
+
+
+            App.MainWindow?.BindStoreSaveFailed();
+            _lastLoadTask = null;
+            _lastLoadPw = null;
+        }
+    }
+
     private async System.Threading.Tasks.Task CheckAutoUnlockAsync(string pw, int seq, System.Threading.CancellationToken ct)
     {
         try { await System.Threading.Tasks.Task.Delay(AutoProbeDebounce, ct); } catch { return; }
         if (seq != _autoUnlockSeq || _verifying) return;
         if (PasswordInput.Password != pw) return;
-        var result = await System.Threading.Tasks.Task.Run(() => App.Store?.LoadWithPassword(pw));
+        var (loadTask, generation) = RunStoreLoadAsync(pw);
+        var result = await loadTask;
 
 
 
-        if (seq != _autoUnlockSeq || _verifying || PasswordInput.Password != pw) return;
+        if (seq != _autoUnlockSeq || _verifying || PasswordInput.Password != pw)
+        {
+
+
+            RelockIfLoadIsOrphaned(generation);
+            return;
+        }
         if (result?.Status == LoadStatus.Ok)
         {
             _verifying = true;
@@ -152,6 +221,9 @@ public sealed partial class LockScreenPage : Page
         if (result?.Status == LoadStatus.Corrupted) { CorruptDetected?.Invoke(); return; }
         if (result?.Status == LoadStatus.IoError) { IoErrorDetected?.Invoke(); return; }
 
+
+
+        RelockIfLoadIsOrphaned(generation);
     }
 
     private void UnlockButton_Click(object sender, RoutedEventArgs e) => _ = VerifyAsync();
@@ -234,7 +306,8 @@ public sealed partial class LockScreenPage : Page
 
 
 
-        var result = await System.Threading.Tasks.Task.Run(() => App.Store?.LoadWithPassword(pw));
+        var (loadTask, generation) = RunStoreLoadAsync(pw);
+        var result = await loadTask;
         if (result != null && result.Status == LoadStatus.Ok)
         {
             _failCount = 0;
@@ -247,12 +320,14 @@ public sealed partial class LockScreenPage : Page
         if (result != null && result.Status == LoadStatus.Corrupted)
         {
             _verifying = false;
+            RelockIfLoadIsOrphaned(generation);
             CorruptDetected?.Invoke();
             return;
         }
         if (result != null && result.Status == LoadStatus.IoError)
         {
             _verifying = false;
+            RelockIfLoadIsOrphaned(generation);
             IoErrorDetected?.Invoke();
             return;
         }
@@ -266,6 +341,7 @@ public sealed partial class LockScreenPage : Page
             WindowsHelloText.Visibility = Visibility.Collapsed;
             await ShakeAndFlashAsync();
             _verifying = false;
+            RelockIfLoadIsOrphaned(generation);
             return;
         }
 
@@ -275,12 +351,14 @@ public sealed partial class LockScreenPage : Page
         {
             PasswordService.SetLockoutUntil(DateTime.Now + LockDuration);
             EnterLockedState();
+            RelockIfLoadIsOrphaned(generation);
             return;
         }
 
         await ShakeAndFlashAsync();
         ClearInput();
         _verifying = false;
+        RelockIfLoadIsOrphaned(generation);
     }
 
 
@@ -419,6 +497,9 @@ private void EnterLockedState()
     {
         PasswordInput.Password = string.Empty;
         if (LockedView.Visibility == Visibility.Visible) return;
+
+
+        if (ForgotOverlay.Visibility == Visibility.Visible) return;
         PasswordInput.Focus(FocusState.Programmatic);
     }
 
@@ -453,22 +534,17 @@ private void EnterLockedState()
     private bool _forgotAnimating;
     private bool _forgotConfirming;
 
+    private readonly System.Collections.Generic.Dictionary<Grid, int> _dialogGens = new();
+    private readonly System.Collections.Generic.Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+
     private void ShowForgotDialog()
     {
         if (_forgotAnimating) return;
         _forgotConfirming = false;
         ForgotDangerIcon.Data = App.CreateGeometry(IconData.Danger);
-        ForgotDialogTransform.ScaleX = 0.94; ForgotDialogTransform.ScaleY = 0.94; ForgotDialogTransform.TranslateY = 24;
-        ForgotDialog.Opacity = 0;
-        ForgotScrim.Opacity = 0;
-        ForgotOverlay.Visibility = Visibility.Visible;
-        var sb = new Storyboard();
-        var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(si, ForgotScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
-        var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(di, ForgotDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, ForgotDialogTransform);
-        sb.Begin();
+
+        DialogUi.ShowOverlay(LockRoot, _dialogGens, _dialogMap, ForgotOverlay, ForgotDialog, ForgotDialogTransform, _dialogWidthFit);
 
         ForgotConfirmButton.IsEnabled = false;
         ForgotConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
@@ -491,15 +567,12 @@ private void EnterLockedState()
         ForgotCd.Reset();
         ForgotConfirmButton.IsEnabled = true;
         ForgotConfirmButton.Opacity = 1;
-        var sb = new Storyboard();
-        var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(so, ForgotScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
-        var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(d, ForgotDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, ForgotDialogTransform);
-        sb.Completed += (_, _) => { ForgotOverlay.Visibility = Visibility.Collapsed; _forgotAnimating = false; };
-        sb.Begin();
+
+        DialogUi.HideOverlay(LockRoot, _dialogGens, _dialogMap, ForgotOverlay, ForgotDialog, ForgotDialogTransform, () => _forgotAnimating = false);
     }
+
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs(LockRoot, _dialogMap, widthFit: _dialogWidthFit);
 
     private void ForgotClose_Click(object sender, RoutedEventArgs e) => HideForgotDialog();
     private void ForgotCancel_Click(object sender, RoutedEventArgs e) => HideForgotDialog();
@@ -533,7 +606,8 @@ private void EnterLockedState()
             PasswordService.DeleteLockout();
             WindowsHelloService.Disable();
             Services.StickySync.ClearAllNotes();
-            Services.SyncService.MarkRestorePendingConfirm();
+            Services.AutoBackupService.ClearAll();
+            Services.SyncService.MarkRestorePendingConfirmOrWarn("forgot-password wipe");
             HideForgotDialog();
             PlayExitAnimation();
         }

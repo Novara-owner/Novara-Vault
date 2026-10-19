@@ -74,7 +74,7 @@ public static class ApiProbeService
     public static string MaskKey(string? key)
     {
         if (string.IsNullOrEmpty(key)) return "(empty)";
-        if (key.Length <= 8) return "****";
+        if (key.Length < 16) return "****";
         return key.Substring(0, 4) + "…" + key.Substring(key.Length - 4);
     }
 
@@ -83,11 +83,10 @@ public static class ApiProbeService
     public static string? SuggestVendorForKey(string? key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;
-        if (key.StartsWith("sk-ant-", StringComparison.Ordinal)) return "Anthropic";
-        if (key.StartsWith("AIza", StringComparison.Ordinal)) return "Google Gemini";
-        if (key.StartsWith("gsk_", StringComparison.Ordinal)) return "Groq";
-        if (key.StartsWith("xai-", StringComparison.Ordinal)) return "xAI Grok";
-        if (key.StartsWith("sk-or-", StringComparison.Ordinal)) return "OpenRouter";
+
+
+        foreach (var (prefix, vendor) in AuditSanitizer.VendorKeyPrefixes)
+            if (key.StartsWith(prefix, StringComparison.Ordinal)) return vendor;
         return null;
     }
 
@@ -273,7 +272,8 @@ public static class ApiProbeService
     public static async System.Threading.Tasks.Task<ApiProbeReport> ProbeAsync(string? url, string? key, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null, bool recordActivity = true)
     {
 
-        if (recordActivity) NetworkActivityService.Begin("NetActivity_Kind_Probe", url ?? "");
+        NetworkActivityService.ActivityHandle? activity = null;
+        if (recordActivity) activity = NetworkActivityService.Begin("NetActivity_Kind_Probe", url ?? "");
         bool activityOk = false;
         try
         {
@@ -371,7 +371,7 @@ public static class ApiProbeService
         }
         finally
         {
-            if (recordActivity) NetworkActivityService.End(activityOk);
+            if (activity != null) NetworkActivityService.End(activity, activityOk);
         }
     }
 
@@ -397,10 +397,10 @@ public static class ApiProbeService
     public static async System.Threading.Tasks.Task<ApiProbeReport> ProbeWithProtocolAsync(
         string? url, string? key, string protocol, System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null)
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Protocol", url ?? "");
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Protocol", url ?? "");
         bool activityOk = false;
         try { var r = await ProbeWithProtocolAsyncCore(url, key, protocol, ct, handler); activityOk = r.Status == ApiProbeStatus.Success; return r; }
-        finally { NetworkActivityService.End(activityOk); }
+        finally { NetworkActivityService.End(activity, activityOk); }
     }
 
     private static async System.Threading.Tasks.Task<ApiProbeReport> ProbeWithProtocolAsyncCore(
@@ -469,7 +469,7 @@ public static class ApiProbeService
 
                 if (resp.StatusCode == HttpStatusCode.OK)
                 {
-                    var body = await resp.Content.ReadAsStringAsync(ct);
+                    var body = await ApiChatClient.ReadBodyCapped(resp, ct);
                     if (IsValidModelsBody(body, successField))
                     {
                         report.Status = ApiProbeStatus.Success;
@@ -500,7 +500,7 @@ public static class ApiProbeService
                 }
 
                 report.Status = MapStatus(resp.StatusCode);
-                var errBody = await resp.Content.ReadAsStringAsync(ct);
+                var errBody = await ApiChatClient.ReadBodyCapped(resp, ct);
                 var (parsedStatus, parsedDetail) = ParseErrorBody(errBody);
                 if (parsedStatus != ApiProbeStatus.Unknown) { report.Status = parsedStatus; report.Detail = MaskKeyInText(parsedDetail, key); }
                 else if (!string.IsNullOrEmpty(parsedDetail)) report.Detail = MaskKeyInText(parsedDetail, key);

@@ -46,8 +46,12 @@ public class StableJsonTests
     [Fact]
     public void StableGraph_Serializes_ByteIdentical()
     {
-        var payload = StableJson.SerializeToUtf8BytesStable(new { Name = "ok", Value = 42 }, Options);
-        Assert.NotNull(payload);
-        Assert.Contains("ok", System.Text.Encoding.UTF8.GetString(payload!));
+
+        var first = StableJson.SerializeToUtf8BytesStable(new { Name = "ok", Value = 42 }, Options);
+        var second = StableJson.SerializeToUtf8BytesStable(new { Name = "ok", Value = 42 }, Options);
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first!, second!);
+        Assert.Contains("ok", System.Text.Encoding.UTF8.GetString(first!));
     }
 }

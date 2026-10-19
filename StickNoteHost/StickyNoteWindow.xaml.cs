@@ -608,7 +608,8 @@ public sealed partial class StickyNoteWindow : Window
     {
         _colorKey = key;
         ApplyTheme(_lastTheme);
-        App.UpdateNoteColor(NoteId, key);
+
+        if (!App.UpdateNoteColor(NoteId, key)) App.Log("UpdateNoteColor 写盘失败（本地已改、盘上未落）: " + (key ?? "跟随主题"));
     }
 
 
@@ -787,7 +788,8 @@ public sealed partial class StickyNoteWindow : Window
             NativeMethods.GetWindowRect(hwnd, out var r);
             int w = Math.Max((int)Math.Round((r.Right - r.Left) / scale), (int)NoteMinW);
             int h = Math.Max((int)Math.Round((r.Bottom - r.Top) / scale), (int)NoteMinH);
-            App.UpdateNoteSize(NoteId, w, h);
+
+            if (!App.UpdateNoteSize(NoteId, w, h)) App.Log("UpdateNoteSize 写盘失败（本地已改、盘上未落）");
         }
         e.Handled = true;
     }

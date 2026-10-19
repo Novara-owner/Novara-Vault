@@ -257,12 +257,14 @@ public static class ImageExportService
 {
 
 
-    public static string? TryReadLogoSvg()
+    public static string? TryReadLogoBrandHtml()
     {
         try
         {
-            var logoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "logo.svg");
-            return System.IO.File.Exists(logoPath) ? System.IO.File.ReadAllText(logoPath) : null;
+            var logoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "logo.png");
+            if (!System.IO.File.Exists(logoPath)) return null;
+            var b64 = System.Convert.ToBase64String(System.IO.File.ReadAllBytes(logoPath));
+            return "<img src=\"data:image/png;base64," + b64 + "\" alt=\"Novara\" style=\"width:38px;height:38px;border-radius:10px;flex-shrink:0;display:block;\">";
         }
         catch { return null; }
     }

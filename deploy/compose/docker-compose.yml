@@ -36,6 +36,9 @@ services:
       # (default 10). Leaving them empty keeps the built-in defaults.
       NOVARA_SYNC_QUOTA_BYTES: ${NOVARA_SYNC_QUOTA_BYTES:-}
       NOVARA_SYNC_MAX_VERSIONS: ${NOVARA_SYNC_MAX_VERSIONS:-}
+      NOVARA_SYNC_STORE: ${NOVARA_SYNC_STORE:-}
+      NOVARA_SYNC_MAX_PAYLOAD_BYTES: ${NOVARA_SYNC_MAX_PAYLOAD_BYTES:-}
+      NOVARA_SYNC_MAX_AUTH_FAILURES: ${NOVARA_SYNC_MAX_AUTH_FAILURES:-}
 
       # Caddy is not loopback, so it has to be named here or every forwarded request looks like
       # plain http from a stranger and the API answers 403. The address is fixed in the network
@@ -74,7 +77,7 @@ services:
         # certificate challenge against a process that has not finished starting.
         condition: service_healthy
     environment:
-      NOVARA_DOMAIN: ${NOVARA_DOMAIN:?set NOVARA_DOMAIN in .env - it is the hostname Caddy obtains a certificate for}
+      NOVARA_DOMAIN: ${NOVARA_DOMAIN:-}
       # The one line that differs from the bare-metal instructions, which is why there is only
       # one copy of the Caddyfile.
       NOVARA_UPSTREAM: novara-sync:5180

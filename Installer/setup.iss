@@ -1,5 +1,9 @@
 ﻿#define MyAppName "Novara"
-#define MyAppVersion "10.3.0"
+
+
+
+#define MyAppVersion "11.0.0"
+#define MyAppDisplayVersion "novara11"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 
@@ -21,11 +25,17 @@
   #error PublishDir holds a stale client: Novara.dll version differs from MyAppVersion. Empty Novara_Publish and re-publish from scratch - never build on the previous release tree.
 #endif
 
+
+
+#if !FileExists(PublishDir + "\Novara.pri")
+  #error PublishDir has no Novara.pri - copy it from the Release win-x64 output before compiling.
+#endif
+
 [Setup]
 AppId={{9E7B2C41-8F3A-4D6B-9C1E-5A2B4D6F8E10}
 AppName={#MyAppName}
-AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+AppVersion={#MyAppDisplayVersion}
+AppVerName={#MyAppName} {#MyAppDisplayVersion}
 AppPublisher={#MyAppPublisher}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
@@ -37,7 +47,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=no
 AllowNoIcons=yes
 OutputDir=..\..\Novara Release
-OutputBaseFilename=Novara_Setup_{#MyAppVersion}
+OutputBaseFilename=Novara_Setup_{#MyAppDisplayVersion}
 SetupIconFile=..\Assets\128.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
@@ -60,9 +70,37 @@ SetupLogging=yes
 Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+
+
+chinesesimplified.DeleteDataFailed=数据目录未能完全删除：%n%1%n%n可能有程序仍在使用其中的文件（例如同步服务端、正在运行的 Novara 或杀毒软件扫描）。请关闭这些程序后手动删除该目录。
+english.DeleteDataFailed=The data directory could not be fully removed:%n%1%n%nA file inside it may still be in use (the sync server, a running Novara, or an antivirus scan). Close those programs and delete the directory by hand.
+chinesesimplified.CreateDesktopIcon=创建桌面快捷方式(&D)
+english.CreateDesktopIcon=Create a &desktop shortcut
+chinesesimplified.AdditionalTasks=附加任务:
+english.AdditionalTasks=Additional tasks:
+chinesesimplified.ViewHelp=查看 Novara 使用教程
+english.ViewHelp=Open the Novara help centre
+chinesesimplified.UninstallShortcut=卸载 Novara
+english.UninstallShortcut=Uninstall Novara
+chinesesimplified.UninstallDataCaption=是否同时删除所有数据
+english.UninstallDataCaption=Delete all data as well?
+chinesesimplified.UninstallDataIntro=数据保存在本机 %LocalAppData%\Novara（data.novadb）。%n%n保留数据：重装后自动恢复；如需备份请先打开 Novara，在设置页导出。%n删除全部：将永久删除日记、待办、备忘等全部数据，不可恢复。
+english.UninstallDataIntro=Your data lives in %LocalAppData%\Novara (data.novadb).%n%nKeep data: it is picked up again after a reinstall. To back it up first, open Novara and export it from Settings.%nDelete all: permanently removes every diary, to-do, memo and other entry. This cannot be undone.
+chinesesimplified.KeepData=保留数据（推荐）
+english.KeepData=Keep my data (recommended)
+chinesesimplified.DeleteData=删除全部数据（需输入 RESET 确认）
+english.DeleteData=Delete all data (type RESET to confirm)
+chinesesimplified.Ok=确定
+english.Ok=OK
+chinesesimplified.Cancel=取消
+english.Cancel=Cancel
+chinesesimplified.ResetMismatch=输入错误，未删除数据。请输入 RESET 确认，或选择「保留数据」。
+english.ResetMismatch=Nothing was deleted. Type RESET to confirm, or choose Keep my data.
+
 [Tasks]
 
-Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescription: "附加任务:"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalTasks}"
 
 [Files]
 
@@ -102,11 +140,11 @@ Source: "Sync\3-查看空间.cmd"; DestDir: "{app}\Sync"; Flags: ignoreversion
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait runasoriginaluser
 
 
-Filename: "https://novara.xin/help/"; Description: "查看 Novara 使用教程"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "https://novara.xin/help/"; Description: "{cm:ViewHelp}"; Flags: postinstall nowait skipifsilent shellexec
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallShortcut}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 
@@ -125,6 +163,9 @@ Root: HKCU; Subkey: "Software\Classes\SystemFileAssociations\.markdown\shell\Nov
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Novara.exe.WebView2"
+
+
+Type: filesandordirs; Name: "{localappdata}\Novara\Webview2"
 
 [Code]
 
@@ -216,6 +257,7 @@ var
   OkBtn, CancelBtn: TNewButton;
   ResultCode: Integer;
   DataDir: String;
+  DeltaY: Integer;
 begin
   if CurUninstallStep = usUninstall then
   begin
@@ -235,52 +277,57 @@ begin
     if UninstallSilent then
       Exit;
 
-    Form := CreateCustomForm(ScaleX(300), ScaleY(190), False, False);
+
+
+
+
+    DeltaY := 0;
+    if ActiveLanguage = 'english' then DeltaY := ScaleY(54);
+
+    Form := CreateCustomForm(ScaleX(300), ScaleY(190) + DeltaY, False, False);
     try
-      Form.Caption := '是否同时删除所有数据';
+      Form.Caption := ExpandConstant('{cm:UninstallDataCaption}');
 
       Lbl := TNewStaticText.Create(Form);
       Lbl.Parent := Form;
       Lbl.Left := ScaleX(16);
       Lbl.Top := ScaleY(12);
       Lbl.Width := Form.ClientWidth - ScaleX(32);
-      Lbl.Height := ScaleY(60);
+      Lbl.Height := ScaleY(60) + DeltaY;
       Lbl.AutoSize := False;
       Lbl.WordWrap := True;
-      Lbl.Caption := '数据保存在本机 %LocalAppData%\Novara（data.novadb）。'#13#10#13#10 +
-        '保留数据：重装后自动恢复；如需备份请先打开 Novara，在设置页导出。'#13#10 +
-        '删除全部：将永久删除日记、待办、备忘等全部数据，不可恢复。';
+      Lbl.Caption := ExpandConstant('{cm:UninstallDataIntro}');
 
       RadioKeep := TNewRadioButton.Create(Form);
       RadioKeep.Parent := Form;
       RadioKeep.Left := ScaleX(16);
-      RadioKeep.Top := ScaleY(78);
+      RadioKeep.Top := ScaleY(78) + DeltaY;
       RadioKeep.Width := Form.ClientWidth - ScaleX(32);
       RadioKeep.Height := ScaleY(26);
-      RadioKeep.Caption := '保留数据（推荐）';
+      RadioKeep.Caption := ExpandConstant('{cm:KeepData}');
       RadioKeep.Checked := True;
       RadioKeep.OnClick := @RadioKeepClick;
 
       RadioDelete := TNewRadioButton.Create(Form);
       RadioDelete.Parent := Form;
       RadioDelete.Left := ScaleX(16);
-      RadioDelete.Top := ScaleY(104);
+      RadioDelete.Top := ScaleY(104) + DeltaY;
       RadioDelete.Width := Form.ClientWidth - ScaleX(32);
       RadioDelete.Height := ScaleY(26);
-      RadioDelete.Caption := '删除全部数据（需输入 RESET 确认）';
+      RadioDelete.Caption := ExpandConstant('{cm:DeleteData}');
       RadioDelete.OnClick := @RadioDeleteClick;
 
       EditReset := TNewEdit.Create(Form);
       EditReset.Parent := Form;
       EditReset.Left := ScaleX(30);
-      EditReset.Top := ScaleY(130);
+      EditReset.Top := ScaleY(130) + DeltaY;
       EditReset.Width := Form.ClientWidth - ScaleX(60);
       EditReset.Height := ScaleY(22);
       EditReset.Enabled := False;
 
       OkBtn := TNewButton.Create(Form);
       OkBtn.Parent := Form;
-      OkBtn.Caption := '确定';
+      OkBtn.Caption := ExpandConstant('{cm:Ok}');
       OkBtn.Left := Form.ClientWidth - ScaleX(152);
       OkBtn.Top := Form.ClientHeight - ScaleY(44);
       OkBtn.Width := ScaleX(68);
@@ -290,7 +337,7 @@ begin
 
       CancelBtn := TNewButton.Create(Form);
       CancelBtn.Parent := Form;
-      CancelBtn.Caption := '取消';
+      CancelBtn.Caption := ExpandConstant('{cm:Cancel}');
       CancelBtn.Left := Form.ClientWidth - ScaleX(78);
       CancelBtn.Top := Form.ClientHeight - ScaleY(44);
       CancelBtn.Width := ScaleX(68);
@@ -316,7 +363,7 @@ begin
           DeleteDataOnUninstall := True;
           Break;
         end;
-        MsgBox('输入错误，未删除数据。请输入 RESET 确认，或选择「保留数据」。', mbError, MB_OK);
+        MsgBox(ExpandConstant('{cm:ResetMismatch}'), mbError, MB_OK);
       end;
     finally
       Form.Free;
@@ -333,9 +380,7 @@ begin
 
 
       if DirExists(DataDir) then
-        MsgBox('数据目录未能完全删除：'#13#10 + DataDir + #13#10#13#10 +
-          '可能有程序仍在使用其中的文件（例如同步服务端、正在运行的 Novara 或杀毒软件扫描）。'#13#10 +
-          '请关闭这些程序后手动删除该目录。', mbError, MB_OK);
+        MsgBox(FmtMessage(CustomMessage('DeleteDataFailed'), [DataDir]), mbError, MB_OK);
     end;
   end;
 end;

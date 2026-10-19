@@ -19,6 +19,8 @@ namespace Novara.Services;
 
 
 
+
+
 public static class SyncFieldPolicy
 {
     private static readonly JsonSerializerOptions Options = new()
@@ -39,12 +41,20 @@ public static class SyncFieldPolicy
     }
 
 
+
+
     public static AppSettings BuildRoamingSettings(AppSettings? source)
     {
         var roaming = new AppSettings();
         if (source is null) return roaming;
         roaming.AppLanguage = source.AppLanguage;
         roaming.Theme = source.Theme;
+        roaming.Workspaces = source.Workspaces is { Count: > 0 }
+            ? source.Workspaces.Select(w => new Novara.Models.WorkspaceItem
+            {
+                Id = w.Id, Name = w.Name, IconKey = w.IconKey, CreatedAt = w.CreatedAt
+            }).ToList()
+            : new();
         return roaming;
     }
 
@@ -59,6 +69,15 @@ public static class SyncFieldPolicy
         if (remote is null) return local;
         local.AppLanguage = remote.AppLanguage;
         local.Theme = remote.Theme;
+
+
+
+
+        if (remote.Workspaces is { Count: > 0 })
+            local.Workspaces = remote.Workspaces.Select(w => new Novara.Models.WorkspaceItem
+            {
+                Id = w.Id, Name = w.Name, IconKey = w.IconKey, CreatedAt = w.CreatedAt
+            }).ToList();
         return local;
     }
 }

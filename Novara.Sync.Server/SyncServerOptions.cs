@@ -16,6 +16,11 @@ public sealed class SyncServerOptions
     public long MaxPayloadBytes { get; set; } = 64L * 1024 * 1024;
 
 
+
+
+    public const int KeyWrapMaxBytes = 64 * 1024;
+
+
     public int MaxAuthFailures { get; set; } = 10;
 
     public TimeSpan AuthFailureWindow { get; set; } = TimeSpan.FromMinutes(1);

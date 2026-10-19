@@ -80,7 +80,7 @@ public static class AddPathRequest
         {
             var dir = Path.GetDirectoryName(PendingPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(PendingPath, JsonSerializer.Serialize(new PendingPathFile { Path = path }));
+            PendingWrite.WritePendingAtomic(PendingPath, JsonSerializer.Serialize(new PendingPathFile { Path = path }));
             try
             {
                 using var evt = EventWaitHandle.OpenExisting(EventName);
@@ -95,4 +95,27 @@ public static class AddPathRequest
 public class PendingPathFile
 {
     public string Path { get; set; } = "";
+}
+
+
+
+
+
+
+internal static class PendingWrite
+{
+    internal static void WritePendingAtomic(string path, string content)
+    {
+        var tmp = path + "." + Environment.ProcessId + ".tmp";
+        try
+        {
+            File.WriteAllText(tmp, content);
+            File.Move(tmp, path, true);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch { }
+            throw;
+        }
+    }
 }

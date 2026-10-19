@@ -201,6 +201,13 @@ public partial class App : Application
 
 
 
+            if (_pendingRemovals.Count > 0)
+                foreach (var pendingId in _pendingRemovals.ToList())
+                    RemoveNote(pendingId);
+
+
+
+
             StickyData data;
             string theme;
             using (StickiesLock.Enter())
@@ -291,8 +298,16 @@ public partial class App : Application
 
 
 
+
+
+
             if (NoteWindows.Count == 0)
             {
+                if (data.Notes is { Count: > 0 })
+                {
+                    Log($"stickies.json 有 {data.Notes.Count} 张卡但建窗全部失败 - 保持运行，等待下一次事件重试");
+                    return;
+                }
                 Log("stickies.json 无内容，Host 自动退出");
                 ExitApp();
                 return;
@@ -331,31 +346,66 @@ public partial class App : Application
             var dir = System.IO.Path.GetDirectoryName(JsonPath);
             if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
             var json = JsonSerializer.Serialize(data);
-            var tmp = JsonPath + ".tmp";
-            System.IO.File.WriteAllText(tmp, json);
-            System.IO.File.Move(tmp, JsonPath, true);
+
+
+            var tmp = JsonPath + "." + System.Environment.ProcessId + ".tmp";
+            try
+            {
+                System.IO.File.WriteAllText(tmp, json);
+                System.IO.File.Move(tmp, JsonPath, true);
+            }
+            catch
+            {
+
+                try { System.IO.File.Delete(tmp); } catch { }
+                throw;
+            }
             return true;
         }
         catch (Exception ex) { Log($"Save 失败: {ex.Message}"); return false; }
     }
 
 
-    public static void RemoveNote(string id)
+
+
+    private static readonly HashSet<string> _pendingRemovals = new();
+
+
+
+    public static bool RemoveNote(string id)
     {
         try
         {
             using (StickiesLock.Enter())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null)
+                {
+
+                    if (!System.IO.File.Exists(JsonPath)) { _pendingRemovals.Remove(id); return true; }
+                    _pendingRemovals.Add(id);
+                    return false;
+                }
                 int before = data.Notes.Count;
                 data.Notes.RemoveAll(n => n.Id == id);
-                if (data.Notes.Count == before) return;
-                Save(data);
+                if (data.Notes.Count == before) { _pendingRemovals.Remove(id); return true; }
+                if (!Save(data))
+                {
+                    _pendingRemovals.Add(id);
+                    Log($"RemoveNote: 写盘失败，卡片 {id} 仍留在 stickies.json，下次同步重试");
+                    return false;
+                }
+                _pendingRemovals.Remove(id);
             }
             Log($"移除卡片 {id}");
+            return true;
         }
-        catch (Exception ex) { Log($"RemoveNote 失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            _pendingRemovals.Add(id);
+            Log($"RemoveNote 失败（待重试）: {ex.Message}");
+            return false;
+        }
     }
 
 

@@ -84,10 +84,23 @@ public static class SyncHostSetup
 
 
 
+
     public static string[] NormalizeAllowedHosts(string allowedHosts, Action<string>? warn = null)
     {
         var hosts = allowedHosts
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+
+
+
+
+        if (hosts.Length == 0)
+        {
+            if (string.IsNullOrWhiteSpace(allowedHosts)) return hosts;
+            warn?.Invoke($"NOVARA_SYNC_ALLOWED_HOSTS='{allowedHosts}' contains no hostname - "
+                + "every request will be refused until a real hostname is configured");
+            return new[] { NoMatchingHost };
+        }
 
         foreach (var entry in hosts)
         {
@@ -95,13 +108,20 @@ public static class SyncHostSetup
                 warn?.Invoke($"{entry} ends with a dot - AllowedHosts entries are hostnames, "
                     + "and a trailing dot never matches a request Host");
 
-            else if (!entry.StartsWith('[') && entry.Contains(':'))
+
+
+            else if (entry.Contains("]:", StringComparison.Ordinal)
+                     || (!entry.StartsWith('[') && entry.Contains(':')))
                 warn?.Invoke($"{entry} carries a port - AllowedHosts entries are hostnames, "
                     + "and an entry with a port never matches a request Host");
         }
 
         return hosts;
     }
+
+
+
+    private const string NoMatchingHost = "<no-hostname-configured>";
 
 
 
@@ -212,6 +232,39 @@ public static class SyncHostSetup
             await next();
         });
 
+
+
+
+
+        app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path;
+            long? limit = null;
+            if (path.Equals(new PathString(SyncApi.ApiPrefix + "/devices/register"), StringComparison.OrdinalIgnoreCase))
+                limit = 16 * 1024;
+            else if (path.Equals(new PathString(SyncApi.ApiPrefix + "/space/keywrap"), StringComparison.OrdinalIgnoreCase))
+                limit = SyncServerOptions.KeyWrapMaxBytes;
+            if (limit is { } max)
+            {
+                var sizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+                if (sizeFeature is { IsReadOnly: false })
+                    sizeFeature.MaxRequestBodySize = max;
+                else if (context.Request.ContentLength is long declared && declared > max)
+                {
+                    context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync(JsonSerializer.Serialize(new SyncErrorResponse
+                    {
+                        Error = SyncErrorCodes.ToWire(SyncErrorCode.PayloadTooLarge),
+                        Message = "request body exceeds the endpoint limit",
+                    }, ErrorJson));
+                    return;
+                }
+            }
+
+            await next();
+        });
+
         if (webRoot is null) return;
 
 
@@ -224,7 +277,9 @@ public static class SyncHostSetup
         {
             if (context.Request.Path.Equals("/web", StringComparison.OrdinalIgnoreCase))
             {
-                context.Response.Redirect("/web/", permanent: true);
+
+
+                context.Response.Redirect("/web/" + context.Request.QueryString, permanent: true);
                 return;
             }
 
@@ -318,11 +373,21 @@ public static class SyncHostSetup
         var data = NormalizedFullPath(dataRoot);
         if (web is null || data is null) return null;
 
+
+
+
         if (string.Equals(web, data, StringComparison.OrdinalIgnoreCase))
             return $"the web root and the data directory are the same directory ({web})";
 
-        if (data.StartsWith(web + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        if (IsSameOrBelow(data, web))
             return $"the data directory ({data}) sits inside the web root ({web}), so /web would serve it";
+
+
+
+
+        var spacesRoot = Path.Combine(data, "spaces");
+        if (IsSameOrBelow(web, spacesRoot))
+            return $"the web root ({web}) sits inside the payload directory ({spacesRoot}), so /web would serve the ciphertext";
 
 
 
@@ -393,5 +458,18 @@ public static class SyncHostSetup
     {
         try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
         catch (Exception) { return null; }
+    }
+
+
+
+
+    private static bool IsSameOrBelow(string path, string root)
+    {
+        if (string.Equals(path, root, StringComparison.OrdinalIgnoreCase)) return true;
+        var relative = Path.GetRelativePath(root, path);
+        return relative != "."
+            && !relative.Equals("..", StringComparison.Ordinal)
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !Path.IsPathRooted(relative);
     }
 }

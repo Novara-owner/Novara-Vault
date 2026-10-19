@@ -59,7 +59,7 @@
         </Storyboard>
     </Page.Resources>
 
-    <Grid>
+    <Grid x:Name="LockRoot">
 
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
 
@@ -128,7 +128,7 @@
                                                        Margin="{TemplateBinding Padding}"
                                                        IsHitTestVisible="False"
                                                        Visibility="Collapsed" />
-                                            <Button x:Name="RevealButton"
+                                            <Button Tag="A11y_RevealPassword" x:Name="RevealButton"
                                                     HorizontalAlignment="Right" VerticalAlignment="Center"
                                                     Width="36" Height="36" Margin="0,0,4,0"
                                                     Background="Transparent" BorderThickness="0"
@@ -178,7 +178,7 @@
                         </PasswordBox.Template>
                     </PasswordBox>
 
-                    <Button x:Name="UnlockButton" Grid.Column="1" Width="48" Height="48" Margin="10,0,0,0"
+                    <Button Tag="A11y_Unlock" x:Name="UnlockButton" Grid.Column="1" Width="48" Height="48" Margin="10,0,0,0"
                             CornerRadius="24"
                             Background="{ThemeResource AppPrimaryButtonBrush}"
                             BorderThickness="0"
@@ -269,7 +269,7 @@
                                            FontSize="18" FontWeight="SemiBold"
                                            Foreground="{ThemeResource AppDangerTextBrush}" />
                             </StackPanel>
-                            <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                            <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
                                     Width="28" Height="28"
                                     Style="{StaticResource NovaraIconButtonStyle}"
                                     Click="ForgotClose_Click">
@@ -286,45 +286,16 @@
                                    Margin="0,20,0,0"
                                    LineHeight="22" />
                         <Grid Grid.Row="2" Margin="0,20,0,0">
-                            <Button HorizontalAlignment="Left" Width="160" Height="36"
+                            <Button HorizontalAlignment="Left" Width="160" Height="40"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"
                                     Click="ForgotCancel_Click">
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Cancel\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                             <services:CountdownBorder x:Name="ForgotCd" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <Button x:Name="ForgotConfirmButton" HorizontalAlignment="Center" Width="160" Height="36"
-                                    Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF"
-                                    CornerRadius="10" FontSize="14" FontWeight="SemiBold"
-                                    BorderThickness="0"
+                            <Button Style="{StaticResource NovaraDangerButtonStyle}" x:Name="ForgotConfirmButton" HorizontalAlignment="Center" Width="160" Height="40" FontSize="14"
                                     Click="ForgotConfirm_Click">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
-                                            <VisualStateManager.VisualStateGroups>
-                                                <VisualStateGroup x:Name="CommonStates">
-                                                    <VisualState x:Name="Normal" />
-                                                    <VisualState x:Name="PointerOver">
-                                                        <Storyboard>
-                                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" />
-                                                            </ObjectAnimationUsingKeyFrames>
-                                                        </Storyboard>
-                                                    </VisualState>
-                                                    <VisualState x:Name="Pressed">
-                                                        <Storyboard>
-                                                            <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background">
-                                                                <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" />
-                                                            </ObjectAnimationUsingKeyFrames>
-                                                        </Storyboard>
-                                                    </VisualState>
-                                                    <VisualState x:Name="Disabled" />
-                                                </VisualStateGroup>
-                                            </VisualStateManager.VisualStateGroups>
-                                            <ContentPresenter x:Name="ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-                                        </Grid>
-                                    </ControlTemplate>
-                                </Button.Template>
+                                
                                 <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_ConfirmButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                             </services:CountdownBorder>

@@ -32,6 +32,9 @@ public static class SyncPayloadApplier
     };
 
 
+    internal static readonly JsonSerializerOptions SyncJsonOptions = JsonOptions;
+
+
 
 
 
@@ -120,9 +123,20 @@ public static class SyncPayloadApplier
     public static bool TryBuildStablePayloadJson(NovaraDatabase database, out byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(database);
-        var stable = StableJson.SerializeToUtf8BytesStable(SyncFieldPolicy.CloneForSync(database), JsonOptions);
-        if (stable == null) { payload = Array.Empty<byte>(); return false; }
-        payload = stable;
-        return true;
+
+
+
+
+        byte[]? first = null;
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var snapshot = SyncFieldPolicy.CloneForSync(database);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonOptions);
+            if (first != null && bytes.AsSpan().SequenceEqual(first)) { payload = bytes; return true; }
+            first = bytes;
+            System.Threading.Thread.Sleep(40);
+        }
+        payload = Array.Empty<byte>();
+        return false;
     }
 }

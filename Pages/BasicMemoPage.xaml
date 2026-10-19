@@ -364,7 +364,7 @@
         <Grid x:Name="ContentGrid" ContextRequested="ContentGrid_ContextRequested">
                 <ScrollViewer x:Name="MemoScrollViewer" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="GroupsContainer" Spacing="12" Padding="40,12,40,20">
+                    <StackPanel x:Name="GroupsContainer" Spacing="12" Padding="40,8,40,20">
 
                     </StackPanel>
                 </ScrollViewer>
@@ -422,7 +422,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="CloseDialogButton"
+                        <Button Tag="Common_Button_Close" x:Name="CloseDialogButton"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Width="28" Height="28"
@@ -515,9 +515,9 @@
                             Style="{StaticResource NovaraPrimaryButtonStyle}"
                             Grid.Row="4"
                             Margin="0,20,0,0"
-                            Height="44"
+                            Height="40"
                             HorizontalAlignment="Stretch"
-                            CornerRadius="12"
+                            CornerRadius="10"
                             FontSize="14"
                             FontWeight="Medium"
                             Click="ConfirmButton_Click">
@@ -567,7 +567,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="CloseNewEntryDialogButton"
+                        <Button Tag="Common_Button_Close" x:Name="CloseNewEntryDialogButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -666,7 +666,7 @@
                                                  MaxLength="2000"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn2" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn2" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="2" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -696,7 +696,7 @@
                                                  MaxLength="2000"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn3" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn3" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="3" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -726,7 +726,7 @@
                                                  MaxLength="500"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn4" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn4" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="4" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -755,7 +755,7 @@
                                                  MaxLength="500"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn5" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn5" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="5" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -784,7 +784,7 @@
                                                  MaxLength="500"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn6" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn6" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="6" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -813,7 +813,7 @@
                                                  MaxLength="500"
                                                  TextChanged="EntryField_TextChanged"
                                                  VerticalAlignment="Center" />
-                                        <Button x:Name="GenerateBtn7" Grid.Column="1" Width="36" Height="36"
+                                        <Button AutomationProperties.ItemStatus="A11y_Generate" x:Name="GenerateBtn7" Grid.Column="1" Width="36" Height="36"
                                                 Style="{StaticResource NovaraIconButtonStyle}" CornerRadius="8"
                                                 Click="GenerateBtn_Click" Tag="7" Visibility="Collapsed" IsTabStop="False">
                                             <Viewbox Width="16" Height="16" Stretch="Uniform">
@@ -940,9 +940,9 @@
                             Style="{StaticResource NovaraPrimaryButtonStyle}"
                             Grid.Row="4"
                             Margin="0,20,0,0"
-                            Height="44"
+                            Height="40"
                             HorizontalAlignment="Stretch"
-                            CornerRadius="12"
+                            CornerRadius="10"
                             FontSize="14"
                             FontWeight="Medium"
                             Click="NewEntryConfirmButton_Click">
@@ -989,7 +989,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right"
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
@@ -1011,7 +1011,7 @@
                     <Grid Grid.Row="2" Margin="0,20,0,0">
 
                         <Button HorizontalAlignment="Left"
-                                Width="160" Height="36"
+                                Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1021,8 +1021,8 @@
                                        HorizontalAlignment="Center" />
                         </Button>
 
-                        <Button x:Name="DeleteConfirmButton" HorizontalAlignment="Right" Width="160" Height="36" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><Button.RenderTransform><CompositeTransform x:Name="DeleteConfirmButtonTransform" /></Button.RenderTransform><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
-                        <Button x:Name="DeleteConfirmRedButton" HorizontalAlignment="Right" Width="160" Height="36" Background="{ThemeResource AppDangerBrush}" Foreground="#FFFFFFFF" CornerRadius="10" FontSize="14" FontWeight="SemiBold" BorderThickness="0" Click="DeleteConfirmButton_Click" Visibility="Collapsed"><Button.RenderTransform><CompositeTransform /></Button.RenderTransform><Button.Template><ControlTemplate TargetType="Button"><Grid x:Name="RootGrid" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"><VisualStateManager.VisualStateGroups><VisualStateGroup x:Name="CommonStates"><VisualState x:Name="Normal" /><VisualState x:Name="PointerOver"><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background"><DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerHoverBrush}" /></ObjectAnimationUsingKeyFrames></Storyboard></VisualState><VisualState x:Name="Pressed"><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Background"><DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerPressedBrush}" /></ObjectAnimationUsingKeyFrames></Storyboard></VisualState><VisualState x:Name="Disabled" /></VisualStateGroup></VisualStateManager.VisualStateGroups><ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" /></Grid></ControlTemplate></Button.Template><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button x:Name="DeleteConfirmButton" HorizontalAlignment="Right" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="DeleteConfirmButton_Click"><Button.RenderTransform><CompositeTransform x:Name="DeleteConfirmButtonTransform" /></Button.RenderTransform><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
+                        <Button Style="{StaticResource NovaraDangerButtonStyle}" x:Name="DeleteConfirmRedButton" HorizontalAlignment="Right" Width="160" Height="40" FontSize="14" Click="DeleteConfirmButton_Click" Visibility="Collapsed"><Button.RenderTransform><CompositeTransform /></Button.RenderTransform><TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Delete\')}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Button>
                     </Grid>
                 </Grid>
             </Border>
@@ -1062,7 +1062,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right"
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
@@ -1085,9 +1085,9 @@
                             Style="{StaticResource NovaraPrimaryButtonStyle}"
                             Grid.Row="2"
                             Margin="0,20,0,0"
-                            Height="44"
+                            Height="40"
                             HorizontalAlignment="Stretch"
-                            CornerRadius="12"
+                            CornerRadius="10"
                             FontSize="14"
                             FontWeight="Medium"
                             Click="EditGroupConfirmButton_Click">
@@ -1109,7 +1109,7 @@
             <Border x:Name="ApiCheckDialog"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Width="460"
+                    Width="480"
                     CornerRadius="24"
                     Background="{ThemeResource AppDialogBgBrush}"
                     BorderBrush="{ThemeResource AppDialogBorderBrush}"
@@ -1133,7 +1133,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="ApiCheckDialogCloseButton"
+                        <Button Tag="Common_Button_Close" x:Name="ApiCheckDialogCloseButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -1174,7 +1174,7 @@
                     <Grid Grid.Row="3" Margin="0,24,0,0">
                         <Button x:Name="ApiCheckAdvancedButton"
                                 HorizontalAlignment="Left"
-                                Width="140" Height="36"
+                                Width="140" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1182,14 +1182,14 @@
                                 Click="ApiCheckAdvancedButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_AdvancedButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="ApiCheckCloseButton"
+                        <Button x:Name="ApiCheckHistoryButton"
                                 HorizontalAlignment="Right"
-                                Width="140" Height="36"
-                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                Width="140" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
-                                Click="ApiCheckCloseButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                Click="ApiCheckHistoryButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -1206,7 +1206,7 @@
             <Border x:Name="ApiProtocolDialog"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Width="360"
+                    Width="400"
                     CornerRadius="24"
                     Background="{ThemeResource AppDialogBgBrush}"
                     BorderBrush="{ThemeResource AppDialogBorderBrush}"
@@ -1231,7 +1231,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="ApiProtocolCloseButton"
+                        <Button Tag="Common_Button_Close" x:Name="ApiProtocolCloseButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -1273,7 +1273,7 @@
                     <Grid Grid.Row="4" Margin="0,20,0,0">
                         <Button x:Name="ApiRetryButton"
                                 HorizontalAlignment="Left"
-                                Width="120" Height="36"
+                                Width="120" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1282,7 +1282,7 @@
                         </Button>
                         <Button x:Name="ApiCancelButton"
                                 HorizontalAlignment="Right"
-                                Width="120" Height="36"
+                                Width="120" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1305,7 +1305,7 @@
             <Border x:Name="ApiDiagDialog"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Width="460"
+                    Width="480"
                     CornerRadius="24"
                     Background="{ThemeResource AppDialogBgBrush}"
                     BorderBrush="{ThemeResource AppDialogBorderBrush}"
@@ -1329,7 +1329,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="ApiDiagDialogCloseButton"
+                        <Button Tag="Common_Button_Close" x:Name="ApiDiagDialogCloseButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -1368,14 +1368,14 @@
                                TextWrapping="Wrap" LineHeight="16"
                                Margin="0,20,0,0" />
                     <Grid Grid.Row="3" Margin="0,24,0,0">
-                        <Button x:Name="ApiDiagCloseButton"
+                        <Button x:Name="ApiDiagHistoryButton"
                                 HorizontalAlignment="Center"
-                                Width="140" Height="36"
-                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                Width="140" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
-                                Click="ApiDiagCloseButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                Click="ApiCheckHistoryButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -1416,7 +1416,7 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="ApiConfirmCloseButton"
+                        <Button Tag="Common_Button_Close" x:Name="ApiConfirmCloseButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
@@ -1440,7 +1440,7 @@
                     <Grid Grid.Row="2" Margin="0,20,0,0">
                         <Button x:Name="ApiConfirmCancelButton"
                                 HorizontalAlignment="Left"
-                                Width="120" Height="36"
+                                Width="120" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1449,7 +1449,7 @@
                         </Button>
                         <Button x:Name="ApiConfirmProceedButton"
                                 HorizontalAlignment="Right"
-                                Width="120" Height="36"
+                                Width="120" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
@@ -1462,32 +1462,33 @@
         </Grid>
 
 
-        <Grid x:Name="RelayProbeOverlay" Grid.RowSpan="3"
+
+
+        <Grid x:Name="RelayProbeRunningOverlay" Grid.RowSpan="3"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
-            <Grid x:Name="RelayProbeScrim"
+            <Grid x:Name="RelayProbeRunningScrim"
                   Background="#2E000000"
-                  Tapped="RelayProbeScrim_Tapped" />
-            <Border x:Name="RelayProbeDialog"
+                  Tapped="RelayProbeRunningScrim_Tapped" />
+            <Border x:Name="RelayProbeRunningDialog"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Width="540"
-                    MaxHeight="720"
+                    Width="600"
                     CornerRadius="24"
                     Background="{ThemeResource AppDialogBgBrush}"
                     BorderBrush="{ThemeResource AppDialogBorderBrush}"
                     BorderThickness="1"
                     Opacity="0">
                 <Border.RenderTransform>
-                    <CompositeTransform x:Name="RelayProbeDialogTransform"
+                    <CompositeTransform x:Name="RelayProbeRunningTransform"
                                         ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
                 </Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
@@ -1497,12 +1498,12 @@
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button x:Name="RelayProbeDialogCloseButton"
+                        <Button Tag="Common_Button_Close" x:Name="RelayProbeRunningCloseButton"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
                                 Width="28" Height="28"
-                                Click="RelayProbeDialogCloseButton_Click">
+                                Click="RelayProbeRunningCloseButton_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
                                    Stroke="{ThemeResource IconForegroundBrush}"
                                    StrokeThickness="1.8"
@@ -1510,48 +1511,239 @@
                                    Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <StackPanel Grid.Row="1" Margin="0,20,0,0" Spacing="6">
-                        <TextBlock x:Name="RelayProbeVerdictText"
+
+                    <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
+                        <TextBlock x:Name="RelayProbeRunningTitleText"
                                    FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}"
                                    TextWrapping="Wrap" />
-                        <TextBlock x:Name="RelayProbeStatusText"
+                        <TextBlock x:Name="RelayProbeRunningHintText"
                                    FontSize="12"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
-                    <ScrollViewer Grid.Row="2" Margin="0,16,0,0"
-                                  VerticalScrollBarVisibility="Hidden"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel Spacing="8">
-                            <StackPanel x:Name="RelayProbeReportRows" Spacing="8" />
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer\')}"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource AppTextTertiaryBrush}"
-                                       TextWrapping="Wrap" LineHeight="16" />
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer2\')}"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource AppTextTertiaryBrush}"
-                                       TextWrapping="Wrap" LineHeight="16" />
-                        </StackPanel>
-                    </ScrollViewer>
-                    <Grid Grid.Row="3" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="2" Margin="0,20,0,0" Spacing="8">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer\')}"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                   TextWrapping="Wrap" LineHeight="16" />
+                        <TextBlock x:Name="RelayProbeDisclaimer2Text"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                   TextWrapping="Wrap" LineHeight="16" />
+                    </StackPanel>
+                    <Grid Grid.Row="3" Margin="0,24,0,0">
                         <Button x:Name="RelayProbeLoadDatasetButton"
                                 HorizontalAlignment="Left"
-                                Width="220" Height="36"
+                                Width="200" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 Click="RelayProbeLoadDatasetButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_LoadDataset\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
-                        <Button x:Name="RelayProbeCloseButton"
+                        <Button x:Name="RelayProbeHistoryButton"
                                 HorizontalAlignment="Right"
-                                Width="220" Height="36"
+                                Width="200" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiCheckHistoryButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="RelayProbeResultOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="RelayProbeResultScrim"
+                  Background="#2E000000"
+                  Tapped="RelayProbeResultScrim_Tapped" />
+            <Border x:Name="RelayProbeResultDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="600"
+                    MaxHeight="720"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="RelayProbeResultTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Title\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" x:Name="RelayProbeResultCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="RelayProbeResultCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
+                        <TextBlock x:Name="RelayProbeResultVerdictText"
+                                   FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="RelayProbeResultStatusText"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid x:Name="RelayProbeReportHeader" Grid.Row="0" Padding="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_ColItem\')}"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_ColResult\')}"
+                                       FontSize="11"
+                                       Margin="16,0,0,0"
+                                       Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                        </Grid>
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="RelayProbeReportRows" />
+                        </ScrollViewer>
+                    </Grid>
+                    <StackPanel Grid.Row="3" Margin="0,24,0,0" Spacing="8">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Disclaimer\')}"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                   TextWrapping="Wrap" LineHeight="16" />
+                        <TextBlock x:Name="RelayProbeResultDisclaimer2Text"
+                                   FontSize="11"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                   TextWrapping="Wrap" LineHeight="16" />
+                    </StackPanel>
+                    <Grid Grid.Row="4" Margin="0,24,0,0">
+                        <Button x:Name="RelayProbeResultHistoryButton"
+                                HorizontalAlignment="Left"
+                                Width="200" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiCheckHistoryButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="RelayProbeRetestButton"
+                                HorizontalAlignment="Right"
+                                Width="200" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"
                                 FontSize="14"
-                                Click="RelayProbeCloseButton_Click">
+                                Click="RelayProbeRetestButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_Retest\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="ApiProbeHistoryOverlay" Grid.RowSpan="3"
+              Visibility="Collapsed"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch">
+            <Grid x:Name="ApiProbeHistoryScrim"
+                  Background="#2E000000"
+                  Tapped="ApiProbeHistoryScrim_Tapped" />
+            <Border x:Name="ApiProbeHistoryDialog"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="520"
+                    CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1"
+                    Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="ApiProbeHistoryDialogTransform"
+                                        ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" x:Name="ApiProbeHistoryCloseButton"
+                                Style="{StaticResource NovaraIconButtonStyle}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="28"
+                                Click="ApiProbeHistoryCloseButton_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                   Stroke="{ThemeResource IconForegroundBrush}"
+                                   StrokeThickness="1.8"
+                                   Stretch="Uniform"
+                                   Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <ScrollViewer x:Name="ApiProbeHistoryScroll" Grid.Row="1" MaxHeight="430" Margin="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="ApiProbeHistoryRows" Spacing="4" />
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="ApiProbeHistoryClearButton"
+                                HorizontalAlignment="Left"
+                                Width="140" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiProbeHistoryClearButton_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History_Clear\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="ApiProbeHistoryDismissButton"
+                                HorizontalAlignment="Right"
+                                Width="140" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10"
+                                FontSize="14"
+                                Click="ApiProbeHistoryCloseButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Common_Button_Close\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
@@ -1579,7 +1771,7 @@
                         <TextBlock x:Name="GenTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
                                    FontSize="18" FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppPrimaryButtonBrush}" />
-                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Width="28" Height="28"
                                 Style="{StaticResource NovaraIconButtonStyle}"
                                 Click="GenClose_Click">

@@ -59,6 +59,8 @@ public class SyncE2EFixture
 
         var path = Path.Combine(Path.GetTempPath(), "novara-m3-fixture.json");
         File.WriteAllText(path, json, new UTF8Encoding(false));
-        Assert.True(File.Exists(path));
+
+
+        Assert.Equal(json, File.ReadAllText(path, new UTF8Encoding(false)));
     }
 }

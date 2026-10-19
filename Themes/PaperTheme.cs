@@ -70,12 +70,21 @@ public static class PaperTheme
 
 
 
+    private static readonly System.Collections.Generic.Dictionary<string, object?> SavedOriginals = new();
+
+
+
+
     public static void ApplyIfNeeded()
     {
         try
         {
             var hint = ReadHint();
-            if (hint == null || !IsPaperName(hint)) return;
+            if (hint == null || !IsPaperName(hint))
+            {
+                RevertToSaved();
+                return;
+            }
             if (!Palettes.TryGetValue(hint, out var table)) return;
             var dict = Application.Current.Resources.ThemeDictionaries["Light"] as ResourceDictionary;
             if (dict == null) return;
@@ -85,6 +94,7 @@ public static class PaperTheme
                 try
                 {
                     var current = dict[key];
+                    if (!SavedOriginals.ContainsKey(key)) SavedOriginals[key] = current;
                     switch (current)
                     {
                         case LinearGradientBrush:
@@ -110,6 +120,27 @@ public static class PaperTheme
         {
             System.Diagnostics.Debug.WriteLine($"PaperTheme apply failed (falls back to plain light): {ex.Message}");
         }
+    }
+
+
+    private static void RevertToSaved()
+    {
+        if (SavedOriginals.Count == 0) return;
+        try
+        {
+            var dict = Application.Current.Resources.ThemeDictionaries["Light"] as ResourceDictionary;
+            if (dict == null) return;
+            foreach (var (key, value) in SavedOriginals)
+            {
+                try { dict[key] = value; }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"PaperTheme revert {key} failed: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"PaperTheme revert failed: {ex.Message}");
+        }
+        finally { SavedOriginals.Clear(); }
     }
 
 

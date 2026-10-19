@@ -140,9 +140,18 @@ public static class Program
             ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
 
 
-            ["serverInfo"] = new JsonObject { ["name"] = "novara-mcp", ["version"] = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0" }
+
+
+
+
+            ["serverInfo"] = new JsonObject { ["name"] = "novara-mcp", ["version"] = DisplayVersion(typeof(Program).Assembly.GetName().Version) }
         });
     }
+
+
+
+    private static string DisplayVersion(System.Version? v)
+        => v is null ? "novara0" : (v.Minor > 0 ? $"novara{v.Major}.R{v.Minor}" : $"novara{v.Major}");
 
     private static JsonObject? HandleToolsList(JsonNode? id)
     {

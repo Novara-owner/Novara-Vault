@@ -156,16 +156,24 @@
 
 
 
-  function editButtonHtml(kind, id) {
+
+
+
+
+
+
+
+
+  function editButtonHtml(kind, id, deleteKind) {
     if (!canEdit()) return '';
     return '<div class="edit-actions"><button class="edit-button" type="button" data-editor-action="' + kind +
       '" data-editor-id="' + escapeAttr(id) + '">' + escape('editItem') + '</button>' +
-      '<button class="edit-button is-danger" type="button" data-editor-action="delete-item" data-editor-kind="' + kind +
+      '<button class="edit-button is-danger" type="button" data-editor-action="delete-item" data-editor-kind="' + deleteKind +
       '" data-editor-id="' + escapeAttr(id) + '">' + escape('deleteItem') + '</button></div>';
   }
 
   function entryFieldsHtml(entry, defaultHtml) {
-    if (editingEntryId !== entry.id) return defaultHtml + editButtonHtml('edit-entry', entry.id);
+    if (editingEntryId !== entry.id) return defaultHtml + editButtonHtml('edit-entry', entry.id, 'memo');
     var rows = '';
     (entry.fields || []).forEach(function (field, index) {
       if (field.label === 'TOTP') return;
@@ -186,10 +194,14 @@
     if (editingNoteId || editingDiaryId) return defaultHtml;
     if (!canEdit()) return defaultHtml;
     var rows = '';
-    rows += checkboxRow(item.id, -1, item.mainText, item.checkedStates.every(function (v) { return v; }) && item.subTexts.length > 0, 'subtask' + (item.subTexts.length > 0 && item.checkedStates.every(function (v) { return v; }) ? ' is-done' : ''));
+    var mainDone = item.checkedStates[0] === true;
+    rows += checkboxRow(item.id, -1, item.mainText, mainDone, 'subtask' + (mainDone ? ' is-done' : ''));
     if (expanded) {
       item.subTexts.forEach(function (text, index) {
-        rows += checkboxRow(item.id, index, text, item.checkedStates[index] === true, 'subtask sub-indent' + (item.checkedStates[index] ? ' is-done' : ''));
+
+
+        var subIndex = index + 1;
+        rows += checkboxRow(item.id, subIndex, text, item.checkedStates[subIndex] === true, 'subtask sub-indent' + (item.checkedStates[subIndex] ? ' is-done' : ''));
       });
     }
     return '<div class="subtasks">' + rows + '</div>';
@@ -211,7 +223,10 @@
         '<button class="edit-button" type="button" data-editor-action="cancel-note" data-editor-id="' + escapeAttr(item.id) + '">' + escape('cancelEdit') + '</button>' +
         '</div></div>';
     }
-    return defaultHtml + editButtonHtml('edit-note', item.id);
+
+
+
+    return defaultHtml + editButtonHtml('edit-note', item.id, 'note');
   }
 
   function escape(key) { return escapeText(t(key)); }
@@ -236,19 +251,19 @@
   function applyTodoToggle(id, index, checked) {
     var todo = (data().todoCards || []).find(function (e) { return e.id === id; });
     if (!todo) return false;
-    if (Number(index) < 0) {
+    var i = Number(index);
+    if (i < 0) {
 
-
-      var everyDone = todo.subTexts.length > 0 && todo.checkedStates.every(function (v) { return v; });
-      if (checked && todo.subTexts.length > 0 && !everyDone) {
-        todo.checkedStates = todo.subTexts.map(function () { return true; });
-      } else {
-        todo.checkedStates[0] = checked;
-      }
+      todo.checkedStates[0] = checked === true;
       return true;
     }
-    if (todo.checkedStates[Number(index)] === undefined) return false;
-    todo.checkedStates[Number(index)] = checked === true;
+    if (todo.checkedStates[i] === undefined) return false;
+    todo.checkedStates[i] = checked === true;
+
+
+    var allSub = true;
+    for (var s = 1; s < todo.checkedStates.length; s++) { if (!todo.checkedStates[s]) { allSub = false; break; } }
+    todo.checkedStates[0] = allSub;
     return true;
   }
 
@@ -286,8 +301,12 @@
         isPinned: false, isStarred: false, createdAt: now,
       });
     } else if (kind === 'todo') {
+
+
+
+
       data().todoCards.push({
-        id: id, title: String(name), mainText: String(detail || name), subTexts: [], checkedStates: [],
+        id: id, title: String(name), mainText: String(detail || name), subTexts: [], checkedStates: [false],
         isPinned: false, isStarred: false, createdAt: now,
       });
     } else if (kind === 'diary') {
@@ -549,6 +568,11 @@
       var envelope = await buildEnvelope(container, ctx.spaceKey, ctx, ctx.baseVersion);
       var response = await fetch(ctx.baseUrl + '/api/v1/space/data', {
         method: 'PUT',
+
+
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
         headers: {
           'Authorization': 'Bearer ' + ctx.getToken(),
           'X-Novara-Space': ctx.spaceId,
@@ -570,8 +594,16 @@
       }
       if (!response.ok) {
 
-        showToast(response.status === 401 || response.status === 403
-          ? t('editReadOnlyFail') : t('editUploadFail') + ' (' + response.status + ')');
+
+
+
+        var failure = t('editUploadFail') + ' (' + response.status + ')';
+        if (response.status === 401) failure = t('editReadOnlyFail');
+        else if (response.status === 403) {
+          var denyBody = await response.json().catch(function () { return {}; });
+          failure = denyBody && denyBody.error === 'upgrade_required' ? t('editUpgradeRequired') : t('editReadOnlyFail');
+        }
+        showToast(failure);
         return;
       }
       ctx.baseVersion = ctx.baseVersion + 1;
@@ -650,7 +682,14 @@
 
   function exportPlain() {
     if (!window.confirm(t('editExportPlainConfirm'))) return;
-    download('novara-conflict.json', utf8.encode(JSON.stringify(data())), 'application/json');
+
+
+    try {
+      download('novara-conflict.json', utf8.encode(JSON.stringify(data())), 'application/json');
+    } catch (e) {
+      if (console && console.error) console.error('edit plain export failed:', e);
+      showToast(t('editExportFail'));
+    }
   }
 
   async function forceOverwrite() {
@@ -663,6 +702,9 @@
       var envelope = await buildEnvelope(container, ctx.spaceKey, ctx, conflictServerVersion);
       var response = await fetch(ctx.baseUrl + '/api/v1/space/data?force=1', {
         method: 'PUT',
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
         headers: {
           'Authorization': 'Bearer ' + ctx.getToken(),
           'X-Novara-Space': ctx.spaceId,
@@ -674,8 +716,15 @@
       });
       if (!response.ok) {
 
-        showToast(response.status === 401 || response.status === 403
-          ? t('editReadOnlyFail') : t('editUploadFail') + ' (' + response.status + ')');
+
+
+        var failure2 = t('editUploadFail') + ' (' + response.status + ')';
+        if (response.status === 401) failure2 = t('editReadOnlyFail');
+        else if (response.status === 403) {
+          var denyBody2 = await response.json().catch(function () { return {}; });
+          failure2 = denyBody2 && denyBody2.error === 'upgrade_required' ? t('editUpgradeRequired') : t('editReadOnlyFail');
+        }
+        showToast(failure2);
         return;
       }
       ctx.baseVersion = conflictServerVersion + 1;
@@ -769,13 +818,17 @@
       editItem: '编辑', saveItem: '保存', cancelEdit: '取消',
       editCleanHint: '本页可直接编辑，改动仅在本机内存中', editDirtyHint: '有未上传的改动（刷新或关闭将丢失）',
       editConflictBar: '存在冲突，改动未上传', editUpload: '上传改动',
-      editReadOnlyHint: '当前凭据仅可阅读（只读令牌），本页不能编辑', editReadOnlyFail: '当前凭据仅可阅读，无法上传改动',
+      editReadOnlyHint: '当前凭据仅可阅读（只读令牌），本页不能编辑', editReadOnlyFail: '当前凭据仅可阅读，无法上传改动', editUpgradeRequired: '此空间已升级到新版同步格式，网页端暂不能上传改动——请在最新版桌面端查看与编辑',
       editConflictTitle: '同步冲突', editConflictInfo: '服务器已有更新版本（v{V}），你的改动仍保留在本页内存中。请选择处理方式：',
       editCopy: '复制改动（JSON）', editExportEnc: '导出加密文件（推荐）', editExportPlain: '导出明文 JSON',
       editForce: '以本机覆盖云端', editClose: '关闭',
       editExportPlainConfirm: '明文 JSON 不加密，任何人都能直接阅读。仍要导出吗？',
       editForceConfirm: '将用本机版本覆盖云端，服务器会把被覆盖的版本存为冲突副本。继续吗？',
       editUploaded: '改动已上传', editUploadFail: '上传失败', editOffline: '无法连接服务器，改动仍保留在本页',
+
+
+
+      editForceDone: '已用本机版本覆盖云端',
       editExportFail: '导出失败，请重试',
       editCopied: '改动已复制到剪贴板', editCopyFail: '复制失败',
       newMemo: '新建备忘', newTodo: '新建待办', newNote: '新建便签',
@@ -790,13 +843,14 @@
       editItem: 'Edit', saveItem: 'Save', cancelEdit: 'Cancel',
       editCleanHint: 'This page is editable; changes live in this tab\'s memory only', editDirtyHint: 'Unsaved changes (lost on refresh or close)',
       editConflictBar: 'Conflict - changes not uploaded', editUpload: 'Upload changes',
-      editReadOnlyHint: 'Read-only credential - this page cannot be edited', editReadOnlyFail: 'This credential is read-only; the changes cannot be uploaded',
+      editReadOnlyHint: 'Read-only credential - this page cannot be edited', editReadOnlyFail: 'This credential is read-only; the changes cannot be uploaded', editUpgradeRequired: 'This space has been upgraded to a newer sync format - web edits cannot be uploaded yet; open it in the latest desktop app',
       editConflictTitle: 'Sync conflict', editConflictInfo: 'The server already has a newer version (v{V}). Your edits are kept in this page\'s memory. Choose how to proceed:',
       editCopy: 'Copy changes (JSON)', editExportEnc: 'Export encrypted file (recommended)', editExportPlain: 'Export plain JSON',
       editForce: 'Overwrite cloud with this device', editClose: 'Close',
       editExportPlainConfirm: 'Plain JSON is not encrypted and can be read by anyone. Export anyway?',
       editForceConfirm: 'This will overwrite the cloud with this device\'s version; the server keeps the replaced version as a conflict copy. Continue?',
       editUploaded: 'Changes uploaded', editUploadFail: 'Upload failed', editOffline: 'Cannot reach the server; your edits are kept on this page',
+      editForceDone: 'Cloud overwritten with this device\'s version',
       editExportFail: 'Export failed - please try again',
       editCopied: 'Changes copied to the clipboard', editCopyFail: 'Copy failed',
       newMemo: 'New entry', newTodo: 'New todo', newNote: 'New note',
@@ -811,13 +865,14 @@
       editItem: '編輯', saveItem: '儲存', cancelEdit: '取消',
       editCleanHint: '本頁可直接編輯，改動僅在本機記憶體中', editDirtyHint: '有未上傳的改動（重新整理或關閉將遺失）',
       editConflictBar: '存在衝突，改動未上傳', editUpload: '上傳改動',
-      editReadOnlyHint: '目前憑證僅可閱讀（唯讀權杖），本頁無法編輯', editReadOnlyFail: '目前憑證僅可閱讀，無法上傳改動',
+      editReadOnlyHint: '目前憑證僅可閱讀（唯讀權杖），本頁無法編輯', editReadOnlyFail: '目前憑證僅可閱讀，無法上傳改動', editUpgradeRequired: '此空間已升級到新版同步格式，網頁端暫不能上傳改動——請在最新版桌面端查看與編輯',
       editConflictTitle: '同步衝突', editConflictInfo: '伺服器已有較新版本（v{V}），你的改動仍保留在本頁記憶體中。請選擇處理方式：',
       editCopy: '複製改動（JSON）', editExportEnc: '匯出加密檔案（建議）', editExportPlain: '匯出明文 JSON',
       editForce: '以本機覆蓋雲端', editClose: '關閉',
       editExportPlainConfirm: '明文 JSON 不加密，任何人都能直接閱讀。仍要匯出嗎？',
       editForceConfirm: '將用本機版本覆蓋雲端，伺服器會把被覆蓋的版本存為衝突副本。繼續嗎？',
       editUploaded: '改動已上傳', editUploadFail: '上傳失敗', editOffline: '無法連線伺服器，改動仍保留在本頁',
+      editForceDone: '已用本機版本覆蓋雲端',
       editExportFail: '匯出失敗，請重試',
       editCopied: '改動已複製到剪貼簿', editCopyFail: '複製失敗',
       newMemo: '新增備忘', newTodo: '新增待辦', newNote: '新增便籤',
@@ -832,13 +887,14 @@
       editItem: '편집', saveItem: '저장', cancelEdit: '취소',
       editCleanHint: '이 페이지에서 직접 편집할 수 있으며 변경 사항은 이 탭의 메모리에만 있습니다', editDirtyHint: '업로드되지 않은 변경 사항이 있습니다(새로고침하거나 닫으면 사라짐)',
       editConflictBar: '충돌 발생 - 변경 사항이 업로드되지 않았습니다', editUpload: '변경 사항 업로드',
-      editReadOnlyHint: '현재 자격 증명은 읽기 전용(읽기 전용 토큰)이라 이 페이지는 편집할 수 없습니다', editReadOnlyFail: '현재 자격 증명은 읽기 전용이라 변경 사항을 업로드할 수 없습니다',
+      editReadOnlyHint: '현재 자격 증명은 읽기 전용(읽기 전용 토큰)이라 이 페이지는 편집할 수 없습니다', editReadOnlyFail: '현재 자격 증명은 읽기 전용이라 변경 사항을 업로드할 수 없습니다', editUpgradeRequired: '이 스페이스는 최신 동기화 형식으로 업그레이드되었습니다. 웹 편집 업로드는 아직 지원되지 않습니다 - 최신 데스크톱 앱에서 확인하세요',
       editConflictTitle: '동기화 충돌', editConflictInfo: '서버에 더 새 버전(v{V})이 있습니다. 변경 사항은 이 페이지의 메모리에 보존되어 있습니다. 처리 방법을 선택하세요:',
       editCopy: '변경 사항 복사(JSON)', editExportEnc: '암호화 파일 내보내기(권장)', editExportPlain: '평문 JSON 내보내기',
       editForce: '이 기기로 클라우드 덮어쓰기', editClose: '닫기',
       editExportPlainConfirm: '평문 JSON은 암호화되지 않아 누구나 읽을 수 있습니다. 그래도 내보내시겠습니까?',
       editForceConfirm: '이 기기의 버전으로 클라우드를 덮어씁니다. 서버는 교체된 버전을 충돌 복사본으로 보관합니다. 계속하시겠습니까?',
       editUploaded: '변경 사항이 업로드되었습니다', editUploadFail: '업로드 실패', editOffline: '서버에 연결할 수 없습니다. 변경 사항은 이 페이지에 보존됩니다',
+      editForceDone: '이 기기의 버전으로 클라우드를 덮어썼습니다',
       editExportFail: '내보내기에 실패했습니다. 다시 시도하세요',
       editCopied: '변경 사항이 클립보드에 복사되었습니다', editCopyFail: '복사 실패',
       newMemo: '새 메모', newTodo: '새 할 일', newNote: '새 노트',
@@ -853,13 +909,14 @@
       editItem: '編集', saveItem: '保存', cancelEdit: 'キャンセル',
       editCleanHint: 'このページは直接編集できます。変更はこのタブのメモリ内のみ', editDirtyHint: '未アップロードの変更があります（更新・終了で失われます）',
       editConflictBar: '競合が発生 - 変更は未アップロードです', editUpload: '変更をアップロード',
-      editReadOnlyHint: '現在の資格情報は読み取り専用（読み取り専用トークン）のため、このページは編集できません', editReadOnlyFail: '現在の資格情報は読み取り専用のため、変更をアップロードできません',
+      editReadOnlyHint: '現在の資格情報は読み取り専用（読み取り専用トークン）のため、このページは編集できません', editReadOnlyFail: '現在の資格情報は読み取り専用のため、変更をアップロードできません', editUpgradeRequired: 'このスペースは新しい同期形式にアップグレードされています。Web 編集のアップロードはまだできません - 最新のデスクトップアプリでご利用ください',
       editConflictTitle: '同期の競合', editConflictInfo: 'サーバーにはより新しいバージョン（v{V}）があります。変更はこのページのメモリに保持されています。処理方法を選んでください：',
       editCopy: '変更をコピー（JSON）', editExportEnc: '暗号化ファイルを書き出す（推奨）', editExportPlain: '平文 JSON を書き出す',
       editForce: 'この端末でクラウドを上書き', editClose: '閉じる',
       editExportPlainConfirm: '平文 JSON は暗号化されておらず、誰でも読めます。それでも書き出しますか？',
       editForceConfirm: 'この端末のバージョンでクラウドを上書きします。サーバーは置き換えられたバージョンを競合コピーとして保持します。続行しますか？',
       editUploaded: '変更をアップロードしました', editUploadFail: 'アップロード失敗', editOffline: 'サーバーに接続できません。変更はこのページに保持されています',
+      editForceDone: 'この端末のバージョンでクラウドを上書きしました',
       editExportFail: '書き出しに失敗しました。もう一度お試しください',
       editCopied: '変更をクリップボードにコピーしました', editCopyFail: 'コピー失敗',
       newMemo: '新規メモ', newTodo: '新規ToDo', newNote: '新規ノート',
@@ -879,7 +936,11 @@
     editorCredential = context.editorCredential === true;
     ctx = {
       baseUrl: location.origin,
-      spaceId: (WEB.parseFragment(location.hash) || {}).spaceId || '',
+
+
+
+
+      spaceId: context.spaceId || '',
       getToken: function () {
         var input = document.getElementById('readTokenInput');
         return input ? input.value : '';
@@ -1002,5 +1063,11 @@
     isDirty: function () { return dirty; },
     getConflictVersion: function () { return conflictServerVersion; },
     getTranslations: function () { return TRANSLATIONS; },
+
+
+
+    applyTodoToggle: applyTodoToggle,
+    applyCreate: applyCreate,
+    applyDelete: applyDelete,
   };
 })();

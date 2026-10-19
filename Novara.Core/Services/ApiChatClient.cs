@@ -19,6 +19,10 @@ public sealed class ApiChatRequest
 
     public object? Tools { get; set; }
     public double? Temperature { get; set; }
+
+
+
+    public string? ModelsEndpoint { get; set; }
 }
 
 public sealed class ApiChatUsage
@@ -94,6 +98,10 @@ public static class ApiChatClient
     public static string ResolveChatEndpoint(string baseUrl, string vendor, string modelsEndpoint, ApiChatProtocol protocol, string model)
     {
         var u = StripQuery(baseUrl.Trim()).TrimEnd('/');
+
+
+        if (u.EndsWith("/models", StringComparison.OrdinalIgnoreCase)) u = u.Substring(0, u.Length - "/models".Length);
+        else if (u.EndsWith("/api/tags", StringComparison.OrdinalIgnoreCase)) u = u.Substring(0, u.Length - "/api/tags".Length);
         switch (protocol)
         {
             case ApiChatProtocol.Anthropic:
@@ -106,7 +114,21 @@ public static class ApiChatClient
                 return JoinEndpoint(u, "/v1beta/models/" + Uri.EscapeDataString(bareModel) + ":generateContent", "/v1beta");
             }
             default:
-                if (vendor == "Ollama") return u + "/v1/chat/completions";
+
+
+
+                if (vendor == "Ollama")
+                {
+
+                    if (modelsEndpoint.Contains("/api/tags", StringComparison.OrdinalIgnoreCase))
+                        return JoinEndpoint(OriginOf(StripQuery(modelsEndpoint)), "/v1/chat/completions", "/v1");
+                    return JoinEndpoint(u, "/v1/chat/completions", "/v1");
+                }
+
+
+
+
+                if (vendor == "Cohere") return JoinEndpoint(OriginOf(u), "/compatibility/v1/chat/completions", "/compatibility/v1");
                 if (vendor == "Azure OpenAI") return AzureChatEndpoint(u, model, modelsEndpoint);
                 return DeriveChatFromModels(StripQuery(modelsEndpoint));
         }
@@ -123,8 +145,12 @@ public static class ApiChatClient
         return m + "/chat/completions";
     }
 
-    private static string AzureChatEndpoint(string baseUrl, string model, string modelsEndpoint)
-    {
+
+
+    private static string OriginOf(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : url;
+
+    private static string AzureChatEndpoint(string baseUrl, string model, string modelsEndpoint)    {
         var apiVersion = "2024-02-01";
         var idx = modelsEndpoint.IndexOf("api-version=", StringComparison.OrdinalIgnoreCase);
         if (idx >= 0)
@@ -219,7 +245,7 @@ public static class ApiChatClient
             {
                 usage.PromptTokens = GetInt(au, "input_tokens");
                 usage.CompletionTokens = GetInt(au, "output_tokens");
-                usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens;
+                usage.TotalTokens = ClampTokenCount((long)usage.PromptTokens + usage.CompletionTokens);
                 usage.CacheReadInputTokens = GetNullableInt(au, "cache_read_input_tokens");
                 usage.HasUsage = true;
             }
@@ -230,7 +256,7 @@ public static class ApiChatClient
 
 
                 usage.TotalTokens = GetInt(gu, "totalTokenCount");
-                if (usage.TotalTokens == 0) usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens;
+                if (usage.TotalTokens == 0) usage.TotalTokens = ClampTokenCount((long)usage.PromptTokens + usage.CompletionTokens);
                 usage.HasUsage = true;
             }
         }
@@ -323,11 +349,23 @@ public static class ApiChatClient
         return (delta, model, usage);
     }
 
+
+
+
+    private static int ClampTokenCount(long n) => n <= 0 ? 0 : n > int.MaxValue ? int.MaxValue : (int)n;
+
+
+
+
+    internal static int SaturatingAdd(int current, int add) => ClampTokenCount((long)current + add);
+
     private static int GetInt(JsonElement e, string name)
-        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n)
+            ? ClampTokenCount(n) : 0;
 
     private static int? GetNullableInt(JsonElement e, string name)
-        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : null;
+        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n)
+            ? ClampTokenCount(n) : null;
 
 
 
@@ -401,6 +439,9 @@ public static class ApiChatClient
         var client = ownedClient ?? Http;
         baseUrl = ApiProbeService.NormalizeBaseUrl(baseUrl!);
         var (vendor, authKind, modelsEndpoint, _) = ApiProbeService.RecognizeVendor(baseUrl);
+
+
+        if (!string.IsNullOrWhiteSpace(request.ModelsEndpoint)) modelsEndpoint = request.ModelsEndpoint!;
         var protocol = DetectProtocol(vendor, baseUrl);
         var endpoint = ResolveChatEndpoint(baseUrl, vendor, modelsEndpoint, protocol, request.Model);
 
@@ -516,20 +557,25 @@ public static class ApiChatClient
         }
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
         var sb = new StringBuilder();
         var raw = new StringBuilder();
         long ttftAt = 0;
         ApiChatUsage usage = new();
-        while (true)
+
+
+
+        var decoder = Encoding.UTF8.GetDecoder();
+        var byteBuf = new byte[8192];
+        var charBuf = new char[8192];
+        var lineBuf = new StringBuilder();
+        long totalBytes = 0;
+
+        void ProcessLine(string line)
         {
-            var line = await reader.ReadLineAsync(ct);
-            if (line == null) break;
-            if (raw.Length > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit");
             raw.AppendLine(line);
-            if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
+            if (!line.StartsWith("data:", StringComparison.Ordinal)) return;
             var payload = line.Substring(5).Trim();
-            if (payload.Length == 0 || payload == "[DONE]") continue;
+            if (payload.Length == 0 || payload == "[DONE]") return;
             var (delta, model, chunkUsage) = ParseOpenAiStreamChunk(payload);
             if (chunkUsage.HasUsage) usage = chunkUsage;
             if (!string.IsNullOrEmpty(model)) result.ModelReturned = model;
@@ -539,6 +585,30 @@ public static class ApiChatClient
                 sb.Append(delta);
             }
         }
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(byteBuf.AsMemory(0, byteBuf.Length), ct);
+            if (read == 0) break;
+            totalBytes += read;
+            if (totalBytes > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit");
+            var chars = decoder.GetChars(byteBuf, 0, read, charBuf, 0);
+            for (var i = 0; i < chars; i++)
+            {
+                var c = charBuf[i];
+                if (c == '\n')
+                {
+                    ProcessLine(lineBuf.ToString().TrimEnd('\r'));
+                    lineBuf.Clear();
+                }
+                else
+                {
+                    lineBuf.Append(c);
+                    if (lineBuf.Length > MaxSingleLineChars) throw new InvalidOperationException("streamed line exceeds the 8MB safety limit");
+                }
+            }
+        }
+        if (lineBuf.Length > 0) ProcessLine(lineBuf.ToString().TrimEnd('\r'));
         result.RawBody = MaskKeyInText(raw.ToString(), key);
         result.Content = sb.ToString();
         result.Usage = usage;
@@ -552,10 +622,30 @@ public static class ApiChatClient
     }
 
 
-
     private const int MaxResponseBodyBytes = 32 * 1024 * 1024;
 
-    private static async System.Threading.Tasks.Task<string> ReadBodyCapped(System.Net.Http.HttpResponseMessage resp, System.Threading.CancellationToken ct)
+
+
+
+
+
+
+
+
+    private const int MaxSingleLineChars = 8 * 1024 * 1024;
+
+
+
+
+
+
+
+
+
+
+
+
+    internal static async System.Threading.Tasks.Task<string> ReadBodyCapped(System.Net.Http.HttpResponseMessage resp, System.Threading.CancellationToken ct, int maxBytes = MaxResponseBodyBytes)
     {
         var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var ms = new MemoryStream();
@@ -565,7 +655,7 @@ public static class ApiChatClient
         while ((read = await stream.ReadAsync(buffer, ct)) > 0)
         {
             total += read;
-            if (total > MaxResponseBodyBytes) throw new InvalidOperationException("response body exceeds the 32MB safety limit");
+            if (total > maxBytes) throw new InvalidOperationException($"response body exceeds the {maxBytes / (1024 * 1024)}MB safety limit");
             ms.Write(buffer, 0, read);
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());

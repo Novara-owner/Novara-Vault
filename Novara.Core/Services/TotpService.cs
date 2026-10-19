@@ -49,6 +49,13 @@ public static class TotpService
 
         if (trimmed.StartsWith("otpauth://", StringComparison.OrdinalIgnoreCase))
         {
+
+
+
+            var tail = trimmed.Substring("otpauth://".Length);
+            var authorityEnd = tail.IndexOfAny(new[] { '/', '?' });
+            var type = authorityEnd >= 0 ? tail[..authorityEnd] : tail;
+            if (!type.Equals("totp", StringComparison.OrdinalIgnoreCase)) return false;
             try
             {
 
@@ -68,6 +75,7 @@ public static class TotpService
                     else if (k.Equals("digits", StringComparison.OrdinalIgnoreCase)) { if (int.TryParse(v, out var d)) digits = d; }
                     else if (k.Equals("period", StringComparison.OrdinalIgnoreCase)) { if (int.TryParse(v, out var p)) period = p; }
                     else if (k.Equals("issuer", StringComparison.OrdinalIgnoreCase)) issuer = v;
+                    else if (k.Equals("counter", StringComparison.OrdinalIgnoreCase)) return false;
                 }
                 if (secret == null || !TryDecodeBase32(secret, out var key)) return false;
                 if (algorithm is not ("SHA1" or "SHA256" or "SHA512")) return false;

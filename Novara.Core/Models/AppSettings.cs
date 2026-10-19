@@ -17,6 +17,14 @@ public class AppSettings
 
 
     public string UpdatePendingVersion { get; set; } = "";
+
+
+
+
+    public bool AutoCheckUpdates { get; set; }
+
+
+    public DateTime? LastCheckUtc { get; set; }
     public bool AutoStart { get; set; }
     public bool ContextMenu { get; set; } = true;
     public string CloseBehavior { get; set; } = "直接退出";
@@ -30,6 +38,7 @@ public class AppSettings
     public string QuickCaptureHotkey { get; set; } = "CtrlShiftN";
     public bool GcmMigrationRejected { get; set; }
     public bool KdfMigrationRejected { get; set; }
+    public bool V5MigrationRejected { get; set; }
     public string AppLanguage { get; set; } = "";
     public bool HasCompletedWelcome { get; set; }
     public bool HasCompletedCarousel { get; set; }
@@ -45,7 +54,6 @@ public class AppSettings
 
     public bool McpEnabled { get; set; }
     public string McpToken { get; set; } = "";
-    public DateTime? McpTokenGeneratedAt { get; set; }
     public List<string> McpAllowedProcesses { get; set; } = new();
     public bool McpDeleteEnabled { get; set; }
     public bool McpDetailExpanded { get; set; } = true;

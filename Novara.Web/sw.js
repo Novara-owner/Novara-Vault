@@ -1,9 +1,9 @@
 var CACHE_PREFIX = 'novara-web-shell-';
-var CACHE = CACHE_PREFIX + 'v18';
+var CACHE = CACHE_PREFIX + 'v27';
 var SCOPE = self.registration.scope;
 
 
-var SHELL = ['', 'index.html', 'viewer.css', 'app.css', 'editor.css', 'viewer.js', 'app.js', 'edit.js', 'manifest.webmanifest', 'icon.svg']
+var SHELL = ['', 'index.html', 'viewer.css', 'app.css', 'editor.css', 'viewer.js', 'app.js', 'edit.js', 'manifest.webmanifest', 'icon.png']
   .map(function (path) { return new URL(path, SCOPE).href; });
 
 

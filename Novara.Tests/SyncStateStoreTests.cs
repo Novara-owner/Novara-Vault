@@ -41,6 +41,32 @@ public class SyncStateStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_NormalisesNullReferenceFields()
+    {
+
+
+
+        File.WriteAllText(StatePath, """
+            {"spaceId":null,"serverUrl":null,"deviceId":null,"deviceName":null,
+             "lastPushedSha256":null,"keyWrapJson":null,"serverManifestPartitions":null}
+            """);
+
+        var state = new SyncStateStore(StatePath).Load();
+
+        Assert.Equal("", state.SpaceId);
+        Assert.Equal("", state.DeviceId);
+        Assert.Equal("", state.KeyWrapJson);
+        Assert.NotNull(state.ServerManifestPartitions);
+        Assert.Empty(state.ServerManifestPartitions);
+        Assert.False(state.ServerManifestPartitions.TryGetValue("memoEntries", out _));
+
+
+
+        state.ServerManifestPartitions["A"] = "x";
+        Assert.False(state.ServerManifestPartitions.ContainsKey("a"));
+    }
+
+    [Fact]
     public async Task Save_ConcurrentWriters_NeverThrowAndNeverInterleave()
     {
         var store = new SyncStateStore(StatePath);

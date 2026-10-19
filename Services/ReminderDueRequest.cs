@@ -80,7 +80,7 @@ public static class ReminderDueRequest
         {
             var dir = Path.GetDirectoryName(PendingPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(PendingPath, JsonSerializer.Serialize(new PendingReminderDueFile { Id = id.ToString() }));
+            PendingWrite.WritePendingAtomic(PendingPath, JsonSerializer.Serialize(new PendingReminderDueFile { Id = id.ToString() }));
             try
             {
                 using var evt = EventWaitHandle.OpenExisting(EventName);

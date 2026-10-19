@@ -64,7 +64,7 @@ public sealed partial class BasicMemoPage : Page
     private HashSet<Border> _starredEntries = new();
     private Dictionary<Border, FrameworkElement> _entryStarIcons = new();
     private Dictionary<Border, (string type, string name, string keyInfo, List<(string, string, bool)> fields)> _entryData = new();
-    private readonly Dictionary<Border, (CancellationTokenSource Cts, bool Expanded)> _entryExpand = new();
+    private readonly Dictionary<Border, bool> _entryExpand = new();
 
 
 
@@ -82,9 +82,23 @@ public sealed partial class BasicMemoPage : Page
     private Border? _apiDiagCard;
     private System.Threading.CancellationTokenSource? _apiDiagCts;
     private System.Action? _apiConfirmProceed;
-    private Border? _relayProbeCard;
+    private bool _apiConfirmHiding;
     private System.Threading.CancellationTokenSource? _relayProbeCts;
     private Storyboard? _relayProbePulse;
+
+    private string _relayProbeUrl = "";
+    private string _relayProbeKey = "";
+    private string _relayProbeModel = "";
+
+
+    private bool _relayProbeVeilHeld;
+
+    private int _relayProbeRunningHideGen;
+    private int _relayProbeResultHideGen;
+
+    private readonly Dictionary<Grid, Border> _dialogMap = new();
+    private readonly DialogUi.DialogWidthFit _dialogWidthFit = new();
+    private readonly DialogUi.DialogScrollFit _dialogScrollFit = new();
 
 
     private Border? _dragCard;
@@ -105,7 +119,16 @@ public sealed partial class BasicMemoPage : Page
     public BasicMemoPage()
     {
         this.InitializeComponent();
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn2, App.GetString("A11y_Generate"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn3, App.GetString("A11y_Generate"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn4, App.GetString("A11y_Generate"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn5, App.GetString("A11y_Generate"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn6, App.GetString("A11y_Generate"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(GenerateBtn7, App.GetString("A11y_Generate"));
+
+        App.ApplyAutomationNames(this);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
+        MemoRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         this.Loaded += Page_Loaded;
         this.Unloaded += OnPageUnloaded;
         this.KeyDown += Page_KeyDown;
@@ -118,6 +141,23 @@ public sealed partial class BasicMemoPage : Page
         _contextMenu = BuildContextMenu();
         AddInfoIcon.PointerEntered += (_, _) => AddInfoIcon.Opacity = 1.0;
         AddInfoIcon.PointerExited += (_, _) => AddInfoIcon.Opacity = 0.6;
+
+
+
+        AttachRelayProbeDisclaimer(RelayProbeDisclaimer2Text);
+        AttachRelayProbeDisclaimer(RelayProbeResultDisclaimer2Text);
+    }
+
+
+    private void AttachRelayProbeDisclaimer(Microsoft.UI.Xaml.Controls.TextBlock target)
+    {
+        target.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Memo_RelayProbe_Disclaimer2") });
+        if (!App.CurrentLanguage.StartsWith("zh"))
+            target.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = " " });
+        var guideLink = new Microsoft.UI.Xaml.Documents.Hyperlink { Foreground = App.GetBrush("AppPrimaryButtonBrush") };
+        guideLink.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Memo_RelayProbe_DatasetGuide") });
+        guideLink.Click += RelayProbeDatasetGuide_Click;
+        target.Inlines.Add(guideLink);
     }
 
 
@@ -169,7 +209,12 @@ private MenuFlyout BuildContextMenu()
         return menu;
     }
 
-    private MenuFlyout BuildGroupCardContextMenu(bool isPinned, bool isStarred)
+
+
+    private bool IsLiveGroupCard(Border card)
+        => card != null && _groupData.ContainsKey(card) && GroupsContainer.Children.Contains(card);
+
+    private MenuFlyout BuildGroupCardContextMenu(Border card, bool isPinned, bool isStarred)
     {
         var menu = new MenuFlyout();
         menu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
@@ -180,7 +225,7 @@ private MenuFlyout BuildContextMenu()
             Text = App.GetString("Menu_Edit"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.Edit[0] + " " + IconData.Edit[1]), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        editItem.Click += (s, e) => OpenEditGroupDialog();
+        editItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; _currentGroupCard = card; OpenEditGroupDialog(); };
 
         var newEntryItem = new MenuFlyoutItem
         {
@@ -188,7 +233,7 @@ private MenuFlyout BuildContextMenu()
             Text = App.GetString("Menu_New_Entry"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.NewEntry[0] + " " + IconData.NewEntry[1]), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        newEntryItem.Click += (s, e) => { _targetGroupCard = _currentGroupCard; OpenNewEntryDialog(); };
+        newEntryItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; _targetGroupCard = card; OpenNewEntryDialog(); };
 
         var pinItem = new MenuFlyoutItem
         {
@@ -196,7 +241,7 @@ private MenuFlyout BuildContextMenu()
             Text = isPinned ? App.GetString("Menu_Unpin") : App.GetString("Menu_Pin"),
             Icon = new PathIcon { Data = App.CreateGeometry(isPinned ? IconData.Unpin : IconData.Pin), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        pinItem.Click += (s, e) => { if (isPinned) UnpinGroupCard(_currentGroupCard); else PinGroupCard(_currentGroupCard); };
+        pinItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; if (isPinned) UnpinGroupCard(card); else PinGroupCard(card); };
 
         var starItem = new MenuFlyoutItem
         {
@@ -204,7 +249,7 @@ private MenuFlyout BuildContextMenu()
             Text = isStarred ? App.GetString("Menu_Unstar") : App.GetString("Menu_Star"),
             Icon = new PathIcon { Data = App.CreateGeometry(isStarred ? IconData.Unstar : IconData.Star), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        starItem.Click += (s, e) => { if (isStarred) UnstarGroupCard(_currentGroupCard); else StarGroupCard(_currentGroupCard); };
+        starItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; if (isStarred) UnstarGroupCard(card); else StarGroupCard(card); };
 
         var separator = new MenuFlyoutSeparator();
 
@@ -215,7 +260,7 @@ private MenuFlyout BuildContextMenu()
             Foreground = App.GetBrush("AppDangerTextBrush"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.SoftDelete), Foreground = App.GetBrush("AppDangerTextBrush") }
         };
-        deleteItem.Click += (s, e) => OpenDeleteConfirmDialog(isGroup: true);
+        deleteItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; _currentGroupCard = card; OpenDeleteConfirmDialog(isGroup: true); };
 
         menu.Items.Add(pinItem);
         menu.Items.Add(starItem);
@@ -536,7 +581,15 @@ private MenuFlyout BuildContextMenu()
                     }
 
                 }
-                if (en.IsPinned) { GroupsContainer.Children.Insert(0, card); _standaloneEntries.Insert(0, card); }
+                if (en.IsPinned)
+                {
+
+
+
+                    var insIdx = (_pinnedGroupCard != null && GroupsContainer.Children.Count > 0 && ReferenceEquals(GroupsContainer.Children[0], _pinnedGroupCard)) ? 1 : 0;
+                    GroupsContainer.Children.Insert(insIdx, card);
+                    _standaloneEntries.Insert(0, card);
+                }
                 else { _standaloneEntries.Add(card); GroupsContainer.Children.Add(card); }
                 if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
             }
@@ -568,6 +621,12 @@ private MenuFlyout BuildContextMenu()
         if (_standaloneEntries.Count > 0) SyncUncategorizedCard();
         ApplyCardFilters();
         if (_persistAfterRender) { _persistAfterRender = false; PersistAll(); }
+    }
+
+
+    internal async void ScrollToMain()
+    {
+        await Services.SmoothScroller.ScrollToTopAsync(MemoScrollViewer);
     }
 
     private void PersistAll()
@@ -668,7 +727,9 @@ private MenuFlyout BuildContextMenu()
         DialogHideAnimation.Stop();
         NewGroupDialogTransform.ScaleX = 0.94; NewGroupDialogTransform.ScaleY = 0.94; NewGroupDialogTransform.TranslateY = 24;
         NewGroupDialog.Opacity = 0; DialogScrim.Opacity = 0;
-        NewGroupDialogOverlay.Visibility = Visibility.Visible;
+        NewGroupDialogOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, NewGroupDialogOverlay, NewGroupDialog, _dialogWidthFit);
+
+        _dialogScrollFit.Fit(UngroupedEntriesScroll, 320, MemoRoot.ActualHeight);
         DialogDepth.VeilShow();
         DialogShowAnimation.Begin();
         _confirming = false;
@@ -893,15 +954,15 @@ private MenuFlyout BuildContextMenu()
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
             BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(16),
+            Padding = new Thickness(16, 12, 16, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
         var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36, GridUnitType.Pixel) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = 28 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var titleGrid = new Grid { Height = 36 };
+        var titleGrid = new Grid { MinHeight = 28 };
         titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -910,26 +971,24 @@ private MenuFlyout BuildContextMenu()
         var nameText = new TextBlock { Text = groupName, FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
         Grid.SetColumn(nameText, 1);
         var rightPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        var pinIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardPin), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
+        var pinIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Child = new PathIcon { Data = App.CreateGeometry(IconData.CardPin), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
         rightPanel.Children.Add(pinIcon);
-        var starIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 12, 0), Child = new PathIcon { Data = App.CreateGeometry(IconData.CardStar), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
+        var starIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Child = new PathIcon { Data = App.CreateGeometry(IconData.CardStar), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
         rightPanel.Children.Add(starIcon);
         var countText = new TextBlock { Text = App.GetString("Memo_Count_Zero"), FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
-        var iconText2 = new TextBlock { Text = "\uE70D", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 10, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
         rightPanel.Children.Add(countText);
-        rightPanel.Children.Add(iconText2);
         Grid.SetColumn(rightPanel, 2);
         _pinIcons[card] = pinIcon; _starIcons[card] = starIcon; _groupNameTexts[card] = nameText;
         _groupCountTexts[card] = countText;
         _groupData[card] = (groupName, groupIconKey);
         titleGrid.Children.Add(icon); titleGrid.Children.Add(nameText); titleGrid.Children.Add(rightPanel);
         Grid.SetRow(titleGrid, 0);
-        var divider = new Border { Height = 1, Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 12, 0, 0), Opacity = 0.3 };
+        var divider = new Border { Height = 1, Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 8, 0, 0), Opacity = 0.3 };
         Grid.SetRow(divider, 1);
-        var entryStack = new StackPanel { Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
+        var entryStack = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
         Grid.SetRow(entryStack, 2);
 
-        var emptyHint = new Grid { MinHeight = 100, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Visible };
+        var emptyHint = new Grid { MinHeight = 100, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Visible };
         var emptyStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
 
 
@@ -951,7 +1010,7 @@ private MenuFlyout BuildContextMenu()
         var baseBorderColor = borderBrush.Color;
         card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
         card.PointerExited += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
-        card.ContextRequested += (s, e) => { e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p); };
+        card.ContextRequested += (s, e) => { e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(card, ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p); };
         AttachCardDrag(card);
         return card;
     }
@@ -976,6 +1035,15 @@ private MenuFlyout BuildContextMenu()
 
 
 
+        Dictionary<Guid, string>? wsById = null;
+        if (wsActive && db != null)
+        {
+            wsById = new Dictionary<Guid, string>();
+            foreach (var e in db.MemoEntries) wsById[e.Id] = e.WorkspaceId ?? "";
+        }
+
+
+
 
 
         foreach (var texts in _maskedFieldTexts.Values) RestoreFieldMasks(texts);
@@ -984,7 +1052,7 @@ private MenuFlyout BuildContextMenu()
         {
             if (child is Border eb && _entryIds.TryGetValue(eb, out var eid))
             {
-                eb.Visibility = EntryMatchesWorkspace(eid, wsActive, wsId, db) ? Visibility.Visible : Visibility.Collapsed;
+                eb.Visibility = EntryMatchesWorkspace(eid, wsActive, wsId, wsById) ? Visibility.Visible : Visibility.Collapsed;
             }
             else if (child is Border gb && _groupIds.ContainsKey(gb))
             {
@@ -994,7 +1062,7 @@ private MenuFlyout BuildContextMenu()
                     foreach (var c in sp.Children)
                         if (c is Border sc && _entryIds.TryGetValue(sc, out var sid))
                         {
-                            bool vis = EntryMatchesWorkspace(sid, wsActive, wsId, db);
+                            bool vis = EntryMatchesWorkspace(sid, wsActive, wsId, wsById);
                             sc.Visibility = vis ? Visibility.Visible : Visibility.Collapsed;
                             if (vis) visibleCount++;
                         }
@@ -1012,7 +1080,7 @@ private MenuFlyout BuildContextMenu()
                 foreach (var c in cp.Children)
                     if (c is Border sc && _entryIds.TryGetValue(sc, out var sid))
                     {
-                        bool vis = EntryMatchesWorkspace(sid, wsActive, wsId, db);
+                        bool vis = EntryMatchesWorkspace(sid, wsActive, wsId, wsById);
                         sc.Visibility = vis ? Visibility.Visible : Visibility.Collapsed;
                         if (vis) visibleCount++;
                     }
@@ -1023,12 +1091,13 @@ private MenuFlyout BuildContextMenu()
         UpdateHintVisibility();
     }
 
-    private bool EntryMatchesWorkspace(Guid eid, bool wsActive, string wsId, Novara.Models.NovaraDatabase? db)
+    private bool EntryMatchesWorkspace(Guid eid, bool wsActive, string wsId, Dictionary<Guid, string>? wsById)
     {
         if (!wsActive) return true;
-        if (db == null) return true;
-        var e = db.MemoEntries.FirstOrDefault(x => x.Id == eid);
-        return e != null && e.WorkspaceId == wsId;
+        if (wsById == null) return true;
+
+
+        return wsById.TryGetValue(eid, out var cw) && cw == wsId;
     }
 
     private void UpdateHintVisibility()
@@ -1167,7 +1236,7 @@ private MenuFlyout BuildContextMenu()
         var typeIconViewbox = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 10, 0), Child = new PathIcon { Data = typeIconGeom, Foreground = App.GetBrush("IconForegroundBrush") } };
         Grid.SetColumn(typeIconViewbox, 0);
         var infoPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-        infoPanel.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
+        infoPanel.Children.Add(new TextBlock { Text = name, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = App.GetBrush("AppTextPrimaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
 
 
 
@@ -1216,15 +1285,14 @@ private MenuFlyout BuildContextMenu()
         var expandBtn = new Button { Width = 32, Height = 32, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = expandViewbox, IsTabStop = false };
         expandBtn.Click += (s, e) =>
         {
-            var st = _entryExpand.TryGetValue(card, out var v) ? v : (null, false);
-            bool targetExpand = !st.Item2;
-            if (st.Cts != null) st.Cts.Cancel();
-            var cts = new CancellationTokenSource();
-            _entryExpand[card] = (cts, targetExpand);
+
+            var st = _entryExpand.TryGetValue(card, out var v) && v;
+            bool targetExpand = !st;
+            _entryExpand[card] = targetExpand;
             if (!targetExpand) RestoreFieldMasks(maskedTexts);
             expandIcon.Data = targetExpand ? collapseIconPath : expandIconPath;
             expandViewbox.Margin = targetExpand ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
-            StartEntryMelt(expandedGrid, targetExpand, cts.Token);
+            StartEntryMelt(expandedGrid, targetExpand);
         };
         Grid.SetColumn(expandBtn, 4);
         mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); mainRow.Children.Add(expandBtn); Grid.SetRow(mainRow, 0);
@@ -1240,7 +1308,7 @@ private MenuFlyout BuildContextMenu()
             row.Children.Add(new TextBlock { Text = FieldLabelText(label), FontSize = 12, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
             var recess = new Border { Background = App.GetBrush("AppSurfaceBrush"), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) }; Grid.SetColumn(recess, 1);
             var innerGrid = new Grid { MinHeight = 24 }; innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            bool maskedField = IsMaskedLabel(label);
+            bool maskedField = IsMaskedLabel(label) && !string.IsNullOrWhiteSpace(value);
             var valueText = new TextBlock { Text = maskedField ? FieldMask : value, FontSize = 12, CharacterSpacing = maskedField ? 150 : App.GetCharacterSpacing(value, 150), Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             if (maskedField)
             {
@@ -1451,7 +1519,9 @@ private MenuFlyout BuildContextMenu()
     }
 
 
-        private void StartEntryMelt(Grid panel, bool expand, CancellationToken token) => Services.MeltAnim.Begin(panel, expand, 12.0);
+
+
+        private void StartEntryMelt(Grid panel, bool expand) => Services.MeltAnim.Begin(panel, expand, 12.0);
 
     private void CopyToClipboardButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1500,17 +1570,17 @@ private MenuFlyout BuildContextMenu()
             Background = App.GetBrush("AppSurfaceOverlayBrush"),
             BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(16),
+            Padding = new Thickness(16, 12, 16, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
 
         var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36, GridUnitType.Pixel) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = 28 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var titleGrid = new Grid { Height = 36 };
+        var titleGrid = new Grid { MinHeight = 28 };
         var titleText = new TextBlock
         {
             Text = App.GetString("Memo_Group_Uncategorized"),
@@ -1526,14 +1596,14 @@ private MenuFlyout BuildContextMenu()
         {
             Height = 1,
             Background = App.GetBrush("AppBorderBrush"),
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Opacity = 0.3
         };
         Grid.SetRow(divider, 1);
 
         var contentPanel = new StackPanel
         {
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Spacing = 8
         };
         Grid.SetRow(contentPanel, 2);
@@ -1613,7 +1683,7 @@ private MenuFlyout BuildContextMenu()
                     {
                         var entry = _standaloneEntries[i];
                         GroupsContainer.Children.Remove(entry);
-                        entry.Margin = new Thickness(0, 0, 0, 8);
+                        entry.Margin = new Thickness(0);
 
 
                         sp.Children.Insert(insertPos, entry);
@@ -1689,6 +1759,8 @@ private MenuFlyout BuildContextMenu()
         App.PlayCardEntrance(nc);
         HintText.Visibility = Visibility.Collapsed;
 
+
+        bool hadPendingMove = _pendingMoveEntry != null;
         if (_pendingMoveEntry != null)
         {
 
@@ -1717,7 +1789,7 @@ private MenuFlyout BuildContextMenu()
 
 
         bool groupHiddenByWorkspace = !string.IsNullOrEmpty(App.CurrentWorkspaceId)
-            && toMove.Count == 0 && _pendingMoveEntry == null;
+            && toMove.Count == 0 && !hadPendingMove;
         App.ShowToast(App.GetString(groupHiddenByWorkspace ? "Memo_Toast_Group_Hidden" : "Common_Toast_Created"));
         var sb = new Storyboard(); var sx = new DoubleAnimation { To = 0.95, Duration = TimeSpan.FromMilliseconds(100) }; Storyboard.SetTarget(sx, ConfirmButtonTransform); Storyboard.SetTargetProperty(sx, "ScaleX"); sb.Children.Add(sx);
         var sy = new DoubleAnimation { To = 0.95, Duration = TimeSpan.FromMilliseconds(100) }; Storyboard.SetTarget(sy, ConfirmButtonTransform); Storyboard.SetTargetProperty(sy, "ScaleY"); sb.Children.Add(sy);
@@ -1889,7 +1961,7 @@ private MenuFlyout BuildContextMenu()
         GenerateShowAnimation.Stop();
         GenerateDialogTransform.ScaleX = 0.94; GenerateDialogTransform.ScaleY = 0.94; GenerateDialogTransform.TranslateY = 24;
         GenerateDialog.Opacity = 0; GenerateScrim.Opacity = 0;
-        GenerateOverlay.Visibility = Visibility.Visible;
+        GenerateOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, GenerateOverlay, GenerateDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         GenerateShowAnimation.Begin();
     }
@@ -2089,11 +2161,16 @@ private MenuFlyout BuildContextMenu()
 
     private void EnsureTotpTimer()
     {
-        _totpTimer ??= DispatcherQueue.CreateTimer();
-        if (_totpTimer.IsRunning) return;
-        _totpTimer.Interval = TimeSpan.FromSeconds(1);
-        _totpTimer.Tick += (_, _) => UpdateTotpRows();
-        _totpTimer.Start();
+
+
+
+        if (_totpTimer == null)
+        {
+            _totpTimer = DispatcherQueue.CreateTimer();
+            _totpTimer.Interval = TimeSpan.FromSeconds(1);
+            _totpTimer.Tick += (_, _) => UpdateTotpRows();
+        }
+        if (!_totpTimer.IsRunning) _totpTimer.Start();
     }
 
     private void UpdateTotpRows()
@@ -2324,7 +2401,7 @@ private MenuFlyout BuildContextMenu()
             _entryPinIcons.Remove(old);
             _entryStarIcons.Remove(old);
             _entryData.Remove(old);
-            if (_entryExpand.TryGetValue(old, out var eo)) { eo.Cts?.Cancel(); _entryExpand.Remove(old); }
+            _entryExpand.Remove(old);
             _maskedFieldTexts.Remove(old);
             _entryIconKeys.Remove(old);
             _starredEntries.Remove(old);
@@ -2496,7 +2573,7 @@ private MenuFlyout BuildContextMenu()
         NewEntryDialogTitle.Text = _editingEntryCard != null ? App.GetString("Memo_Entry_EditTitle") : App.GetString("Memo_Entry_NewTitle");
         EntryTypeSection.Visibility = _editingEntryCard != null ? Visibility.Collapsed : Visibility.Visible;
         ResetEntryTypeForms();
-        NewEntryDialogOverlay.Visibility = Visibility.Visible;
+        NewEntryDialogOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, NewEntryDialogOverlay, NewEntryDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         Motion.StaggerReset(NewEntryDialog);
         Motion.StaggerWire(NewEntryDialogShowAnimation, NewEntryDialog);
@@ -2651,7 +2728,7 @@ private MenuFlyout BuildContextMenu()
         _editGroupOrigName = EditGroupNameTextBox.Text.Trim();
         EditGroupDialogTransform.ScaleX = 0.94; EditGroupDialogTransform.ScaleY = 0.94; EditGroupDialogTransform.TranslateY = 24;
         EditGroupDialog.Opacity = 0; EditGroupScrim.Opacity = 0;
-        EditGroupOverlay.Visibility = Visibility.Visible;
+        EditGroupOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, EditGroupOverlay, EditGroupDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         EditGroupShowAnimation.Begin();
         UpdateEditGroupConfirmState();
@@ -2708,7 +2785,8 @@ private MenuFlyout BuildContextMenu()
         DeleteConfirmRedButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
         DeleteConfirmDialogTransform.ScaleX = 0.94; DeleteConfirmDialogTransform.ScaleY = 0.94; DeleteConfirmDialogTransform.TranslateY = 24;
         DeleteConfirmDialog.Opacity = 0; DeleteConfirmScrim.Opacity = 0;
-        DeleteConfirmOverlay.Visibility = Visibility.Visible;
+        DeleteConfirmHideAnimation.Stop();
+        DeleteConfirmOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, DeleteConfirmOverlay, DeleteConfirmDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         DeleteConfirmShowAnimation.Begin();
     }
@@ -2741,15 +2819,15 @@ private MenuFlyout BuildContextMenu()
 
                     App.PlayCardRemoval(parent!, delEntryCard, _dragging, () =>
                     {
-                        if (parent is StackPanel sp && sp.Parent is Grid g && g.Children.Count > 3 && g.Children[3] is Grid eh && sp.Children.Count == 0)
-                            eh.Visibility = Visibility.Visible;
+
+
                         if (parent is StackPanel sp2 && sp2.Parent is Grid g2 && g2.Parent is Border groupCard)
                             UpdateGroupCount(groupCard);
 
                         _standaloneEntries.Remove(delEntryCard);
                         _entriesInGroup.Remove(delEntryCard);
                         _entryData.Remove(delEntryCard);
-                        if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); }
+                        _entryExpand.Remove(delEntryCard);
                         _maskedFieldTexts.Remove(delEntryCard);
                         _entryIconKeys.Remove(delEntryCard);
                         _entryPinIcons.Remove(delEntryCard);
@@ -2766,6 +2844,7 @@ private MenuFlyout BuildContextMenu()
                         _currentEntryCard = null!;
                         if (GroupsContainer.Children.Count == 0) FloatInHint();
                         SyncUncategorizedCard();
+                        ApplyCardFilters();
                         PersistAll();
                         App.ShowToast(App.GetString("Common_Toast_Deleted"));
                         CloseDeleteConfirmDialog();
@@ -2781,7 +2860,7 @@ private MenuFlyout BuildContextMenu()
                         _standaloneEntries.Remove(delEntryCard);
                         _entriesInGroup.Remove(delEntryCard);
                         _entryData.Remove(delEntryCard);
-                        if (_entryExpand.TryGetValue(delEntryCard, out var ed)) { ed.Cts?.Cancel(); _entryExpand.Remove(delEntryCard); }
+                        _entryExpand.Remove(delEntryCard);
                         _maskedFieldTexts.Remove(delEntryCard);
                         _entryIconKeys.Remove(delEntryCard);
                         _entryPinIcons.Remove(delEntryCard);
@@ -2798,6 +2877,7 @@ private MenuFlyout BuildContextMenu()
                         _currentEntryCard = null!;
                         if (GroupsContainer.Children.Count == 0) FloatInHint();
                         SyncUncategorizedCard();
+                        ApplyCardFilters();
                         PersistAll();
                         App.ShowToast(App.GetString("Common_Toast_Deleted"));
                         CloseDeleteConfirmDialog();
@@ -2806,6 +2886,12 @@ private MenuFlyout BuildContextMenu()
             }
             else if (_currentGroupCard != null)
             {
+
+                if (!GroupsContainer.Children.Contains(_currentGroupCard))
+                {
+                    CloseDeleteConfirmDialog();
+                    return;
+                }
 
                 if (_currentGroupCard.Child is Grid g && g.Children.Count > 3 && g.Children[2] is StackPanel entryStack)
                 {
@@ -2897,7 +2983,10 @@ private MenuFlyout BuildContextMenu()
         ApiProtocolOverlay.Visibility = Visibility.Collapsed;
         ApiDiagOverlay.Visibility = Visibility.Collapsed;
         ApiConfirmOverlay.Visibility = Visibility.Collapsed;
-        RelayProbeOverlay.Visibility = Visibility.Collapsed;
+        RelayProbeRunningOverlay.Visibility = Visibility.Collapsed;
+        RelayProbeResultOverlay.Visibility = Visibility.Collapsed;
+        _relayProbeVeilHeld = false;
+        ApiProbeHistoryOverlay.Visibility = Visibility.Collapsed;
         DialogDepth.VeilClear();
         _targetGroupCard = null!;
         _editingEntryCard = null!;
@@ -2906,8 +2995,11 @@ private MenuFlyout BuildContextMenu()
         _pendingMoveEntry = null!;
         _apiCheckCard = null;
         _apiDiagCard = null;
-        _relayProbeCard = null;
         _apiConfirmProceed = null;
+        _apiConfirmHiding = false;
+        _apiProbeHistoryHiding = false;
+        _relayProbeRunningHideGen++;
+        _relayProbeResultHideGen++;
         _pendingMenuAction = null!;
 
         if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; }
@@ -2921,10 +3013,14 @@ private MenuFlyout BuildContextMenu()
     private void Page_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != Windows.System.VirtualKey.Escape) return;
+
+
+        if (ApiProbeHistoryOverlay.Visibility == Visibility.Visible) { HideApiProbeHistoryOverlay(); e.Handled = true; return; }
         if (ApiProtocolOverlay.Visibility == Visibility.Visible) { HideApiProtocolDialog(); e.Handled = true; return; }
         if (ApiCheckOverlay.Visibility == Visibility.Visible) { HideApiCheckOverlay(); e.Handled = true; return; }
         if (ApiDiagOverlay.Visibility == Visibility.Visible) { HideApiDiagOverlay(); e.Handled = true; return; }
-        if (RelayProbeOverlay.Visibility == Visibility.Visible) { HideRelayProbeOverlay(); e.Handled = true; return; }
+        if (RelayProbeRunningOverlay.Visibility == Visibility.Visible) { HideRelayProbeRunning(); e.Handled = true; return; }
+        if (RelayProbeResultOverlay.Visibility == Visibility.Visible) { HideRelayProbeResult(); e.Handled = true; return; }
         if (ApiConfirmOverlay.Visibility == Visibility.Visible) { HideApiConfirmOverlay(); e.Handled = true; return; }
         if (DeleteConfirmOverlay.Visibility == Visibility.Visible) { CloseDeleteConfirmDialog(); e.Handled = true; return; }
         if (GenerateOverlay.Visibility == Visibility.Visible) { CloseGenerateDialog(); _genTargetSlot = null; e.Handled = true; return; }
@@ -2942,7 +3038,18 @@ private MenuFlyout BuildContextMenu()
 
 
 
-private void ShowApiCheckDialog(Border card)
+
+
+
+    private void BeginApiProbeUi(string title, string detail)
+    {
+        ApiCheckReportRows.Children.Clear();
+        ApiCheckReportPanel.Visibility = Visibility.Collapsed;
+        ApiCheckStatusDetail.Text = "";
+        SetApiCheckState("probing", title, detail);
+    }
+
+    private void ShowApiCheckDialog(Border card)
     {
         if (!_entryData.TryGetValue(card, out var d)) return;
         string url = ""; string key = "";
@@ -2954,10 +3061,7 @@ private void ShowApiCheckDialog(Border card)
         _apiCheckCard = card;
 
 
-        ApiCheckReportRows.Children.Clear();
-        ApiCheckReportPanel.Visibility = Visibility.Collapsed;
-        ApiCheckStatusDetail.Text = "";
-        SetApiCheckState("probing", App.GetString("Memo_Api_Checking"), App.GetString("Memo_Api_CheckingHint"));
+        BeginApiProbeUi(App.GetString("Memo_Api_Checking"), App.GetString("Memo_Api_CheckingHint"));
         ShowApiCheckOverlay();
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -2989,11 +3093,161 @@ private void ShowApiCheckDialog(Border card)
         ApiCheckAdvancedButton.Visibility = kind == "fail" ? Visibility.Visible : Visibility.Collapsed;
     }
 
+
+
+
+
+    private static string TruncateProbeDetail(string detail)
+    {
+        detail = (detail ?? string.Empty).Replace('\n', ' ').Replace('\r', ' ');
+        return detail.Length <= 120 ? detail : detail[..120];
+    }
+
+    private void ApiCheckHistoryButton_Click(object sender, RoutedEventArgs e) => ShowApiProbeHistoryOverlay();
+
+    private bool _apiProbeHistoryHiding;
+
+    private void ShowApiProbeHistoryOverlay()
+    {
+        _apiProbeHistoryHiding = false;
+        BuildApiProbeHistoryRows();
+        ApiProbeHistoryDialogTransform.ScaleX = 0.94; ApiProbeHistoryDialogTransform.ScaleY = 0.94; ApiProbeHistoryDialogTransform.TranslateY = 24;
+        ApiProbeHistoryDialog.Opacity = 0; ApiProbeHistoryScrim.Opacity = 0;
+        ApiProbeHistoryOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, ApiProbeHistoryOverlay, ApiProbeHistoryDialog, _dialogWidthFit);
+
+        _dialogScrollFit.Fit(ApiProbeHistoryScroll, 180, MemoRoot.ActualHeight);
+
+
+        DialogDepth.VeilShow();
+        var sb = new Storyboard();
+        var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
+        Storyboard.SetTarget(si, ApiProbeHistoryScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
+        var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        Storyboard.SetTarget(di, ApiProbeHistoryDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
+        Motion.AddDialogShowTransform(sb, ApiProbeHistoryDialogTransform);
+        sb.Begin();
+    }
+
+    private void HideApiProbeHistoryOverlay()
+    {
+        if (_apiProbeHistoryHiding) return;
+        _apiProbeHistoryHiding = true;
+        DialogDepth.VeilHide();
+        var sb = new Storyboard();
+        var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(so, ApiProbeHistoryScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
+        var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(d, ApiProbeHistoryDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
+        Motion.AddDialogHideTransform(sb, ApiProbeHistoryDialogTransform);
+        sb.Completed += (s, ev) =>
+        {
+            sb.Stop();
+            ApiProbeHistoryOverlay.Visibility = Visibility.Collapsed;
+            _apiProbeHistoryHiding = false;
+        };
+        sb.Begin();
+    }
+
+    private void ApiProbeHistoryCloseButton_Click(object sender, RoutedEventArgs e) => HideApiProbeHistoryOverlay();
+
+    private void ApiProbeHistoryScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    { if (ReferenceEquals(e.OriginalSource, ApiProbeHistoryScrim)) HideApiProbeHistoryOverlay(); }
+
+    private void ApiProbeHistoryClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        var cleared = Novara.Services.ApiProbeHistoryLog.Clear();
+        BuildApiProbeHistoryRows();
+
+
+        App.ShowToast(App.GetString(cleared ? "Common_Toast_Cleared" : "Common_Toast_Failed"),
+            cleared ? ToastTone.Success : ToastTone.Error);
+    }
+
+    private void BuildApiProbeHistoryRows()
+    {
+        ApiProbeHistoryRows.Children.Clear();
+
+        Novara.Services.ApiProbeHistoryLog.WaitForPendingWrites();
+
+
+        var entries = Novara.Services.ApiProbeHistoryLog.ReadRecent(80);
+        if (entries.Count == 0)
+        {
+            ApiProbeHistoryRows.Children.Add(new TextBlock { Text = App.GetString("Memo_Api_History_Empty"), FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush") });
+            return;
+        }
+        foreach (var e in entries)
+        {
+            var kindLabel = e.Kind switch
+            {
+                "diagnose" => App.GetString("Memo_Api_Kind_Diag"),
+                "relay" => App.GetString("Memo_Api_Kind_Relay"),
+                _ => App.GetString("Memo_Api_Kind_Probe"),
+            };
+            var grid = new Grid { ColumnSpacing = 8 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var kind = new TextBlock { Text = kindLabel, FontSize = 11, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(kind, 0);
+            grid.Children.Add(kind);
+            var host = new TextBlock { Text = string.IsNullOrEmpty(e.Host) ? "—" : e.Host, FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush"), TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(host, 1);
+            grid.Children.Add(host);
+            var right = new TextBlock
+            {
+                FontSize = 11,
+                Foreground = App.GetBrush("AppTextSecondaryBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Text = ProbeHistoryStatusText(e.Kind, e.Status) + " · " + (e.LatencyMs < 0 ? "—" : e.LatencyMs + " ms") + " · " + e.Utc.ToLocalTime().ToString("MM-dd HH:mm"),
+            };
+            Grid.SetColumn(right, 2);
+            grid.Children.Add(right);
+            var row = new Border { Background = App.GetBrush("AppSurfaceOverlayBrush"), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 7, 10, 7) };
+            row.Child = grid;
+            ApiProbeHistoryRows.Children.Add(row);
+        }
+    }
+
+
+    private string ProbeHistoryStatusText(string kind, string? status)
+    {
+        if (kind == "relay")
+        {
+            return status switch
+            {
+                "trusted" => App.GetString("Memo_RelayProbe_Verdict_Trusted"),
+                "mostly-trusted" => App.GetString("Memo_RelayProbe_Verdict_MostlyTrusted"),
+                "suspicious" => App.GetString("Memo_RelayProbe_Verdict_Suspicious"),
+                "high-risk" => App.GetString("Memo_RelayProbe_Verdict_HighRisk"),
+                "offline" => App.GetString("Memo_RelayProbe_Verdict_Offline"),
+                _ => App.GetString("Memo_RelayProbe_Verdict_Unknown"),
+            };
+        }
+        var s = status ?? "";
+        if (s.StartsWith("reachable/", StringComparison.Ordinal)) s = s["reachable/".Length..];
+        else if (s.StartsWith("unreachable/", StringComparison.Ordinal)) s = s["unreachable/".Length..];
+        return s switch
+        {
+            "Success" => App.GetString("Memo_Api_Ok_Title"),
+            "InvalidKey" => App.GetString("Memo_Api_AuthFail_Title"),
+            "InsufficientQuota" => App.GetString("Memo_Api_Quota_Title"),
+            "RateLimited" => App.GetString("Memo_Api_RateLimit_Title"),
+            "NoModels" => App.GetString("Memo_Api_NoAuto_Title"),
+            "Permission" => App.GetString("Memo_Api_Permission_Title"),
+            "ServerError" => App.GetString("Memo_Api_ServerError_Title"),
+            "NetworkError" => App.GetString("Memo_Api_NetFail_Title"),
+            "timeout" => App.GetString("Memo_ApiDiag_Timeout"),
+            "exception" => App.GetString("Memo_Api_ProbeFail_Title"),
+            _ => s,
+        };
+    }
+
     private void ShowApiCheckOverlay()
     {
         ApiCheckDialogTransform.ScaleX = 0.94; ApiCheckDialogTransform.ScaleY = 0.94; ApiCheckDialogTransform.TranslateY = 24;
         ApiCheckDialog.Opacity = 0; ApiCheckScrim.Opacity = 0;
-        ApiCheckOverlay.Visibility = Visibility.Visible;
+        ApiCheckOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, ApiCheckOverlay, ApiCheckDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -3028,7 +3282,6 @@ private void ShowApiCheckDialog(Border card)
     }
 
     private void ApiCheckDialogCloseButton_Click(object sender, RoutedEventArgs e) => HideApiCheckOverlay();
-    private void ApiCheckCloseButton_Click(object sender, RoutedEventArgs e) => HideApiCheckOverlay();
     private void ApiCheckScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ApiCheckScrim)) HideApiCheckOverlay(); }
     private void ApiCheckAdvancedButton_Click(object sender, RoutedEventArgs e) => ShowApiProtocolDialog();
 
@@ -3060,6 +3313,7 @@ private void ShowApiCheckDialog(Border card)
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"API 自动探测异常: {ex}");
+            try { Novara.Services.ApiProbeHistoryLog.RecordProbe(Novara.Services.NetworkActivityService.ExtractHost(url), Novara.Services.ApiProbeStatus.NetworkError, -1, TruncateProbeDetail(ex.Message)); } catch { }
             try { SetApiCheckState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), true); }
             catch { }
         }
@@ -3067,6 +3321,8 @@ private void ShowApiCheckDialog(Border card)
 
     private void ApplyProbeReport(Novara.Services.ApiProbeReport report)
     {
+
+        try { Novara.Services.ApiProbeHistoryLog.RecordProbe(Novara.Services.NetworkActivityService.ExtractHost(report.Endpoint), report.Status, report.LatencyMs, TruncateProbeDetail(report.Detail)); } catch { }
 
         ApiCheckReportRows.Children.Clear();
         void AddRow(string label, string value)
@@ -3116,6 +3372,8 @@ private void ShowApiCheckDialog(Border card)
             _ => "Memo_Api_HintGeneric",
         };
         detail.Append(App.GetString(hintKey));
+
+        detail.Append('\n').Append(App.GetString("Memo_Api_Hint_TryDeep"));
 
         var (title, warn) = report.Status switch
         {
@@ -3203,45 +3461,66 @@ private void ShowApiCheckDialog(Border card)
 
     private async Task RunApiDiagAsync(string url, string key, string model)
     {
-        System.Threading.CancellationTokenSource? myCts = null;
+
+
+
+
+        var budgetCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(180));
+        _apiDiagCts?.Cancel();
+        _apiDiagCts?.Dispose();
+        var cancelCts = new System.Threading.CancellationTokenSource();
+        _apiDiagCts = cancelCts;
+
+        using var linkedCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(budgetCts.Token, cancelCts.Token);
         try
         {
-            _apiDiagCts?.Cancel();
-            _apiDiagCts?.Dispose();
-
-            myCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(180));
-            _apiDiagCts = myCts;
-            var ct = myCts.Token;
+            var ct = linkedCts.Token;
 
             App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url));
             var report = await Novara.Services.ApiDiagnoseService.DiagnoseAsync(url, key,model, ct);
-            if (myCts.IsCancellationRequested)
+            if (budgetCts.IsCancellationRequested)
             {
 
-
+                try { Novara.Services.ApiProbeHistoryLog.RecordDiagnoseFailure(Novara.Services.NetworkActivityService.ExtractHost(url), "timeout"); } catch { }
                 SetApiDiagState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_ApiDiag_Timeout"), true);
+            }
+            else if (cancelCts.IsCancellationRequested)
+            {
+
+                return;
             }
             else ApplyDiagReport(report);
         }
-        catch (System.OperationCanceledException) when (myCts != null && myCts.IsCancellationRequested)
+        catch (System.OperationCanceledException) when (budgetCts.IsCancellationRequested)
         {
 
+            try { Novara.Services.ApiProbeHistoryLog.RecordDiagnoseFailure(Novara.Services.NetworkActivityService.ExtractHost(url), "timeout"); } catch { }
             SetApiDiagState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_ApiDiag_Timeout"), true);
         }
         catch (System.OperationCanceledException)
         {
 
+
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"API 诊断异常: {ex}");
+            try { Novara.Services.ApiProbeHistoryLog.RecordDiagnoseFailure(Novara.Services.NetworkActivityService.ExtractHost(url), "exception"); } catch { }
             try { SetApiDiagState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), true); }
             catch { }
+        }
+        finally
+        {
+
+
+            budgetCts.Dispose();
         }
     }
 
     private void ApplyDiagReport(Novara.Services.ApiDiagnoseReport report)
     {
+
+        try { Novara.Services.ApiProbeHistoryLog.RecordDiagnose(Novara.Services.NetworkActivityService.ExtractHost(report.Endpoint), report.Reachable, report.ReachabilityStatus, report.LatencyMs, TruncateProbeDetail(report.BalanceInfer ?? string.Empty)); } catch { }
         ApiDiagReportRows.Children.Clear();
         void AddRow(string label, string value, string status)
         {
@@ -3336,7 +3615,7 @@ private void ShowApiCheckDialog(Border card)
     {
         ApiDiagDialogTransform.ScaleX = 0.94; ApiDiagDialogTransform.ScaleY = 0.94; ApiDiagDialogTransform.TranslateY = 24;
         ApiDiagDialog.Opacity = 0; ApiDiagScrim.Opacity = 0;
-        ApiDiagOverlay.Visibility = Visibility.Visible;
+        ApiDiagOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, ApiDiagOverlay, ApiDiagDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -3371,7 +3650,6 @@ private void ShowApiCheckDialog(Border card)
     }
 
     private void ApiDiagDialogCloseButton_Click(object sender, RoutedEventArgs e) => HideApiDiagOverlay();
-    private void ApiDiagCloseButton_Click(object sender, RoutedEventArgs e) => HideApiDiagOverlay();
     private void ApiDiagScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, ApiDiagScrim)) HideApiDiagOverlay(); }
 
 
@@ -3379,10 +3657,11 @@ private void ShowApiCheckDialog(Border card)
     private void ShowApiConfirmOverlay(System.Action onProceed, string? desc = null)
     {
         _apiConfirmProceed = onProceed;
+        _apiConfirmHiding = false;
         ApiConfirmDescText.Text = desc ?? App.GetString("Memo_ApiConfirm_Desc");
         ApiConfirmDialogTransform.ScaleX = 0.94; ApiConfirmDialogTransform.ScaleY = 0.94; ApiConfirmDialogTransform.TranslateY = 24;
         ApiConfirmDialog.Opacity = 0; ApiConfirmScrim.Opacity = 0;
-        ApiConfirmOverlay.Visibility = Visibility.Visible;
+        ApiConfirmOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, ApiConfirmOverlay, ApiConfirmDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -3395,6 +3674,9 @@ private void ShowApiCheckDialog(Border card)
 
     private void HideApiConfirmOverlay()
     {
+
+        if (_apiConfirmHiding) return;
+        _apiConfirmHiding = true;
         _apiConfirmProceed = null;
         var sb = new Storyboard();
         var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
@@ -3408,10 +3690,11 @@ private void ShowApiCheckDialog(Border card)
         sb.Begin();
     }
 
-    private void OnApiConfirmHideCompleted(object? sender, object e) { ApiConfirmOverlay.Visibility = Visibility.Collapsed; }
+    private void OnApiConfirmHideCompleted(object? sender, object e) { ApiConfirmOverlay.Visibility = Visibility.Collapsed; _apiConfirmHiding = false; }
 
     private void ApiConfirmProceedButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_apiConfirmHiding) return;
         var action = _apiConfirmProceed;
         HideApiConfirmOverlay();
         action?.Invoke();
@@ -3427,25 +3710,27 @@ private void ShowApiCheckDialog(Border card)
     private void ShowRelayProbeConfirm(Border card)
     {
         var (url, key, model) = GetApiEntryFields(card);
-        _relayProbeCard = card;
+
+
+        _relayProbeUrl = url; _relayProbeKey = key; _relayProbeModel = model;
 
         RelayProbeReportRows.Children.Clear();
         if (string.IsNullOrWhiteSpace(url))
         {
-            ShowRelayProbeOverlay();
-            SetRelayProbeState(App.GetString("Memo_Api_MissingUrl_Title"), App.GetString("Memo_Api_MissingUrl_Desc"), "fail");
+            SetRelayProbeResultState(App.GetString("Memo_Api_MissingUrl_Title"), App.GetString("Memo_Api_MissingUrl_Desc"), "fail", canRetest: false);
+            ShowRelayProbeResult();
             return;
         }
         if (string.IsNullOrWhiteSpace(key))
         {
-            ShowRelayProbeOverlay();
-            SetRelayProbeState(App.GetString("Memo_Api_MissingKey_Title"), App.GetString("Memo_Api_MissingKey_Desc"), "fail");
+            SetRelayProbeResultState(App.GetString("Memo_Api_MissingKey_Title"), App.GetString("Memo_Api_MissingKey_Desc"), "fail", canRetest: false);
+            ShowRelayProbeResult();
             return;
         }
         if (string.IsNullOrWhiteSpace(model))
         {
-            ShowRelayProbeOverlay();
-            SetRelayProbeState(App.GetString("Memo_ApiDiag_MissingModel_Title"), App.GetString("Memo_ApiDiag_MissingModel_Desc"), "fail");
+            SetRelayProbeResultState(App.GetString("Memo_ApiDiag_MissingModel_Title"), App.GetString("Memo_ApiDiag_MissingModel_Desc"), "fail", canRetest: false);
+            ShowRelayProbeResult();
             return;
         }
         bool local = url.Contains("localhost", StringComparison.OrdinalIgnoreCase) || url.Contains("127.0.0.1", StringComparison.OrdinalIgnoreCase);
@@ -3454,36 +3739,48 @@ private void ShowApiCheckDialog(Border card)
 
     private void StartRelayProbe(string url, string key, string model)
     {
+        _relayProbeUrl = url; _relayProbeKey = key; _relayProbeModel = model;
         RelayProbeReportRows.Children.Clear();
-        SetRelayProbeState(App.GetString("Memo_RelayProbe_Checking"), App.GetString("Memo_RelayProbe_CheckingHint"), "probing");
-        ShowRelayProbeOverlay();
+        RelayProbeRunningTitleText.Text = App.GetString("Memo_RelayProbe_Checking");
+        RelayProbeRunningHintText.Text = App.GetString("Memo_RelayProbe_CheckingHint");
+        RelayProbeRunningTitleText.Foreground = App.GetBrush("AppTextPrimaryBrush");
+        ShowRelayProbeRunning();
         StartRelayProbePulse();
         _ = RunRelayProbeAsync(url, key, model);
     }
 
     private async Task RunRelayProbeAsync(string url, string key, string model)
     {
+        System.Threading.CancellationTokenSource? myCts = null;
         try
         {
             _relayProbeCts?.Cancel();
             _relayProbeCts?.Dispose();
-            _relayProbeCts = new System.Threading.CancellationTokenSource();
-            var ct = _relayProbeCts.Token;
+            _relayProbeCts = myCts = new System.Threading.CancellationTokenSource();
+            var ct = myCts.Token;
 
             App.ShowToast(App.GetString("NetActivity_Active") + " " + Novara.Services.NetworkActivityService.ExtractHost(url));
             var report = await Novara.Services.RelayProbeService.ProbeAsync(url, key, model, ct);
             if (ct.IsCancellationRequested) return;
+            try { Novara.Services.ApiProbeHistoryLog.RecordRelay(Novara.Services.NetworkActivityService.ExtractHost(url), report.Verdict, "score=" + report.Score.ToString("0") + ";seed=" + report.Seed); } catch { }
             ApplyRelayProbeReport(report);
         }
-        catch (System.OperationCanceledException) when (_relayProbeCts?.IsCancellationRequested == true)
+        catch (System.OperationCanceledException) when (myCts?.IsCancellationRequested == true)
         {
-            StopRelayProbePulse();
+
+            if (ReferenceEquals(_relayProbeCts, myCts)) StopRelayProbePulse();
         }
         catch (Exception ex)
         {
             StopRelayProbePulse();
             System.Diagnostics.Debug.WriteLine($"中转站探针异常: {ex}");
-            try { SetRelayProbeState(App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), "fail"); }
+            try { Novara.Services.ApiProbeHistoryLog.RecordRelayFailure(Novara.Services.NetworkActivityService.ExtractHost(url), "exception"); } catch { }
+            try
+            {
+                HideRelayProbeRunningImmediate();
+                SetRelayProbeResultState(App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), "fail");
+                ShowRelayProbeResult();
+            }
             catch { }
         }
     }
@@ -3491,6 +3788,7 @@ private void ShowApiCheckDialog(Border card)
     private void ApplyRelayProbeReport(Novara.Services.RelayProbeReport report)
     {
         StopRelayProbePulse();
+        HideRelayProbeRunningImmediate();
         RelayProbeReportRows.Children.Clear();
         string ItemLabel(string key) => key switch
         {
@@ -3512,28 +3810,48 @@ private void ShowApiCheckDialog(Border card)
                 Novara.Services.ProbeVerdict.Fail => (((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color, "\uE783"),
                 _ => (Color.FromArgb(0xFF, 0x90, 0x90, 0x90), "\uE72A"),
             };
-            var card = new Border { Background = App.GetBrush("AppSurfaceOverlayBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 10, 12, 10) };
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.Children.Add(new FontIcon { Glyph = glyph, FontSize = 14, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
-            var name = new TextBlock { Text = ItemLabel(p.Key), FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(name, 1);
-            grid.Children.Add(name);
-            if (!string.IsNullOrEmpty(p.Evidence))
+
+
+            var rowBorder = new Border
             {
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var ev = new TextBlock { Text = p.Evidence, FontSize = 11, Foreground = App.GetBrush("AppTextTertiaryBrush"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
-                Grid.SetRow(ev, 1);
-                Grid.SetColumn(ev, 1);
-                grid.Children.Add(ev);
-            }
-            card.Child = grid;
-            RelayProbeReportRows.Children.Add(card);
+                BorderBrush = App.GetBrush("AppBorderBrush"),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(0, 8, 0, 8)
+            };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var name = new TextBlock { Text = ItemLabel(p.Key), FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            Grid.SetColumn(name, 0);
+            grid.Children.Add(name);
+            var resultCell = new Grid { Margin = new Thickness(16, 0, 0, 0) };
+            resultCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+            resultCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            resultCell.Children.Add(new FontIcon { Glyph = glyph, FontSize = 14, Foreground = new SolidColorBrush(color), VerticalAlignment = VerticalAlignment.Center });
+            var valueText = new TextBlock
+            {
+                Text = p.Evidence ?? "",
+                FontSize = 11,
+                Foreground = App.GetBrush("AppTextTertiaryBrush"),
+                TextWrapping = TextWrapping.Wrap,
+                MaxLines = 2,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (!string.IsNullOrEmpty(p.Evidence)) Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(valueText, p.Evidence);
+            Grid.SetColumn(valueText, 1);
+            resultCell.Children.Add(valueText);
+            Grid.SetColumn(resultCell, 1);
+            grid.Children.Add(resultCell);
+            rowBorder.Child = grid;
+            RelayProbeReportRows.Children.Add(rowBorder);
         }
 
         foreach (var p in report.Probes) AddProbe(p);
+
+        if (RelayProbeReportRows.Children.Count > 0 && RelayProbeReportRows.Children[^1] is Border lastRow)
+            lastRow.BorderThickness = new Thickness(0);
 
         string verdictText = report.Verdict switch
         {
@@ -3552,8 +3870,9 @@ private void ShowApiCheckDialog(Border card)
             "high-risk" => ((SolidColorBrush)App.GetBrush("AppDangerTextBrush")).Color,
             _ => Color.FromArgb(0xFF, 0x90, 0x90, 0x90),
         };
-        RelayProbeVerdictText.Text = verdictText;
-        RelayProbeVerdictText.Foreground = new SolidColorBrush(verdictColor);
+        RelayProbeResultVerdictText.Text = verdictText;
+        RelayProbeResultVerdictText.Foreground = new SolidColorBrush(verdictColor);
+        RelayProbeRetestButton.Visibility = Visibility.Visible;
 
         var statusSb = new System.Text.StringBuilder();
         if (report.Reachable)
@@ -3563,16 +3882,24 @@ private void ShowApiCheckDialog(Border card)
             statusSb.Append('\n').Append(string.Format(App.GetString("Memo_RelayProbe_Suspect"), report.SuspectModel));
         if (!report.Reachable && !string.IsNullOrEmpty(report.Detail))
             statusSb.Append('\n').Append(report.Detail);
-        RelayProbeStatusText.Text = statusSb.ToString();
+        RelayProbeResultStatusText.Text = statusSb.ToString();
+        RelayProbeReportHeader.Visibility = RelayProbeReportRows.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowRelayProbeResult();
     }
 
-    private void SetRelayProbeState(string title, string detail, string kind)
+
+    private void SetRelayProbeResultState(string title, string detail, string kind, bool canRetest = true)
     {
-        RelayProbeVerdictText.Text = title;
-        RelayProbeStatusText.Text = detail;
-        RelayProbeVerdictText.Foreground = kind == "fail"
+
+        RelayProbeReportHeader.Visibility = Visibility.Collapsed;
+        RelayProbeResultVerdictText.Text = title;
+        RelayProbeResultStatusText.Text = detail;
+        RelayProbeResultVerdictText.Foreground = kind == "fail"
             ? App.GetBrush("AppDangerTextBrush")
             : App.GetBrush("AppTextPrimaryBrush");
+
+
+        RelayProbeRetestButton.Visibility = canRetest ? Visibility.Visible : Visibility.Collapsed;
     }
 
 
@@ -3587,7 +3914,7 @@ private void ShowApiCheckDialog(Border card)
             AutoReverse = true,
             RepeatBehavior = RepeatBehavior.Forever,
         };
-        Storyboard.SetTarget(anim, RelayProbeVerdictText);
+        Storyboard.SetTarget(anim, RelayProbeRunningTitleText);
         Storyboard.SetTargetProperty(anim, "Opacity");
         sb.Children.Add(anim);
         sb.Begin();
@@ -3598,58 +3925,147 @@ private void ShowApiCheckDialog(Border card)
     {
         _relayProbePulse?.Stop();
         _relayProbePulse = null;
-        RelayProbeVerdictText.Opacity = 1.0;
+        RelayProbeRunningTitleText.Opacity = 1.0;
     }
 
-    private void ShowRelayProbeOverlay()
+
+    private void ShowRelayProbeRunning()
     {
-
-
-        double viewport = MemoRoot.ActualHeight;
-        DialogUi.ClampDialogHeight(RelayProbeDialog, viewport);
-
-        RelayProbeDialogTransform.ScaleX = 0.94; RelayProbeDialogTransform.ScaleY = 0.94; RelayProbeDialogTransform.TranslateY = 24;
-        RelayProbeDialog.Opacity = 0; RelayProbeScrim.Opacity = 0;
-        RelayProbeOverlay.Visibility = Visibility.Visible;
-        DialogDepth.VeilShow();
+        _relayProbeRunningHideGen++;
+        var continueChain = _relayProbeVeilHeld;
+        RelayProbeRunningTransform.ScaleX = 0.94; RelayProbeRunningTransform.ScaleY = 0.94; RelayProbeRunningTransform.TranslateY = 24;
+        RelayProbeRunningDialog.Opacity = 0; RelayProbeRunningScrim.Opacity = continueChain ? 1 : 0;
+        RelayProbeRunningOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, RelayProbeRunningOverlay, RelayProbeRunningDialog, _dialogWidthFit);
+        HoldRelayProbeVeil();
         var sb = new Storyboard();
-        var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
-        Storyboard.SetTarget(si, RelayProbeScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
+
+
+        if (!continueChain)
+        {
+            var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
+            Storyboard.SetTarget(si, RelayProbeRunningScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
+        }
         var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
-        Storyboard.SetTarget(di, RelayProbeDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
-        Motion.AddDialogShowTransform(sb, RelayProbeDialogTransform);
+        Storyboard.SetTarget(di, RelayProbeRunningDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
+        Motion.AddDialogShowTransform(sb, RelayProbeRunningTransform);
         sb.Begin();
     }
 
-    private void HideRelayProbeOverlay()
+    private void ReclampVisibleDialogs()
+        => DialogUi.ReclampVisibleDialogs(MemoRoot, _dialogMap, _dialogScrollFit, _dialogWidthFit);
+
+
+    private void ShowRelayProbeResult()
     {
+        _relayProbeResultHideGen++;
+        var continueChain = _relayProbeVeilHeld;
+        DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, RelayProbeResultOverlay, RelayProbeResultDialog, _dialogWidthFit);
+
+        RelayProbeResultTransform.ScaleX = 0.94; RelayProbeResultTransform.ScaleY = 0.94; RelayProbeResultTransform.TranslateY = 24;
+        RelayProbeResultDialog.Opacity = 0; RelayProbeResultScrim.Opacity = continueChain ? 1 : 0;
+        RelayProbeResultOverlay.Visibility = Visibility.Visible;
+        HoldRelayProbeVeil();
+        var sb = new Storyboard();
+
+        if (!continueChain)
+        {
+            var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
+            Storyboard.SetTarget(si, RelayProbeResultScrim); Storyboard.SetTargetProperty(si, "Opacity"); sb.Children.Add(si);
+        }
+        var di = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        Storyboard.SetTarget(di, RelayProbeResultDialog); Storyboard.SetTargetProperty(di, "Opacity"); sb.Children.Add(di);
+        Motion.AddDialogShowTransform(sb, RelayProbeResultTransform);
+        sb.Begin();
+    }
+
+
+
+    private void HoldRelayProbeVeil()
+    {
+        if (_relayProbeVeilHeld) return;
+        DialogDepth.VeilShow();
+        _relayProbeVeilHeld = true;
+    }
+
+
+    private void HideRelayProbeRunningImmediate()
+    {
+        StopRelayProbePulse();
+        RelayProbeRunningOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideRelayProbeRunning()
+    {
+        var hideGen = _relayProbeRunningHideGen;
         StopRelayProbePulse();
         _relayProbeCts?.Cancel();
         _relayProbeCts?.Dispose();
         _relayProbeCts = null;
         var sb = new Storyboard();
         var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(so, RelayProbeScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
+        Storyboard.SetTarget(so, RelayProbeRunningScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(d, RelayProbeDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
-        Motion.AddDialogHideTransform(sb, RelayProbeDialogTransform);
-        sb.Completed -= OnRelayProbeHideCompleted;
-        sb.Completed += OnRelayProbeHideCompleted;
-        DialogDepth.VeilHide();
+        Storyboard.SetTarget(d, RelayProbeRunningDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
+        Motion.AddDialogHideTransform(sb, RelayProbeRunningTransform);
+        sb.Completed += (_, _) => OnRelayProbeRunningHideCompleted(hideGen);
+        ReleaseRelayProbeVeil();
         sb.Begin();
     }
 
-    private void OnRelayProbeHideCompleted(object? sender, object e)
+    private void OnRelayProbeRunningHideCompleted(int hideGen)
     {
-        RelayProbeOverlay.Visibility = Visibility.Collapsed;
-        _relayProbeCard = null;
+        if (hideGen != _relayProbeRunningHideGen) return;
+        RelayProbeRunningOverlay.Visibility = Visibility.Collapsed;
     }
 
-    private void RelayProbeDialogCloseButton_Click(object sender, RoutedEventArgs e) => HideRelayProbeOverlay();
-    private void RelayProbeCloseButton_Click(object sender, RoutedEventArgs e) => HideRelayProbeOverlay();
-    private void RelayProbeScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, RelayProbeScrim)) HideRelayProbeOverlay(); }
+    private void HideRelayProbeResult()
+    {
+        var hideGen = _relayProbeResultHideGen;
+        var sb = new Storyboard();
+        var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(so, RelayProbeResultScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
+        var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(d, RelayProbeResultDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
+        Motion.AddDialogHideTransform(sb, RelayProbeResultTransform);
+        sb.Completed += (_, _) => OnRelayProbeResultHideCompleted(hideGen);
+        ReleaseRelayProbeVeil();
+        sb.Begin();
+    }
 
-    private void RelayProbeLoadDatasetButton_Click(object sender, RoutedEventArgs e)
+    private void OnRelayProbeResultHideCompleted(int hideGen)
+    {
+        if (hideGen != _relayProbeResultHideGen) return;
+        RelayProbeResultOverlay.Visibility = Visibility.Collapsed;
+    }
+
+
+    private void HideRelayProbeResultImmediate()
+    {
+        RelayProbeResultOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void ReleaseRelayProbeVeil()
+    {
+        if (!_relayProbeVeilHeld) return;
+        DialogDepth.VeilHide();
+        _relayProbeVeilHeld = false;
+    }
+
+    private void RelayProbeRunningCloseButton_Click(object sender, RoutedEventArgs e) => HideRelayProbeRunning();
+    private void RelayProbeRunningScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, RelayProbeRunningScrim)) HideRelayProbeRunning(); }
+    private void RelayProbeResultCloseButton_Click(object sender, RoutedEventArgs e) => HideRelayProbeResult();
+    private void RelayProbeResultScrim_Tapped(object sender, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, RelayProbeResultScrim)) HideRelayProbeResult(); }
+
+
+    private void RelayProbeRetestButton_Click(object sender, RoutedEventArgs e)
+    {
+        string url = _relayProbeUrl, key = _relayProbeKey, model = _relayProbeModel;
+        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(model)) return;
+        HideRelayProbeResultImmediate();
+        StartRelayProbe(url, key, model);
+    }
+
+    private async void RelayProbeLoadDatasetButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
@@ -3657,14 +4073,47 @@ private void ShowApiCheckDialog(Border card)
             if (path == null) return;
 
             var json = System.IO.File.ReadAllText(path);
-            if (!Novara.Services.ProbeDataSetLoader.TryParse(json, out _, out var error))
+            if (!Novara.Services.ProbeDataSetLoader.TryParse(json, out var parsed, out var error))
             {
                 App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" + error, ToastTone.Error);
                 return;
             }
-            var dest = System.IO.Path.Combine(System.AppContext.BaseDirectory, Novara.Services.ProbeDataSetLoader.DefaultFileName);
-            System.IO.File.Copy(path, dest, overwrite: true);
-            App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset"));
+
+
+
+            if (parsed!.Version < Novara.Services.ProbeDataSetLoader.LoadFromFile().Version)
+            {
+                App.ShowToast(App.GetString("Memo_RelayProbe_LoadDataset") + "：" +
+                    string.Format(App.GetString("Memo_RelayProbe_VersionLower"), parsed.Version,
+                        Novara.Services.ProbeDataSetLoader.LoadFromFile().Version), ToastTone.Error);
+                return;
+            }
+
+
+            var dest = Novara.Services.ProbeDataSetLoader.UserDataSetPath;
+
+
+
+
+            var srcFull = System.IO.Path.GetFullPath(path);
+            var destFull = System.IO.Path.GetFullPath(dest);
+            if (!string.Equals(srcFull, destFull, System.StringComparison.OrdinalIgnoreCase))
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest)!);
+                System.IO.File.Copy(path, dest, overwrite: true);
+            }
+
+
+
+            App.ShowToast(App.GetString("Memo_RelayProbe_LoadedRestart"), ToastTone.Success);
+            await MainWindow.FlushPendingEditorForRestartAsync();
+            if (App.Store is { } store && !store.SaveSync())
+            {
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+                return;
+            }
+            await System.Threading.Tasks.Task.Delay(800);
+            MainWindow.RestartNow();
         }
         catch (Exception ex)
         {
@@ -3675,13 +4124,22 @@ private void ShowApiCheckDialog(Border card)
         }
     }
 
+
+
+
+    private void RelayProbeDatasetGuide_Click(Microsoft.UI.Xaml.Documents.Hyperlink sender, Microsoft.UI.Xaml.Documents.HyperlinkClickEventArgs args)
+    {
+        var lang = App.CurrentLanguage.StartsWith("zh") ? "zh" : "en";
+        OpenWebsite("https://www.novara.xin/help/probe.html?lang=" + lang);
+    }
+
     private void ShowApiProtocolDialog()
     {
         _selectedApiProtocol = _apiCheckCard != null && _apiProtocols.TryGetValue(_apiCheckCard, out var p) ? p : "Bearer";
         UpdateApiProtocolButton();
         ApiProtocolDialogTransform.ScaleX = 0.94; ApiProtocolDialogTransform.ScaleY = 0.94; ApiProtocolDialogTransform.TranslateY = 24;
         ApiProtocolDialog.Opacity = 0; ApiProtocolScrim.Opacity = 0;
-        ApiProtocolOverlay.Visibility = Visibility.Visible;
+        ApiProtocolOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp(MemoRoot, _dialogMap, ApiProtocolOverlay, ApiProtocolDialog, _dialogWidthFit);
         DialogDepth.VeilShow();
         var sb = new Storyboard();
         var si = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -3750,28 +4208,38 @@ private void ShowApiCheckDialog(Border card)
 
     private async void ApiRetryButton_Click(object sender, RoutedEventArgs e)
     {
+        System.Threading.CancellationTokenSource? myCts = null;
+        string url = ""; string key = "";
         try
         {
             HideApiProtocolDialog();
             if (_apiCheckCard == null || !_entryData.TryGetValue(_apiCheckCard, out var d)) return;
-            string url = ""; string key = "";
             foreach (var f in d.fields)
             {
                 if (f.Item1 == "URL") url = f.Item2.Trim();
                 else if (f.Item1 == "API Key") key = f.Item2.Trim();
             }
-            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key)) return;
-            SetApiCheckState("probing", App.GetString("Memo_Api_CheckingManual"), string.Format(App.GetString("Memo_Api_CheckingWith"), ApiProtocolButtonText.Text));
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(key))
+            {
+
+                BeginApiProbeUi(App.GetString("Memo_Api_CheckingManual"), string.Format(App.GetString("Memo_Api_CheckingWith"), ApiProtocolButtonText.Text));
+                SetApiCheckState("fail",
+                    App.GetString(string.IsNullOrWhiteSpace(url) ? "Memo_Api_MissingUrl_Title" : "Memo_Api_MissingKey_Title"),
+                    App.GetString(string.IsNullOrWhiteSpace(url) ? "Memo_Api_MissingUrl_Desc" : "Memo_Api_MissingKey_Desc"), true);
+                return;
+            }
+            BeginApiProbeUi(App.GetString("Memo_Api_CheckingManual"), string.Format(App.GetString("Memo_Api_CheckingWith"), ApiProtocolButtonText.Text));
             _apiCheckCts?.Cancel();
             _apiCheckCts?.Dispose();
-            _apiCheckCts = new System.Threading.CancellationTokenSource();
-            var ct = _apiCheckCts.Token;
+            myCts = new System.Threading.CancellationTokenSource();
+            _apiCheckCts = myCts;
+            var ct = myCts.Token;
             var report = await Novara.Services.ApiProbeService.ProbeWithProtocolAsync(url, key, _selectedApiProtocol, ct);
             if (ct.IsCancellationRequested) return;
             if (report.Status == Novara.Services.ApiProbeStatus.Success) SaveApiProtocol(_selectedApiProtocol);
             ApplyProbeReport(report);
         }
-        catch (OperationCanceledException) when (_apiCheckCts?.IsCancellationRequested == true)
+        catch (OperationCanceledException) when (myCts?.IsCancellationRequested == true)
         {
 
         }
@@ -3779,7 +4247,15 @@ private void ShowApiCheckDialog(Border card)
         {
 
             System.Diagnostics.Debug.WriteLine($"API 手动重试异常: {ex}");
-            try { SetApiCheckState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), true); }
+
+            try { Novara.Services.ApiProbeHistoryLog.RecordProbe(Novara.Services.NetworkActivityService.ExtractHost(url), Novara.Services.ApiProbeStatus.NetworkError, -1, TruncateProbeDetail(ex.Message)); } catch { }
+            try
+            {
+                ApiCheckReportRows.Children.Clear();
+                ApiCheckReportPanel.Visibility = Visibility.Collapsed;
+                ApiCheckStatusDetail.Text = "";
+                SetApiCheckState("fail", App.GetString("Memo_Api_ProbeFail_Title"), App.GetString("Memo_Api_ProbeException_Desc"), true);
+            }
             catch { }
         }
     }
@@ -4074,7 +4550,9 @@ private void ShowApiCheckDialog(Border card)
         if (dst != curVisible)
         {
             container.Children.Remove(card);
-            container.Children.Insert(PhysicalIndexForVisibleSlotIn(dst, container), card);
+
+
+            container.Children.Insert(InsertIndexAfterVisibleSlot(dst, container), card);
         }
 
         PersistAll();
@@ -4098,18 +4576,20 @@ private void ShowApiCheckDialog(Border card)
 
 
 
-    private int PhysicalIndexForVisibleSlotIn(int visibleSlot, Panel container)
+    private int InsertIndexAfterVisibleSlot(int visibleSlot, Panel container)
     {
+        FrameworkElement? before = null, after = null;
         int seen = 0;
-        var children = container.Children;
-        for (int i = 0; i < children.Count; i++)
+        foreach (var child in container.Children)
         {
-            if (children[i] is FrameworkElement fe && fe.Visibility == Visibility.Visible)
-            {
-                if (seen == visibleSlot) return i;
-                seen++;
-            }
+            if (ReferenceEquals(child, _dropIndicator)) continue;
+            if (child is not FrameworkElement fe || fe.Visibility != Visibility.Visible) continue;
+            if (seen == visibleSlot - 1) before = fe;
+            if (seen == visibleSlot) { after = fe; break; }
+            seen++;
         }
-        return children.Count;
+        if (before != null) return container.Children.IndexOf(before) + 1;
+        if (after != null) return container.Children.IndexOf(after);
+        return container.Children.Count;
     }
 }

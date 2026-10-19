@@ -1,3 +1,4 @@
+using Novara.Models;
 using Novara.Services;
 using Xunit;
 
@@ -54,9 +55,14 @@ public class StoreSavedEventTests : IDisposable
         var count = 0;
         store.Saved += () => Interlocked.Increment(ref count);
 
+
+
+        var before = File.ReadAllBytes(_file);
+        store.Database.MemoEntries.Add(new MemoEntry { Name = "落盘过", Type = "自定义" });
+
         Assert.True(store.SaveSync());
         Assert.Equal(0, count);
-        Assert.True(File.Exists(_file), "the write itself must still have happened");
+        Assert.NotEqual(before, File.ReadAllBytes(_file));
     }
 
     [Fact]
@@ -100,8 +106,14 @@ public class StoreSavedEventTests : IDisposable
         Assert.True(store.IsLoaded);
 
         store.Saved += () => throw new InvalidOperationException("subscriber blew up");
+
+
+
+        var before = File.ReadAllBytes(_file);
+        store.Database.MemoEntries.Add(new MemoEntry { Name = "落盘过", Type = "自定义" });
+
         await store.SaveAsync();
 
-        Assert.True(File.Exists(_file));
+        Assert.NotEqual(before, File.ReadAllBytes(_file));
     }
 }

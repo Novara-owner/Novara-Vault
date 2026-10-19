@@ -436,7 +436,11 @@ public static class McpLogic
             {
                 if (IsSensitiveLabel(f.Label))
                 {
-                    var old = e.Fields.FirstOrDefault(x => string.Equals(x.Label, f.Label, StringComparison.OrdinalIgnoreCase));
+
+
+
+                    var label = f.Label?.Trim() ?? "";
+                    var old = e.Fields.FirstOrDefault(x => string.Equals(x.Label?.Trim() ?? "", label, StringComparison.OrdinalIgnoreCase));
                     if (old != null && old.Value != f.Value)
                         throw new McpError($"不能修改已有敏感字段「{f.Label}」");
                 }
@@ -446,8 +450,11 @@ public static class McpLogic
 
             foreach (var g in e.Fields.Where(x => IsSensitiveLabel(x.Label) && !string.IsNullOrEmpty(x.Value)))
             {
+
+
+
                 bool movedToNonSensitive = fields.Any(f =>
-                    !IsSensitiveLabel(f.Label) && string.Equals(f.Value, g.Value, StringComparison.Ordinal));
+                    !IsSensitiveLabel(f.Label) && string.Equals(f.Value.Trim(), g.Value.Trim(), StringComparison.Ordinal));
                 if (movedToNonSensitive)
                     throw new McpError($"不能把敏感字段「{g.Label}」的值移动到非敏感标签下（会绕过脱敏）。请先清除该值再改名。");
             }

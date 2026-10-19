@@ -285,6 +285,18 @@ public class SyncApiClientTests
     }
 
     [Fact]
+    public void DataTimeout_ScalesWithPayload_KeepsSmallRequestsAtTheBase_AndCaps()
+    {
+
+
+
+        Assert.Equal(TimeSpan.FromSeconds(30), SyncApiClient.ComputeDataTimeout(0));
+        Assert.Equal(TimeSpan.FromSeconds(30), SyncApiClient.ComputeDataTimeout(-1));
+        Assert.Equal(TimeSpan.FromSeconds(42.625), SyncApiClient.ComputeDataTimeout(413696));
+        Assert.Equal(TimeSpan.FromSeconds(1800), SyncApiClient.ComputeDataTimeout(long.MaxValue / 2));
+    }
+
+    [Fact]
     public async Task MissingDeviceCredentials_FailWithoutTouchingTheNetwork()
     {
         using var client = new SyncApiClient("https://novara.invalid", "space");
@@ -306,16 +318,21 @@ public class SyncApiClientTests
         private readonly HttpStatusCode _status;
         private readonly string _body;
         private readonly (string Name, string Value)? _header;
+        private readonly int _failFirst;
+        private int _calls;
 
-        public StubHandler(HttpStatusCode status, string body, (string Name, string Value)? header = null)
+
+        public StubHandler(HttpStatusCode status, string body, (string Name, string Value)? header = null, int failFirst = 0)
         {
             _status = status;
             _body = body;
             _header = header;
+            _failFirst = failFirst;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (_calls++ < _failFirst) throw new HttpRequestException("transient failure");
             var response = new HttpResponseMessage(_status) { Content = new StringContent(_body, Encoding.UTF8, "application/json") };
             if (_header is { } header) response.Headers.Add(header.Name, header.Value);
             return Task.FromResult(response);
@@ -414,5 +431,18 @@ public class SyncApiClientTests
 
         Assert.True(result.Success);
         Assert.Equal(3, result.Value!.Version);
+    }
+
+    [Fact]
+    public async Task CapabilityProbe_DoesNotRememberATransientFailure()
+    {
+
+
+
+        using var http = new HttpClient(new StubHandler(HttpStatusCode.OK, "{\"containerV5\":true}", failFirst: 1));
+        using var client = new SyncApiClient("https://novara.example.com", "space", "device", "token", httpClient: http);
+
+        Assert.False(await client.SupportsContainerV5Async(default));
+        Assert.True(await client.SupportsContainerV5Async(default));
     }
 }

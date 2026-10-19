@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using Novara.Server;
 using Xunit;
 
@@ -7,6 +8,19 @@ namespace Novara.Tests;
 
 public class SyncHostPipelineTests
 {
+    [Fact]
+    public async Task RegistrationBody_IsRejectedBeforeModelBinding()
+    {
+
+
+
+        await using var server = await HostedSyncServer.StartAsync();
+        using var http = new HttpClient();
+        using var body = new StringContent(new string('{', 20 * 1024), Encoding.UTF8, "application/json");
+        var response = await http.PostAsync(server.BaseUrl + "/api/v1/devices/register", body);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
     [Fact]
     public async Task ForwardedHeaders_AreProcessed_SoARemoteClaimedPeerCannotSkipTheTransportGuard()
     {
@@ -48,6 +62,8 @@ public class SyncHostPipelineTests
     [Fact]
     public async Task AllowedHosts_MalformedHostPort_IsTheDocumentedBadRequest_NotA500()
     {
+
+
 
 
 
@@ -102,6 +118,39 @@ public class SyncHostPipelineTests
         var quiet = new List<string>();
         Assert.Equal(new[] { "[::1]", "*.example.com" },
             SyncHostSetup.NormalizeAllowedHosts("[::1], *.example.com", quiet.Add));
+        Assert.Empty(quiet);
+    }
+
+    [Fact]
+    public void AllowedHosts_BracketedIpv6WithAPort_IsReported()
+    {
+
+
+        var warnings = new List<string>();
+        var hosts = SyncHostSetup.NormalizeAllowedHosts("[::1]:5180, [::1]", warnings.Add);
+
+        Assert.Equal(new[] { "[::1]:5180", "[::1]" }, hosts);
+        Assert.Single(warnings);
+        Assert.Contains("port", warnings[0]);
+    }
+
+    [Fact]
+    public void AllowedHosts_OnlySeparators_FailsClosedInsteadOfOpen()
+    {
+
+
+
+        var warnings = new List<string>();
+        var hosts = SyncHostSetup.NormalizeAllowedHosts(", ,", warnings.Add);
+
+        Assert.Single(hosts);
+        Assert.NotEmpty(hosts[0]);
+        Assert.Single(warnings);
+        Assert.Contains("no hostname", warnings[0]);
+
+
+        var quiet = new List<string>();
+        Assert.Empty(SyncHostSetup.NormalizeAllowedHosts("  ", quiet.Add));
         Assert.Empty(quiet);
     }
 

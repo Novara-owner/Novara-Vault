@@ -102,17 +102,18 @@ public static class SyncAuditLog
 
 
 
-    public static void ClearAllWithMarker()
+    public static bool ClearAllWithMarker()
     {
         try
         {
             var marker = new SyncAuditEvent { Ev = SyncAuditEvents.AuditCleared, Detail = "-", Ok = true };
             Prepare(marker);
-            Store.ClearAllWithMarker(marker);
+            return Store.ClearAllWithMarker(marker);
         }
         catch (Exception ex)
         {
             AuditWriteHealth.Report("sync-audit clear", ex);
+            return false;
         }
     }
 
@@ -138,7 +139,7 @@ public static class SyncAuditLog
 
 
 
-    internal static void ClearAll() => Store.ClearAll();
+    internal static bool ClearAll() => Store.ClearAll();
 
 
     public static int CountAll() => Store.CountAll();

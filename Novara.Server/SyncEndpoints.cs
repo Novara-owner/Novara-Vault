@@ -17,6 +17,10 @@ public static class SyncEndpoints
 
     private const string ReadPrefix = SyncApi.ReadScheme + " ";
 
+
+    private const string ContainerV5Header = SyncApi.ContainerV5Header;
+    private const string ChunkIdsHeader = SyncApi.ChunkIdsHeader;
+
     public static void MapSyncEndpoints(this WebApplication app)
     {
         var api = app.MapGroup(SyncApi.ApiPrefix);
@@ -41,8 +45,20 @@ public static class SyncEndpoints
             {
 
 
+
+
                 (context.HttpContext.RequestServices.GetService(typeof(ILoggerFactory)) as ILoggerFactory)
                     ?.CreateLogger("SyncEndpoints").LogError(e, "sync storage failure");
+                return Error(SyncErrorCode.ServerError, e.Message);
+            }
+
+
+
+
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+            {
+                (context.HttpContext.RequestServices.GetService(typeof(ILoggerFactory)) as ILoggerFactory)
+                    ?.CreateLogger("SyncEndpoints").LogError(e, "sync storage failure (raw IO)");
                 return Error(SyncErrorCode.ServerError, e.Message);
             }
         });
@@ -53,8 +69,12 @@ public static class SyncEndpoints
                 return Error(SyncErrorCode.BadRequest, "space id is not valid");
 
 
+            if ((body.DeviceName?.Length ?? 0) > 128)
+                return Error(SyncErrorCode.BadRequest, "device name is too long");
 
-            var result = service.RegisterDevice(body.SpaceId, body.EnrollmentSecret, body.DeviceName,
+
+
+            var result = service.RegisterDevice(body.SpaceId, body.EnrollmentSecret, body.DeviceName ?? "",
                 ctx.Connection.RemoteIpAddress?.ToString());
             if (!result.Success) return Map(result);
 
@@ -63,6 +83,19 @@ public static class SyncEndpoints
                 DeviceId = result.Value!.DeviceId,
                 DeviceToken = result.Value.DeviceToken,
             });
+        }).AddEndpointFilter(async (context, next) =>
+        {
+
+
+
+
+            const long MaxRegistrationBytes = 16 * 1024;
+            var http = context.HttpContext;
+            if (http.Request.ContentLength is > MaxRegistrationBytes)
+                return Error(SyncErrorCode.PayloadTooLarge, $"registration body exceeds {MaxRegistrationBytes} bytes");
+            var sizeFeature = http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = MaxRegistrationBytes;
+            return await next(context);
         });
 
         api.MapGet("/space/info", (HttpContext ctx, SpaceService service) =>
@@ -78,7 +111,10 @@ public static class SyncEndpoints
             var auth = AuthorizeRead(ctx, service);
             if (!auth.Success) return Map(auth);
 
-            var result = service.GetData(auth.Value!, version ?? 0);
+
+            var containerV5 = ctx.Request.Headers[ContainerV5Header].ToString() == "1";
+            var deviceAuth = !ctx.Request.Headers.Authorization.ToString().StartsWith(ReadPrefix, StringComparison.OrdinalIgnoreCase);
+            var result = service.GetData(auth.Value!, version ?? 0, containerV5Capable: containerV5, deviceAuth: deviceAuth);
             if (!result.Success) return Map(result);
 
             ctx.Response.Headers[VersionHeader] = result.Value!.Version.Version
@@ -113,9 +149,66 @@ public static class SyncEndpoints
             var body = await reader.ReadToEndAsync();
             if (string.IsNullOrWhiteSpace(body)) return Error(SyncErrorCode.BadRequest, "envelope body is required");
 
-            var result = service.PutData(auth.Value!.Space, auth.Value.Device, body, baseVersion, WantsForce(force));
+
+
+            var containerV5 = string.Equals(ctx.Request.Headers[ContainerV5Header].ToString(), "1", StringComparison.Ordinal);
+            var chunkIds = ctx.Request.Headers[ChunkIdsHeader].ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            var result = service.PutData(auth.Value!.Space, auth.Value.Device, body, baseVersion, WantsForce(force),
+                containerV5Capable: containerV5, chunkIds: chunkIds);
             return result.Success ? Results.Ok(new { version = result.Value }) : Map(result);
         });
+
+
+
+        api.MapPut("/space/chunks/{chunkId}", async (HttpContext ctx, SpaceService service, string chunkId) =>
+        {
+            var auth = ResolveDevice(ctx, service);
+            if (!auth.Success) return Map(auth);
+
+
+
+
+
+            var quota = auth.Value!.Space.QuotaBytes > 0 ? auth.Value.Space.QuotaBytes : service.Options.DefaultQuotaBytes;
+            var chunkCeiling = quota > 0 ? quota + 64 * 1024 : service.Options.MaxPayloadBytes + 64 * 1024;
+            var sizeFeature = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = chunkCeiling;
+            if (quota > 0 && ctx.Request.ContentLength is long declared && declared > quota)
+                return Error(SyncErrorCode.QuotaExceeded, "chunk exceeds the space quota", quota);
+
+
+
+
+
+            byte[] body;
+            using (var ms = new System.IO.MemoryStream())
+            {
+                await ctx.Request.Body.CopyToAsync(ms, ctx.RequestAborted);
+                body = ms.GetBuffer();
+                Array.Resize(ref body, (int)ms.Length);
+            }
+            if (body.Length == 0) return Error(SyncErrorCode.BadRequest, "chunk body is required");
+
+            var result = service.PutChunk(auth.Value!.Space, chunkId.ToLowerInvariant(), body);
+            return result.Success ? Results.Ok(new { id = chunkId.ToLowerInvariant() }) : Map(result);
+        });
+
+        api.MapGet("/space/chunks/{chunkId}", (HttpContext ctx, SpaceService service, string chunkId) =>
+        {
+            var auth = AuthorizeRead(ctx, service);
+            if (!auth.Success) return Map(auth);
+
+
+            var containerV5 = ctx.Request.Headers[ContainerV5Header].ToString() == "1";
+            var deviceAuth = !ctx.Request.Headers.Authorization.ToString().StartsWith(ReadPrefix, StringComparison.OrdinalIgnoreCase);
+            var result = service.GetChunk(auth.Value!, chunkId.ToLowerInvariant(), containerV5Capable: containerV5, deviceAuth: deviceAuth);
+            if (!result.Success) return Map(result);
+            return Results.File(result.Value!, "application/octet-stream");
+        });
+
+
+        api.MapGet("/capabilities", (SpaceService service) => Results.Ok(service.Capabilities()));
 
         api.MapGet("/space/versions", (HttpContext ctx, SpaceService service) =>
         {
@@ -145,9 +238,14 @@ public static class SyncEndpoints
                 return Error(SyncErrorCode.BadRequest, "If-Match header with the keywrap version is required");
 
 
-            if (ctx.Request.ContentLength is long declaredKeyWrapLength && declaredKeyWrapLength > service.Options.MaxPayloadBytes)
-                return Error(SyncErrorCode.PayloadTooLarge, "keywrap record exceeds the server limit",
-                    service.Options.MaxPayloadBytes);
+
+
+
+            if (ctx.Request.ContentLength is long declaredKeyWrapLength
+                && declaredKeyWrapLength > SyncServerOptions.KeyWrapMaxBytes)
+                return Error(SyncErrorCode.PayloadTooLarge, "keywrap record exceeds the server limit");
+            var kwSizeFeature = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (kwSizeFeature is { IsReadOnly: false }) kwSizeFeature.MaxRequestBodySize = SyncServerOptions.KeyWrapMaxBytes;
 
             using var reader = new StreamReader(ctx.Request.Body, System.Text.Encoding.UTF8);
             var body = await reader.ReadToEndAsync();

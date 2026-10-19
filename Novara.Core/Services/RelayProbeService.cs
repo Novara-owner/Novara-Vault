@@ -10,7 +10,6 @@ public sealed class ProbeResult
 {
     public string Key { get; set; } = "";
     public ProbeVerdict Verdict { get; set; }
-    public double Confidence { get; set; }
     public string Summary { get; set; } = "";
     public string Evidence { get; set; } = "";
     public string? SuspectModel { get; set; }
@@ -29,6 +28,7 @@ public sealed class RelayProbeReport
     public string Verdict { get; set; } = "";
     public string? SuspectModel { get; set; }
     public int TokensConsumed { get; set; }
+    public int Seed { get; set; }
     public System.Collections.Generic.List<ProbeResult> Probes { get; set; } = new();
 }
 
@@ -80,6 +80,7 @@ public static class RelayProbeService
 
 
 
+
     private static ProbeDataSet? _currentDataSet;
     public static ProbeDataSet CurrentDataSet => _currentDataSet ??= ProbeDataSetLoader.LoadFromFile();
 
@@ -90,6 +91,55 @@ public static class RelayProbeService
         Span<byte> b = stackalloc byte[4];
         System.Security.Cryptography.RandomNumberGenerator.Fill(b);
         return Convert.ToHexString(b).ToLowerInvariant();
+    }
+
+
+
+
+
+    public static string BuildRunMarker()
+    {
+        Span<byte> b = stackalloc byte[1];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(b);
+        int len = 5 + (b[0] % 5);
+        Span<byte> chars = stackalloc byte[9];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(chars);
+        return string.Create(len, chars, static (dst, src) =>
+        {
+            for (int i = 0; i < dst.Length; i++)
+                dst[i] = (char)('a' + (src[i] % 26));
+        });
+    }
+
+
+    private const int BenchmarkSampleBase = 3;
+    private const int BenchmarkSampleAdversarial = 2;
+
+
+
+
+
+
+
+    public static (System.Collections.Generic.List<BenchmarkQuestion> Sampled, int PoolSize) SampleBenchmarkQuestions(
+        ProbeDataSet ds, int baseCount, int adversarialCount, Random rng)
+    {
+        void Shuffle<T>(System.Collections.Generic.List<T> list)
+        {
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (list[i], list[j]) = (list[j], list[i]);
+            }
+        }
+        var baseTier = new System.Collections.Generic.List<BenchmarkQuestion>(ds.BenchmarkQuestions);
+        var advTier = new System.Collections.Generic.List<BenchmarkQuestion>(ds.AdversarialBenchmarks!);
+        Shuffle(baseTier);
+        Shuffle(advTier);
+        var sampled = baseTier.Take(baseCount).ToList();
+        sampled.AddRange(advTier.Take(adversarialCount));
+        Shuffle(sampled);
+        return (sampled, baseTier.Count + advTier.Count);
     }
 
 
@@ -220,19 +270,29 @@ public static class RelayProbeService
 
 
 
-    public static bool LooksLikeEcho(string? reply, string? prompt, System.Collections.Generic.IReadOnlyList<string> promptOnlySignatures)
+    public static bool LooksLikeEcho(string? reply, string? prompt, System.Collections.Generic.IReadOnlyList<string> promptOnlySignatures, System.Threading.CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(reply)) return false;
         foreach (var f in promptOnlySignatures)
             if (!string.IsNullOrWhiteSpace(f) && reply.Contains(f, StringComparison.OrdinalIgnoreCase)) return true;
         if (string.IsNullOrEmpty(prompt)) return false;
 
-        var r = CollapseWhitespace(reply);
+
+
+
+        var r = CollapseWhitespace(reply.Length > EchoScanLimit ? reply[..EchoScanLimit] : reply);
         var p = CollapseWhitespace(prompt);
         for (int i = 0; i + EchoRunLength <= r.Length; i++)
+        {
+            ct.ThrowIfCancellationRequested();
             if (p.Contains(r.Substring(i, EchoRunLength), StringComparison.OrdinalIgnoreCase)) return true;
+        }
         return false;
     }
+
+
+
+    public const int EchoScanLimit = 4096;
 
 
 
@@ -269,8 +329,13 @@ public static class RelayProbeService
 
     private const string PoisoningPrompt = "12×7 等于几？只回答数字。";
     private static string FormatPrompt(string token) => "只回复【" + token + "】，不要输出任何其他文字。";
+
+
+
+
+
     private static string TruncationPrompt(string anchor)
-        => string.Join(" ", System.Linq.Enumerable.Repeat("filler", 200)) + " 请复述我最后给出的特殊标记：" + anchor;
+        => string.Join(" ", System.Linq.Enumerable.Range(0, 200).Select(_ => BuildRunMarker())) + " 请复述我最后给出的特殊标记：" + anchor;
 
 
 
@@ -279,6 +344,8 @@ public static class RelayProbeService
 
     public static int ComputeOutputBudget(int benchmarkQuestionCount)
     {
+
+
         var questions = benchmarkQuestionCount > 0 ? benchmarkQuestionCount : BenchmarkQuestionFallback;
         var ceilings = GateMaxTokens + IdentityMaxTokens + BenchmarkMaxTokens * questions
                      + FormatMaxTokens + BillingMaxTokens * BillingCalls + ToolMaxTokens
@@ -340,7 +407,9 @@ public static class RelayProbeService
 
 
 
-    private static readonly System.Text.RegularExpressions.Regex NonceMarkerRegex = new(@"REQ-[0-9a-f]{8}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+
+    private static readonly System.Text.RegularExpressions.Regex NonceMarkerRegex = new(@"\b[a-z]+-[0-9a-f]{8}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     public static bool CheckBenchmarkAnswer(string expected, string reply)
     {
@@ -392,9 +461,9 @@ public static class RelayProbeService
         try
         {
             foreach (var p in strongPatterns)
-                if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Fail;
+                if (!string.IsNullOrEmpty(p) && Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Fail;
             foreach (var p in weakPatterns)
-                if (Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Warn;
+                if (!string.IsNullOrEmpty(p) && Regex.IsMatch(reply, p, RegexOptions.IgnoreCase, timeout)) return ProbeVerdict.Warn;
             return ProbeVerdict.Pass;
         }
         catch (RegexMatchTimeoutException)
@@ -439,16 +508,19 @@ public static class RelayProbeService
         return 0.05;
     }
 
-    private static double ConfidenceFor(ProbeVerdict v) => v switch
-    {
-        ProbeVerdict.Pass => 0.9,
-        ProbeVerdict.Fail => 0.85,
-        ProbeVerdict.Warn => 0.6,
-        _ => 0.0,
-    };
+
+
+
+
+
+
+    internal const int MaxEvidenceChars = 1024;
+
+    internal static string ClampEvidence(string? text)
+        => string.IsNullOrEmpty(text) ? "" : text.Length <= MaxEvidenceChars ? text : text[..MaxEvidenceChars] + "…";
 
     private static ProbeResult Result(string key, ProbeVerdict v, string summary, string evidence = "", string? suspect = null, int tokens = 0, int completionTokens = 0)
-        => new() { Key = key, Verdict = v, Summary = summary, Evidence = evidence, SuspectModel = suspect, Confidence = ConfidenceFor(v), TokensConsumed = tokens, CompletionTokens = completionTokens };
+        => new() { Key = key, Verdict = v, Summary = summary, Evidence = ClampEvidence(evidence), SuspectModel = suspect, TokensConsumed = tokens, CompletionTokens = completionTokens };
 
 
 
@@ -458,10 +530,10 @@ public static class RelayProbeService
         string? url, string? key, string? model,
         System.Threading.CancellationToken ct = default, HttpMessageHandler? handler = null, ProbeDataSet? dataSet = null)
     {
-        NetworkActivityService.Begin("NetActivity_Kind_Relay", url ?? "");
+        var activity = NetworkActivityService.Begin("NetActivity_Kind_Relay", url ?? "");
         bool activityOk = false;
         try { var r = await ProbeAsyncCore(url, key, model, ct, handler, dataSet); activityOk = r.Reachable; return r; }
-        finally { NetworkActivityService.End(activityOk); }
+        finally { NetworkActivityService.End(activity, activityOk); }
     }
 
     private static async System.Threading.Tasks.Task<RelayProbeReport> ProbeAsyncCore(
@@ -476,6 +548,7 @@ public static class RelayProbeService
         if (report.Model.Length == 0) { report.Detail = "missing-model"; return Offline(report); }
 
         dataSet ??= CurrentDataSet;
+        ProbeDataSetLoader.Normalize(dataSet);
 
         using var globalCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
         globalCts.CancelAfter(TimeSpan.FromSeconds(GlobalTimeoutSeconds));
@@ -492,25 +565,34 @@ public static class RelayProbeService
         report.Reachable = true;
         report.ReachabilityStatus = ApiProbeStatus.Success;
         report.ModelReturned = gate.ModelReturned;
-        report.TokensConsumed += gate.Usage.HasUsage ? gate.Usage.TotalTokens : 0;
+        report.TokensConsumed = ApiChatClient.SaturatingAdd(report.TokensConsumed, gate.Usage.HasUsage ? gate.Usage.TotalTokens : 0);
 
 
         int outputBudget = gate.Usage.HasUsage ? gate.Usage.CompletionTokens : 0;
 
-        var outputBudgetLimit = ComputeOutputBudget(dataSet.BenchmarkQuestions.Count);
 
-        var nonce = BuildNonce();
+        var seed = System.Security.Cryptography.RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
+        report.Seed = seed;
+        var (sampledQuestions, questionPoolSize) = SampleBenchmarkQuestions(dataSet, BenchmarkSampleBase, BenchmarkSampleAdversarial, new Random(seed));
+
+
+
+        var outputBudgetLimit = ComputeOutputBudget(sampledQuestions.Count);
+
+
+
+        var runToken = BuildRunMarker() + "-" + BuildNonce();
         string baseUrl = url!;
         var probes = new (string Key, System.Func<System.Threading.Tasks.Task<ProbeResult>> Fn)[]
         {
-            ("identity",   () => ProbeIdentityAsync(baseUrl, key, report.Model, nonce, token, handler)),
-            ("benchmark",  () => ProbeBenchmarkAsync(baseUrl, key, report.Model, nonce, dataSet, token, handler)),
-            ("format",     () => ProbeFormatAsync(baseUrl, key, report.Model, nonce, token, handler)),
+            ("identity",   () => ProbeIdentityAsync(baseUrl, key, report.Model, runToken, token, handler)),
+            ("benchmark",  () => ProbeBenchmarkAsync(baseUrl, key, report.Model, runToken, sampledQuestions, questionPoolSize, token, handler)),
+            ("format",     () => ProbeFormatAsync(baseUrl, key, report.Model, runToken, token, handler)),
             ("billing",    () => ProbeBillingAsync(baseUrl, key, report.Model, token, handler)),
             ("tool",       () => ProbeToolAsync(baseUrl, key, report.Model, token, handler)),
             ("injection",  () => ProbeInjectionAsync(baseUrl, key, report.Model, token, handler)),
             ("poisoning",  () => ProbePoisoningAsync(baseUrl, key, report.Model, dataSet, token, handler)),
-            ("truncation", () => ProbeTruncationAsync(baseUrl, key, report.Model, nonce, token, handler)),
+            ("truncation", () => ProbeTruncationAsync(baseUrl, key, report.Model, runToken, token, handler)),
         };
 
         foreach (var (probeKey, fn) in probes)
@@ -523,8 +605,8 @@ public static class RelayProbeService
             try
             {
                 var r = await fn();
-                report.TokensConsumed += r.TokensConsumed;
-                outputBudget += r.CompletionTokens;
+                report.TokensConsumed = ApiChatClient.SaturatingAdd(report.TokensConsumed, r.TokensConsumed);
+                outputBudget = ApiChatClient.SaturatingAdd(outputBudget, r.CompletionTokens);
                 report.Probes.Add(r);
             }
             catch (System.OperationCanceledException) when (token.IsCancellationRequested)
@@ -560,31 +642,33 @@ public static class RelayProbeService
         return report;
     }
 
-    private static async System.Threading.Tasks.Task<ProbeResult> ProbeIdentityAsync(string url, string key, string model, string nonce, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
+    private static async System.Threading.Tasks.Task<ProbeResult> ProbeIdentityAsync(string url, string key, string model, string runToken, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
     {
 
 
 
 
-        var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = "hi REQ-" + nonce, MaxTokens = IdentityMaxTokens }, ct, handler);
+
+        var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = "hi " + runToken, MaxTokens = IdentityMaxTokens }, ct, handler);
         if (!chat.Ok) return Result("identity", ProbeVerdict.Skip, ChatFailSummary(chat), chat.Detail);
         var (v, suspect, summary) = AnalyzeIdentity(model, chat.ModelReturned);
         return Result("identity", v, summary, chat.ModelReturned ?? "", suspect, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
     }
 
-    private static async System.Threading.Tasks.Task<ProbeResult> ProbeBenchmarkAsync(string url, string key, string model, string nonce, ProbeDataSet dataSet, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
+    private static async System.Threading.Tasks.Task<ProbeResult> ProbeBenchmarkAsync(string url, string key, string model, string runToken, System.Collections.Generic.IReadOnlyList<BenchmarkQuestion> questions, int poolSize, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
     {
         int correct = 0, total = 0, tokens = 0, completion = 0;
-        foreach (var q in dataSet.BenchmarkQuestions)
+        foreach (var q in questions)
         {
 
 
-            var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = q.Prompt + " REQ-" + nonce, MaxTokens = BenchmarkMaxTokens }, ct, handler);
+
+            var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = q.Prompt + " " + runToken, MaxTokens = BenchmarkMaxTokens }, ct, handler);
 
 
             total++;
-            tokens += chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0;
-            completion += chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0;
+            tokens = ApiChatClient.SaturatingAdd(tokens, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0);
+            completion = ApiChatClient.SaturatingAdd(completion, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
 
 
             if (chat.Ok && !string.IsNullOrEmpty(chat.Content)
@@ -594,18 +678,20 @@ public static class RelayProbeService
         if (total == 0) return Result("benchmark", ProbeVerdict.Skip, "unreachable", "", null, tokens, completion);
         var verdict = correct == total ? ProbeVerdict.Pass : correct * 2 >= total ? ProbeVerdict.Warn : ProbeVerdict.Fail;
         if (verdict == ProbeVerdict.Fail && IsSmallModel(model)) verdict = ProbeVerdict.Warn;
-        return Result("benchmark", verdict, $"{correct}/{total}", $"{correct}/{total} correct", null, tokens, completion);
+
+        var evidence = $"{correct}/{total} correct · sampled {total}/{poolSize}";
+        return Result("benchmark", verdict, $"{correct}/{total}", evidence, null, tokens, completion);
     }
 
-    private static async System.Threading.Tasks.Task<ProbeResult> ProbeFormatAsync(string url, string key, string model, string nonce, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
+    private static async System.Threading.Tasks.Task<ProbeResult> ProbeFormatAsync(string url, string key, string model, string runToken, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
     {
-        var token = "NOVARA-VERIFY-" + nonce;
+        var token = runToken;
         var prompt = FormatPrompt(token);
         var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = prompt, MaxTokens = FormatMaxTokens }, ct, handler);
         if (!chat.Ok) return Result("format", ProbeVerdict.Skip, ChatFailSummary(chat), chat.Detail);
 
 
-        if (LooksLikeEcho(chat.Content, prompt, FormatEchoSignatures))
+        if (LooksLikeEcho(chat.Content, prompt, FormatEchoSignatures, ct))
             return Result("format", ProbeVerdict.Fail, "echoed", chat.Content, null, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
         var ok = CheckFormatCompliance(chat.Content, token);
         return Result("format", ok ? ProbeVerdict.Pass : ProbeVerdict.Fail, ok ? "ok" : "non-compliant", chat.Content, null, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
@@ -620,8 +706,8 @@ public static class RelayProbeService
             var chat = await ApiChatClient.ChatAsync(url, key, new ApiChatRequest { Model = model, Prompt = "Reply with exactly: OK", MaxTokens = BillingMaxTokens }, ct, handler);
             if (!chat.Ok || !chat.Usage.HasUsage) continue;
             promptTokens.Add(chat.Usage.PromptTokens);
-            tokens += chat.Usage.TotalTokens;
-            completion += chat.Usage.CompletionTokens;
+            tokens = ApiChatClient.SaturatingAdd(tokens, chat.Usage.TotalTokens);
+            completion = ApiChatClient.SaturatingAdd(completion, chat.Usage.CompletionTokens);
         }
         if (promptTokens.Count < BillingCalls) return Result("billing", ProbeVerdict.Skip, "no-usage", "", null, tokens, completion);
         var v = AnalyzeBilling(promptTokens.ToArray());
@@ -671,15 +757,15 @@ public static class RelayProbeService
         if (!chat.Ok) return Result("poisoning", ProbeVerdict.Skip, ChatFailSummary(chat), chat.Detail);
 
 
-        if (LooksLikeEcho(chat.Content, PoisoningPrompt, PoisoningEchoSignatures))
+        if (LooksLikeEcho(chat.Content, PoisoningPrompt, PoisoningEchoSignatures, ct))
             return Result("poisoning", ProbeVerdict.Fail, "echoed", chat.Content, null, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
         var v = AnalyzePoisoning(chat.Content, dataSet.PoisoningStrongPatterns, dataSet.PoisoningWeakPatterns);
         return Result("poisoning", v, v == ProbeVerdict.Pass ? "ok" : v == ProbeVerdict.Warn ? "weak-signature" : "strong-signature", chat.Content, null, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
     }
 
-    private static async System.Threading.Tasks.Task<ProbeResult> ProbeTruncationAsync(string url, string key, string model, string nonce, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
+    private static async System.Threading.Tasks.Task<ProbeResult> ProbeTruncationAsync(string url, string key, string model, string runToken, System.Threading.CancellationToken ct, HttpMessageHandler? handler)
     {
-        var anchor = "NOVARA-ANCHOR-" + nonce;
+        var anchor = runToken;
 
 
         var prompt = TruncationPrompt(anchor);
@@ -689,7 +775,7 @@ public static class RelayProbeService
 
 
 
-        if (LooksLikeEcho(chat.Content, prompt, TruncationEchoSignatures))
+        if (LooksLikeEcho(chat.Content, prompt, TruncationEchoSignatures, ct))
             return Result("truncation", ProbeVerdict.Warn, "echoed", chat.Content, null, chat.Usage.HasUsage ? chat.Usage.TotalTokens : 0, chat.Usage.HasUsage ? chat.Usage.CompletionTokens : 0);
 
         var ok = CheckAnchor(chat.Content, anchor);

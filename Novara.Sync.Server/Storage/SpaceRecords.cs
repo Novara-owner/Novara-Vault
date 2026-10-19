@@ -33,6 +33,10 @@ public sealed class SpaceRecord
 
     public long QuotaBytes { get; set; }
     public int MaxVersions { get; set; }
+
+
+
+    public int ContainerGeneration { get; set; } = 4;
 }
 
 
@@ -59,6 +63,9 @@ public sealed class DeviceRecord
 
 
     public DeviceKind Kind { get; set; } = DeviceKind.Standard;
+
+
+
 }
 
 
@@ -77,4 +84,17 @@ public sealed class VersionRecord
 
 
     public bool Retained { get; set; } = true;
+
+
+
+
+
+
+    public List<string> ChunkIds
+    {
+        get => _chunkIds;
+        set => _chunkIds = value ?? new List<string>();
+    }
+
+    private List<string> _chunkIds = new();
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.UI.Xaml;
@@ -57,6 +57,7 @@ public sealed partial class SearchPage : Page
     public SearchPage()
     {
         InitializeComponent();
+        App.ApplyAutomationNames(this);
         Novara.Services.DialogDepth.AttachContainer((Grid)Content, autoVeil: true);
         BackPathIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.Back);
         SearchGlyphIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), SearchGlyphPath);
@@ -120,7 +121,7 @@ public sealed partial class SearchPage : Page
             FocusSearch();
             ShowBlankHint();
         };
-        Unloaded += (_, _) => _renderCts?.Cancel();
+        Unloaded += (_, _) => DisposeRenderCts();
     }
 
 
@@ -464,15 +465,26 @@ public sealed partial class SearchPage : Page
         Render(key);
     }
 
+
+
+
+    private void DisposeRenderCts()
+    {
+        var old = _renderCts;
+        _renderCts = null;
+        old?.Cancel();
+        old?.Dispose();
+    }
+
     private async void Render(string key)
     {
-        _renderCts?.Cancel();
+        DisposeRenderCts();
         var cts = _renderCts = new System.Threading.CancellationTokenSource();
         var token = cts.Token;
 
         ResultPanel.Children.Clear();
         var filtered = _items.Where(MatchesFilter).ToList();
-        if (filtered.Count == 0) { ShowNoResultHint(); _renderCts = null; return; }
+        if (filtered.Count == 0) { ShowNoResultHint(); DisposeRenderCts(); return; }
         EmptyHintPanel.Visibility = Visibility.Collapsed;
 
         try
@@ -496,12 +508,12 @@ public sealed partial class SearchPage : Page
 
 
             System.Diagnostics.Debug.WriteLine($"搜索结果渲染失败（下次搜索将重建）: {ex}");
-            _renderCts = null;
+            DisposeRenderCts();
             return;
         }
 
         if (token.IsCancellationRequested) return;
-        _renderCts = null;
+        DisposeRenderCts();
     }
 
 

@@ -80,6 +80,25 @@ public interface ISpaceStore
     byte[]? ReadBlob(string spaceId, VersionRecord version);
 
 
+
+
+    void WriteChunk(string spaceId, string chunkId, byte[] data);
+
+
+
+
+    bool ChunkExists(string spaceId, string chunkId);
+
+
+    byte[]? ReadChunk(string spaceId, string chunkId);
+
+
+    Dictionary<string, long> ChunkSizes(string spaceId);
+
+
+    List<string> PruneChunks(string spaceId, ISet<string> keepChunkIds);
+
+
     void DeleteBlob(string spaceId, VersionRecord version);
 }
 

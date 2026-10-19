@@ -52,5 +52,7 @@ public static class ReadTokenRules
     }
 
 
-    public static bool IsWellFormed(string? token) => Normalize(token).Length == Length;
+
+
+
 }

@@ -22,8 +22,20 @@ echo  请立刻抄下来或截图保存（配对电脑时要用）。
 echo.
 
 "%~dp0NovaraSync.exe" space create --name my-space
+if errorlevel 1 goto failed
 
 echo.
 echo  ^> 完成。下一步：双击同目录下的「2-启动服务端.cmd」。
+goto done
+
+:failed
+echo.
+echo  [失败] 建空间没有完成（见上方错误输出）。
+echo  ^> 常见原因：安装目录或数据目录不可写。
+pause >nul
+exit /b 1
+
+:done
+echo.
 echo  ^> 按任意键关闭本窗口。
 pause >nul
