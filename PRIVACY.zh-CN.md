@@ -161,8 +161,8 @@ Novara 基于标准 Microsoft 技术与若干开源库构建：
 
 | 组件 | 作用 | 数据说明 |
 |------|------|---------|
-| WinUI 3 / Windows App SDK 1.6 | UI 框架 | 本地；Novara 不做数据收集 |
-| .NET 8 | 运行时 | 本地 |
+| WinUI 3 / Windows App SDK 2.5 | UI 框架 | 本地；Novara 不做数据收集 |
+| .NET 10 | 运行时 | 本地 |
 | WebView2（Edge Chromium） | 承载记录编辑器（富文本与 Markdown） | 微软组件；可能保留其自身的本地运行时数据，其处理遵循微软的隐私声明。编辑器本身**离线**运行（引擎内置，无 CDN）。 |
 | H.NotifyIcon | 系统托盘图标 | 本地 |
 | Tiptap | 富文本编辑器引擎 | 作为本地脚本（`tiptap.bundle.js`）打包，完全离线运行 |

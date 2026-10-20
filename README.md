@@ -39,33 +39,11 @@ Today that layer takes the shape of memos (with built-in API-key connectivity te
 
 ---
 
-## Versioning
-
-Starting with the 11.0 release, Novara uses a compact version scheme instead of dotted version numbers: the first release on a new major line is **`novara11`**, and follow-up fix releases are **`novara11.R1`**, `novara11.R2`, and so on (R = Revision). The next major line will be `novara12`. Releases up to 10.3.0 used the previous numeric scheme and keep their original names; the GitHub release tag of each new release carries the same identifier, and installer files are named accordingly (`Novara_Setup_novara11.exe`).
-
-## 11.0 — Making everything you already use more dependable
-
-11.0 is the "Hardened" release: no feature sprawl — a stronger foundation for everything already shipped. The desktop app moves to .NET 10; the database upgrades to the v5 container (Argon2id derivation, self-describing parameters, SHA-256 integrity precheck, optional upgrade after unlocking); sync uploads only the partitions that changed; update manifests carry an ECDSA signature and are rejected without one; backup snapshots record SHA-256 hashes with GFS-tiered retention. An optional automatic update check arrives in-app (off by default). And a codebase-wide overhaul fixed **some 470 defects** one by one — including deeply buried ones like "the app occasionally quit after a theme switch without relaunching", "a sync device stuck forever", and "dialogs crashing on extremely narrow windows".
-
-Full details: [Release novara11](https://github.com/Novara-owner/Novara-Vault/releases/tag/novara11) · [CHANGELOG](CHANGELOG.md)
-
-## 10.0 — Built to Be Verified
-
-10.0 is the trust release: most of the work went into making Novara verifiable from the outside. Release signing with Sigstore (checkable with `cosign`) is in place and takes effect from 10.1; the build is pinned and reproducible on the input side; and the security posture is published rather than asserted. A bilingual threat model states what Novara protects against and what it does not, and a code signing policy documents who authors, reviews and approves release binaries. Every push is gated on locked dependency restores, vulnerability and licence audits, and an 80% line-coverage floor, while the packaging job refuses to ship unless two independent publishes come out byte-identical. On the desktop, the record editor gains a live split preview that follows the line you are typing.
-
-Full details: [Release v10.0.0](https://github.com/Novara-owner/Novara-Vault/releases/tag/v10.0.0) · [CHANGELOG](CHANGELOG.md)
-
-## 9.0 — Self-Hosting, One Command Away
-
-9.0 is the deployment release: the server you could already run on Windows now ships the way servers actually reach people. One `docker compose up -d` brings up the sync server with automatic HTTPS on hardware you already own — an official container image, an operations CLI, a 36-page help center and per-release verification assets included. Nothing about the data changes — the server still only ever handles ciphertext, and the red lines did not move. On the desktop, 9.0 adds export-as-image, four paper themes, an animation toggle, an in-app update checker and a rebuilt sticky-note card.
-
-Full details: [Release v9.0.0](https://github.com/Novara-owner/Novara-Vault/releases/tag/v9.0.0) · [CHANGELOG](CHANGELOG.md)
-
 ## Security & Privacy Lock
 
-Optional password protection backed by **AES-256-GCM authenticated encryption**. Once enabled, your entire database is encrypted at rest — every memo, path, todo, note, and record becomes unreadable without the correct password. Passwords may be **6 to 64 characters** and are never stored in plaintext: only a salted, versioned hash is kept locally (PBKDF2-SHA256 with 3,000,000 iterations since its second revision). There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
+Optional password protection backed by **AES-256-GCM authenticated encryption**. Once enabled, your entire database is encrypted at rest — every memo, path, todo, note, and record becomes unreadable without the correct password. Passwords may be **6 to 64 characters** and are never stored in plaintext: only a salted, versioned password hash is kept locally (PBKDF2-SHA256, 3,000,000 iterations); the database key itself is derived with **Argon2id** (64 MiB, three passes), while older databases keep opening through PBKDF2 and can upgrade in place. There is no backdoor, no recovery mechanism, and no cloud dependency — if you forget your password, the only way forward is to wipe the database and start over.
 
-GCM adds **authenticated encryption**: any tampering with the encrypted file is detected by the cryptographic tag, so corrupted or modified data is reported instead of silently misread. Older databases upgrade in place: the 2.0-era AES-CBC format migrates to GCM after one confirmation, and since 5.3 the key derivation is calibrated at **3,000,000 PBKDF2 iterations** (format v3) via a one-time opt-in prompt.
+GCM adds **authenticated encryption**: any tampering with the encrypted file is detected by the cryptographic tag, so corrupted or modified data is reported instead of silently misread. Older databases upgrade in place: the 2.0-era AES-CBC format migrates to GCM after one confirmation, and since 5.3 the key derivation is calibrated at **3,000,000 PBKDF2 iterations** (format v3) via a one-time opt-in prompt. The current format stores its KDF parameters and salt in a self-describing header, with a SHA-256 integrity checksum for a pre-unlock corruption check.
 
 Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). And since 5.1 the vault can lock itself: on demand (**Ctrl+Shift+L**), after an idle timeout of your choosing, or whenever Windows locks its session. The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
 

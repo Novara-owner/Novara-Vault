@@ -56,7 +56,7 @@ Four tabs + a settings page + an optional privacy lock:
 Core design principles:
 
 - **Local-first**: all data is stored in a local single file (`%LocalAppData%\Novara\data.novadb`), no cloud sync, no telemetry.
-- **Optional encryption**: AES-256-GCM + PBKDF2; the whole database is encrypted when the privacy lock is on.
+- **Optional encryption**: AES-256-GCM with Argon2id (v5) or PBKDF2 (older formats); the whole database is encrypted when the privacy lock is on.
 - **Privacy lock**: optional; lock-screen password + lockout duration that increases after 5 failures; supports Windows Hello unlock.
 - **Five languages**: Simplified Chinese / Traditional Chinese / English / 한국어 / 日本語.
 - **Theme**: light / dark / follow system + Paper tier (four paper color schemes, since 9.0).
@@ -70,8 +70,8 @@ Core design principles:
 
 | Layer | Technology |
 |----|------|
-| UI framework | WinUI 3 (Microsoft.WindowsAppSDK 1.6) |
-| Runtime | .NET 8 (`net8.0-windows10.0.26100.0`, Windows 10 2004 minimum) |
+| UI framework | WinUI 3 (Microsoft.WindowsAppSDK 2.5.1) |
+| Runtime | .NET 10 (`net10.0-windows10.0.26100.0`, Windows 10 2004 minimum) |
 | Language | C# |
 | Rich-text editor | WebView2 (Tiptap rich text + markdown-it Markdown) |
 | Tray | H.NotifyIcon.WinUI |
@@ -92,11 +92,11 @@ The `Novara.slnx` solution contains seven projects:
 ```
 Novara/
 ├── Novara.csproj        main program (WinUI 3 UI layer)
-├── Novara.Core/         pure-logic library (net8.0, no WinUI, referenceable by xUnit)
+├── Novara.Core/         pure-logic library (net10.0, no WinUI, referenceable by xUnit)
 ├── Novara.Tests/        xUnit unit tests
 ├── StickNoteHost/       desktop sticky note standalone process (no main window, tray-resident)
-├── NovaraMCP/           MCP stdio front end (pure net8.0 console, single-file publish)
-├── Novara.Server/       self-hosted sync server host (ASP.NET Core 8, single-file publish)
+├── NovaraMCP/           MCP stdio front end (pure net10.0 console, single-file publish)
+├── Novara.Server/       self-hosted sync server host (ASP.NET Core 10, single-file publish)
 └── Novara.Sync.Server/  sync server library (space storage, token auth, retention policy)
 ```
 
@@ -104,7 +104,7 @@ Novara/
 
 - `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
 - The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
-- `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net10.0` (since 9.0) and have no WinUI dependency; the desktop side and `Novara.Core` remain on `net8.0`.
+- `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net10.0` (since 9.0) and have no WinUI dependency; the desktop side and `Novara.Core` moved to `net10.0` in novara11.
 - `Pages/` contains ten pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage.
 
 **Core decoupling**:
@@ -185,7 +185,7 @@ The file header is a fixed 22 bytes:
 ### 5.1 Encryption algorithm
 
 - **Encryption**: AES-256-GCM (v2 header structure; parameters are implied by the version byte). 12-byte nonce + 16-byte tag; authentication relies on the GCM tag, the MD5 field is zeroed and not verified.
-- **Key derivation**: PBKDF2-SHA256, **3,000,000 iterations** since format v3 (5.3+; ≈340 ms unlock on the reference machine). v2 databases upgrade through a one-time opt-in prompt; refusal is remembered and the manual entry stays in Settings.
+- **Key derivation**: **Argon2id** since v5 (m=64 MiB, t=3, p=1; the parameters live in the header, so tuning no longer needs a new version byte). Older formats keep PBKDF2-SHA256 — **3,000,000 iterations** since format v3 (5.3+; ≈340 ms unlock on the reference machine). v2/v3 databases are offered a one-time upgrade to v5 after unlock; refusal is remembered and the manual entry stays in Settings.
 - **Legacy compatibility**: 2.0 legacy data used AES-CBC (v1); after unlock it is automatically migrated to v2 GCM.
 
 ### 5.2 Version matrix
@@ -195,7 +195,8 @@ The file header is a fixed 22 bytes:
 | v1 plaintext | always v1 (2.0 compatible), no encryption |
 | v1 CBC | 2.0 legacy encryption; a one-time migration confirmation pops up after unlock → upgrade to v2 |
 | v2 GCM | GCM with 100,000-iteration PBKDF2 (3.0–5.2 format) |
-| v3 GCM | GCM with 3,000,000-iteration PBKDF2 — the current scheme; **not readable by versions ≤ 5.2.0** |
+| v3 GCM | GCM with 3,000,000-iteration PBKDF2 |
+| v5 | Self-describing 63-byte header: Argon2id (m=64 MiB, t=3, p=1) or PBKDF2, SHA-256 integrity precheck, AAD over the header — the current scheme since 11.0; **not readable by 10.3.0 and earlier** |
 
 ### 5.3 Password hash stored separately
 
@@ -630,9 +631,9 @@ The connected era spans three versions: Novara Snapshot (7.0) → cross-device s
 
 ### 17.3 Self-Hosting and Update Check (9.0)
 - Official Docker image (multi-stage, non-root, `/data` volume, HEALTHCHECK) with `deploy/compose/` and a parameterized `deploy/Caddyfile` for automatic HTTPS.
-- Server projects target **net10.0**; the desktop side stays on net8.0 (`Novara.Core` is the only shared layer).
+- Server projects target **net10.0**; the desktop side and `Novara.Core` moved to net10.0 in novara11 (`Novara.Core` is the only shared layer).
 - Ops CLI: `NovaraSync space create|list|show|delete|rotate-secret` (`--json` supported, exit codes 0 / 1 / 2).
-- In-app update check (user-clicked only): fetches a static `latest.json` manifest from novara.xin and verifies the SHA-256 before anything is installed.
+- In-app update check: manual check plus an optional automatic check (off by default; at most once per 6 hours while the app is running). It fetches the static `latest.json` manifest from novara.xin, verifies the ECDSA signature over the manifest, and checks the SHA-256 before anything is installed.
 
 ### 17.4 What Syncs and What Never Leaves
 - `SyncFieldPolicy.CloneForSync` whitelist: the five data partitions + workspaces + language/theme roam; MCP credentials, machine behavior, and one-time flags never sync.
@@ -748,7 +749,7 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 ### Novara.Core (pure logic)
 
 - **NovaraStore**: `Load` / `LoadWithPassword` / `SaveAsync` (SemaphoreSlim serialization + snapshot merge + 300ms debounce) / `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt` (rollback on failure) / `ExportBackup` (always plaintext + soft-delete filter) / `ImportBackup` (validate + rollback + normalize + Id dedup) / `ResetDatabase`; writes use tmp+Move atomic replacement + Flush(true).
-- **CryptoService**: `Encrypt` (v1 CBC) / `Decrypt` + `EncryptGcm` / `DecryptGcm` (v2/v3 GCM); PBKDF2-SHA256 3,000,000 iterations since format v3. Also `ExportBackup` (plaintext), `ExportBackupEncrypted` (`.novaenc` v4 container), and GZip decompression-bomb protection.
+- **CryptoService**: `Encrypt` (v1 CBC) / `Decrypt` + `EncryptGcm` / `DecryptGcm` (v2/v3 GCM), plus the v5 self-describing header (Argon2id or PBKDF2, SHA-256 integrity precheck, AAD over the header); PBKDF2-SHA256 3,000,000 iterations since format v3. Also `ExportBackup` (plaintext), `ExportBackupEncrypted` (`.novaenc` v4 container), and GZip decompression-bomb protection.
 - **PasswordService**: `security.dat` dual salt + versioned password hash (V1 salted SHA256 → V2 PBKDF2-SHA256 3M) with constant-time comparison; `lockout.dat` (FailCount/Until/Enabled); `SetBaseDir` path injection.
 - **ApiProbeService**: tier 1 — vendor identification + protocol matrix + error classification + redaction (see 21).
 - **ApiChatClient**: shared chat client (OpenAI/Anthropic/Gemini protocols + streaming + usage/TTFT + chat-endpoint derivation).
@@ -798,7 +799,7 @@ Key pitfalls (must follow):
 - **Empty the publish folder first**: `dotnet publish -o` only overwrites same-name files and never deletes leftovers. A stale `Novara.pri` from a previous version combined with new DLLs misaligns the compiled XBF resources and crashes every modified page (`InvalidCastException` in generated code).
 - **Novara.pri**: must be manually added after publish (the publish output does not include it); verify its mtime matches the DLLs' batch. Without it, the app crashes with `0xc000027b` on launch. On an x64-forced project the file lives under `bin\x64\Release\...`.
 - **StickNoteHost ships as a full self-contained bundle**: publish the Host to a separate temporary directory, then copy the complete output (exe + dll + deps.json + runtimeconfig + native libraries) into a `Host\` subfolder of the publish directory. Shipping the bare `StickNoteHost.exe` apphost alone dies instantly on clean machines (Event 1023). `resources.pri` inside `Host\` is harmless; it must never appear at the publish root.
-- **NovaraMCP independent publish**: a pure net8.0 console, `PublishSingleFile=true` + `SelfContained=true`, publish produces a single self-contained exe (no `resources.pri`). Copy only `NovaraMCP.exe` to the main program's publish directory.
+- **NovaraMCP independent publish**: a pure net10.0 console, `PublishSingleFile=true` + `SelfContained=true`, publish produces a single self-contained exe (no `resources.pri`). Copy only `NovaraMCP.exe` to the main program's publish directory.
 - **Win2D check**: verify `Microsoft.Graphics.Canvas.dll` and `Microsoft.Graphics.Canvas.Interop.dll` are present in the publish folder (used by the blur treatments); a missing pair degrades silently.
 - Uninstaller: delete the auto-start registry entry + before deleting `data.novadb`, first clear the Hidden|ReadOnly attributes.
 - Data retention semantics: choosing "keep data" on uninstall leaves `%LocalAppData%\Novara` as-is; reinstall restores automatically.

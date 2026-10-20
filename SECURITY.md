@@ -18,7 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 10.3 | ✅ Supported | Current release — save dialogs append the selected file type's extension again (10.1–10.2 regression) |
+| novara11 (11.0) | ✅ Supported | Current release — desktop on .NET 10, v5 database container (Argon2id), partition-level incremental sync, signed update manifests with an optional automatic check, and a codebase-wide hardening pass |
+| 10.3 | ✅ Supported | Save dialogs append the selected file type's extension again (10.1–10.2 regression) |
 | 10.2 | ✅ Supported | Markdown split-view rework and editor feedback fixes |
 | 10.1 | ✅ Supported | Picker fix, semantic toasts, keyless signatures shipping |
 | 10.0 | ✅ Supported | The trust release: signature verification, reproducible builds, a public threat model, and dependency, licence and coverage gates in CI |

@@ -161,8 +161,8 @@ Novara is built on standard Microsoft technologies and a few open-source librari
 
 | Component | Role | Data note |
 |-----------|------|-----------|
-| WinUI 3 / Windows App SDK 1.6 | UI framework | Local; no data collection by Novara |
-| .NET 8 | Runtime | Local |
+| WinUI 3 / Windows App SDK 2.5 | UI framework | Local; no data collection by Novara |
+| .NET 10 | Runtime | Local |
 | WebView2 (Edge Chromium) | Hosts the records editor (rich text and Markdown) | A Microsoft component; may keep its own local runtime data. Its handling is governed by Microsoft's privacy statement. The editor itself runs **offline** (the engine is bundled, no CDN). |
 | H.NotifyIcon | System-tray icon | Local |
 | Tiptap | Rich-text editor engine | Bundled as a local script (`tiptap.bundle.js`) and runs entirely offline |

@@ -56,7 +56,7 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 核心设计理念：
 
 - **本地优先**：所有数据存本地单文件（`%LocalAppData%\Novara\data.novadb`），无云同步、无遥测。
-- **可选加密**：AES-256-GCM + PBKDF2，隐私锁开启时整库加密。
+- **可选加密**：AES-256-GCM，v5 起用 Argon2id、旧格式用 PBKDF2；隐私锁开启时整库加密。
 - **隐私锁**：可选，锁屏密码 + 5 次失败锁定时长递增；支持 Windows Hello 解锁。
 - **五语言**：中文简体 / 中文繁体 / English / 한국어 / 日本語。
 - **主题**：浅色 / 深色 / 跟随系统 + 类纸档（四款纸色，自 9.0 起）。
@@ -70,8 +70,8 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 
 | 层 | 技术 |
 |----|------|
-| UI 框架 | WinUI 3（Microsoft.WindowsAppSDK 1.6） |
-| 运行时 | .NET 8（`net8.0-windows10.0.26100.0`，最低 Windows 10 2004） |
+| UI 框架 | WinUI 3（Microsoft.WindowsAppSDK 2.5.1） |
+| 运行时 | .NET 10（`net10.0-windows10.0.26100.0`，最低 Windows 10 2004） |
 | 语言 | C# |
 | 富文本编辑器 | WebView2（Tiptap 富文本 + markdown-it Markdown） |
 | 托盘 | H.NotifyIcon.WinUI |
@@ -92,11 +92,11 @@ Novara 是一款**本地优先的个人知识管理四合一工具**（Windows �
 ```
 Novara/
 ├── Novara.csproj        主程序（WinUI 3 UI 层）
-├── Novara.Core/         纯逻辑库（net8.0 无 WinUI，可被 xUnit 引用）
+├── Novara.Core/         纯逻辑库（net10.0 无 WinUI，可被 xUnit 引用）
 ├── Novara.Tests/        xUnit 单元测试
 ├── StickNoteHost/       桌面便签独立进程（无主窗口、托盘常驻）
-├── NovaraMCP/           MCP stdio 前端（纯 net8.0 控制台，单文件发布）
-├── Novara.Server/       自托管同步服务端宿主（ASP.NET Core 8，单文件发布）
+├── NovaraMCP/           MCP stdio 前端（纯 net10.0 控制台，单文件发布）
+├── Novara.Server/       自托管同步服务端宿主（ASP.NET Core 10，单文件发布）
 └── Novara.Sync.Server/  同步服务端逻辑库（空间存储、token 鉴权、保留策略）
 ```
 
@@ -104,7 +104,7 @@ Novara/
 
 - `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
 - 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
-- `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者自 9.0 起面向 `net10.0`，无 WinUI 依赖；桌面端与 `Novara.Core` 保持 `net8.0`。
+- `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者自 9.0 起面向 `net10.0`，无 WinUI 依赖；桌面端与 `Novara.Core` 自 novara11 起也迁移到 `net10.0`。
 - `Pages/` 是十大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage。
 
 **核心解耦方式**：
@@ -185,7 +185,7 @@ Novara/
 ### 5.1 加密算法
 
 - **加密**：AES-256-GCM（v2 头结构；加密参数由版本字节隐含）。nonce 12 字节 + tag 16 字节，认证靠 GCM tag，MD5 字段置零不校验。
-- **密钥派生**：PBKDF2-SHA256，格式 v3（5.3+）起为 **3,000,000 次迭代**（参考机解锁约 340 ms）。v2 库经一次性选择权弹窗迁移；拒绝后不再弹，设置页保留手动入口。
+- **密钥派生**：**v5 起为 Argon2id**（m=64 MiB、t=3、p=1，参数写在头部，今后调参不必再换版本字节）。旧格式沿用 PBKDF2-SHA256，格式 v3（5.3+）起为 **3,000,000 次迭代**（参考机解锁约 340 ms）。v2/v3 库解锁后可一次性选择升级 v5；拒绝后不再弹，设置页保留手动入口。
 - **旧版兼容**：2.0 旧数据为 AES-CBC（v1），解锁后自动迁移到 v2 GCM。
 
 ### 5.2 版本矩阵
@@ -195,7 +195,8 @@ Novara/
 | v1 明文 | 恒为 v1（2.0 兼容），无加密 |
 | v1 CBC | 2.0 旧加密，解锁后弹一次迁移确认 → 升级 v2 |
 | v2 GCM | GCM + 100,000 次 PBKDF2（3.0–5.2 格式） |
-| v3 GCM | GCM + 3,000,000 次 PBKDF2——现行方案；**≤ 5.2.0 无法读取** |
+| v3 GCM | GCM + 3,000,000 次 PBKDF2 |
+| v5 | 自描述头（63 B）：Argon2id（m=64 MiB、t=3、p=1）或 PBKDF2，SHA-256 完整性预检，AAD 绑定头部——11.0 起的现行方案；**10.3.0 及更早无法读取** |
 
 ### 5.3 密码哈希独立存储
 
@@ -630,9 +631,9 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 
 ### 17.3 自托管与检查更新（9.0）
 - 官方 Docker 镜像（多阶段、非 root、`/data` 卷、HEALTHCHECK），配 `deploy/compose/` 与参数化的 `deploy/Caddyfile` 实现自动 HTTPS。
-- 服务端工程面向 **net10.0**；桌面端保持 net8.0（`Novara.Core` 是唯一共享层）。
+- 服务端工程面向 **net10.0**；桌面端与 `Novara.Core` 自 novara11 起也迁移到 net10.0（`Novara.Core` 是唯一共享层）。
 - 运维命令行：`NovaraSync space create|list|show|delete|rotate-secret`（支持 `--json`，退出码 0 / 1 / 2）。
-- 应用内检查更新（仅用户点击触发）：拉取 novara.xin 上的静态 `latest.json` 清单，安装前先校验 SHA-256。
+- 应用内检查更新：手动检查 + 可选的自动检查（默认关闭；应用运行期间最多每 6 小时一次）。拉取 novara.xin 上的静态 `latest.json` 清单，先验清单的 ECDSA 签名、再校验 SHA-256，之后才安装。
 
 ### 17.4 同步什么、什么永不离开
 - `SyncFieldPolicy.CloneForSync` 白名单：五大数据分区 + 工作区 + 语言/主题；MCP 凭证、本机行为与一次性标记永不同步。
@@ -748,7 +749,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 ### Novara.Core（纯逻辑）
 
 - **NovaraStore**：`Load` / `LoadWithPassword` / `SaveAsync`（SemaphoreSlim 串行 + 快照合并 + 300ms 去抖）/ `SaveSync` / `EnableEncryption` / `DisableEncryption` / `Reencrypt`（失败回滚）/ `ExportBackup`（恒明文 + 软删过滤）/ `ImportBackup`（校验 + 回滚 + 归一化 + Id 去重）/ `ResetDatabase`；写盘 tmp+Move 原子替换 + Flush(true)。
-- **CryptoService**：`Encrypt`（v1 CBC）/ `Decrypt` + `EncryptGcm` / `DecryptGcm`（v2/v3 GCM）；格式 v3 起为 PBKDF2-SHA256 3,000,000 次迭代。另有 `ExportBackup`（明文）、`ExportBackupEncrypted`（`.novaenc` v4 容器）与 GZip 解压炸弹防护。
+- **CryptoService**：`Encrypt`（v1 CBC）/ `Decrypt` + `EncryptGcm` / `DecryptGcm`（v2/v3 GCM），以及 v5 自描述头（Argon2id 或 PBKDF2、SHA-256 完整性预检、AAD 绑定头部）；格式 v3 起为 PBKDF2-SHA256 3,000,000 次迭代。另有 `ExportBackup`（明文）、`ExportBackupEncrypted`（`.novaenc` v4 容器）与 GZip 解压炸弹防护。
 - **PasswordService**：`security.dat` 双盐 + 版本化密码哈希（V1 加盐 SHA256 → V2 PBKDF2-SHA256 3M）固定时间比较；`lockout.dat`（FailCount/Until/Enabled）；`SetBaseDir` 路径注入。
 - **ApiProbeService**：入口一，厂商识别 + 协议矩阵 + 错误分类 + 脱敏（见 21）。
 - **ApiChatClient**：共享聊天客户端（OpenAI/Anthropic/Gemini 三协议 + 流式 + usage/TTFT + chat 端点推导）。
@@ -798,7 +799,7 @@ dotnet publish -r win-x64 --self-contained
 - **发布目录必须先清空**：`dotnet publish -o` 只覆盖同名文件、从不删除残留。旧版本残留的 `Novara.pri` + 新 DLL 会造成编译期 XBF 资源错位，所有改过 XAML 的页面启动即崩（生成代码中 `InvalidCastException`）。
 - **Novara.pri**：publish 产物不含 pri，必须从构建输出手动补齐并核验其与 DLL 同批次 mtime；缺它启动即 `0xc000027b`。平台强制 x64 后文件位于 `bin\x64\Release\...`。
 - **StickNoteHost 以完整自包含包随发**：Host publish 到独立临时目录，然后把全部产物（exe + dll + deps.json + runtimeconfig + 原生库）复制进发布目录的 `Host\` 子目录。只带裸 `StickNoteHost.exe`（apphost）在全新机器上即死（事件 1023）。`resources.pri` 在 `Host\` 内无害，但发布目录根绝不能出现。
-- **NovaraMCP 独立发布**：纯 net8.0 控制台，`PublishSingleFile=true` + `SelfContained=true`，publish 产单个自包含 exe（无 `resources.pri`）。只复制 `NovaraMCP.exe` 到主程序发布目录。
+- **NovaraMCP 独立发布**：纯 net10.0 控制台，`PublishSingleFile=true` + `SelfContained=true`，publish 产单个自包含 exe（无 `resources.pri`）。只复制 `NovaraMCP.exe` 到主程序发布目录。
 - **Win2D 核验**：确认发布目录含 `Microsoft.Graphics.Canvas.dll` 与 `Microsoft.Graphics.Canvas.Interop.dll`（模糊特效依赖）；缺失时静默降级不崩溃，但观感受损。
 - 卸载器：删除自启注册表项 + 删 `data.novadb` 前先去 Hidden|ReadOnly 属性。
 - 数据保留语义：卸载选「保留数据」则 `%LocalAppData%\Novara` 原样保留，重装自动恢复。
