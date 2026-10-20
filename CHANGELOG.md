@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [novara11] - 2026-10-19
 
-> Starting with this release the project uses compact version identifiers (`novara11` ↔ internal 11.0.0; see "Version naming" in the README).
+> Starting with this release the project uses compact version identifiers (`novara11` ↔ internal 11.0.0; revisions follow as `novara11.R1`, `novara11.R2`).
 
 A "Hardened" release: no feature sprawl — instead, everything already in use gets a stronger foundation: a new database container, leaner sync, backups that keep receipts, and a multi-pass, codebase-wide overhaul.
 
