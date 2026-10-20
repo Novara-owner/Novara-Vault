@@ -125,7 +125,7 @@ public static class McpService
                 try
                 {
                     var req = JsonSerializer.Deserialize<ReqMsg>(line, JsonOpts);
-                    if (req == null) { System.Diagnostics.Debug.WriteLine("V11-332: null/blank line from a pipe client (no reply, not audited - a direct-connect client could flood the user-visible list)"); continue; }
+                    if (req == null) { System.Diagnostics.Debug.WriteLine("null/blank line from a pipe client (no reply, not audited - a direct-connect client could flood the user-visible list)"); continue; }
                     var resp = Execute(req, clientPath, handshakeToken);
                     writer.WriteLine(JsonSerializer.Serialize(resp, JsonOpts));
                 }
@@ -796,11 +796,11 @@ public static class McpService
         if (dq.TryEnqueue(() => { try { action(); } finally { done.Set(); } }))
         {
             if (!done.Wait(TimeSpan.FromSeconds(5)))
-                System.Diagnostics.Debug.WriteLine("V11-284: 便签同步投递 UI 线程 5s 未完成（放弃等待，写盘可能稍后仍会落地）");
+                System.Diagnostics.Debug.WriteLine("便签同步投递 UI 线程 5s 未完成（放弃等待，写盘可能稍后仍会落地）");
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine("V11-284: 便签同步投递 UI 线程失败（DispatcherQueue 拒绝入队）");
+            System.Diagnostics.Debug.WriteLine("便签同步投递 UI 线程失败（DispatcherQueue 拒绝入队）");
         }
     }
 

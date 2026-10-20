@@ -989,7 +989,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
         if (_currentDiary is { } live && App.Store?.Database.DiaryItems.Any(d => d.Id == live.Id) != true)
         {
-            System.Diagnostics.Debug.WriteLine("V11-297: 打开的日记已不存在（外部删除）——保存被拒绝");
+            System.Diagnostics.Debug.WriteLine("打开的日记已不存在（外部删除）——保存被拒绝");
             try { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); } catch { }
             return false;
         }

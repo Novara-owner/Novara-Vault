@@ -4976,7 +4976,7 @@ public sealed partial class ToolsPage : Page
             try { await ShowSyncConflictDialogAsync(); }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"V11-335: 冲突检视失败: {ex}");
+                System.Diagnostics.Debug.WriteLine($"冲突检视失败: {ex}");
                 App.ShowToast(App.GetString("Sync_Conflict_InspectFailed"), ToastTone.Error);
             }
             return;
