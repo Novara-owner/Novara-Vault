@@ -244,6 +244,11 @@
 
 
 
+
+            <Border x:Name="WebViewCover" Background="{ThemeResource AppSurfaceBrush}" IsHitTestVisible="False" />
+
+
+
             <Grid x:Name="EditorFailNotice" Visibility="Collapsed" Background="{ThemeResource AppSurfaceBrush}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="540" Spacing="14">
                     <TextBlock x:Name="EditorFailTitle" FontSize="20" FontWeight="SemiBold"

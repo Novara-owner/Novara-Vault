@@ -84,7 +84,7 @@ public sealed partial class FilePathPage : Page
         DeleteConfirmOverlay.ContextRequested += (_, e) => e.Handled = true;
         ContentRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         Loaded += (_, _) => { LoadFromStore();
-        CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => CheckAllPaths(); _autoCheckTimer.Start(); } };
+        _ = CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => _ = CheckAllPaths(); _autoCheckTimer.Start(); } };
         Unloaded += (_, _) => { _pathCheckCts?.Cancel();
             _npCheckCts?.Cancel(); _npCheckCts?.Dispose(); _npCheckCts = null;
 
@@ -181,7 +181,7 @@ public sealed partial class FilePathPage : Page
         _entrancePlayed = true;
         ReorderCards();
         ApplyCardFilters();
-        CheckAllPaths();
+        _ = CheckAllPaths();
         if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
     }
 
@@ -1397,7 +1397,11 @@ public sealed partial class FilePathPage : Page
         };
         checkItem.Click += (_, _) =>
         {
-            if (!_pathCardData.TryGetValue(card, out var data) || string.IsNullOrWhiteSpace(data.path)) return;
+            if (!_pathCardData.TryGetValue(card, out var data) || string.IsNullOrWhiteSpace(data.path))
+            {
+                App.ShowToast(App.GetString("Path_Toast_NoCheckable"), ToastTone.Error);
+                return;
+            }
 
 
             ProbePathStatusAsync(card, data.path);
@@ -1489,7 +1493,15 @@ public sealed partial class FilePathPage : Page
             }
         };
 
-        checkItem.Click += (_, _) => { CheckAllPaths(); App.ShowToast(App.GetString("Common_Toast_Detected")); };
+        checkItem.Click += async (_, _) =>
+        {
+
+            var checkedCount = await CheckAllPaths();
+            if (checkedCount == 0)
+                App.ShowToast(App.GetString("Path_Toast_NoCheckable"), ToastTone.Error);
+            else
+                App.ShowToast(App.GetString("Common_Toast_Detected"));
+        };
 
         menu.Items.Add(newItem);
         menu.Items.Add(checkItem);
@@ -1545,7 +1557,7 @@ public sealed partial class FilePathPage : Page
         SetPathStatus(card, isValid);
     }
 
-    private async void CheckAllPaths()
+    private async Task<int> CheckAllPaths()
     {
 
 
@@ -1559,7 +1571,7 @@ public sealed partial class FilePathPage : Page
             if (child is Border card && card.Visibility == Visibility.Visible
                 && _pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
                 targets.Add((card, data.path, ClaimPathStatusGen(card)));
-        if (targets.Count == 0) return;
+        if (targets.Count == 0) return 0;
 
         var results = new List<(Border Card, bool IsValid, long Gen)>();
         try
@@ -1576,11 +1588,12 @@ public sealed partial class FilePathPage : Page
                 }
             });
         }
-        catch (System.OperationCanceledException) { return; }
-        if (ct.IsCancellationRequested) return;
+        catch (System.OperationCanceledException) { return 0; }
+        if (ct.IsCancellationRequested) return 0;
         foreach (var (card, isValid, gen) in results)
 
             if (PathList.Children.Contains(card) && IsPathStatusCurrent(card, gen)) SetPathStatus(card, isValid);
+        return targets.Count;
     }
 
     private GeometryGroup MakeGroup(string[] paths)

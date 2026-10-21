@@ -3209,7 +3209,7 @@ public sealed partial class ToolsPage : Page
     {
 
         _pendingRestoreSnapshot = GetCheckedSnapshot(BackupRestoreList);
-        if (string.IsNullOrEmpty(_pendingRestoreSnapshot)) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst")); return; }
+        if (string.IsNullOrEmpty(_pendingRestoreSnapshot)) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst"), ToastTone.Error); return; }
 
         HideBackupRestoreDialog();
         ShowBackupRestoreConfirmDialog();
@@ -3292,7 +3292,7 @@ public sealed partial class ToolsPage : Page
         _pendingDeleteIsClearAll = false;
         _pendingDeleteSnapshots.Clear();
         _pendingDeleteSnapshots.AddRange(GetCheckedSnapshots(BackupDeleteList));
-        if (_pendingDeleteSnapshots.Count == 0) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst")); return; }
+        if (_pendingDeleteSnapshots.Count == 0) { App.ShowToast(App.GetString("Setting_Backup_SelectFirst"), ToastTone.Error); return; }
         HideBackupDeleteDialog();
         ShowBackupDeleteConfirmDialog();
     }
@@ -5090,7 +5090,13 @@ public sealed partial class ToolsPage : Page
             Services.SyncRoundStatus.Error => SyncOutcomeStatusKey(outcome, fallback: "Sync_Status_Error"),
             _ => "",
         };
-        if (key.Length > 0) App.ShowToast(App.GetString(key));
+        if (key.Length == 0) return;
+
+        bool failed = outcome.Status is Services.SyncRoundStatus.Conflict
+            or Services.SyncRoundStatus.RollbackRejected
+            or Services.SyncRoundStatus.TransportFailure
+            or Services.SyncRoundStatus.Error;
+        App.ShowToast(App.GetString(key), failed ? ToastTone.Error : ToastTone.Success);
     }
 
 
@@ -5265,7 +5271,7 @@ public sealed partial class ToolsPage : Page
         if (_syncConflictBusy)
         {
 
-            App.ShowToast(App.GetString("Sync_Conflict_Busy"));
+            App.ShowToast(App.GetString("Sync_Conflict_Busy"), ToastTone.Error);
             return;
         }
         _syncConflictBusy = true;

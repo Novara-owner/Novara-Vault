@@ -489,7 +489,7 @@ public static class SyncService
 
 
     private static void NotifyKeyWrapLocalOnly()
-        => App.ShowToast(App.GetString("Sync_KeyRewrap_LocalOnly"));
+        => App.ShowToast(App.GetString("Sync_KeyRewrap_LocalOnly"), ToastTone.Error);
 
 
     public static void SetEnabled(bool enabled)
@@ -1460,7 +1460,11 @@ public static class SyncService
 
 
             if ((outcome.Changed || outcome.NeedsDecision) && ShouldNotify(outcome.Status))
-                App.UiQueue?.TryEnqueue(() => App.MainWindow?.ShowToast(ToastFor(outcome)));
+                App.UiQueue?.TryEnqueue(() =>
+                {
+                    var (message, tone) = ToastFor(outcome);
+                    App.MainWindow?.ShowToast(message, tone);
+                });
 
         }
         catch {  }
@@ -1481,12 +1485,12 @@ public static class SyncService
     }
 
 
-    private static string ToastFor(SyncRoundOutcome outcome) => outcome.Status switch
+    private static (string Message, ToastTone Tone) ToastFor(SyncRoundOutcome outcome) => outcome.Status switch
     {
-        SyncRoundStatus.Push => App.GetString("Sync_Toast_Pushed"),
-        SyncRoundStatus.Pull => App.GetString("Sync_Toast_Pulled"),
-        SyncRoundStatus.Conflict => App.GetString("Sync_Toast_Conflict"),
-        SyncRoundStatus.RollbackRejected => App.GetString("Sync_Toast_Rollback"),
-        _ => App.GetString("Sync_Toast_Done"),
+        SyncRoundStatus.Push => (App.GetString("Sync_Toast_Pushed"), ToastTone.Success),
+        SyncRoundStatus.Pull => (App.GetString("Sync_Toast_Pulled"), ToastTone.Success),
+        SyncRoundStatus.Conflict => (App.GetString("Sync_Toast_Conflict"), ToastTone.Error),
+        SyncRoundStatus.RollbackRejected => (App.GetString("Sync_Toast_Rollback"), ToastTone.Error),
+        _ => (App.GetString("Sync_Toast_Done"), ToastTone.Success),
     };
 }

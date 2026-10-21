@@ -895,7 +895,7 @@ private void ShowSetPasswordDialog()
                 switch (t.Result)
                 {
                     case SyncService.RewrapOutcome.SessionTornDown:
-                        App.ShowToast(App.GetString("Sync_Status_KeyWrapStale")); break;
+                        App.ShowToast(App.GetString("Sync_Status_KeyWrapStale"), ToastTone.Error); break;
                     case SyncService.RewrapOutcome.StateWriteFailed:
                     case SyncService.RewrapOutcome.RoundTripFailed:
                         App.ShowToast(App.GetString("Sync_KeyWrap_RewrapFailed"), ToastTone.Error); break;
@@ -2173,7 +2173,7 @@ private void ShowPrivacyLockWarningDialog()
 
         if (_updateBusy)
         {
-            App.ShowToast(App.GetString("Update_Busy_Retry"));
+            App.ShowToast(App.GetString("Update_Busy_Retry"), ToastTone.Error);
             return;
         }
         PendingAutoUpdateRelease = null;

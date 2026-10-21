@@ -460,6 +460,46 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         if (!string.IsNullOrEmpty(e.Uri)) OpenExternalLink(e.Uri);
     }
 
+
+
+
+
+    private int _webViewCoverGen;
+
+    private void ShowWebViewCover()
+    {
+        _webViewCoverGen++;
+        WebViewCover.Visibility = Visibility.Visible;
+        WebViewCover.Opacity = 1;
+    }
+
+    private async void HideWebViewCover(int gen)
+    {
+        await System.Threading.Tasks.Task.Delay(80);
+        if (gen != _webViewCoverGen) return;
+        try
+        {
+            var sb = new Storyboard();
+            var anim = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(120) };
+            Storyboard.SetTarget(anim, WebViewCover);
+            Storyboard.SetTargetProperty(anim, "Opacity");
+            sb.Children.Add(anim);
+            sb.Completed += (_, _) => { if (gen == _webViewCoverGen) WebViewCover.Visibility = Visibility.Collapsed; };
+            sb.Begin();
+        }
+        catch
+        {
+            HideWebViewCoverNow();
+        }
+    }
+
+    private void HideWebViewCoverNow()
+    {
+        _webViewCoverGen++;
+        WebViewCover.Opacity = 0;
+        WebViewCover.Visibility = Visibility.Collapsed;
+    }
+
     private async void OnNavigationCompleted(Microsoft.UI.Xaml.Controls.WebView2 sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
         if (!e.IsSuccess)
@@ -469,6 +509,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
             Services.CrashLogger.LogNote("DiaryEditorNavigationFailed", $"日记编辑器导航失败: {e.WebErrorStatus}");
             _webViewReady = false;
+            HideWebViewCoverNow();
             return;
         }
 
@@ -484,6 +525,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         _navigatingFormat = null;
         _webViewReady = true;
         SetDiaryContent(_currentDiary);
+        HideWebViewCover(_webViewCoverGen);
         _ = RebaselineContentAfterRenderAsync();
         UpdateToolbarForFormat();
         SetMdView(MdViewMode.Write);
@@ -562,7 +604,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             else if (action == "httpImgBlocked")
             {
                 var count = doc.RootElement.TryGetProperty("count", out var cn) && cn.TryGetInt32(out var hc) ? hc : 0;
-                if (count > 0) App.ShowToast(string.Format(App.GetString("Memo_HttpImg_Blocked_Toast"), count));
+                if (count > 0) App.ShowToast(string.Format(App.GetString("Memo_HttpImg_Blocked_Toast"), count), ToastTone.Error);
             }
             else if (action == "userEdited")
             {
@@ -732,6 +774,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     private void ShowEditorFailNotice(string err)
     {
+        HideWebViewCoverNow();
         bool runtimeMissing = err.StartsWith("runtime-missing", StringComparison.Ordinal);
         EditorFailTitle.Text = App.GetString("Editor_Fail_Title");
         EditorFailBody.Text = App.GetString(runtimeMissing ? "Editor_Fail_Runtime" : "Editor_Fail_Generic");
@@ -751,6 +794,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
     public void LoadDiary(DiaryEntry? diary, string? newFormat = null)
     {
+        ShowWebViewCover();
         BackButton.IsEnabled = true;
         _currentDiary = diary;
         _currentImageBytes = diary != null ? EstimateImageBytes(diary.Content) : 0;
@@ -777,6 +821,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         else if (_webViewReady)
         {
             SetDiaryContent(diary);
+            HideWebViewCover(_webViewCoverGen);
             if (format != "markdown") _ = RebaselineContentAfterRenderAsync();
         }
         else if (_navigatingFormat != null && _navigatingFormat != format)

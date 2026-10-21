@@ -555,7 +555,7 @@ private bool CreateTrayIcon()
             var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
             menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_ShowWindow"), Command = ShowWindowCommand });
             menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_LockNow"), Command = new Services.RelayCommand(() => { if (LockScreenFrame.Visibility == Visibility.Visible) return;
-                if (App.Store is { IsLoaded: true, IsEncrypted: true }) LockNow(); else App.ShowToast(App.GetString("Tray_LockNeedLock")); }) });
+                if (App.Store is { IsLoaded: true, IsEncrypted: true }) LockNow(); else App.ShowToast(App.GetString("Tray_LockNeedLock"), ToastTone.Error); }) });
             menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_Exit"), Command = ExitCommand });
 
@@ -2976,7 +2976,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void RefuseHiddenTabAction(string requestedTag)
     {
         ShowMainWindow();
-        App.ShowToast(App.GetString("Common_Tab_Hidden_Toast"));
+        App.ShowToast(App.GetString("Common_Tab_Hidden_Toast"), ToastTone.Error);
         System.Diagnostics.Debug.WriteLine($"N4W-03: action for hidden tab '{requestedTag}' dropped");
     }
 
@@ -3272,7 +3272,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void RefuseRestorePending()
     {
         ShowMainWindow();
-        App.ShowToast(App.GetString("Common_Toast_RestorePending"));
+        App.ShowToast(App.GetString("Common_Toast_RestorePending"), ToastTone.Error);
     }
 
 
@@ -3403,7 +3403,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     public void RunPaletteCommand(string cmd)
     {
 
-        if (RestorePendingBlocksNavigation()) { App.ShowToast(App.GetString("Common_Toast_RestorePending")); return; }
+        if (RestorePendingBlocksNavigation()) { App.ShowToast(App.GetString("Common_Toast_RestorePending"), ToastTone.Error); return; }
         CloseSearchPage();
         switch (cmd)
         {
@@ -3435,7 +3435,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 break;
             case "lock_now":
                 if (App.Store is { IsEncrypted: true }) LockNow();
-                else App.ShowToast(App.GetString("Tray_LockNeedLock"));
+                else App.ShowToast(App.GetString("Tray_LockNeedLock"), ToastTone.Error);
                 break;
         }
     }
@@ -3444,11 +3444,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     public void SearchJump(string kind, string id)
     {
 
-        if (RestorePendingBlocksNavigation()) { App.ShowToast(App.GetString("Common_Toast_RestorePending")); return; }
+        if (RestorePendingBlocksNavigation()) { App.ShowToast(App.GetString("Common_Toast_RestorePending"), ToastTone.Error); return; }
 
 
         string tag = kind switch { "memo" => "Memo", "path" => "File", "todo" => "Plan", "note" => "Plan", "diary" => "Diary", _ => "" };
-        if (tag != "" && !IsTabVisible(tag)) { App.ShowToast(App.GetString("Common_Tab_Hidden_Toast")); return; }
+        if (tag != "" && !IsTabVisible(tag)) { App.ShowToast(App.GetString("Common_Tab_Hidden_Toast"), ToastTone.Error); return; }
         CloseSearchPage();
         EnsureTargetWorkspaceVisible(kind, id);
         switch (kind)
