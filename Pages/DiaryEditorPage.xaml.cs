@@ -60,7 +60,7 @@ public sealed partial class DiaryEditorPage : Page
 
 
     private const string EditorHtmlTemplate = @"<!DOCTYPE html>
-<html><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
+<html style='background:{0}'><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
@@ -151,6 +151,32 @@ tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboar
 notifyFormatState();
 </script></body></html>";
 
+
+
+
+    private string GetEditorBackgroundHex()
+    {
+        bool isLight = App.CurrentTheme == "浅色模式"
+            || (App.MainWindow?.Content is FrameworkElement root && root.ActualTheme == ElementTheme.Light);
+        string bg = isLight ? "#F2F2F2" : "#1E1E1E";
+        if (PaperTheme.TryGetEditorColors(out var pBg, out _, out _, out _, out _, out _, out _, out _, out _)) bg = pBg;
+        return bg;
+    }
+
+    private static Windows.UI.Color ParseRgbHex(string hex, Windows.UI.Color fallback)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(hex) && hex.Length == 7 && hex[0] == '#')
+                return Windows.UI.Color.FromArgb(255,
+                    System.Convert.ToByte(hex.Substring(1, 2), 16),
+                    System.Convert.ToByte(hex.Substring(3, 2), 16),
+                    System.Convert.ToByte(hex.Substring(5, 2), 16));
+        }
+        catch { }
+        return fallback;
+    }
+
     private string GetEditorHtml()
     {
 
@@ -196,7 +222,7 @@ notifyFormatState();
 
 
     private const string MarkdownHtmlTemplate = @"<!DOCTYPE html>
-<html><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
+<html style='background:{0}'><head><meta charset='utf-8'><meta http-equiv='Content-Security-Policy' content=""default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https:; connect-src 'none'; base-uri 'none'; form-action 'none'""><style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 html,body{{background:{0};font-family:'Segoe UI',sans-serif;color:{1}}}
 body{{overflow-y:auto;color:{1};padding-bottom:80px}}
@@ -469,6 +495,9 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     private void ShowWebViewCover()
     {
         _webViewCoverGen++;
+
+        WebViewCover.Background = new SolidColorBrush(ParseRgbHex(GetEditorBackgroundHex(),
+            Windows.UI.Color.FromArgb(255, 0xF2, 0xF2, 0xF2)));
         WebViewCover.Visibility = Visibility.Visible;
         WebViewCover.Opacity = 1;
     }
@@ -719,6 +748,10 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
 
             var env = await GetOrCreateEditorEnvAsync(udf);
             await ContentWebView.EnsureCoreWebView2Async(env);
+
+
+            ContentWebView.DefaultBackgroundColor = ParseRgbHex(GetEditorBackgroundHex(),
+                Windows.UI.Color.FromArgb(255, 0xF2, 0xF2, 0xF2));
 
 
             var bundlePath = System.IO.Path.Combine(AppContext.BaseDirectory, _loadedFormat == "markdown" ? "md.bundle.js" : "tiptap.bundle.js");

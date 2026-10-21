@@ -264,7 +264,7 @@
                         <Button x:Name="EditorFailRetryButton" Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 MinWidth="140" Height="40" CornerRadius="10" Click="EditorFailRetry_Click" />
                         <HyperlinkButton x:Name="EditorFailHelpLink" FontSize="14"
-                                         NavigateUri="https://developer.microsoft.com/microsoft-edge/webview2/"
+                                         NavigateUri="https://go.microsoft.com/fwlink/?linkid=2124701"
                                          Foreground="{ThemeResource AppPrimaryButtonBrush}" />
                     </StackPanel>
                 </StackPanel>
