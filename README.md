@@ -147,8 +147,6 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
 
 <p align="center">
   <img src="images/HtmlEditor.png" alt="Rich text HTML editor" width="420" />
-  <img src="images/English-MdEditor-PreviewMode.png" alt="Markdown editor preview" width="420" />
-  <img src="images/English-MdEditor-SourceMode.png" alt="Markdown editor source mode" width="420" />
   <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown editor split preview" width="420" />
 </p>
 
@@ -259,9 +257,6 @@ Light, Dark, and Follow System themes with a unified brand-button system (primar
 <p align="center">
   <img src="images/English-Settings.png" alt="Settings page" width="420" />
   <img src="images/English-Tools.png" alt="Tools page" width="420" />
-</p>
-<p align="center">
-  <img src="images/English-Data%20Overview.png" alt="Data overview" width="720" />
 </p>
 
 ## Data Import & Export

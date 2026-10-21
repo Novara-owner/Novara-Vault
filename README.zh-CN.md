@@ -147,8 +147,6 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 
 <p align="center">
   <img src="images/HtmlEditor.png" alt="富文本 HTML 编辑器" width="420" />
-  <img src="images/Chinese-MdEditor-PreviewMode.png" alt="Markdown 编辑器预览" width="420" />
-  <img src="images/Chinese-MdEditor-SourceMode.png" alt="Markdown 编辑器源码模式" width="420" />
   <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown 编辑器分屏预览" width="420" />
 </p>
 
@@ -259,9 +257,6 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 <p align="center">
   <img src="images/Chinese-SettingsPage.png" alt="设置页" width="420" />
   <img src="images/Chinese-Tools.png" alt="工具页" width="420" />
-</p>
-<p align="center">
-  <img src="images/Chinese-Data%20Overview.png" alt="数据概览" width="720" />
 </p>
 
 ## 数据导入与导出
