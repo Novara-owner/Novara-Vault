@@ -46,7 +46,7 @@ digest 必须与 `IMAGES.txt` 一致。同一 digest 也会发布到 Docker Hub�
 ```bash
 cosign verify-blob \
   --bundle signature.bundle \
-  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/(v|novara)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   Novara_Setup_novara11.exe
 ```
@@ -55,7 +55,7 @@ Docker 镜像的签名存放在镜像仓库中。按 digest 校验，身份条�
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/(v|novara)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/novara-owner/novara-sync@sha256:<IMAGES.txt 中的 digest>
 ```

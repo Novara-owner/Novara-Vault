@@ -46,7 +46,7 @@ From 10.1 on, the Windows installer ships a `signature.bundle` attachment. Downl
 ```bash
 cosign verify-blob \
   --bundle signature.bundle \
-  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/(v|novara)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   Novara_Setup_novara11.exe
 ```
@@ -55,7 +55,7 @@ The container image is signed in the registry. Verify it by digest, with the sam
 
 ```bash
 cosign verify \
-  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/(v|novara)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/novara-owner/novara-sync@sha256:<digest-from-IMAGES.txt>
 ```
