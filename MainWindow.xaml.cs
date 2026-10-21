@@ -2024,7 +2024,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             Grid.SetColumn(visibleItems[i], i);
         }
         NavIndicator.Opacity = 0;
-        RelocateNavGlow();
+
+
+
+        if (NavBar.Visibility == Visibility.Visible)
+        {
+            
+            RelocateNavGlow();
+        }
         UpdateNavBarVisibility();
     }
 
@@ -3675,6 +3682,15 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (selected == null) return false;
         if (NavBar.Visibility != Visibility.Visible || selected.Visibility != Visibility.Visible
             || selected.ActualWidth < 1) return false;
+
+
+        int cols = NavBar.ColumnDefinitions.Count;
+        if (cols > 0 && NavBar.ActualWidth > 1)
+        {
+            double expected = NavBar.ActualWidth / cols - 16;
+            if (expected > 1 && Math.Abs(selected.ActualWidth - expected) > Math.Max(10, expected * 0.2))
+                return false;
+        }
         var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
         SetNavGlowX(pt.X);
         NavIndicator.Width = selected.ActualWidth;
@@ -3720,8 +3736,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
             if (!_navGlowRetryHooked) return;
-            if (!SilentPlaceNavGlow()) return;
-            Unhook();
+            if (SilentPlaceNavGlow()) { Unhook(); return; }
+
+
+            if (NavBar.Visibility != Visibility.Visible) Unhook();
         });
     }
 
@@ -4000,7 +4018,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-        if (NavBar.Visibility == Visibility.Visible) RelocateNavGlow();
+        if (NavBar.Visibility == Visibility.Visible)
+        {
+
+            NavBar.UpdateLayout();NavBar.UpdateLayout();
+            RelocateNavGlow();
+        }
     }
 
     public void ReloadPages()
