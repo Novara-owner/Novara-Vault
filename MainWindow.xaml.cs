@@ -4100,12 +4100,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
         if (!IsTabVisible("Diary"))
         {
+            _diaryEditorPage?.PrepareForExit();
             var (tab, nav) = ResolveNavTarget("Diary");
             NavigateToPage(tab);
             UpdateNavSelection(nav);
             _diaryEditorPage?.ClearContent();
             return;
         }
+        _diaryEditorPage?.PrepareForExit();
         var fadeOut = new Storyboard();
         var oa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(120), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         Storyboard.SetTarget(oa, RootFrame);

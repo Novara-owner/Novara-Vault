@@ -522,6 +522,28 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         }
     }
 
+
+    private async void ShowEditorSurfaceAndDropCover(int gen)
+    {
+        await System.Threading.Tasks.Task.Delay(60);
+        if (gen != _webViewCoverGen) return;
+        if (ContentWebView.CoreWebView2 != null)
+        {
+            ContentWebView.Visibility = Visibility.Visible;
+            ContentWebView.Opacity = 1;
+        }
+        HideWebViewCover(gen);
+    }
+
+
+    public void PrepareForExit()
+    {
+        ShowWebViewCover();
+        ContentWebView.Opacity = 0;
+        if (ContentWebView.CoreWebView2 != null)
+            ContentWebView.Visibility = Visibility.Collapsed;
+    }
+
     private void HideWebViewCoverNow()
     {
         _webViewCoverGen++;
@@ -554,7 +576,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         _navigatingFormat = null;
         _webViewReady = true;
         SetDiaryContent(_currentDiary);
-        HideWebViewCover(_webViewCoverGen);
+        ShowEditorSurfaceAndDropCover(_webViewCoverGen);
         _ = RebaselineContentAfterRenderAsync();
         UpdateToolbarForFormat();
         SetMdView(MdViewMode.Write);
@@ -716,7 +738,16 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     private async System.Threading.Tasks.Task<Microsoft.Web.WebView2.Core.CoreWebView2Environment> GetOrCreateEditorEnvAsync(string udf)
     {
         if (_editorEnv == null)
-            _editorEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, udf, null);
+        {
+
+
+
+            var options = new Microsoft.Web.WebView2.Core.CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--msWebView2CancelInitialNavigation"
+            };
+            _editorEnv = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateWithOptionsAsync(null, udf, options);
+        }
         return _editorEnv;
     }
 
@@ -828,6 +859,9 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
     public void LoadDiary(DiaryEntry? diary, string? newFormat = null)
     {
         ShowWebViewCover();
+
+        ContentWebView.Visibility = Visibility.Visible;
+        ContentWebView.Opacity = 0;
         BackButton.IsEnabled = true;
         _currentDiary = diary;
         _currentImageBytes = diary != null ? EstimateImageBytes(diary.Content) : 0;
@@ -854,7 +888,7 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
         else if (_webViewReady)
         {
             SetDiaryContent(diary);
-            HideWebViewCover(_webViewCoverGen);
+            ShowEditorSurfaceAndDropCover(_webViewCoverGen);
             if (format != "markdown") _ = RebaselineContentAfterRenderAsync();
         }
         else if (_navigatingFormat != null && _navigatingFormat != format)
