@@ -3,7 +3,7 @@
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['v*', 'novara*']
   pull_request:
     branches: [main]
   workflow_dispatch:
