@@ -67,7 +67,7 @@ Both commands print the release tag the artifact was signed at. Get `cosign` fro
 Releases include a Software Bill of Materials (SPDX JSON, generated with Syft) listing every component in the product. Open it with any SPDX viewer, or list package names:
 
 ```bash
-jq -r '.packages[].name' novara-sync-11.0.0.spdx.json | sort -u
+jq -r '.packages[].name' novara-sync-11.1.0.spdx.json | sort -u
 ```
 
 ## OpenSSF Scorecard

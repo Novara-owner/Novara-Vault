@@ -67,7 +67,7 @@ cosign verify \
 发布附件中包含软件物料清单（SPDX JSON，用 Syft 生成），列出产品中的每一个组件。用任意 SPDX 查看器打开，或直接列出包名：
 
 ```bash
-jq -r '.packages[].name' novara-sync-11.0.0.spdx.json | sort -u
+jq -r '.packages[].name' novara-sync-11.1.0.spdx.json | sort -u
 ```
 
 ## OpenSSF Scorecard
