@@ -4,13 +4,17 @@ English · [简体中文](REGRESSION_TESTS.zh-CN.md)
 
 How bugs fixed over the last six months map onto the automated regression surface. The project started in August 2026, so "the last six months" is the project's whole life. The bug sources are the [CHANGELOG](../CHANGELOG.md) "Fixed" entries and the verification-round summaries; the regression surface has two layers:
 
-1. **Unit / integration tests** — `Novara.Tests` (xUnit, 35+ files, ~850 tests) covering the data, crypto, sync and server layers, which reference the shipping assemblies directly.
-2. **Static guards** — `Tools/page_lifecycle_guard.py` (368 checks), `Tools/reverse_verify.py` (193 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
+1. **Unit / integration tests** — `Novara.Tests` (xUnit, 50+ files, 1,003 tests) covering the data, crypto, sync and server layers, which reference the shipping assemblies directly.
+2. **Static guards** — `Tools/page_lifecycle_guard.py` (674 checks), `Tools/reverse_verify.py` (193 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
 
 ## Mapping (named fixes in the changelog)
 
 | Version | Fixed issue | Regression test |
 |---|---|---|
+| 11.1 (R1) | HTML editor image picker used the wrong COM collection; multi-select was disabled | `RegressionGuardsTests.FilePicker_MultiSelectUsesShellItemArray` (CI) |
+| 11.1 (R1) | Multiple images replaced each other; image selection was hard to clear | `RegressionGuardsTests.DiaryEditor_ImageSelectionAndMultiInsert` (CI) |
+| 11.1 (R1) | Toolbar commands stole focus from the editor | `RegressionGuardsTests.DiaryEditor_ToolbarKeepsEditorFocus` (CI) |
+| 11.0 | Hardening pass (~470 fixes across the codebase) | Full guard suite + the cycle's CI tests; the editor hotfix is pinned in the 11.1 rows |
 | 10.3 | Exported files lost their extension | `RegressionGuardsTests.FilePicker_KeepsTheExtensionInvariant` (CI) + local guard |
 | 10.2 | Toolbar edits did not refresh the preview | `RegressionGuardsTests.EditorToolbar_ActionsSyncThePreview` (CI) |
 | 10.2 | Split-view typing jumped to the bottom | Manual verification (WebView2 editor surface) |
@@ -42,9 +46,9 @@ The contributing policy requires major functionality to arrive with tests, and t
 
 ## Totals
 
-- **13 of the 26 named fixes (50%) carry their regression inside the CI test suite** — 3 as behavioural unit tests, 10 as `RegressionGuardsTests` source-form assertions; the remaining 9 are manual verifications for surfaces a unit test cannot host (WebView2, Task Scheduler COM, locale matrix).
-- The local guard scripts (which run before every local build and are mutation-verified) back 10 of the CI assertions plus the aggregate rounds (6.0's ~250 issues, 5.1's ~20) — they are development infrastructure and intentionally not part of this public repository.
+- The table spans the 11.1 editor hotfix, the 11.0 hardening pass and the earlier named fixes. Each R1 fix added a `RegressionGuardsTests` source-form assertion (CI); the 11.0 pass is backed by the full guard suite. The historical split between behavioural tests, source-form assertions, local guards and manual verification is shown per row rather than aggregated, because the mix and the suite size change every release.
+- The local guard scripts (which run before every local build and are mutation-verified) back the CI assertions and the aggregate rounds (6.0's ~250 issues, 5.1's ~20) — they are development infrastructure and intentionally not part of this public repository.
 
 ---
 
-*Last updated: 2026-10-13*
+*Last updated: 2026-10-22*

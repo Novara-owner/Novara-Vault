@@ -4,13 +4,17 @@
 
 近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与验证轮次汇总；回归面有两层：
 
-1. **单元/集成测试** —— `Novara.Tests`（xUnit，35+ 文件，约 850 个测试），直接引用发行程序集，覆盖数据、加密、同步与服务端层。
-2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（368 条判据）、`Tools/reverse_verify.py`（193 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
+1. **单元/集成测试** —— `Novara.Tests`（xUnit，50+ 文件，1,003 个测试），直接引用发行程序集，覆盖数据、加密、同步与服务端层。
+2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（674 条判据）、`Tools/reverse_verify.py`（193 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
 
 ## 映射（更新日志中的具名修复）
 
 | 版本 | 修复 | 回归测试 |
 |---|---|---|
+| 11.1 (R1) | HTML 编辑器图片选择器用错 COM 集合；多选被禁用 | `RegressionGuardsTests.FilePicker_MultiSelectUsesShellItemArray`（CI） |
+| 11.1 (R1) | 多张图片互相替换；图片选中态难以清除 | `RegressionGuardsTests.DiaryEditor_ImageSelectionAndMultiInsert`（CI） |
+| 11.1 (R1) | 工具栏命令夺走编辑器焦点 | `RegressionGuardsTests.DiaryEditor_ToolbarKeepsEditorFocus`（CI） |
+| 11.0 | 全代码库加固（约 470 项修复） | 全守卫套件 + 本周期 CI 测试；编辑器热修复钉在 11.1 三行 |
 | 10.3 | 导出文件丢失扩展名 | `RegressionGuardsTests.FilePicker_KeepsTheExtensionInvariant`（CI）+ 本地守卫 |
 | 10.2 | 工具栏编辑不即时刷新预览 | `RegressionGuardsTests.EditorToolbar_ActionsSyncThePreview`（CI） |
 | 10.2 | 分屏打字跳到底部 | 人工验证（WebView2 编辑器面） |
@@ -42,9 +46,9 @@
 
 ## 合计
 
-- **26 条具名修复中的 13 条（50%）把回归放进 CI 测试套件**——3 条为行为级单元测试，10 条为 `RegressionGuardsTests` 源码形态断言；其余 9 条是单元测试无法承载的表面（WebView2、Task Scheduler COM、语言矩阵）的人工验证。
-- 本地守卫脚本（每次本机构建前运行、经变异验证）为 10 条 CI 断言及汇总轮（6.0 的约 250 项、5.1 的约 20 项）提供后备——它们是开发基础设施，有意不入本公开仓库。
+- 本表覆盖 11.1 编辑器热修复、11.0 加固与更早的具名修复。R1 的三项修复各自新增一条 `RegressionGuardsTests` 源码形态断言（CI）；11.0 加固由全守卫套件兜底。行为级单测、源码形态断言、本地守卫与人工验证的历史占比不再汇总为单一百分比——每次发版混合比例与套件规模都会变化，逐行标注更可靠。
+- 本地守卫脚本（每次本机构建前运行、经变异验证）为 CI 断言及汇总轮（6.0 的约 250 项、5.1 的约 20 项）提供后备——它们是开发基础设施，有意不入本公开仓库。
 
 ---
 
-*最后更新：2026-10-13*
+*最后更新：2026-10-22*
