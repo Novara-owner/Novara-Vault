@@ -41,6 +41,49 @@ public class RegressionGuardsTests
 
 
 
+
+    [Fact]
+    public void FilePicker_MultiSelectUsesShellItemArray()
+    {
+        var src = Read("Services", "FilePicker.cs");
+        Assert.Contains("GetResults(out IShellItemArray", src);
+        Assert.DoesNotContain("GetResults(out IEnumShellItems", src);
+        Assert.Contains("B63EA76D-1F85-456F-A19C-48159EFA858B", src);
+        Assert.Contains("GetItemAt", src);
+        Assert.Contains("FOS_ALLOWMULTISELECT", src);
+    }
+
+
+
+
+    [Fact]
+    public void DiaryEditor_ImageSelectionAndMultiInsert()
+    {
+        var src = Read("Pages", "DiaryEditorPage.xaml.cs");
+        Assert.Contains(".resizable-image-outer{{pointer-events:none}}", src);
+        Assert.Contains(".resizable-image-wrapper{{pointer-events:auto}}", src);
+        Assert.Contains("function clearImageSelection()", src);
+        Assert.Contains("clearImageSelection();var n=", src);
+        Assert.Contains("case'insertImage':insertImage(m.base64,m.filename,m.mime,m.keepSelected);break;", src);
+        Assert.Contains("if(!keepSelected)clearImageSelection()", src);
+        Assert.Contains("keepSelected = i == images.Count - 1", src);
+    }
+
+
+
+    [Fact]
+    public void DiaryEditor_ToolbarKeepsEditorFocus()
+    {
+        var xaml = Read("Pages", "DiaryEditorPage.xaml");
+        Assert.Contains("<Setter Property=\"AllowFocusOnInteraction\" Value=\"False\" />", xaml);
+        Assert.Equal(3, Regex.Matches(xaml, "AllowFocusOnInteraction").Count);
+        var cs = Read("Pages", "DiaryEditorPage.xaml.cs");
+        Assert.Contains("action.StartsWith(\"exec\", StringComparison.Ordinal) || action == \"insertImage\"", cs);
+        Assert.Contains("RefocusEditorAfterToolbarCommand();", cs);
+    }
+
+
+
     [Fact]
     public void PaperTheme_ParsesSixDigitColors()
     {

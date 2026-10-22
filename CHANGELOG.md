@@ -6,6 +6,17 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [novara11.R1] - 2026-10-22
+
+A focused editor hotfix: image insertion, image selection and toolbar focus in the HTML record editor.
+
+### Fixed
+
+- **Image insertion in the HTML editor** — the file picker enumerated its selection as `IEnumShellItems` although `IFileOpenDialog::GetResults` returns `IShellItemArray`, so every pick ended in "Operation failed". The picker now uses the correct interface, and multiple images can be selected at once.
+- **Multiple images** — selected images are inserted in order; the last one stays selected, and consecutive inserts no longer replace the previous image.
+- **Image selection** — clicking beside an image, clicking the title or pressing Esc clears the selection; opening a document no longer auto-selects an image, and a full-width image can always be deselected from the title or with Esc.
+- **Toolbar focus** — clicking any HTML toolbar button no longer steals native focus from the editor; the caret stays in the content area, including after the image picker closes or is cancelled.
+
 ## [novara11] - 2026-10-19
 
 > Starting with this release the project uses compact version identifiers (`novara11` ↔ internal 11.0.0; revisions follow as `novara11.R1`, `novara11.R2`).

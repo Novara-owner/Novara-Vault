@@ -166,7 +166,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Data.Sqlite": "[8.0.8, )",
-          "Novara.Core": "[11.0.0, )",
+          "Novara.Core": "[11.1.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[2.1.13, )"
         }
       },
@@ -176,7 +176,7 @@
       "NovaraSync": {
         "type": "Project",
         "dependencies": {
-          "Novara.Sync.Server": "[11.0.0, )"
+          "Novara.Sync.Server": "[11.1.0, )"
         }
       }
     }

@@ -85,6 +85,8 @@ body::-webkit-scrollbar{{width:4px;height:4px}}body::-webkit-scrollbar-track{{ba
 #body .ProseMirror a{{color:{12};text-decoration:underline;cursor:pointer}}
 img{{max-width:100%;height:auto;display:block;margin:4px 0}}
 img[src^='http:']{{opacity:.3;outline:1px dashed #999}}
+.resizable-image-outer{{pointer-events:none}}
+.resizable-image-wrapper{{pointer-events:auto}}
 </style></head><body>
 <div id='title' contenteditable='true' spellcheck='false'></div>
 <div class='sep'></div>
@@ -123,8 +125,9 @@ function execRedo(){{editor.chain().focus().redo().run();notifyFormatState()}}
 function execAlign(a){{editor.chain().focus().setTextAlign(a).run()}}
 function execCodeBlock(){{editor.chain().focus().toggleCodeBlock().run()}}
 function execHorizontalRule(){{editor.chain().focus().setHorizontalRule().run()}}
-function insertImage(b64,name,mime){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run()}}
-function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh();var n=document.querySelectorAll(""img[src^='http:']"").length;if(n>0)window.chrome.webview.postMessage(JSON.stringify({{action:'httpImgBlocked',count:n}}))}}
+function insertImage(b64,name,mime,keepSelected){{editor.chain().focus().setImage({{src:'data:'+(mime||'image/png')+';base64,'+b64,alt:name||''}}).run();if(!keepSelected)clearImageSelection()}}
+function clearImageSelection(){{try{{var s=editor.state.selection;if(s&&s.node)editor.commands.setTextSelection(Math.min(s.to,editor.state.doc.content.size))}}catch(err){{}}}}
+function setAll(ht,hb){{tel.textContent=ht||'';window.__mdLoading=true;editor.commands.setContent(hb||'');window.__mdLoading=false;updateTitleSpacing();updPh();clearImageSelection();var n=document.querySelectorAll(""img[src^='http:']"").length;if(n>0)window.chrome.webview.postMessage(JSON.stringify({{action:'httpImgBlocked',count:n}}))}}
 function updateTitleSpacing(){{var t=tel.textContent||'';var sp='0.18em';for(var i=0;i<t.length;i++){{var c=t.charCodeAt(i);if((c>=65&&c<=90)||(c>=97&&c<=122)||(c>=0xAC00&&c<=0xD7AF)||(c>=0x1100&&c<=0x11FF)||(c>=0x3040&&c<=0x30FF)){{sp='0';break}}}}tel.style.letterSpacing=sp}}
 tel.addEventListener('input',function(){{updateTitleSpacing();window.chrome.webview.postMessage(JSON.stringify({{action:'userEdited'}}))}});
 function getTitle(){{return tel.innerHTML}}function getBody(){{return editor.getHTML()}}
@@ -144,10 +147,13 @@ function showCtx(x,y){{ctxMenu.style.left=x+'px';ctxMenu.style.top=y+'px';ctxMen
 function hideCtx(){{ctxMenu.style.display='none'}}
 bel.addEventListener('contextmenu',function(e){{var a=e.target&&e.target.closest?e.target.closest('a'):null;if(a){{e.preventDefault();showCtx(e.clientX,e.clientY)}}else{{hideCtx()}}}});
 document.addEventListener('click',function(e){{if(!ctxMenu.contains(e.target))hideCtx()}});
-window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setAll':setAll(m.title||'',m.body||'');break;case'insertImage':insertImage(m.base64,m.filename,m.mime);break;case'execBold':execBold();break;case'execItalic':execItalic();break;case'execUnderline':execUnderline();break;case'execForeColor':execForeColor(m.color);break;case'execClear':execClear();break;case'execUndo':execUndo();break;case'execRedo':execRedo();break;case'execAlign':execAlign(m.align);break;case'execCodeBlock':execCodeBlock();break;case'execHorizontalRule':execHorizontalRule();break;}}}}catch(err){{}}}});
+window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.parse(e.data);switch(m.action){{case'setAll':setAll(m.title||'',m.body||'');break;case'insertImage':insertImage(m.base64,m.filename,m.mime,m.keepSelected);break;case'execBold':execBold();break;case'execItalic':execItalic();break;case'execUnderline':execUnderline();break;case'execForeColor':execForeColor(m.color);break;case'execClear':execClear();break;case'execUndo':execUndo();break;case'execRedo':execRedo();break;case'execAlign':execAlign(m.align);break;case'execCodeBlock':execCodeBlock();break;case'execHorizontalRule':execHorizontalRule();break;}}}}catch(err){{}}}});
 tel.addEventListener('keydown',function(e){{var t=tel.textContent.replace(/\s/g,'');if(t.length>=120&&e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});tel.addEventListener('drop',function(e){{if(e.target===tel||tel.contains(e.target))e.preventDefault()}});
 tel.addEventListener('keydown',function(e){{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){{e.preventDefault()}}}});
 tel.addEventListener('paste',function(e){{e.preventDefault();var txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';var sel=window.getSelection();if(sel&&sel.rangeCount&&tel.contains(sel.anchorNode)){{try{{sel.deleteFromDocument()}}catch(err){{}}}}var t=tel.textContent.replace(/\s/g,'');var rem=120-t.length;if(rem<=0)return;var out='',ns=0;for(var i=0;i<txt.length;i++){{var ch=txt.charAt(i);out+=ch;if(!/\s/.test(ch)){{ns++;if(ns>=rem)break}}}}document.execCommand('insertText',false,out)}});
+document.addEventListener('mousedown',function(e){{if(!bel.contains(e.target))clearImageSelection()}},true);
+tel.addEventListener('focus',clearImageSelection);
+bel.addEventListener('keydown',function(e){{if(e.key==='Escape')clearImageSelection()}});
 notifyFormatState();
 </script></body></html>";
 
@@ -993,13 +999,19 @@ window.chrome.webview.addEventListener('message',function(e){{try{{var m=JSON.pa
             cv.PostWebMessageAsString(JsonSerializer.Serialize(msg));
 
 
-            if (action.StartsWith("md", StringComparison.Ordinal))
+
+            if (action.StartsWith("md", StringComparison.Ordinal) || action.StartsWith("exec", StringComparison.Ordinal) || action == "insertImage")
             {
-                try { ContentWebView.Focus(FocusState.Programmatic); } catch { }
-                _ = RefocusMdTextareaAsync(cv);
+                RefocusEditorAfterToolbarCommand();
+                if (action.StartsWith("md", StringComparison.Ordinal)) _ = RefocusMdTextareaAsync(cv);
             }
         }
         catch { }
+    }
+
+    private void RefocusEditorAfterToolbarCommand()
+    {
+        try { ContentWebView.Focus(FocusState.Programmatic); } catch { }
     }
 
     private static async System.Threading.Tasks.Task RefocusMdTextareaAsync(Microsoft.Web.WebView2.Core.CoreWebView2 cv)
@@ -1419,38 +1431,50 @@ private void BoldButton_Click(object sender, RoutedEventArgs e)
         try
         {
             var files = FilePicker.PickFiles("*.png;*.jpg;*.jpeg");
-            if (files.Count == 0) return;
-            foreach (var f in files)
-                await InsertImageFromPath(f);
+            if (files.Count == 0) { RefocusEditorAfterToolbarCommand(); return; }
+            await InsertImagesFromPathsAsync(files);
         }
         catch (Exception ex)
         {
             CrashLogger.LogNote("DiaryImagePicker", ex.Message);
             try { App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error); } catch { }
+            RefocusEditorAfterToolbarCommand();
         }
     }
 
-    private async System.Threading.Tasks.Task InsertImageFromPath(string path)
+    private async System.Threading.Tasks.Task InsertImagesFromPathsAsync(List<string> paths)
     {
-        try
+
+
+
+
+        long existing = await QueryEmbeddedImageBytesAsync();
+        long added = 0;
+        var images = new List<(byte[] Bytes, string Name, string Mime)>();
+        foreach (var path in paths)
         {
-            var bytes = await System.IO.File.ReadAllBytesAsync(path);
-            if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge"), ToastTone.Error); return; }
+            try
+            {
+                var bytes = await System.IO.File.ReadAllBytesAsync(path);
+                if (bytes.Length > 5 * 1024 * 1024) { App.ShowToast(App.GetString("DiaryEditor_ImageTooLarge"), ToastTone.Error); continue; }
+                if (existing + added + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded"), ToastTone.Error); continue; }
+                added += bytes.Length;
+                var mime = System.IO.Path.GetExtension(path).ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
+                images.Add((bytes, System.IO.Path.GetFileName(path), mime));
+            }
+            catch (Exception ex)
+            {
 
-
-
-
-            long existing = await QueryEmbeddedImageBytesAsync();
-            if (existing + bytes.Length > MaxDiaryImageBytes) { App.ShowToast(App.GetString("DiaryEditor_ImageTotalExceeded"), ToastTone.Error); return; }
-            _currentImageBytes = existing + bytes.Length;
-            var mime = System.IO.Path.GetExtension(path).ToLowerInvariant() switch { ".jpg" or ".jpeg" => "image/jpeg", _ => "image/png" };
-            PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(bytes), filename = System.IO.Path.GetFileName(path), mime });
+                CrashLogger.LogNote("DiaryImageInsert", ex.Message);
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+            }
         }
-        catch (Exception ex)
+        if (images.Count == 0) { RefocusEditorAfterToolbarCommand(); return; }
+        _currentImageBytes = existing + added;
+        for (int i = 0; i < images.Count; i++)
         {
-
-            CrashLogger.LogNote("DiaryImageInsert", ex.Message);
-            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+            var img = images[i];
+            PostMessageAsync("insertImage", new { base64 = Convert.ToBase64String(img.Bytes), filename = img.Name, mime = img.Mime, keepSelected = i == images.Count - 1 });
         }
     }
 

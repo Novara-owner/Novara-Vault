@@ -14,6 +14,7 @@ internal static class FilePicker
     private const uint FOS_PICKFOLDERS = 0x20;
     private const uint FOS_FORCEFILESYSTEM = 0x40;
     private const uint FOS_OVERWRITEPROMPT = 0x2;
+    private const uint FOS_ALLOWMULTISELECT = 0x200;
     private const uint SIGDN_FILESYSPATH = 0x80058000;
     private const int HR_CANCELLED = unchecked((int)0x800704C7);
     private static readonly Guid IID_IShellItem = new("43826D1E-E718-42EE-BC55-A1E261C37BFE");
@@ -74,6 +75,7 @@ internal static class FilePicker
         dlg.GetOptions(out var fos);
         fos |= FOS_FORCEFILESYSTEM;
         if (folders) fos |= FOS_PICKFOLDERS;
+        if (multi) fos |= FOS_ALLOWMULTISELECT;
         dlg.SetOptions(fos);
         if (!string.IsNullOrWhiteSpace(title)) dlg.SetTitle(title);
         if (!folders)
@@ -97,9 +99,12 @@ internal static class FilePicker
             if (path != null) result.Add(path);
             return result;
         }
-        dlg.GetResults(out var items);
-        while (items.Next(1, out var one, out _) == 0)
+        var hrResults = dlg.GetResults(out var items);
+        if (hrResults != 0) Marshal.ThrowExceptionForHR(hrResults);
+        items.GetCount(out var count);
+        for (uint i = 0; i < count; i++)
         {
+            if (items.GetItemAt(i, out var one) != 0) continue;
             var path = ItemPath(one);
             if (path != null) result.Add(path);
         }
@@ -188,7 +193,8 @@ internal static class FilePicker
         [PreserveSig] int SetClientGuid(ref Guid guid);
         [PreserveSig] int ClearClientData();
         [PreserveSig] int SetFilter(nint pFilter);
-        [PreserveSig] int GetResults(out IEnumShellItems ppenumShellItems);
+
+        [PreserveSig] int GetResults(out IShellItemArray ppenumShellItems);
         [PreserveSig] int GetSelectedItems(out nint ppsai);
     }
 
@@ -202,13 +208,17 @@ internal static class FilePicker
         [PreserveSig] int Compare(IShellItem psi, uint hint, out int piOrder);
     }
 
-    [ComImport, Guid("70629033-E363-4A28-A567-0DB78006E6D7"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IEnumShellItems
+
+
+    [ComImport, Guid("B63EA76D-1F85-456F-A19C-48159EFA858B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemArray
     {
-        [PreserveSig] int Next(uint celt, out IShellItem rgelt, out nint pceltFetched);
-        [PreserveSig] int Skip(uint celt);
-        [PreserveSig] int Reset();
-        [PreserveSig] int Clone(out IEnumShellItems ppenum);
+        [PreserveSig] int BindToHandler(nint pbc, ref Guid bhid, ref Guid riid, out nint ppvOut);
+        [PreserveSig] int GetPropertyStore(uint flags, ref Guid riid, out nint ppv);
+        [PreserveSig] int GetPropertyDescriptionList(nint keyType, ref Guid riid, out nint ppv);
+        [PreserveSig] int GetAttributes(uint attribFlags, uint sfgaoMask, out uint psfgaoAttribs);
+        [PreserveSig] int GetCount(out uint pdwNumItems);
+        [PreserveSig] int GetItemAt(uint dwIndex, out IShellItem ppsi);
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
