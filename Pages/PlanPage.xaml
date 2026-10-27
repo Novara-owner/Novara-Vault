@@ -102,7 +102,7 @@
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Plan_Todo_MainLabel\')}" FontSize="12" FontWeight="Medium" Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                                <TextBox Grid.Row="1" x:Name="MainTodoBox" Style="{StaticResource NovaraTextBoxStyle}" MaxLength="500" PlaceholderText="{x:Bind app:App.GetString(\'Plan_Todo_MainPlaceholder\')}" TextChanged="PlanField_TextChanged" />
+                                <TextBox Grid.Row="1" x:Name="MainTodoBox" Style="{StaticResource NovaraTextBoxStyle}" MaxLength="500" PlaceholderText="{x:Bind app:App.GetString(\'Plan_Todo_MainPlaceholder\')}" TextChanged="PlanField_TextChanged" KeyDown="MainTodoBox_KeyDown" />
                             </Grid>
 
                             <StackPanel x:Name="SubTodoPanel" Spacing="10" />

@@ -22,7 +22,8 @@ public static class MeltAnim
 
 
 
-    public static void Begin(FrameworkElement panel, bool expand, double topMargin = 0, double? restHeight = null, System.Action? completed = null, double? startHeightOverride = null)
+
+    public static void Begin(FrameworkElement panel, bool expand, double topMargin = 0, double? restHeight = null, System.Action? completed = null, double? startHeightOverride = null, double durationMs = 220)
     {
         try
         {
@@ -94,7 +95,7 @@ public static class MeltAnim
                     if (!_active.TryGetValue(panel, out var rec) || !ReferenceEquals(rec.Handler, handler))
                     { try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { } return; }
 
-                    var t = System.Math.Min(1.0, sw.Elapsed.TotalMilliseconds / 220.0);
+                    var t = System.Math.Min(1.0, sw.Elapsed.TotalMilliseconds / System.Math.Max(1.0, durationMs));
                     var eOut = 1 - System.Math.Pow(1 - t, 3);
                     var eIn = System.Math.Pow(t, 3);
                     var e = expand ? eOut : eIn;

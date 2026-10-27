@@ -21,4 +21,23 @@ public static class PasswordStrength
         if (password.Length >= 12 && classes >= 3) return BackupPasswordStrength.Strong;
         return BackupPasswordStrength.Medium;
     }
+
+
+
+
+
+
+
+
+    public static BackupPasswordStrength RateLockPassword(string? password)
+    {
+        if (string.IsNullOrEmpty(password)) return BackupPasswordStrength.Weak;
+        if (password.Length < 8) return BackupPasswordStrength.Weak;
+        int classes = 0;
+        if (password.Any(char.IsLetter)) classes++;
+        if (password.Any(char.IsDigit)) classes++;
+        if (password.Any(c => !char.IsLetterOrDigit(c))) classes++;
+        if (password.Length >= 10 && classes >= 2) return BackupPasswordStrength.Strong;
+        return BackupPasswordStrength.Medium;
+    }
 }

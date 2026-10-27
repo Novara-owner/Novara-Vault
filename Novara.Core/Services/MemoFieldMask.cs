@@ -3,7 +3,8 @@ namespace Novara.Services;
 public static class MemoFieldMask
 {
 
-    public const string Mask = "••••••••";
+
+    public const string Mask = "••••••••••••••";
 
 
 

@@ -269,11 +269,12 @@ public sealed partial class TrashPage : Page
         var brandBlue = App.GetBrush("AppPrimaryButtonBrush");
         var dangerRed = App.GetBrush("AppDangerTextBrush");
         var restoreBtn = MakeIconButton(IconData.RestoreTrash, (_, _) => Restore(row.Entity), brandBlue, brandBlue, bold: true);
+
         var delBtn = MakeIconButton(IconData.Delete, (_, _) =>
         {
             _pendingDeleteForever = row.Entity;
             ShowDeleteForeverDialog();
-        }, dangerRed, dangerRed);
+        }, dangerRed, dangerRed, style: (Style)Application.Current.Resources["NovaraCardActionButtonDangerStyle"]);
         actions.Children.Add(restoreBtn);
         actions.Children.Add(delBtn);
         Grid.SetColumn(actions, 2);
@@ -283,14 +284,14 @@ public sealed partial class TrashPage : Page
         return card;
     }
 
-    private Button MakeIconButton(string iconData, RoutedEventHandler click, Brush? foreground = null, Brush? borderBrush = null, bool bold = false)
+    private Button MakeIconButton(string iconData, RoutedEventHandler click, Brush? foreground = null, Brush? borderBrush = null, bool bold = false, Style? style = null)
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
         var btn = new Button
         {
             Width = 44,
             Height = 44,
-            Style = (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
+            Style = style ?? (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
             CornerRadius = new CornerRadius(12),
         };
         if (borderBrush != null) btn.BorderBrush = borderBrush;

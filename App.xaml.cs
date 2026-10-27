@@ -255,46 +255,56 @@ public partial class App : Application
             var transparent = Windows.UI.Color.FromArgb(0, 0, 0, 0);
             var origBgColor = (origBg as SolidColorBrush)?.Color ?? transparent;
             var origBorderColor = (origBorder as SolidColorBrush)?.Color ?? transparent;
-            var highlightBg = Windows.UI.Color.FromArgb(0x40, accent.Color.R, accent.Color.G, accent.Color.B);
+
+            var highlightBg = Windows.UI.Color.FromArgb(0x26, accent.Color.R, accent.Color.G, accent.Color.B);
+            var highlightBorder = Windows.UI.Color.FromArgb(0x80, accent.Color.R, accent.Color.G, accent.Color.B);
 
             await System.Threading.Tasks.Task.Delay(50);
-            if (card.Parent == null) return;
-
-            card.Background = new SolidColorBrush(highlightBg);
-            card.BorderBrush = new SolidColorBrush(accent.Color);
+            if (card.Parent == null) { _flashingCards.Remove(card); return; }
 
 
-            const int rounds = 2;
-            const int holdMs = 100;
-            const int fadeSteps = 6;
-            const int fadeStepMs = 35;
-            for (int r = 0; r < rounds; r++)
+
+            var bgBrush = new SolidColorBrush(highlightBg);
+            var borderBrush = new SolidColorBrush(highlightBorder);
+            card.Background = bgBrush;
+            card.BorderBrush = borderBrush;
+
+            var sb = new Storyboard();
+            AddFlashPulses(sb, bgBrush, highlightBg, origBgColor);
+            AddFlashPulses(sb, borderBrush, highlightBorder, origBorderColor);
+            sb.Completed += (_, _) =>
             {
-                card.Background = new SolidColorBrush(highlightBg);
-                card.BorderBrush = new SolidColorBrush(accent.Color);
-                await System.Threading.Tasks.Task.Delay(holdMs);
-                if (card.Parent == null) return;
-                for (int i = 1; i <= fadeSteps; i++)
-                {
-                    await System.Threading.Tasks.Task.Delay(fadeStepMs);
-                    if (card.Parent == null) return;
-                    float t = (float)i / fadeSteps;
-                    card.Background = new SolidColorBrush(LerpColor(highlightBg, origBgColor, t));
-                    card.BorderBrush = new SolidColorBrush(LerpColor(accent.Color, origBorderColor, t));
-                }
-            }
 
-            card.Background = origBg;
-            card.BorderBrush = origBorder;
+                card.Background = origBg;
+                card.BorderBrush = origBorder;
+                _flashingCards.Remove(card);
+            };
+            sb.Begin();
         }
-        catch { System.Diagnostics.Debug.WriteLine("FlashCard 异常（卡片可能已卸载）"); }
-        finally { _flashingCards.Remove(card); }
+        catch
+        {
+            System.Diagnostics.Debug.WriteLine("FlashCard 异常（卡片可能已卸载）");
+            _flashingCards.Remove(card);
+        }
     }
 
-    private static Windows.UI.Color LerpColor(Windows.UI.Color a, Windows.UI.Color b, float t)
+
+    private static void AddFlashPulses(Storyboard sb, SolidColorBrush brush, Windows.UI.Color highlight, Windows.UI.Color rest)
     {
-        byte L(byte x, byte y) => (byte)Math.Round(x + (y - x) * t);
-        return Windows.UI.Color.FromArgb(L(a.A, b.A), L(a.R, b.R), L(a.G, b.G), L(a.B, b.B));
+        var anim = new ColorAnimationUsingKeyFrames
+        {
+            Duration = TimeSpan.FromMilliseconds(620),
+            EnableDependentAnimation = true,
+        };
+        Storyboard.SetTarget(anim, brush);
+        Storyboard.SetTargetProperty(anim, "Color");
+        anim.KeyFrames.Add(new DiscreteColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(0), Value = highlight });
+        anim.KeyFrames.Add(new LinearColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(100), Value = highlight });
+        anim.KeyFrames.Add(new LinearColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(310), Value = rest });
+        anim.KeyFrames.Add(new DiscreteColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(311), Value = highlight });
+        anim.KeyFrames.Add(new LinearColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(410), Value = highlight });
+        anim.KeyFrames.Add(new LinearColorKeyFrame { KeyTime = TimeSpan.FromMilliseconds(620), Value = rest });
+        sb.Children.Add(anim);
     }
 
 
@@ -824,6 +834,11 @@ public partial class App : Application
             _ = System.Threading.Tasks.Task.Run(() => Services.ReminderScheduler.Reconcile(
                 new System.Collections.Generic.Dictionary<Guid, DateTime>(),
                 Services.ReminderScheduler.Snapshot(Store?.Database)));
+
+
+
+
+        MainWindow.SyncLockHotkey();
     }
 
     public static void SetTheme(string theme)

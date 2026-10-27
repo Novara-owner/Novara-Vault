@@ -259,6 +259,34 @@ public class SyncDiffTests
 
 
     [Fact]
+    public void UngroupedCardExpanded_ConcreteDifference_IsReported()
+    {
+        var local = Db();
+        var remote = Db();
+        local.AppSettings.UngroupedCardExpanded = true;
+        remote.AppSettings.UngroupedCardExpanded = false;
+
+        var summary = SyncDiff.Compare(local, remote);
+
+        Assert.True(summary.RoamingSettingsDiffer);
+        Assert.False(summary.IsIdentical);
+    }
+
+    [Fact]
+    public void UngroupedCardExpanded_RemoteNull_IsNeverADifference()
+    {
+
+
+        var local = Db();
+        var remote = Db();
+        local.AppSettings.UngroupedCardExpanded = true;
+
+        Assert.True(SyncDiff.Compare(local, remote).IsIdentical);
+    }
+
+
+
+    [Fact]
     public void DuplicateIds_DoNotThrow()
     {
         var local = Db();

@@ -438,12 +438,20 @@ private void EnterLockedState()
         PasswordInput.BorderBrush = ErrorBrush;
         PasswordInput.BorderThickness = StateBorderThickness;
 
-        int[] offsets = { -8, 8, -6, 6, -4, 4, 0 };
-        foreach (var off in offsets)
-        {
-            t.X = off;
-            await System.Threading.Tasks.Task.Delay(50);
-        }
+
+
+
+        var shake = new Storyboard();
+        var sx = new DoubleAnimationUsingKeyFrames();
+        Storyboard.SetTarget(sx, PasswordInputPanelTransform);
+        Storyboard.SetTargetProperty(sx, "X");
+        foreach (var (ms, v) in new[] { (0, 0.0), (50, -8.0), (150, 7.0), (250, -5.0), (340, 3.0), (400, 0.0) })
+            sx.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms)), Value = v });
+        shake.Children.Add(sx);
+        var shaken = new TaskCompletionSource();
+        shake.Completed += (_, _) => shaken.TrySetResult();
+        shake.Begin();
+        await shaken.Task;
 
         for (int i = 0; i < 2; i++)
         {

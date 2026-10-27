@@ -87,9 +87,13 @@ public static class SyncDiff
     }
 
 
+
+
+
     private static bool RoamingSettingsDiffer(AppSettings? local, AppSettings? remote)
         => !string.Equals(local?.AppLanguage, remote?.AppLanguage, StringComparison.Ordinal)
            || !string.Equals(local?.Theme, remote?.Theme, StringComparison.Ordinal)
+           || (remote?.UngroupedCardExpanded is bool remoteUngrouped && local?.UngroupedCardExpanded != remoteUngrouped)
            || WorkspacesDiffer(local, remote);
 
 

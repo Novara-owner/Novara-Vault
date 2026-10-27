@@ -24,6 +24,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonBrush" Color="#FF7276FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
+
+                    <SolidColorBrush x:Key="AppOutlineHoverTintBrush" Color="#147276FF" />
+                    <SolidColorBrush x:Key="AppOutlineHoverBorderBrush" Color="#667276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerHoverTintBrush" Color="#14FF4545" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
 
                     <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />
@@ -71,6 +76,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonBrush" Color="#FF7276FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
+
+                    <SolidColorBrush x:Key="AppOutlineHoverTintBrush" Color="#147276FF" />
+                    <SolidColorBrush x:Key="AppOutlineHoverBorderBrush" Color="#667276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerHoverTintBrush" Color="#14FF4545" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
 
                     <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />
@@ -117,6 +127,11 @@
                     <SolidColorBrush x:Key="AppPrimaryButtonBrush" Color="#FF7276FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonHoverBrush" Color="#FF8C93FF" />
                     <SolidColorBrush x:Key="AppPrimaryButtonPressedBrush" Color="#FF5855FF" />
+
+                    <SolidColorBrush x:Key="AppOutlineHoverTintBrush" Color="#147276FF" />
+                    <SolidColorBrush x:Key="AppOutlineHoverBorderBrush" Color="#667276FF" />
+
+                    <SolidColorBrush x:Key="AppDangerHoverTintBrush" Color="#14FF4545" />
                     <SolidColorBrush x:Key="AppDialogBorderBrush" Color="#FF7276FF" />
 
                     <SolidColorBrush x:Key="AppDangerBrush" Color="#CCFF4545" />

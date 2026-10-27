@@ -1148,7 +1148,7 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
                         <TextBlock x:Name="ApiCheckStatusText"
-                                   FontSize="16"
+                                   FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}"
                                    TextWrapping="Wrap" />
@@ -1171,9 +1171,11 @@
                                Foreground="{ThemeResource AppTextTertiaryBrush}"
                                TextWrapping="Wrap" LineHeight="16"
                                Margin="0,20,0,0" />
+
+
                     <Grid Grid.Row="3" Margin="0,24,0,0">
                         <Button x:Name="ApiCheckAdvancedButton"
-                                HorizontalAlignment="Left"
+                                HorizontalAlignment="Center"
                                 Width="140" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
@@ -1181,15 +1183,6 @@
                                 Visibility="Collapsed"
                                 Click="ApiCheckAdvancedButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_AdvancedButton\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Button>
-                        <Button x:Name="ApiCheckHistoryButton"
-                                HorizontalAlignment="Right"
-                                Width="140" Height="40"
-                                Style="{StaticResource NovaraOutlineButtonStyle}"
-                                CornerRadius="10"
-                                FontSize="14"
-                                Click="ApiCheckHistoryButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -1344,7 +1337,7 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="8">
                         <TextBlock x:Name="ApiDiagStatusText"
-                                   FontSize="16"
+                                   FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}"
                                    TextWrapping="Wrap" />
@@ -1367,17 +1360,7 @@
                                Foreground="{ThemeResource AppTextTertiaryBrush}"
                                TextWrapping="Wrap" LineHeight="16"
                                Margin="0,20,0,0" />
-                    <Grid Grid.Row="3" Margin="0,24,0,0">
-                        <Button x:Name="ApiDiagHistoryButton"
-                                HorizontalAlignment="Center"
-                                Width="140" Height="40"
-                                Style="{StaticResource NovaraOutlineButtonStyle}"
-                                CornerRadius="10"
-                                FontSize="14"
-                                Click="ApiCheckHistoryButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Button>
-                    </Grid>
+
                 </Grid>
             </Border>
         </Grid>
@@ -1535,21 +1518,12 @@
                     </StackPanel>
                     <Grid Grid.Row="3" Margin="0,24,0,0">
                         <Button x:Name="RelayProbeLoadDatasetButton"
-                                HorizontalAlignment="Left"
+                                HorizontalAlignment="Center"
                                 Width="200" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10"
                                 Click="RelayProbeLoadDatasetButton_Click">
                             <TextBlock Text="{x:Bind app:App.GetString(\'Memo_RelayProbe_LoadDataset\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Button>
-                        <Button x:Name="RelayProbeHistoryButton"
-                                HorizontalAlignment="Right"
-                                Width="200" Height="40"
-                                Style="{StaticResource NovaraOutlineButtonStyle}"
-                                CornerRadius="10"
-                                FontSize="14"
-                                Click="ApiCheckHistoryButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </Grid>
                 </Grid>
@@ -1654,17 +1628,8 @@
                                    TextWrapping="Wrap" LineHeight="16" />
                     </StackPanel>
                     <Grid Grid.Row="4" Margin="0,24,0,0">
-                        <Button x:Name="RelayProbeResultHistoryButton"
-                                HorizontalAlignment="Left"
-                                Width="200" Height="40"
-                                Style="{StaticResource NovaraOutlineButtonStyle}"
-                                CornerRadius="10"
-                                FontSize="14"
-                                Click="ApiCheckHistoryButton_Click">
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Memo_Api_History\')}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Button>
                         <Button x:Name="RelayProbeRetestButton"
-                                HorizontalAlignment="Right"
+                                HorizontalAlignment="Center"
                                 Width="200" Height="40"
                                 Style="{StaticResource NovaraPrimaryButtonStyle}"
                                 CornerRadius="10"

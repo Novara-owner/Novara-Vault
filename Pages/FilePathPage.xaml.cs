@@ -48,6 +48,10 @@ public sealed partial class FilePathPage : Page
     private readonly Dictionary<Border, Button> _openButtons = new();
     private readonly HashSet<Border> _invalidOpenCards = new();
     private readonly Dictionary<Border, Button> _copyButtons = new();
+    private readonly Dictionary<Border, Button> _openFileButtons = new();
+    private readonly HashSet<Border> _cardIsFile = new();
+    private readonly Dictionary<Border, TextBlock> _propertyTexts = new();
+    private readonly Dictionary<Border, Storyboard> _propertyBreaths = new();
 
 
     private Border? _dragCard;
@@ -80,12 +84,16 @@ public sealed partial class FilePathPage : Page
         PickPathButton.PointerEntered += (_, _) => PickPathIcon.Opacity = 1.0;
         PickPathButton.PointerExited += (_, _) => PickPathIcon.Opacity = 0.6;
         KeyDown += Page_KeyDown;
+        PathPropertyService.Updated += OnPathPropertyUpdated;
+        PathPropertyService.FeatureToggled += OnPathPropertyFeatureToggled;
 
         DeleteConfirmOverlay.ContextRequested += (_, e) => e.Handled = true;
         ContentRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
         Loaded += (_, _) => { LoadFromStore();
-        _ = CheckAllPaths(); if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => _ = CheckAllPaths(); _autoCheckTimer.Start(); } };
-        Unloaded += (_, _) => { _pathCheckCts?.Cancel();
+        _ = CheckAllPaths(); SyncPathPropertyTargets(); PathPropertyService.RefreshAll();
+        if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => _ = CheckAllPaths(); _autoCheckTimer.Start(); } };
+        Unloaded += (_, _) => { PathPropertyService.Updated -= OnPathPropertyUpdated; PathPropertyService.FeatureToggled -= OnPathPropertyFeatureToggled; StopAllPropertyBreaths();
+            _pathCheckCts?.Cancel();
             _npCheckCts?.Cancel(); _npCheckCts?.Dispose(); _npCheckCts = null;
 
 
@@ -182,6 +190,7 @@ public sealed partial class FilePathPage : Page
         ReorderCards();
         ApplyCardFilters();
         _ = CheckAllPaths();
+        SyncPathPropertyTargets();
         if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
     }
 
@@ -203,6 +212,10 @@ public sealed partial class FilePathPage : Page
         _pathStatusGens.Clear();
         _starredCards.Clear();
         _invalidOpenCards.Clear();
+        StopAllPropertyBreaths();
+        _propertyTexts.Clear();
+        _openFileButtons.Clear();
+        _cardIsFile.Clear();
         _pinnedCard = null;
     }
 
@@ -575,6 +588,10 @@ public sealed partial class FilePathPage : Page
             _copyButtons.Remove(old);
             _invalidOpenCards.Remove(old);
             _createdAt.Remove(old);
+            if (_propertyBreaths.TryGetValue(old, out var oldBreath)) { oldBreath.Stop(); _propertyBreaths.Remove(old); }
+            _propertyTexts.Remove(old);
+            _openFileButtons.Remove(old);
+            _cardIsFile.Remove(old);
             _editingPathCard = null;
         }
         else
@@ -589,6 +606,7 @@ public sealed partial class FilePathPage : Page
             ReorderCards();
         }
         ApplyCardFilters();
+        SyncPathPropertyTargets();
 
 
 
@@ -626,6 +644,7 @@ public sealed partial class FilePathPage : Page
         mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
 
         var leftGrid = new Grid();
+        leftGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         leftGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         leftGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         leftGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -718,8 +737,25 @@ public sealed partial class FilePathPage : Page
 
             Margin = new Thickness(0, 4, 0, 0)
         };
+
+        noteText.Visibility = string.IsNullOrEmpty(note) ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetRow(noteText, 2);
         leftGrid.Children.Add(noteText);
+
+        var propText = new TextBlock
+        {
+            FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.Light,
+            CharacterSpacing = App.GetCharacterSpacing(note, 60),
+            Foreground = App.GetBrush("AppTextTertiaryBrush"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        Grid.SetRow(propText, 3);
+        leftGrid.Children.Add(propText);
+        _propertyTexts[card] = propText;
+
+        propText.Visibility = PathPropertyService.IsFeatureEnabled() ? Visibility.Visible : Visibility.Collapsed;
 
         Grid.SetColumn(leftGrid, 0);
         mainGrid.Children.Add(leftGrid);
@@ -742,6 +778,53 @@ public sealed partial class FilePathPage : Page
             VerticalAlignment = VerticalAlignment.Center,
             Spacing = 10
         };
+
+
+
+        var openFileBtn = new Button
+        {
+            Width = 44, Height = 44,
+            Style = (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
+            CornerRadius = new CornerRadius(12),
+            IsTabStop = false,
+            Visibility = Visibility.Collapsed
+        };
+        openFileBtn.Content = new Viewbox
+        {
+            Width = 20, Height = 20,
+            Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+            Child = new PathIcon
+            {
+                Data = (Geometry)cv(typeof(Geometry), IconData.OpenFile),
+                Foreground = App.GetBrush("IconForegroundBrush")
+            }
+        };
+        openFileBtn.Click += async (_, _) =>
+        {
+
+            if (_invalidOpenCards.Contains(card))
+            {
+                App.ShowToast(App.GetString("Path_Invalid_OpenToast"), ToastTone.Error);
+                return;
+            }
+
+            bool stillExists = await System.Threading.Tasks.Task.Run(() => { try { return File.Exists(path); } catch { return false; } });
+            if (!stillExists) { App.ShowToast(App.GetString("Path_Invalid_OpenToast"), ToastTone.Error); return; }
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+
+                App.ShowToast(App.GetString("OpenFile_Fail"), ToastTone.Error);
+            }
+        };
+
+        ToolTipService.SetToolTip(openFileBtn, new ToolTip { Content = App.GetString("Path_OpenFile_Button"), Style = (Style)Application.Current.Resources["BrandToolTipStyle"] });
+        rightPanel.Children.Add(openFileBtn);
+        _openFileButtons[card] = openFileBtn;
+        HookCardActionButtonHover(openFileBtn, card);
 
         var openBtn = new Button
         {
@@ -855,6 +938,7 @@ public sealed partial class FilePathPage : Page
 
         _pathCardData[card] = (name, path, note);
         _createdAt[card] = DateTime.Now;
+        RenderPathProperty(card);
         return card;
     }
 
@@ -937,6 +1021,10 @@ public sealed partial class FilePathPage : Page
             _copyButtons.Remove(_pendingDeleteCard);
             _invalidOpenCards.Remove(_pendingDeleteCard);
             _createdAt.Remove(_pendingDeleteCard);
+            if (_propertyBreaths.TryGetValue(_pendingDeleteCard, out var delBreath)) { delBreath.Stop(); _propertyBreaths.Remove(_pendingDeleteCard); }
+            _propertyTexts.Remove(_pendingDeleteCard);
+            _openFileButtons.Remove(_pendingDeleteCard);
+            _cardIsFile.Remove(_pendingDeleteCard);
 
             if (_cardIds.Remove(_pendingDeleteCard, out var delId))
             {
@@ -949,6 +1037,7 @@ public sealed partial class FilePathPage : Page
             {
                 PersistOrderAndSave();
                 ApplyCardFilters();
+                SyncPathPropertyTargets();
                 App.ShowToast(App.GetString("Common_Toast_Deleted"));
             });
         }
@@ -1302,14 +1391,36 @@ public sealed partial class FilePathPage : Page
 
 
         var btnColor = Windows.UI.Color.FromArgb(0x99, color.R, color.G, color.B);
+
+
+
+        var targetStyle = (Style)Application.Current.Resources[isValid ? "NovaraCardActionButtonStyle" : "NovaraCardActionButtonDangerStyle"];
         if (_openButtons.TryGetValue(card, out var ob))
         {
+            if (!ReferenceEquals(ob.Style, targetStyle)) ob.Style = targetStyle;
             ob.BorderBrush = new SolidColorBrush(btnColor);
             if (isValid) _invalidOpenCards.Remove(card);
             else _invalidOpenCards.Add(card);
         }
         if (_copyButtons.TryGetValue(card, out var cb))
+        {
+            if (!ReferenceEquals(cb.Style, targetStyle)) cb.Style = targetStyle;
             cb.BorderBrush = new SolidColorBrush(btnColor);
+        }
+        if (_openFileButtons.TryGetValue(card, out var of))
+        {
+            if (!ReferenceEquals(of.Style, targetStyle)) of.Style = targetStyle;
+            of.BorderBrush = new SolidColorBrush(btnColor);
+        }
+    }
+
+
+    private void SetCardIsFile(Border card, bool isFile)
+    {
+        if (isFile) _cardIsFile.Add(card);
+        else _cardIsFile.Remove(card);
+        if (_openFileButtons.TryGetValue(card, out var b))
+            b.Visibility = (isFile && !_invalidOpenCards.Contains(card)) ? Visibility.Visible : Visibility.Collapsed;
     }
 
 
@@ -1327,6 +1438,169 @@ public sealed partial class FilePathPage : Page
             if (_cardBaseBorderColor.TryGetValue(card, out var c))
                 btn.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x99, c.R, c.G, c.B));
         };
+    }
+
+
+
+
+
+
+
+    private void RenderPathProperty(Border card)
+    {
+        if (!_propertyTexts.TryGetValue(card, out var tb)) return;
+        if (!PathPropertyService.IsFeatureEnabled()) return;
+        if (!_pathCardData.TryGetValue(card, out var data) || string.IsNullOrWhiteSpace(data.path))
+        {
+            tb.Text = "";
+            ToolTipService.SetToolTip(tb, null);
+            SetPropertyBreath(card, false);
+            return;
+        }
+        bool has = PathPropertyService.TryGet(data.path, out var result, out var scanning, out var lb, out var lf, out var lfo);
+        if (!has || (result == null && !scanning))
+        {
+
+            SetPropertyBreath(card, false);
+            ApplyPropertySlots(tb, "…", "…", "…", App.GetString("Path_Prop_Scanning"));
+            return;
+        }
+        if (scanning)
+        {
+            SetPropertyBreath(card, true);
+            ApplyPropertySlots(tb,
+                PathPropertyFormatter.FormatSize(lb),
+                PathPropertyFormatter.FormatCount(lf),
+                PathPropertyFormatter.FormatCount(lfo),
+                App.GetString("Path_Prop_Scanning"));
+            return;
+        }
+        SetPropertyBreath(card, false);
+        var r = result!;
+        bool invalid = r.State != PathPropertyState.Ready;
+        ApplyPropertySlots(tb,
+            invalid ? "-" : PathPropertyFormatter.FormatSize(r.Bytes ?? 0),
+            invalid || r.Files is null ? "-" : PathPropertyFormatter.FormatCount(r.Files.Value),
+            invalid || r.Folders is null ? "-" : PathPropertyFormatter.FormatCount(r.Folders.Value),
+            BuildPropertyTooltip(r));
+    }
+
+    private void ApplyPropertySlots(TextBlock tb, string size, string files, string folders, string tooltip)
+    {
+        tb.Text = $"{App.GetString("Path_Prop_Size")} {size} · {App.GetString("Path_Prop_Files")} {files} · {App.GetString("Path_Prop_Folders")} {folders}";
+
+        var tip = new ToolTip { Content = tooltip, Style = (Style)Application.Current.Resources["BrandToolTipStyle"] };
+        ToolTipService.SetToolTip(tb, tip);
+    }
+
+
+
+    private static string BuildPropertyTooltip(PathPropertyResult r)
+    {
+        if (r.State == PathPropertyState.Unavailable) return App.GetString("Path_Prop_Network");
+        if (r.State != PathPropertyState.Ready) return App.GetString("Path_Prop_Invalid");
+        var parts = new List<string> { $"{PathPropertyFormatter.FormatCount(r.Bytes ?? 0)} {App.GetString("Path_Prop_Bytes")}" };
+        if (r.CreatedAtUtc is { } c) parts.Add($"{App.GetString("Path_Prop_Created")} {c:g}");
+        if (r.ModifiedAtUtc is { } m) parts.Add($"{App.GetString("Path_Prop_Modified")} {m:g}");
+        if (r.IsReadOnly) parts.Add(App.GetString("Path_Prop_ReadOnly"));
+        if (r.IsHidden) parts.Add(App.GetString("Path_Prop_Hidden"));
+        return string.Join("\n", parts);
+    }
+
+
+    private void OnPathPropertyUpdated(PathPropertyUpdate update)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            Border? card = null;
+            foreach (var kv in _cardIds)
+                if (kv.Value == update.Id) { card = kv.Key; break; }
+            if (card == null || !_propertyTexts.TryGetValue(card, out var tb)) return;
+            if (update.Phase == PathPropertyPhase.Completed)
+            {
+                RenderPathProperty(card);
+            }
+            else
+            {
+                SetPropertyBreath(card, true);
+                ApplyPropertySlots(tb,
+                    PathPropertyFormatter.FormatSize(update.LiveBytes),
+                    PathPropertyFormatter.FormatCount(update.LiveFiles),
+                    PathPropertyFormatter.FormatCount(update.LiveFolders),
+                    App.GetString("Path_Prop_Scanning"));
+            }
+        });
+    }
+
+
+
+    private void OnPathPropertyFeatureToggled(bool enabled)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            foreach (var kv in _propertyTexts)
+            {
+                kv.Value.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+            }
+            if (!enabled) { StopAllPropertyBreaths(); return; }
+            foreach (var child in PathList.Children)
+                if (child is Border b) RenderPathProperty(b);
+            SyncPathPropertyTargets();
+            PathPropertyService.RefreshAll();
+        });
+    }
+
+
+
+
+    private void SetPropertyBreath(Border card, bool on)
+    {
+        if (_propertyBreaths.TryGetValue(card, out var existing))
+        {
+            existing.Stop();
+            _propertyBreaths.Remove(card);
+            if (_propertyTexts.TryGetValue(card, out var stopped)) stopped.Opacity = 1.0;
+        }
+        if (!on || !App.IsAnimationsEnabled) return;
+        if (!_propertyTexts.TryGetValue(card, out var tb)) return;
+        var anim = new DoubleAnimation
+        {
+            To = 0.6,
+            Duration = new Duration(TimeSpan.FromMilliseconds(1400)),
+            AutoReverse = true,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+            RepeatBehavior = RepeatBehavior.Forever
+        };
+        Storyboard.SetTarget(anim, tb);
+        Storyboard.SetTargetProperty(anim, "Opacity");
+        var board = new Storyboard();
+        board.Children.Add(anim);
+        _propertyBreaths[card] = board;
+        board.Begin();
+    }
+
+    private void StopAllPropertyBreaths()
+    {
+        foreach (var sb in _propertyBreaths.Values) sb.Stop();
+        _propertyBreaths.Clear();
+        foreach (var tb in _propertyTexts.Values) tb.Opacity = 1.0;
+    }
+
+
+
+    private void SyncPathPropertyTargets()
+    {
+        var items = new List<(Guid, string)>();
+        foreach (var child in PathList.Children)
+        {
+            if (child is Border b && _cardIds.TryGetValue(b, out var id)
+                && _pathCardData.TryGetValue(b, out var data) && !string.IsNullOrWhiteSpace(data.path))
+            {
+                if (b.Visibility == Visibility.Visible) items.Insert(0, (id, data.path));
+                else items.Add((id, data.path));
+            }
+        }
+        if (items.Count > 0) PathPropertyService.SetTargets(items, visibleFirst: true);
     }
 
     private void AttachCardContextMenu(Border card, Viewbox pinIcon, Viewbox starIcon)
@@ -1544,17 +1818,23 @@ public sealed partial class FilePathPage : Page
         if (string.IsNullOrWhiteSpace(path)) return;
         var gen = ClaimPathStatusGen(card);
         bool isValid;
+        bool isFile;
         try
         {
-            isValid = await System.Threading.Tasks.Task.Run(() =>
+            (isValid, isFile) = await System.Threading.Tasks.Task.Run(() =>
             {
-                try { return Directory.Exists(path) || File.Exists(path); }
-                catch { return false; }
+                try
+                {
+                    bool file = File.Exists(path);
+                    return (file || Directory.Exists(path), file);
+                }
+                catch { return (false, false); }
             });
         }
         catch { return; }
         if (!PathList.Children.Contains(card) || !IsPathStatusCurrent(card, gen)) return;
         SetPathStatus(card, isValid);
+        SetCardIsFile(card, isFile);
     }
 
     private async Task<int> CheckAllPaths()
@@ -1573,7 +1853,7 @@ public sealed partial class FilePathPage : Page
                 targets.Add((card, data.path, ClaimPathStatusGen(card)));
         if (targets.Count == 0) return 0;
 
-        var results = new List<(Border Card, bool IsValid, long Gen)>();
+        var results = new List<(Border Card, bool IsValid, bool IsFile, long Gen)>();
         try
         {
             await System.Threading.Tasks.Task.Run(() =>
@@ -1582,17 +1862,27 @@ public sealed partial class FilePathPage : Page
                 {
                     if (ct.IsCancellationRequested) return;
                     bool isValid;
-                    try { isValid = Directory.Exists(path) || File.Exists(path); }
-                    catch { isValid = false; }
-                    results.Add((card, isValid, gen));
+                    bool isFile;
+                    try
+                    {
+                        bool file = File.Exists(path);
+                        isValid = file || Directory.Exists(path);
+                        isFile = file;
+                    }
+                    catch { isValid = false; isFile = false; }
+                    results.Add((card, isValid, isFile, gen));
                 }
             });
         }
         catch (System.OperationCanceledException) { return 0; }
         if (ct.IsCancellationRequested) return 0;
-        foreach (var (card, isValid, gen) in results)
+        foreach (var (card, isValid, isFile, gen) in results)
 
-            if (PathList.Children.Contains(card) && IsPathStatusCurrent(card, gen)) SetPathStatus(card, isValid);
+            if (PathList.Children.Contains(card) && IsPathStatusCurrent(card, gen))
+            {
+                SetPathStatus(card, isValid);
+                SetCardIsFile(card, isFile);
+            }
         return targets.Count;
     }
 

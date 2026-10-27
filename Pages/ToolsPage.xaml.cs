@@ -378,8 +378,9 @@ public sealed partial class ToolsPage : Page
 
     private void ApplyToggleState(Button btn, bool on)
     {
+
         btn.Style = on ? (Style)Application.Current.Resources["NovaraPrimaryButtonStyle"]
-                       : (Style)Resources["SettingsDropdownButtonStyle"];
+                       : (Style)Application.Current.Resources["NovaraSurfaceButtonStyle"];
         btn.Background = on ? App.GetBrush("AppPrimaryButtonBrush")
                             : App.GetBrush("AppSurfaceBrush");
         btn.Foreground = on ? new SolidColorBrush(Color.FromArgb(255, 255, 255, 255))

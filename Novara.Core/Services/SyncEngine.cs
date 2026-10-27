@@ -547,10 +547,13 @@ public static class SyncEngine
 
 
 
+
+
             var db = store.Database;
             var partitionsBefore = (db.MemoGroups, db.MemoEntries, db.PathBackupItems,
                 db.TodoCards, db.NoteCards, db.DiaryItems);
-            var settingsBefore = (db.AppSettings.AppLanguage, db.AppSettings.Theme, db.AppSettings.Workspaces);
+            var settingsBefore = (db.AppSettings.AppLanguage, db.AppSettings.Theme, db.AppSettings.Workspaces,
+                db.AppSettings.UngroupedCardExpanded);
             void RestoreInMemory()
             {
                 db.MemoGroups = partitionsBefore.MemoGroups;
@@ -562,6 +565,7 @@ public static class SyncEngine
                 db.AppSettings.AppLanguage = settingsBefore.AppLanguage;
                 db.AppSettings.Theme = settingsBefore.Theme;
                 db.AppSettings.Workspaces = settingsBefore.Workspaces;
+                db.AppSettings.UngroupedCardExpanded = settingsBefore.UngroupedCardExpanded;
             }
 
             SyncPartitions.ApplyPartitions(db, applied);

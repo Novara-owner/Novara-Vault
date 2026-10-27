@@ -50,7 +50,8 @@ public class AppSettings
     public bool AutoBackupEnabled { get; set; }
     public int BackupFreq { get; set; }
 
-    public bool StatsEnabled { get; set; }
+
+    public bool StatsEnabled { get; set; } = true;
 
     public bool McpEnabled { get; set; }
     public string McpToken { get; set; } = "";
@@ -66,6 +67,22 @@ public class AppSettings
 
 
     public bool SyncDetailExpanded { get; set; } = true;
+
+
+
+
+    public string MemoCardDisplayMode { get; set; } = "auto";
+
+
+
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? UngroupedCardExpanded { get; set; }
+
+
+
+
+    public int PathPropertyRefreshMinutes { get; set; }
 }
 
 

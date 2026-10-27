@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Novara.Models;
 
 public class TodoCard
@@ -17,4 +19,8 @@ public class TodoCard
     public DateTime? ReminderAt { get; set; }
     public DateTime? ReminderSetAt { get; set; }
     public string WorkspaceId { get; set; } = "";
+
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsExpanded { get; set; }
 }

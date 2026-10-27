@@ -75,6 +75,19 @@ public static class GlobalHotkeyService
         if (_registered.Remove(id) && _hwnd != IntPtr.Zero) UnregisterHotKey(_hwnd, id);
     }
 
+
+
+
+
+
+    public static bool ApplyLockHotkey(bool lockEnabled)
+    {
+        if (_hwnd == IntPtr.Zero) return true;
+        Unregister(IdLockNow);
+        if (!lockEnabled) return true;
+        return Register(IdLockNow, MOD_CONTROL | MOD_SHIFT, 0x4C);
+    }
+
     public static void UnregisterAll()
     {
 

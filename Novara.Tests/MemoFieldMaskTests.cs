@@ -71,7 +71,7 @@ public class MemoFieldMaskTests
     [Fact]
     public void Mask_IsFixedLength_SoTheValueLengthDoesNotLeak()
     {
-        Assert.Equal(8, MemoFieldMask.Mask.Length);
+        Assert.Equal(14, MemoFieldMask.Mask.Length);
     }
 
 
@@ -203,8 +203,8 @@ public class MemoFieldMaskTests
 
 
     [Theory]
-    [InlineData("银行卡", "6222020200112233445", "••••••••")]
-    [InlineData("证件", "110101199001011234", "••••••••")]
+    [InlineData("银行卡", "6222020200112233445", "••••••••••••••")]
+    [InlineData("证件", "110101199001011234", "••••••••••••••")]
     [InlineData("账户", "alice", "alice")]
     [InlineData("API Key", "https://api.example.com", "https://api.example.com")]
     [InlineData("自定义", "随手记", "随手记")]

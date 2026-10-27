@@ -8,14 +8,6 @@ This page lists directions, not dates. Novara does not promise that a given feat
 
 A separate sealed store for the entries that matter most; and a time lock for notes written to your future self, opened only on the date you choose. The specification is settled.
 
-## Calmer organization
-
-Groups collapse and expand on a click and fold themselves while you drag; the file path page reports size, type and status right on the row. Large collections stay readable at a glance.
-
-## Detect from the entry
-
-A detection entry point on the API item itself, without a detour through the context menu.
-
 ## A quieter interface
 
 Frosted veils behind dialogs, and exported images, collections, HTML and PDF following the paper palette of the current theme.

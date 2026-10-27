@@ -21,6 +21,9 @@ namespace Novara.Services;
 
 
 
+
+
+
 public static class SyncFieldPolicy
 {
     private static readonly JsonSerializerOptions Options = new()
@@ -49,6 +52,10 @@ public static class SyncFieldPolicy
         if (source is null) return roaming;
         roaming.AppLanguage = source.AppLanguage;
         roaming.Theme = source.Theme;
+
+
+
+        roaming.UngroupedCardExpanded = source.UngroupedCardExpanded;
         roaming.Workspaces = source.Workspaces is { Count: > 0 }
             ? source.Workspaces.Select(w => new Novara.Models.WorkspaceItem
             {
@@ -78,6 +85,11 @@ public static class SyncFieldPolicy
             {
                 Id = w.Id, Name = w.Name, IconKey = w.IconKey, CreatedAt = w.CreatedAt
             }).ToList();
+
+
+
+        if (remote.UngroupedCardExpanded is bool ungroupedExpanded)
+            local.UngroupedCardExpanded = ungroupedExpanded;
         return local;
     }
 }

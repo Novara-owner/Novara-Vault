@@ -12,25 +12,25 @@
 
     <Page.Resources>
         <Storyboard x:Name="CardsFloatIn">
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card1" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.36">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card1" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.39">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.36">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.39">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.48">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.51">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.48">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card8" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.51">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -48,37 +48,61 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.66">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="MemoDisplayCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.21">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.66">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="MemoDisplayCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.21">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card3" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.3">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="PathPropertyCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.24">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.3">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="PathPropertyCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.24">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ContextMenuCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.24">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.69">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ContextMenuCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.24">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="WelcomeCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.69">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card3" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.33">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.33">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ContextMenuCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.27">
+                <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
+                <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
+                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
+                </EasingDoubleKeyFrame>
+            </DoubleAnimationUsingKeyFrames>
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ContextMenuCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.27">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -108,62 +132,62 @@
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.54">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.57">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.54">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card6" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.57">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.76">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.79">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.76">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="UpdateCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.79">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.86">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.89">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.86">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Card9" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.89">
 
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.42">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.45">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.42">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="CardAnimation" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.45">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.60">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="Opacity" BeginTime="0:0:0.63">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="0" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="1">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
                 </EasingDoubleKeyFrame>
             </DoubleAnimationUsingKeyFrames>
-            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.60">
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="EdgeMenuCard" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" BeginTime="0:0:0.63">
                 <EasingDoubleKeyFrame KeyTime="0:0:0" Value="20" />
                 <EasingDoubleKeyFrame KeyTime="0:0:0.6" Value="0">
                     <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut" /></EasingDoubleKeyFrame.EasingFunction>
@@ -272,8 +296,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -294,8 +317,7 @@
                                 x:Name="PrivacyLockEnabledPanel"
                                 Visibility="Collapsed">
                         <Button MinWidth="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextPrimaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -308,8 +330,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                         <Button MinWidth="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextSecondaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -320,8 +341,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                         <Button MinWidth="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextSecondaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -427,8 +447,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -438,6 +457,78 @@
                             x:Name="CustomizeTabsButton"
                             Click="CustomizeTabsButton_Click">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Tabs_ButtonLabel\')}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Border x:Name="MemoDisplayCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Bind app:App.GetString(\'Setting_MemoDisplay_Title\')}"
+                               FontSize="16"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                    <Button Grid.Column="2"
+                            Width="160" Height="40"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
+                            Foreground="{ThemeResource AppTextSecondaryBrush}"
+                            BorderBrush="{ThemeResource AppBorderBrush}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            Margin="-8,0,0,0"
+                            x:Name="MemoDisplayButton"
+                            Click="MemoDisplayButton_Click">
+                        <TextBlock x:Name="MemoDisplayText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Border x:Name="PathPropertyCard" CornerRadius="12" Opacity="0"
+                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                    BorderBrush="{ThemeResource AppBorderBrush}"
+                    BorderThickness="1"
+                    Padding="20,18">
+                <Border.RenderTransform><TranslateTransform Y="20" /></Border.RenderTransform>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Bind app:App.GetString(\'Setting_PathProps_Title\')}"
+                               FontSize="16"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0" />
+                    <Button Grid.Column="2"
+                            Width="160" Height="40"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
+                            Foreground="{ThemeResource AppTextSecondaryBrush}"
+                            BorderBrush="{ThemeResource AppBorderBrush}"
+                            CornerRadius="10"
+                            FontSize="14"
+                            VerticalAlignment="Center"
+                            Margin="-8,0,0,0"
+                            x:Name="PathPropertyRefreshButton"
+                            Click="PathPropertyRefreshButton_Click">
+                        <TextBlock x:Name="PathPropertyRefreshText"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Button>
@@ -464,8 +555,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -501,8 +591,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -539,8 +628,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -576,8 +664,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -613,8 +700,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -650,8 +736,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -687,8 +772,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -724,8 +808,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -762,8 +845,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             Width="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -877,13 +959,17 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="20" Margin="0,24,0,0">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
                             <TextBox x:Name="SetPasswordBox" Grid.Row="1"
                                      Style="{StaticResource NovaraTextBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordPlaceholder\')}"
-                                     MaxLength="64" />
+                                     MaxLength="64" TextChanged="SetPasswordBox_TextChanged" />
+
+                            <TextBlock x:Name="SetPasswordStrengthText" Grid.Row="2" Visibility="Collapsed"
+                                       FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Grid>
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -1004,13 +1090,17 @@
                                      MaxLength="64" />
                         </Grid>
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_NewPasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
                             <TextBox x:Name="ChangePasswordNewBox" Grid.Row="1"
                                      Style="{StaticResource NovaraTextBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordPlaceholder\')}"
-                                     MaxLength="64" />
+                                     MaxLength="64" TextChanged="ChangePasswordNewBox_TextChanged" />
+
+                            <TextBlock x:Name="ChangePasswordStrengthText" Grid.Row="2" Visibility="Collapsed"
+                                       FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Grid>
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

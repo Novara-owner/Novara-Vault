@@ -12,7 +12,7 @@ You never need to take our word for anything on this page — every release ship
 2. Compare the hash. In PowerShell:
 
    ```powershell
-   Get-FileHash .\Novara_Setup_novara11.R1.exe -Algorithm SHA256
+   Get-FileHash .\Novara_Setup_novara12.exe -Algorithm SHA256
    ```
 
    The value must match the line in `SHA256SUMS`. If you downloaded the installer through the in-app update check, it is the very same file the `SHA256SUMS` attachment describes. If you have `sha256sum` (Git Bash, Linux), place the installer next to `SHA256SUMS` and run:
@@ -32,7 +32,7 @@ docker pull ghcr.io/novara-owner/novara-sync@sha256:<digest-from-IMAGES.txt>
 To check an image you already pulled:
 
 ```bash
-docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:11.1.0
+docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/novara-owner/novara-sync:12.0.0
 ```
 
 The digest must match `IMAGES.txt`. The same digest is published to Docker Hub, so either source resolves to the same bytes.
@@ -48,7 +48,7 @@ cosign verify-blob \
   --bundle signature.bundle \
   --certificate-identity-regexp '^https://github\.com/Novara-owner/Novara-Vault/\.github/workflows/ci\.yml@refs/tags/(v|novara)' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  Novara_Setup_novara11.R1.exe
+  Novara_Setup_novara12.exe
 ```
 
 The container image is signed in the registry. Verify it by digest, with the same identity checks:
@@ -67,7 +67,7 @@ Both commands print the release tag the artifact was signed at. Get `cosign` fro
 Releases include a Software Bill of Materials (SPDX JSON, generated with Syft) listing every component in the product. Open it with any SPDX viewer, or list package names:
 
 ```bash
-jq -r '.packages[].name' novara-sync-11.1.0.spdx.json | sort -u
+jq -r '.packages[].name' novara-sync-12.0.0.spdx.json | sort -u
 ```
 
 ## OpenSSF Scorecard

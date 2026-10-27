@@ -76,6 +76,16 @@ public sealed partial class BasicMemoPage : Page
 
     private readonly Dictionary<Border, string> _apiProtocols = new();
     private readonly Dictionary<Border, TextBlock> _groupCountTexts = new();
+
+
+    private readonly Dictionary<Guid, bool> _groupCollapsed = new();
+    private readonly Dictionary<Border, GroupArrow> _groupArrows = new();
+    private string _appliedDisplayMode = MemoDisplayMode.Auto;
+    private bool _initialLoadCompleted;
+    private Border? _pressArmedCard;
+    private int _dragGeneration;
+    private List<(Border card, bool collapsed)>? _dragGroupFolds;
+    private bool? _dragEntryWasExpanded;
     private Border? _apiCheckCard;
     private System.Threading.CancellationTokenSource? _apiCheckCts;
     private string _selectedApiProtocol = "Bearer";
@@ -85,6 +95,8 @@ public sealed partial class BasicMemoPage : Page
     private bool _apiConfirmHiding;
     private System.Threading.CancellationTokenSource? _relayProbeCts;
     private Storyboard? _relayProbePulse;
+    private Storyboard? _apiCheckPulse;
+    private Storyboard? _apiDiagPulse;
 
     private string _relayProbeUrl = "";
     private string _relayProbeKey = "";
@@ -332,13 +344,14 @@ private MenuFlyout BuildContextMenu()
     {
 
         var srcPanel = card.Parent as Panel;
+        var srcGroup = OwningGroupCardByParent(card);
         if (srcPanel != null) srcPanel.Children.Remove(card);
         StripEntryPersonalMarks(card);
 
-        if (srcPanel is StackPanel srcSp && srcSp.Parent is Grid srcGrid && srcGrid.Parent is Border srcGroup && !ReferenceEquals(srcGroup, gb))
+        if (srcGroup != null && !ReferenceEquals(srcGroup, gb))
         {
             UpdateGroupCount(srcGroup);
-            if (srcSp.Children.Count == 0 && srcGrid.Children.Count > 3 && srcGrid.Children[3] is Grid eh)
+            if (EntryStackOf(srcGroup) is { Children.Count: 0 } && EmptyHintOf(srcGroup) is { } eh)
                 eh.Visibility = Visibility.Visible;
         }
         _standaloneEntries.Remove(card);
@@ -346,13 +359,13 @@ private MenuFlyout BuildContextMenu()
 
         if (_entryIds.TryGetValue(card, out var inId) && _groupIds.TryGetValue(gb, out var tGid))
         { var me = FindEntry(inId); if (me != null) me.GroupId = tGid; }
-        var targetContent = gb.Child as Grid;
-        if (targetContent != null && targetContent.Children.Count > 3 && targetContent.Children[2] is StackPanel entryStack)
+        if (EntryStackOf(gb) is { } entryStack)
         {
             entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, card), card);
-            if (targetContent.Children[3] is Grid emptyHint)
+            if (EmptyHintOf(gb) is { } emptyHint)
                 emptyHint.Visibility = Visibility.Collapsed;
             UpdateGroupCount(gb);
+            SetGroupCollapsed(gb, false, animate: IsLoaded);
         }
         SyncUncategorizedCard();
         PersistAll();
@@ -369,16 +382,26 @@ private MenuFlyout BuildContextMenu()
     }
 
 
+
+    private Border? OwningGroupCardByParent(Border entryCard)
+    {
+        for (var p = entryCard.Parent as FrameworkElement; p != null; p = p.Parent as FrameworkElement)
+            if (p is Border b && _groupNameTexts.ContainsKey(b)) return b;
+        return null;
+    }
+
+
     private void MoveEntryOut(Border card)
     {
         var p = card.Parent as Panel;
+        var srcGroup = OwningGroupCardByParent(card);
         if (p != null) p.Children.Remove(card);
         StripEntryPersonalMarks(card);
 
-        if (p is StackPanel sp && sp.Parent is Grid g && g.Parent is Border srcGroup)
+        if (srcGroup != null)
         {
             UpdateGroupCount(srcGroup);
-            if (sp.Children.Count == 0 && g.Children.Count > 3 && g.Children[3] is Grid eh)
+            if (EntryStackOf(srcGroup) is { Children.Count: 0 } && EmptyHintOf(srcGroup) is { } eh)
                 eh.Visibility = Visibility.Visible;
         }
         _entriesInGroup.Remove(card);
@@ -404,6 +427,7 @@ private MenuFlyout BuildContextMenu()
 
         if (_entryIds.TryGetValue(card, out var outId)) { var me = FindEntry(outId); if (me != null) me.GroupId = null; }
         SyncUncategorizedCard();
+        if (_uncategorizedCard != null) SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
         PersistAll();
         ApplyCardFilters();
     }
@@ -519,6 +543,7 @@ private MenuFlyout BuildContextMenu()
 
         var groups = db.MemoGroups.ToList();
         var entries = db.MemoEntries.Where(x => !x.IsDeleted).ToList();
+        _appliedDisplayMode = MemoDisplayMode.Normalize(db.AppSettings.MemoCardDisplayMode);
         _totpRows.Clear();
 
         bool playEntrance = !_entrancePlayed;
@@ -531,6 +556,7 @@ private MenuFlyout BuildContextMenu()
             var card = CreateGroupCard(g.Name, g.IconKey);
             _groupIds[card] = g.Id;
             _groupCreatedAt[card] = g.CreatedAt;
+            InitializeGroupCollapsed(card, expandNew: false);
             if (g.IsStarred) { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
             if (g.IsPinned && _pinnedGroupCard == null) { _pinnedGroupCard = card; if (_pinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
             GroupsContainer.Children.Add(card);
@@ -571,10 +597,10 @@ private MenuFlyout BuildContextMenu()
                     Border? groupCard = null;
                     foreach (var kv in _groupIds)
                         if (kv.Value == gid) { groupCard = kv.Key; break; }
-                    if (groupCard != null && groupCard.Child is Grid gg && gg.Children.Count > 3 && gg.Children[2] is StackPanel sp)
+                    if (groupCard != null && EntryStackOf(groupCard) is { } sp)
                     {
                         if (en.IsPinned) sp.Children.Insert(0, card); else sp.Children.Add(card);
-                        if (gg.Children[3] is Grid eh) eh.Visibility = Visibility.Collapsed;
+                        if (EmptyHintOf(groupCard) is { } eh) eh.Visibility = Visibility.Collapsed;
                         _entriesInGroup.Add(card);
                         UpdateGroupCount(groupCard);
                         continue;
@@ -619,6 +645,8 @@ private MenuFlyout BuildContextMenu()
 
         _entrancePlayed = true;
         if (_standaloneEntries.Count > 0) SyncUncategorizedCard();
+        _initialLoadCompleted = true;
+        ApplyMemoDisplayMode(_appliedDisplayMode, animate: false);
         ApplyCardFilters();
         if (_persistAfterRender) { _persistAfterRender = false; PersistAll(); }
     }
@@ -653,14 +681,14 @@ private MenuFlyout BuildContextMenu()
             if (child is Border b && _groupIds.TryGetValue(b, out var gid) && groupById.TryGetValue(gid, out var g))
             {
                 groups.Add(g);
-                if (b.Child is Grid g2 && g2.Children.Count > 2 && g2.Children[2] is StackPanel sp)
+                if (EntryStackOf(b) is { } sp)
                     CollectEntries(sp);
             }
             else if (child is Border eb && _entryIds.TryGetValue(eb, out var eid) && entryById.TryGetValue(eid, out var en))
             {
                 entries.Add(en);
             }
-            else if (child == _uncategorizedCard && _uncategorizedCard?.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is Panel cp)
+            else if (child == _uncategorizedCard && _uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } cp)
             {
                 CollectEntries(cp);
             }
@@ -916,7 +944,7 @@ private MenuFlyout BuildContextMenu()
         if (!singleMove)
         {
             entries.AddRange(_standaloneEntries);
-            if (_uncategorizedCard?.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is StackPanel sp)
+            if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } sp)
                 foreach (var child in sp.Children)
                     if (child is Border b && !entries.Contains(b))
                         entries.Add(b);
@@ -946,6 +974,200 @@ private MenuFlyout BuildContextMenu()
         UngroupedListSection.Visibility = entries.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+
+
+
+
+
+
+    private Border BuildGroupCapsule(Border card)
+    {
+        var capsule = new Border
+        {
+            Height = 24,
+            CornerRadius = new CornerRadius(8),
+            Background = App.GetBrush("AppSurfaceBrush"),
+            BorderBrush = App.GetBrush("AppBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(7, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var stack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        var mini = new Canvas { Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center };
+        Border MiniCard(double left, double top, double opacity) => new()
+        {
+            Width = 8,
+            Height = 9,
+            CornerRadius = new CornerRadius(2),
+            BorderThickness = new Thickness(1),
+            BorderBrush = App.GetBrush("AppTextTertiaryBrush"),
+            Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+            Opacity = opacity,
+        };
+        var backCard = MiniCard(1, 2.5, 0.55);
+        Canvas.SetLeft(backCard, 1); Canvas.SetTop(backCard, 2.5);
+        var frontCard = MiniCard(3, 0, 0.90);
+        Canvas.SetLeft(frontCard, 3); Canvas.SetTop(frontCard, 0);
+        mini.Children.Add(backCard); mini.Children.Add(frontCard);
+        var countText = new TextBlock
+        {
+            Text = App.GetString("Memo_Count_Zero"),
+            FontSize = 11,
+            Foreground = App.GetBrush("AppTextSecondaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _groupCountTexts[card] = countText;
+        var arrow = new GroupArrow { VerticalAlignment = VerticalAlignment.Center };
+        _groupArrows[card] = arrow;
+        stack.Children.Add(mini); stack.Children.Add(countText); stack.Children.Add(arrow);
+        capsule.Child = stack;
+        return capsule;
+    }
+
+
+    private static Grid? GroupBodyOf(Border card)
+        => card.Child is Grid g && g.Children.Count > 1 ? g.Children[1] as Grid : null;
+
+    private static Grid? ContentHostOf(Border card)
+    {
+        var body = GroupBodyOf(card);
+        return body is { Children.Count: > 1 } ? body.Children[1] as Grid : null;
+    }
+
+
+    private static StackPanel? EntryStackOf(Border card)
+    {
+        var host = ContentHostOf(card);
+        if (host == null) return null;
+        foreach (var child in host.Children)
+            if (child is StackPanel sp) return sp;
+        return null;
+    }
+
+    private static Grid? EmptyHintOf(Border card)
+    {
+        var host = ContentHostOf(card);
+        if (host == null) return null;
+        foreach (var child in host.Children)
+            if (child is Grid g) return g;
+        return null;
+    }
+
+    private Guid GroupKeyOf(Border card) => _groupIds.TryGetValue(card, out var id) ? id : Guid.Empty;
+
+    private bool GetGroupCollapsedState(Border card)
+        => _groupCollapsed.TryGetValue(GroupKeyOf(card), out var collapsed) ? collapsed : ModeDefaultCollapsed(card);
+
+
+
+    private bool ModeDefaultCollapsed(Border card)
+        => _appliedDisplayMode == MemoDisplayMode.Auto
+           || (_appliedDisplayMode == MemoDisplayMode.Memory && !ReadGroupMemoryExpanded(card));
+
+
+
+    private bool ReadGroupMemoryExpanded(Border card)
+    {
+        var key = GroupKeyOf(card);
+        if (key == Guid.Empty)
+            return App.Store?.Database.AppSettings.UngroupedCardExpanded is true;
+        return FindGroup(key)?.IsExpanded is true;
+    }
+
+
+
+
+    private void PersistGroupMemory(Border card, bool collapsed)
+    {
+        var key = GroupKeyOf(card);
+        if (key == Guid.Empty)
+        {
+            var s = App.Store?.Database.AppSettings;
+            if (s != null) { s.UngroupedCardExpanded = !collapsed; App.Store?.SaveAsync(); }
+            return;
+        }
+        var g = FindGroup(key);
+        if (g != null) { g.IsExpanded = !collapsed; App.Store?.SaveAsync(); }
+    }
+
+
+    private void SetGroupCollapsedVisual(Border card, bool collapsed, bool animate, double durationMs = 280, double arrowDelayMs = 30)
+    {
+        var body = GroupBodyOf(card);
+        if (body == null) return;
+        bool canAnimate = animate && card.Visibility == Visibility.Visible && card.IsLoaded;
+        if (canAnimate) Services.MeltAnim.Begin(body, expand: !collapsed, durationMs: durationMs);
+        else Services.MeltAnim.SetInstant(body, !collapsed);
+        if (_groupArrows.TryGetValue(card, out var arrow))
+            arrow.SetExpanded(!collapsed, canAnimate, durationMs, arrowDelayMs);
+    }
+
+
+    private void SetGroupCollapsed(Border card, bool collapsed, bool animate, double durationMs = 280, double arrowDelayMs = 30)
+    {
+        if (!_groupIds.ContainsKey(card) && !ReferenceEquals(card, _uncategorizedCard)) return;
+        _groupCollapsed[GroupKeyOf(card)] = collapsed;
+        SetGroupCollapsedVisual(card, collapsed, animate, durationMs, arrowDelayMs);
+    }
+
+    private void ToggleGroupCollapsed(Border card)
+    {
+        bool collapsed = GetGroupCollapsedState(card);
+        SetGroupCollapsed(card, !collapsed, animate: true);
+        if (_appliedDisplayMode == MemoDisplayMode.Memory) PersistGroupMemory(card, !collapsed);
+    }
+
+
+    private void InitializeGroupCollapsed(Border card, bool expandNew)
+    {
+        bool collapsed;
+        if (!_groupCollapsed.TryGetValue(GroupKeyOf(card), out collapsed))
+        {
+            if (_appliedDisplayMode == MemoDisplayMode.Memory)
+            {
+
+
+
+                collapsed = expandNew && GroupKeyOf(card) != Guid.Empty ? false : !ReadGroupMemoryExpanded(card);
+            }
+            else
+            {
+                collapsed = expandNew ? false : _appliedDisplayMode == MemoDisplayMode.Auto;
+            }
+            _groupCollapsed[GroupKeyOf(card)] = collapsed;
+        }
+        SetGroupCollapsedVisual(card, collapsed, animate: false);
+    }
+
+
+
+
+    private void ApplyMemoDisplayMode(string mode, bool animate)
+    {
+        _appliedDisplayMode = MemoDisplayMode.Normalize(mode);
+        _groupCollapsed.Clear();
+        foreach (var child in GroupsContainer.Children)
+        {
+            if (child is not Border card) continue;
+            bool isContainer = _groupIds.ContainsKey(card) || ReferenceEquals(card, _uncategorizedCard);
+            if (!isContainer) continue;
+            bool collapsed = _appliedDisplayMode == MemoDisplayMode.Memory
+                ? !ReadGroupMemoryExpanded(card)
+                : _appliedDisplayMode == MemoDisplayMode.Auto;
+            _groupCollapsed[GroupKeyOf(card)] = collapsed;
+            SetGroupCollapsedVisual(card, collapsed, animate);
+        }
+    }
+
+
+
+    public void ApplyMemoDisplayModeFromSettings(bool animate)
+    {
+        var mode = MemoDisplayMode.Normalize(App.Store?.Database.AppSettings.MemoCardDisplayMode);
+        if (mode == _appliedDisplayMode) return;
+        ApplyMemoDisplayMode(mode, animate && IsLoaded);
+    }
+
     private Border CreateGroupCard(string groupName, string groupIconKey)
     {
         var card = new Border
@@ -961,7 +1183,6 @@ private MenuFlyout BuildContextMenu()
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = 28 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var titleGrid = new Grid { MinHeight = 28 };
         titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -975,19 +1196,25 @@ private MenuFlyout BuildContextMenu()
         rightPanel.Children.Add(pinIcon);
         var starIcon = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed, Child = new PathIcon { Data = App.CreateGeometry(IconData.CardStar), Foreground = new SolidColorBrush(PaperTheme.BrandColor) } };
         rightPanel.Children.Add(starIcon);
-        var countText = new TextBlock { Text = App.GetString("Memo_Count_Zero"), FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush"), VerticalAlignment = VerticalAlignment.Center };
-        rightPanel.Children.Add(countText);
+
+
+        rightPanel.Children.Add(BuildGroupCapsule(card));
         Grid.SetColumn(rightPanel, 2);
         _pinIcons[card] = pinIcon; _starIcons[card] = starIcon; _groupNameTexts[card] = nameText;
-        _groupCountTexts[card] = countText;
         _groupData[card] = (groupName, groupIconKey);
         titleGrid.Children.Add(icon); titleGrid.Children.Add(nameText); titleGrid.Children.Add(rightPanel);
         Grid.SetRow(titleGrid, 0);
-        var divider = new Border { Height = 1, Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 8, 0, 0), Opacity = 0.3 };
-        Grid.SetRow(divider, 1);
-        var entryStack = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
-        Grid.SetRow(entryStack, 2);
 
+
+
+        var body = new Grid();
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var divider = new Border { Height = 1, Background = App.GetBrush("AppBorderBrush"), Margin = new Thickness(0, 8, 0, 0), Opacity = 0.3 };
+        Grid.SetRow(divider, 0);
+        var contentHost = new Grid();
+        Grid.SetRow(contentHost, 1);
+        var entryStack = new StackPanel { Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
         var emptyHint = new Grid { MinHeight = 100, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Visible };
         var emptyStack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 8 };
 
@@ -996,9 +1223,11 @@ private MenuFlyout BuildContextMenu()
         emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Tip"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 13, Foreground = App.GetBrush("AppTextSecondaryBrush") });
         emptyStack.Children.Add(new TextBlock { Text = App.GetString("Memo_Group_Empty_Hint"), HorizontalAlignment = HorizontalAlignment.Center, FontSize = 12, Foreground = App.GetBrush("AppTextTertiaryBrush") });
         emptyHint.Children.Add(emptyStack);
-        Grid.SetRow(emptyHint, 2);
+        contentHost.Children.Add(entryStack); contentHost.Children.Add(emptyHint);
+        body.Children.Add(divider); body.Children.Add(contentHost);
+        Grid.SetRow(body, 1);
 
-        grid.Children.Add(titleGrid); grid.Children.Add(divider); grid.Children.Add(entryStack); grid.Children.Add(emptyHint);
+        grid.Children.Add(titleGrid); grid.Children.Add(body);
         card.Child = grid;
         var translate = new TranslateTransform { Y = 0 }; card.RenderTransform = translate;
         var borderBrush = App.GetBrush("AppBorderBrush");
@@ -1010,7 +1239,12 @@ private MenuFlyout BuildContextMenu()
         var baseBorderColor = borderBrush.Color;
         card.PointerEntered += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = hoverBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = -3, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
         card.PointerExited += (s, e) => { if (_dragging) return; if (card.BorderBrush is SolidColorBrush sb) sb.Color = baseBorderColor; if (App.IsAnimationsEnabled && card.RenderTransform is TranslateTransform) { var st = new Storyboard(); var la = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }; Storyboard.SetTarget(la, translate); Storyboard.SetTargetProperty(la, "Y"); st.Children.Add(la); st.Begin(); } };
-        card.ContextRequested += (s, e) => { e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(card, ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p); };
+        card.ContextRequested += (s, e) =>
+        {
+
+            if (ReferenceEquals(_pressArmedCard, card) || (_dragging && ReferenceEquals(_dragCard, card))) { e.Handled = true; return; }
+            e.Handled = true; _currentGroupCard = card; bool ip = card == _pinnedGroupCard; bool starred = _starredCards.Contains(card); var m = BuildGroupCardContextMenu(card, ip, starred); if (e.TryGetPosition(card, out var p)) m.ShowAt(card, p);
+        };
         AttachCardDrag(card);
         return card;
     }
@@ -1019,7 +1253,7 @@ private MenuFlyout BuildContextMenu()
     {
         if (groupCard == null || !_groupCountTexts.TryGetValue(groupCard, out var ct)) return;
         int count = 0;
-        if (groupCard.Child is Grid g && g.Children.Count > 2 && g.Children[2] is StackPanel entryStack)
+        if (EntryStackOf(groupCard) is { } entryStack)
             foreach (var c in entryStack.Children)
                 if (c.Visibility == Visibility.Visible) count++;
         ct.Text = string.Format(App.GetString("Memo_Count_N"), count);
@@ -1057,7 +1291,7 @@ private MenuFlyout BuildContextMenu()
             else if (child is Border gb && _groupIds.ContainsKey(gb))
             {
                 int visibleCount = 0;
-                if (gb.Child is Grid gg && gg.Children.Count > 3 && gg.Children[2] is StackPanel sp)
+                if (EntryStackOf(gb) is { } sp)
                 {
                     foreach (var c in sp.Children)
                         if (c is Border sc && _entryIds.TryGetValue(sc, out var sid))
@@ -1070,11 +1304,11 @@ private MenuFlyout BuildContextMenu()
 
 
                 gb.Visibility = visibleCount > 0 || !wsActive ? Visibility.Visible : Visibility.Collapsed;
-                if (gb.Child is Grid gg2 && gg2.Children.Count > 3 && gg2.Children[3] is Grid eh)
+                if (EmptyHintOf(gb) is { } eh)
                     eh.Visibility = visibleCount > 0 ? Visibility.Collapsed : Visibility.Visible;
                 UpdateGroupCount(gb);
             }
-            else if (child == _uncategorizedCard && _uncategorizedCard?.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is Panel cp)
+            else if (child == _uncategorizedCard && _uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } cp)
             {
                 int visibleCount = 0;
                 foreach (var c in cp.Children)
@@ -1085,6 +1319,7 @@ private MenuFlyout BuildContextMenu()
                         if (vis) visibleCount++;
                     }
                 _uncategorizedCard.Visibility = visibleCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+                UpdateGroupCount(_uncategorizedCard);
             }
         }
 
@@ -1278,24 +1513,34 @@ private MenuFlyout BuildContextMenu()
         var expandedGrid = new Grid { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 12, 0, 0) }; expandedGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); expandedGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var maskedTexts = new List<TextBlock>();
         _maskedFieldTexts[card] = maskedTexts;
-        var expandIconPath = App.CreateGeometry(IconData.CardExpand);
-        var collapseIconPath = App.CreateGeometry(IconData.CardCollapse);
-        var expandIcon = new PathIcon { Data = expandIconPath, Foreground = App.GetBrush("IconForegroundBrush") };
-        var expandViewbox = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = expandIcon };
-        var expandBtn = new Button { Width = 32, Height = 32, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = expandViewbox, IsTabStop = false };
-        expandBtn.Click += (s, e) =>
-        {
 
-            var st = _entryExpand.TryGetValue(card, out var v) && v;
-            bool targetExpand = !st;
-            _entryExpand[card] = targetExpand;
-            if (!targetExpand) RestoreFieldMasks(maskedTexts);
-            expandIcon.Data = targetExpand ? collapseIconPath : expandIconPath;
-            expandViewbox.Margin = targetExpand ? new Thickness(0) : new Thickness(-2, -1, 0, 0);
-            StartEntryMelt(expandedGrid, targetExpand);
-        };
-        Grid.SetColumn(expandBtn, 4);
-        mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); mainRow.Children.Add(expandBtn); Grid.SetRow(mainRow, 0);
+
+        Button? apiDetectBtn = null;
+        if (type == "API Key")
+        {
+            var detectBtnContent = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new PathIcon { Data = App.CreateGeometry(IconData.ApiDetect), Foreground = App.GetBrush("IconForegroundBrush") } };
+            apiDetectBtn = new Button { Width = 32, Height = 32, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = detectBtnContent, IsTabStop = false };
+
+
+
+
+            var detectMenu = new MenuFlyout();
+            detectMenu.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
+            var quickMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Detect") };
+            quickMi.Click += (s2, e2) => ShowApiCheckDialog(card);
+            var normalMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_ApiStatusDiag") };
+            normalMi.Click += (s2, e2) => ShowApiDiagConfirm(card);
+            var deepMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_RelayProbe") };
+            deepMi.Click += (s2, e2) => ShowRelayProbeConfirm(card);
+
+
+            var historyMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Memo_Api_History") };
+            historyMi.Click += (s2, e2) => ShowApiProbeHistoryOverlay();
+            detectMenu.Items.Add(quickMi); detectMenu.Items.Add(normalMi); detectMenu.Items.Add(deepMi); detectMenu.Items.Add(historyMi);
+            apiDetectBtn.Flyout = detectMenu;
+            Grid.SetColumn(apiDetectBtn, 4);
+        }
+        mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); if (apiDetectBtn != null) mainRow.Children.Add(apiDetectBtn); Grid.SetRow(mainRow, 0);
         _entryPinIcons[card] = entryPinIcon;
         _entryStarIcons[card] = entryStarIcon;
         _entryData[card] = (type, name, keyInfo, fields);
@@ -1350,6 +1595,7 @@ private MenuFlyout BuildContextMenu()
 
         card.ContextRequested += (s, e) =>
         {
+            if (ReferenceEquals(_pressArmedCard, card) || (_dragging && ReferenceEquals(_dragCard, card))) { e.Handled = true; return; }
             e.Handled = true;
             var m = new MenuFlyout();
             m.MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"];
@@ -1491,22 +1737,7 @@ private MenuFlyout BuildContextMenu()
                 openMi.Click += (s2, e2) => OpenWebsite(websiteData.keyInfo);
                 m.Items.Add(openMi);
             }
-            if (_entryData.TryGetValue(card, out var apiEntryData) && apiEntryData.type == "API Key")
-            {
-                var checkMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_Detect"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.ApiDetect), Foreground = App.GetBrush("IconForegroundBrush") } };
-                checkMi.Click += (s2, e2) => ShowApiCheckDialog(card);
-                m.Items.Add(checkMi);
 
-
-                var statusDiagMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_ApiStatusDiag"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.ApiStatusDiag), Foreground = App.GetBrush("IconForegroundBrush") } };
-                statusDiagMi.Click += (s2, e2) => ShowApiDiagConfirm(card);
-                m.Items.Add(statusDiagMi);
-
-
-                var relayProbeMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_RelayProbe"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.RelayProbe), Foreground = App.GetBrush("IconForegroundBrush") } };
-                relayProbeMi.Click += (s2, e2) => ShowRelayProbeConfirm(card);
-                m.Items.Add(relayProbeMi);
-            }
             m.Items.Add(moveSub);
             m.Items.Add(editMi);
             m.Items.Add(sep);
@@ -1522,6 +1753,34 @@ private MenuFlyout BuildContextMenu()
 
 
         private void StartEntryMelt(Grid panel, bool expand) => Services.MeltAnim.Begin(panel, expand, 12.0);
+
+
+        private bool GetEntryExpanded(Border card) => _entryExpand.TryGetValue(card, out var v) && v;
+
+        private static Grid? EntryExpandedGridOf(Border card)
+            => card.Child is Grid g && g.Children.Count > 1 ? g.Children[1] as Grid : null;
+
+        private void SetEntryExpanded(Border card, bool expanded, bool animate)
+        {
+            _entryExpand[card] = expanded;
+            if (!expanded && _maskedFieldTexts.TryGetValue(card, out var maskedTexts))
+                RestoreFieldMasks(maskedTexts);
+            SetEntryExpandedVisual(card, expanded, animate);
+        }
+
+
+        private void SetEntryExpandedVisual(Border card, bool expanded, bool animate)
+        {
+            var panel = EntryExpandedGridOf(card);
+            if (panel == null) return;
+            if (animate) StartEntryMelt(panel, expanded);
+            else
+            {
+                Services.MeltAnim.Cancel(panel);
+                Services.MeltAnim.SetInstant(panel, expanded);
+                panel.Margin = new Thickness(0, expanded ? 12 : 0, 0, 0);
+            }
+        }
 
     private void CopyToClipboardButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1578,20 +1837,31 @@ private MenuFlyout BuildContextMenu()
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = 28 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var titleGrid = new Grid { MinHeight = 28 };
+        titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var titleText = new TextBlock
         {
             Text = App.GetString("Memo_Group_Uncategorized"),
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             Foreground = App.GetBrush("AppTextPrimaryBrush"),
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
+        Grid.SetColumn(titleText, 0);
         titleGrid.Children.Add(titleText);
+
+        var capsule = BuildGroupCapsule(card);
+        Grid.SetColumn(capsule, 2);
+        titleGrid.Children.Add(capsule);
         Grid.SetRow(titleGrid, 0);
 
+        var body = new Grid();
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var divider = new Border
         {
             Height = 1,
@@ -1599,21 +1869,59 @@ private MenuFlyout BuildContextMenu()
             Margin = new Thickness(0, 8, 0, 0),
             Opacity = 0.3
         };
-        Grid.SetRow(divider, 1);
-
+        Grid.SetRow(divider, 0);
+        var contentHost = new Grid();
+        Grid.SetRow(contentHost, 1);
         var contentPanel = new StackPanel
         {
             Margin = new Thickness(0, 8, 0, 0),
             Spacing = 8
         };
-        Grid.SetRow(contentPanel, 2);
+        contentHost.Children.Add(contentPanel);
+        body.Children.Add(divider);
+        body.Children.Add(contentHost);
+        Grid.SetRow(body, 1);
 
         grid.Children.Add(titleGrid);
-        grid.Children.Add(divider);
-        grid.Children.Add(contentPanel);
+        grid.Children.Add(body);
         card.Child = grid;
-
+        AttachHeaderClick(card);
         return card;
+    }
+
+
+    private void AttachHeaderClick(Border card)
+    {
+        bool armed = false;
+        bool moved = false;
+        Point pressPoint = default;
+        var pressWatch = new System.Diagnostics.Stopwatch();
+        card.PointerPressed += (s, e) =>
+        {
+            if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
+            if (IsPressOnChildEntry(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject, card)) return;
+            var pt = e.GetCurrentPoint(card);
+            if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
+            pressPoint = pt.Position;
+            armed = true; moved = false; _pressArmedCard = card;
+            pressWatch.Restart();
+        };
+        card.PointerMoved += (s, e) =>
+        {
+            if (!armed) return;
+            var pt = e.GetCurrentPoint(card);
+            if (CardGesturePolicy.ExceedsMoveTolerance(pt.Position.X - pressPoint.X, pt.Position.Y - pressPoint.Y))
+            { armed = false; moved = true; }
+        };
+        card.PointerReleased += (s, e) =>
+        {
+            if (armed && CardGesturePolicy.IsClick(pressWatch.ElapsedMilliseconds, moved) && IsInHeaderHotZone(card, pressPoint))
+                OnCardHeaderClick(card);
+            armed = false; moved = false; pressWatch.Stop(); _pressArmedCard = null;
+        };
+        card.PointerExited += (s, e) => { armed = false; _pressArmedCard = null; };
+        card.PointerCanceled += (s, e) => { armed = false; moved = false; _pressArmedCard = null; };
+        card.PointerCaptureLost += (s, e) => { armed = false; moved = false; _pressArmedCard = null; };
     }
 
     private void SyncUncategorizedCard()
@@ -1630,25 +1938,25 @@ private MenuFlyout BuildContextMenu()
 
         if (hasGroups && _standaloneEntries.Count > 0 && _uncategorizedCard == null)
         {
-
             _uncategorizedCard = CreateUncategorizedCard();
             GroupsContainer.Children.Add(_uncategorizedCard);
+
+
+            InitializeGroupCollapsed(_uncategorizedCard, expandNew: _initialLoadCompleted);
         }
 
         if (_uncategorizedCard != null)
         {
-            int countInCard = 0;
-            if (_uncategorizedCard.Child is Grid ug2 && ug2.Children.Count > 2 && ug2.Children[2] is Panel cp2)
-                countInCard = cp2.Children.Count;
+            var stack = EntryStackOf(_uncategorizedCard);
+            int countInCard = stack?.Children.Count ?? 0;
 
             if (!hasGroups || (_standaloneEntries.Count == 0 && countInCard == 0))
             {
-
-                if (_uncategorizedCard.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is StackPanel sp)
+                if (stack != null)
                 {
                     var toRestore = new List<UIElement>();
-                    foreach (var child in sp.Children) toRestore.Add(child);
-                    sp.Children.Clear();
+                    foreach (var child in stack.Children) toRestore.Add(child);
+                    stack.Children.Clear();
                     int idx = GroupsContainer.Children.IndexOf(_uncategorizedCard);
                     GroupsContainer.Children.Remove(_uncategorizedCard);
                     foreach (var entry in toRestore)
@@ -1665,31 +1973,31 @@ private MenuFlyout BuildContextMenu()
                 {
                     GroupsContainer.Children.Remove(_uncategorizedCard);
                 }
+                _groupArrows.Remove(_uncategorizedCard);
+                _groupCountTexts.Remove(_uncategorizedCard);
+
                 _uncategorizedCard = null!;
             }
-            else if (_standaloneEntries.Count > 0)
+            else if (_standaloneEntries.Count > 0 && stack != null)
             {
 
-                if (_uncategorizedCard.Child is Grid ug && ug.Children.Count > 2 && ug.Children[2] is StackPanel sp)
+
+
+
+                int insertPos = 0;
+                if (RegionPinnedEntryCard(stack) is Border stackPinned)
+                    insertPos = stack.Children.IndexOf(stackPinned) + 1;
+                for (int i = _standaloneEntries.Count - 1; i >= 0; i--)
                 {
+                    var entry = _standaloneEntries[i];
+                    GroupsContainer.Children.Remove(entry);
+                    entry.Margin = new Thickness(0);
 
 
-
-
-                    int insertPos = 0;
-                    if (RegionPinnedEntryCard(sp) is Border stackPinned)
-                        insertPos = sp.Children.IndexOf(stackPinned) + 1;
-                    for (int i = _standaloneEntries.Count - 1; i >= 0; i--)
-                    {
-                        var entry = _standaloneEntries[i];
-                        GroupsContainer.Children.Remove(entry);
-                        entry.Margin = new Thickness(0);
-
-
-                        sp.Children.Insert(insertPos, entry);
-                        _standaloneEntries.RemoveAt(i);
-                    }
+                    stack.Children.Insert(insertPos, entry);
+                    _standaloneEntries.RemoveAt(i);
                 }
+                UpdateGroupCount(_uncategorizedCard);
             }
         }
     }
@@ -1729,7 +2037,7 @@ private MenuFlyout BuildContextMenu()
         {
             var entry = toMove[mi];
 
-            if (_uncategorizedCard?.Child is Grid ugc && ugc.Children.Count > 2 && ugc.Children[2] is StackPanel usp && usp.Children.Contains(entry))
+            if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } usp && usp.Children.Contains(entry))
                 usp.Children.Remove(entry);
             else
                 GroupsContainer.Children.Remove(entry);
@@ -1738,10 +2046,10 @@ private MenuFlyout BuildContextMenu()
             _entriesInGroup.Add(entry);
 
             if (_entryIds.TryGetValue(entry, out var mvId)) { var me = FindEntry(mvId); if (me != null) me.GroupId = newGroup.Id; }
-            if (nc.Child is Grid g && g.Children.Count > 3 && g.Children[2] is StackPanel entryStack)
+            if (EntryStackOf(nc) is { } entryStack)
             {
                 entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, entry), entry);
-                if (g.Children[3] is Grid emptyHint)
+                if (EmptyHintOf(nc) is { } emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
                 UpdateGroupCount(nc);
             }
@@ -1756,6 +2064,7 @@ private MenuFlyout BuildContextMenu()
             if (insertIndex > uncatIdx) insertIndex = uncatIdx;
         }
         GroupsContainer.Children.Insert(insertIndex, nc);
+        InitializeGroupCollapsed(nc, expandNew: true);
         App.PlayCardEntrance(nc);
         HintText.Visibility = Visibility.Collapsed;
 
@@ -1764,7 +2073,7 @@ private MenuFlyout BuildContextMenu()
         if (_pendingMoveEntry != null)
         {
 
-            if (_uncategorizedCard?.Child is Grid ugc2 && ugc2.Children.Count > 2 && ugc2.Children[2] is StackPanel usp2 && usp2.Children.Contains(_pendingMoveEntry))
+            if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } usp2 && usp2.Children.Contains(_pendingMoveEntry))
                 usp2.Children.Remove(_pendingMoveEntry);
             else
                 GroupsContainer.Children.Remove(_pendingMoveEntry);
@@ -1773,12 +2082,13 @@ private MenuFlyout BuildContextMenu()
             _entriesInGroup.Add(_pendingMoveEntry);
 
             if (_entryIds.TryGetValue(_pendingMoveEntry, out var pmId)) { var me = FindEntry(pmId); if (me != null) me.GroupId = newGroup.Id; }
-            if (nc.Child is Grid ng && ng.Children.Count > 3 && ng.Children[2] is StackPanel entryStack)
+            if (EntryStackOf(nc) is { } entryStack)
             {
                 entryStack.Children.Insert(PinnedFirstInsertIndex(entryStack, _pendingMoveEntry), _pendingMoveEntry);
-                if (ng.Children[3] is Grid emptyHint)
+                if (EmptyHintOf(nc) is { } emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
                 UpdateGroupCount(nc);
+                SetGroupCollapsed(nc, false, animate: false);
             }
             _pendingMoveEntry = null!;
         }
@@ -2377,7 +2687,7 @@ private MenuFlyout BuildContextMenu()
                 for (int i = 0; i < GroupsContainer.Children.Count; i++)
                 {
                     if (GroupsContainer.Children[i] == old) { idx = i; parent = GroupsContainer; break; }
-                    if (GroupsContainer.Children[i] is Border g && g.Child is Grid gg && gg.Children.Count > 2 && gg.Children[2] is Panel cp)
+                    if (GroupsContainer.Children[i] is Border g && EntryStackOf(g) is { } cp)
                     {
                         int j = cp.Children.IndexOf(old);
                         if (j >= 0) { idx = j; parent = cp; break; }
@@ -2394,7 +2704,7 @@ private MenuFlyout BuildContextMenu()
 
 
         bool wasInUncategorized = _uncategorizedCard != null
-            && parent is StackPanel usp && usp.Parent is Grid ug && ug.Parent is Border ub && ReferenceEquals(ub, _uncategorizedCard);
+            && ReferenceEquals(parent, EntryStackOf(_uncategorizedCard));
             _entriesInGroup.Remove(old);
             int standaloneIdx = _standaloneEntries.IndexOf(old);
             _standaloneEntries.Remove(old);
@@ -2437,16 +2747,17 @@ private MenuFlyout BuildContextMenu()
             _entryIds[card] = entryEntity.Id;
             _entryCreatedAt[card] = entryEntity.CreatedAt;
             if (_groupIds.TryGetValue(_targetGroupCard, out var tGid)) entryEntity.GroupId = tGid;
-            if (_targetGroupCard.Child is Grid tg && tg.Children.Count > 3 && tg.Children[2] is StackPanel entryStack)
+            if (EntryStackOf(_targetGroupCard) is { } entryStack)
             {
 
                 int insIdx = RegionPinnedEntryCard(entryStack) is Border rp
                     ? entryStack.Children.IndexOf(rp) + 1 : 0;
                 entryStack.Children.Insert(insIdx, card);
-                if (tg.Children[3] is Grid emptyHint)
+                if (EmptyHintOf(_targetGroupCard) is { } emptyHint)
                     emptyHint.Visibility = Visibility.Collapsed;
                 UpdateGroupCount(_targetGroupCard);
             }
+            SetGroupCollapsed(_targetGroupCard, false, animate: IsLoaded);
             _targetGroupCard = null!;
         }
         else
@@ -2475,7 +2786,22 @@ private MenuFlyout BuildContextMenu()
         }
         HintText.Visibility = Visibility.Collapsed;
         App.PlayCardEntrance(card);
-        if (_editingEntryCard == null) SyncUncategorizedCard();
+        if (_editingEntryCard == null)
+        {
+            SyncUncategorizedCard();
+
+
+            if (_uncategorizedCard != null && ReferenceEquals(card.Parent, EntryStackOf(_uncategorizedCard)))
+                SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
+        }
+        else
+        {
+
+            var owner = OwningGroupCardByParent(card);
+            if (owner != null) SetGroupCollapsed(owner, false, animate: IsLoaded);
+            else if (_uncategorizedCard != null && ReferenceEquals(card.Parent, EntryStackOf(_uncategorizedCard)))
+                SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
+        }
         PersistAll();
         ApplyCardFilters();
         App.ShowToast(App.GetString(isEdit ? "Common_Toast_Modified" : "Common_Toast_Created"));
@@ -2492,8 +2818,15 @@ private MenuFlyout BuildContextMenu()
         foreach (var (card, cid) in _entryIds)
         {
             if (cid != id) continue;
+
+            var owner = OwningGroupCardByParent(card);
+            if (owner != null) SetGroupCollapsed(owner, false, animate: false);
+            else if (_uncategorizedCard != null && ReferenceEquals(card.Parent, EntryStackOf(_uncategorizedCard)))
+                SetGroupCollapsed(_uncategorizedCard, false, animate: false);
             try
             {
+                card.UpdateLayout();
+                MemoScrollViewer.UpdateLayout();
                 var t = card.TransformToVisual(MemoScrollViewer);
                 var pt = t.TransformPoint(new Windows.Foundation.Point(0, 0));
                 MemoScrollViewer.ChangeView(null, System.Math.Max(0, MemoScrollViewer.VerticalOffset + pt.Y - 20), null, false);
@@ -2558,6 +2891,7 @@ private MenuFlyout BuildContextMenu()
         HintText.Visibility = Visibility.Collapsed;
         App.PlayCardEntrance(card);
         SyncUncategorizedCard();
+        if (_uncategorizedCard != null) SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
         PersistAll();
         ApplyCardFilters();
         App.ShowToast(App.GetString("Common_Toast_Created"));
@@ -2760,6 +3094,9 @@ private MenuFlyout BuildContextMenu()
                 _groupData[_currentGroupCard] = (nn, gd.iconKey);
 
             if (_groupIds.TryGetValue(_currentGroupCard, out var egid)) { var eg = FindGroup(egid); if (eg != null) eg.Name = nn; }
+
+
+            SetGroupCollapsed(_currentGroupCard, false, animate: IsLoaded);
         }
         PersistAll();
         App.ShowToast(App.GetString("Common_Toast_Modified"));
@@ -2814,6 +3151,7 @@ private MenuFlyout BuildContextMenu()
                 {
                     var parent = _currentEntryCard.Parent as Panel;
                     var delEntryCard = _currentEntryCard;
+                    var owningGroupCard = OwningGroupCardByParent(delEntryCard);
 
 
 
@@ -2821,8 +3159,8 @@ private MenuFlyout BuildContextMenu()
                     {
 
 
-                        if (parent is StackPanel sp2 && sp2.Parent is Grid g2 && g2.Parent is Border groupCard)
-                            UpdateGroupCount(groupCard);
+                        if (owningGroupCard != null)
+                            UpdateGroupCount(owningGroupCard);
 
                         _standaloneEntries.Remove(delEntryCard);
                         _entriesInGroup.Remove(delEntryCard);
@@ -2893,12 +3231,12 @@ private MenuFlyout BuildContextMenu()
                     return;
                 }
 
-                if (_currentGroupCard.Child is Grid g && g.Children.Count > 3 && g.Children[2] is StackPanel entryStack)
+                if (EntryStackOf(_currentGroupCard) is { } entryStack)
                 {
                     var rescued = new List<UIElement>();
                     foreach (var child in entryStack.Children) rescued.Add(child);
                     entryStack.Children.Clear();
-                    if (g.Children[3] is Grid emptyHint)
+                    if (EmptyHintOf(_currentGroupCard) is { } emptyHint)
                         emptyHint.Visibility = Visibility.Visible;
                     int idx = GroupsContainer.Children.IndexOf(_currentGroupCard);
                     foreach (var entry in rescued)
@@ -2915,6 +3253,9 @@ private MenuFlyout BuildContextMenu()
                         GroupsContainer.Children.Insert(idx++, entry);
                     }
                 }
+                _groupCollapsed.Remove(GroupKeyOf(_currentGroupCard));
+                _groupArrows.Remove(_currentGroupCard);
+                _groupCountTexts.Remove(_currentGroupCard);
                 var delGroupCard = _currentGroupCard;
 
                 App.PlayCardRemoval(GroupsContainer, delGroupCard, _dragging, () =>
@@ -2938,6 +3279,7 @@ private MenuFlyout BuildContextMenu()
                     _currentGroupCard = null!;
                     if (GroupsContainer.Children.Count == 0) FloatInHint();
                     SyncUncategorizedCard();
+                    if (_uncategorizedCard != null) SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
                     PersistAll();
                     ApplyCardFilters();
                     App.ShowToast(App.GetString("Common_Toast_Deleted"));
@@ -3002,8 +3344,9 @@ private MenuFlyout BuildContextMenu()
         _relayProbeResultHideGen++;
         _pendingMenuAction = null!;
 
-        if (_dragCard != null) { _dragCard.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color); _dragCard.BorderThickness = new Thickness(1); _dragCard.Opacity = 1; }
-        _dragging = false;
+        AbortDrag();
+        _dragGeneration++;
+        _pressArmedCard = null;
         if (_dropIndicator != null && _dragContainer != null) { _dragContainer.Children.Remove(_dropIndicator); _dropIndicator = null; }
         if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
         _dragCard = null; _dragContainer = null;
@@ -3078,6 +3421,7 @@ private MenuFlyout BuildContextMenu()
 
     private void SetApiCheckState(string kind, string title, string detail, bool warn = false)
     {
+        if (kind == "probing") StartApiCheckPulse(); else StopApiCheckPulse();
         ApiCheckStatusText.Text = title;
         ApiCheckStatusDetail.Text = detail;
 
@@ -3097,13 +3441,12 @@ private MenuFlyout BuildContextMenu()
 
 
 
+
     private static string TruncateProbeDetail(string detail)
     {
         detail = (detail ?? string.Empty).Replace('\n', ' ').Replace('\r', ' ');
         return detail.Length <= 120 ? detail : detail[..120];
     }
-
-    private void ApiCheckHistoryButton_Click(object sender, RoutedEventArgs e) => ShowApiProbeHistoryOverlay();
 
     private bool _apiProbeHistoryHiding;
 
@@ -3260,6 +3603,7 @@ private MenuFlyout BuildContextMenu()
 
     private void HideApiCheckOverlay()
     {
+        StopApiCheckPulse();
         _apiCheckCts?.Cancel();
         _apiCheckCts?.Dispose();
         _apiCheckCts = null;
@@ -3600,6 +3944,7 @@ private MenuFlyout BuildContextMenu()
 
     private void SetApiDiagState(string kind, string title, string detail, bool warn = false)
     {
+        if (kind == "probing") StartApiDiagPulse(); else StopApiDiagPulse();
         ApiDiagStatusText.Text = title;
         ApiDiagStatusDetail.Text = detail;
         ApiDiagStatusDetail.Visibility = string.IsNullOrEmpty(detail) ? Visibility.Collapsed : Visibility.Visible;
@@ -3628,6 +3973,7 @@ private MenuFlyout BuildContextMenu()
 
     private void HideApiDiagOverlay()
     {
+        StopApiDiagPulse();
         _apiDiagCts?.Cancel();
         _apiDiagCts?.Dispose();
         _apiDiagCts = null;
@@ -3903,9 +4249,9 @@ private MenuFlyout BuildContextMenu()
     }
 
 
-    private void StartRelayProbePulse()
+
+    private static Storyboard CreateTitlePulse(TextBlock target)
     {
-        _relayProbePulse?.Stop();
         var sb = new Storyboard();
         var anim = new DoubleAnimation
         {
@@ -3914,18 +4260,37 @@ private MenuFlyout BuildContextMenu()
             AutoReverse = true,
             RepeatBehavior = RepeatBehavior.Forever,
         };
-        Storyboard.SetTarget(anim, RelayProbeRunningTitleText);
+        Storyboard.SetTarget(anim, target);
         Storyboard.SetTargetProperty(anim, "Opacity");
         sb.Children.Add(anim);
-        sb.Begin();
-        _relayProbePulse = sb;
+        return sb;
     }
+
+    private void StartRelayProbePulse() { _relayProbePulse?.Stop(); _relayProbePulse = CreateTitlePulse(RelayProbeRunningTitleText); _relayProbePulse.Begin(); }
 
     private void StopRelayProbePulse()
     {
         _relayProbePulse?.Stop();
         _relayProbePulse = null;
         RelayProbeRunningTitleText.Opacity = 1.0;
+    }
+
+    private void StartApiCheckPulse() { _apiCheckPulse?.Stop(); _apiCheckPulse = CreateTitlePulse(ApiCheckStatusText); _apiCheckPulse.Begin(); }
+
+    private void StopApiCheckPulse()
+    {
+        _apiCheckPulse?.Stop();
+        _apiCheckPulse = null;
+        ApiCheckStatusText.Opacity = 1.0;
+    }
+
+    private void StartApiDiagPulse() { _apiDiagPulse?.Stop(); _apiDiagPulse = CreateTitlePulse(ApiDiagStatusText); _apiDiagPulse.Begin(); }
+
+    private void StopApiDiagPulse()
+    {
+        _apiDiagPulse?.Stop();
+        _apiDiagPulse = null;
+        ApiDiagStatusText.Opacity = 1.0;
     }
 
 
@@ -4265,35 +4630,33 @@ private MenuFlyout BuildContextMenu()
     private void AttachCardDrag(Border card)
     {
         bool armed = false;
+        bool moved = false;
         DispatcherTimer? timer = null;
         Point grabOffset = default;
+        var pressWatch = new System.Diagnostics.Stopwatch();
 
         card.PointerPressed += (s, e) =>
         {
             if (_dragging) return;
 
-
             if (ReferenceEquals(card, _pinnedGroupCard) || _pinnedEntryCards.Contains(card)) return;
             if (App.IsDescendantOfButton(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject)) return;
+
+            if (IsGroupContainer(card) && IsPressOnChildEntry(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject, card)) return;
             var pt = e.GetCurrentPoint(card);
             if (pt.Properties.IsRightButtonPressed || !pt.Properties.IsLeftButtonPressed) return;
             grabOffset = pt.Position;
             var pointer = e.Pointer;
-            armed = true;
-            e.Handled = true;
+            armed = true; moved = false; _pressArmedCard = card;
+            pressWatch.Restart();
 
-            var rtb = new RenderTargetBitmap();
-            var renderOp = rtb.RenderAsync(card);
-
-            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
-            timer.Tick += async (_, _) =>
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(CardGesturePolicy.LongPressMs) };
+            timer.Tick += (_, _) =>
             {
                 timer.Stop(); timer = null;
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
-                try { await renderOp; } catch { }
-                if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
-                BeginDrag(card, grabOffset, rtb);
-                try { card.CapturePointer(pointer); } catch { }
+                if (!armed || moved || _dragging || !card.IsLoaded) { armed = false; return; }
+                armed = false;
+                _ = BeginDragAsync(card, grabOffset, pointer);
             };
             timer.Start();
         };
@@ -4308,36 +4671,134 @@ private MenuFlyout BuildContextMenu()
             if (armed)
             {
                 var pt = e.GetCurrentPoint(card);
-                double dx = pt.Position.X - grabOffset.X, dy = pt.Position.Y - grabOffset.Y;
-                if (dx * dx + dy * dy > 64) { armed = false; timer?.Stop(); timer = null; }
+                if (CardGesturePolicy.ExceedsMoveTolerance(pt.Position.X - grabOffset.X, pt.Position.Y - grabOffset.Y))
+                { moved = true; armed = false; timer?.Stop(); timer = null; }
             }
         };
 
         card.PointerReleased += (s, e) =>
         {
-            if (_dragging && ReferenceEquals(_dragCard, card)) EndDrag();
-            armed = false; timer?.Stop(); timer = null;
+            bool wasDragging = _dragging && ReferenceEquals(_dragCard, card);
+            if (wasDragging)
+            {
+                EndDrag();
+            }
+            else if (armed && CardGesturePolicy.IsClick(pressWatch.ElapsedMilliseconds, moved) && IsInHeaderHotZone(card, grabOffset))
+            {
+                OnCardHeaderClick(card);
+            }
+            armed = false; moved = false; timer?.Stop(); timer = null; pressWatch.Stop();
+            _pressArmedCard = null;
+        };
+        card.PointerExited += (s, e) =>
+        {
+            if (_dragging) return;
+            armed = false; timer?.Stop(); timer = null; _pressArmedCard = null;
         };
         card.PointerCanceled += (s, e) =>
         {
-            if (_dragging && ReferenceEquals(_dragCard, card)) EndDrag();
-            armed = false; timer?.Stop(); timer = null;
+            if (_dragging && ReferenceEquals(_dragCard, card)) AbortDrag();
+            armed = false; moved = false; timer?.Stop(); timer = null; _pressArmedCard = null;
         };
         card.PointerCaptureLost += (s, e) =>
         {
-            if (_dragging && ReferenceEquals(_dragCard, card)) EndDrag();
-            armed = false; timer?.Stop(); timer = null;
+            if (_dragging && ReferenceEquals(_dragCard, card)) AbortDrag();
+            armed = false; moved = false; timer?.Stop(); timer = null; _pressArmedCard = null;
         };
     }
 
-    private void BeginDrag(Border card, Point grabOffset, RenderTargetBitmap rtb)
+    private bool IsGroupContainer(Border card)
+        => _groupNameTexts.ContainsKey(card) || ReferenceEquals(card, _uncategorizedCard);
+
+    private bool IsPressOnChildEntry(DependencyObject? source, Border owner)
     {
+        for (var p = source; p != null && !ReferenceEquals(p, owner); p = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(p))
+            if (p is Border b && !ReferenceEquals(b, owner) && _entryIds.ContainsKey(b)) return true;
+        return false;
+    }
+
+
+    private static bool IsInHeaderHotZone(Border card, Point pressPoint)
+    {
+        if (card.Child is not Grid root || root.Children.Count == 0 || root.Children[0] is not FrameworkElement head) return false;
+        double zone = card.Padding.Top + head.ActualHeight + card.Padding.Bottom;
+        return pressPoint.Y >= -0.5 && pressPoint.Y <= zone + 0.5;
+    }
+
+    private void OnCardHeaderClick(Border card)
+    {
+        if (IsGroupContainer(card)) ToggleGroupCollapsed(card);
+        else if (_entryIds.ContainsKey(card)) SetEntryExpanded(card, !GetEntryExpanded(card), animate: true);
+    }
+
+    private async System.Threading.Tasks.Task BeginDragAsync(Border card, Point grabOffset, Microsoft.UI.Xaml.Input.Pointer pointer)
+    {
+        if (_dragging || !card.IsLoaded) return;
         _dragging = true;
         _dragCard = card;
         _dragContainer = card.Parent as Panel;
         _grabOffset = grabOffset;
         _dropIndex = _dragOriginIndex = _dragContainer != null ? CountVisibleBeforeIn(card, _dragContainer) : 0;
         _dropCache = null; _dropCacheDirty = true;
+        int gen = ++_dragGeneration;
+        try { card.CapturePointer(pointer); } catch { }
+
+
+
+        _dragGroupFolds = null; _dragEntryWasExpanded = null;
+        if (IsGroupContainer(card))
+        {
+            _dragGroupFolds = new List<(Border card, bool collapsed)>();
+            foreach (var child in GroupsContainer.Children)
+                if (child is Border b && b.Visibility == Visibility.Visible && IsGroupContainer(b))
+                {
+                    _dragGroupFolds.Add((b, GetGroupCollapsedState(b)));
+                    SetGroupCollapsedVisual(b, true, animate: true, durationMs: 220, arrowDelayMs: 20);
+                }
+        }
+        else
+        {
+            _dragEntryWasExpanded = GetEntryExpanded(card);
+            SetEntryExpandedVisual(card, false, animate: true);
+        }
+
+        await System.Threading.Tasks.Task.Delay(220);
+        if (gen != _dragGeneration || !_dragging || !ReferenceEquals(_dragCard, card) || !card.IsLoaded) return;
+        _dropCacheDirty = true;
+
+        var rtb = new RenderTargetBitmap();
+        try { await rtb.RenderAsync(card); } catch { }
+        if (gen != _dragGeneration || !_dragging || !ReferenceEquals(_dragCard, card) || !card.IsLoaded) return;
+
+
+        _grabOffset.Y = System.Math.Min(_grabOffset.Y, card.ActualHeight);
+
+        try
+        {
+            var ghost = new Image
+            {
+                Source = rtb,
+                Width = card.ActualWidth,
+                Height = card.ActualHeight,
+                Opacity = 0,
+            };
+            var pos = card.TransformToVisual(MemoRoot).TransformPoint(new Point(0, 0));
+            _dragGhost = ghost;
+            DragLayer.Children.Add(ghost);
+            Canvas.SetLeft(ghost, pos.X);
+            Canvas.SetTop(ghost, pos.Y);
+            if (App.IsAnimationsEnabled)
+            {
+                var fade = new Storyboard();
+                var op = new DoubleAnimation { From = 0, To = 0.92, Duration = TimeSpan.FromMilliseconds(80) };
+                Storyboard.SetTarget(op, ghost);
+                Storyboard.SetTargetProperty(op, "Opacity");
+                fade.Children.Add(op); fade.Begin();
+            }
+            else ghost.Opacity = 0.92;
+        }
+        catch { _dragGhost = null; }
+
 
         App.StopCardEntrance(card);
         card.BorderBrush = new SolidColorBrush(PaperTheme.BrandColor);
@@ -4347,23 +4808,40 @@ private MenuFlyout BuildContextMenu()
 
         if (card.RenderTransform is not TranslateTransform tt) { tt = new TranslateTransform(); card.RenderTransform = tt; }
         tt.X = 0; tt.Y = 0;
+    }
 
-        try
+
+    private void RestoreDragFolds(bool animate, Border? entryCard)
+    {
+        if (_dragGroupFolds != null)
         {
-            var ghost = new Image
-            {
-                Source = rtb,
-                Width = card.ActualWidth,
-                Height = card.ActualHeight,
-                Opacity = 0.92,
-            };
-            var pos = card.TransformToVisual(MemoRoot).TransformPoint(new Point(0, 0));
-            _dragGhost = ghost;
-            DragLayer.Children.Add(ghost);
-            Canvas.SetLeft(ghost, pos.X);
-            Canvas.SetTop(ghost, pos.Y);
+            foreach (var (c, collapsed) in _dragGroupFolds)
+                if (GroupsContainer.Children.Contains(c) || ReferenceEquals(c, _uncategorizedCard))
+                    SetGroupCollapsedVisual(c, collapsed, animate);
+            _dragGroupFolds = null;
         }
-        catch { _dragGhost = null; }
+        if (_dragEntryWasExpanded is bool wasExpanded && entryCard != null)
+        {
+            SetEntryExpandedVisual(entryCard, wasExpanded, animate);
+            _dragEntryWasExpanded = null;
+        }
+    }
+
+    private void AbortDrag()
+    {
+        if (!_dragging || _dragCard == null) return;
+        var card = _dragCard;
+        var container = _dragContainer;
+        _dragCard = null; _dragContainer = null; _dragging = false; _dragGeneration++;
+        if (_dragGhost != null) { DragLayer.Children.Remove(_dragGhost); _dragGhost = null; }
+        if (_dropIndicator != null && container != null) { container.Children.Remove(_dropIndicator); _dropIndicator = null; }
+        _dropCache = null;
+        StopAutoScroll();
+        card.BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color);
+        card.BorderThickness = new Thickness(1);
+        card.Opacity = 1;
+        RestoreDragFolds(animate: false, card);
+        _pressArmedCard = null;
     }
 
     private void UpdateDrag(PointerRoutedEventArgs e)
@@ -4530,6 +5008,7 @@ private MenuFlyout BuildContextMenu()
         _dragCard = null;
         _dragContainer = null;
         _dragging = false;
+        _dragGeneration++;
 
         int dropIndex = _dropIndex;
 
@@ -4542,7 +5021,12 @@ private MenuFlyout BuildContextMenu()
         card.BorderThickness = new Thickness(1);
         card.Opacity = 1;
 
-        if (container == null) return;
+        if (container == null)
+        {
+            RestoreDragFolds(animate: true, card);
+            _pressArmedCard = null;
+            return;
+        }
 
 
         int curVisible = CountVisibleBeforeIn(card, container);
@@ -4555,6 +5039,8 @@ private MenuFlyout BuildContextMenu()
             container.Children.Insert(InsertIndexAfterVisibleSlot(dst, container), card);
         }
 
+        RestoreDragFolds(animate: true, card);
+        _pressArmedCard = null;
         PersistAll();
     }
 

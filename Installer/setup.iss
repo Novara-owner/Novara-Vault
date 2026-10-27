@@ -2,8 +2,8 @@
 
 
 
-#define MyAppVersion "11.1.0"
-#define MyAppDisplayVersion "novara11.R1"
+#define MyAppVersion "12.0.0"
+#define MyAppDisplayVersion "novara12"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 

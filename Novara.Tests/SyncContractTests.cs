@@ -365,6 +365,7 @@ public class SyncContractTests
             Theme = "浅色",
             AutoStart = true,
             QuickCaptureHotkey = "AltN",
+            UngroupedCardExpanded = true,
             VisibleTabs = new List<string> { "备忘", "计划" },
         };
         var remote = new AppSettings { AppLanguage = "en-US", Theme = "深色", AutoStart = false, QuickCaptureHotkey = "CtrlShiftN" };
@@ -374,9 +375,26 @@ public class SyncContractTests
         Assert.Same(local, result);
         Assert.Equal("en-US", local.AppLanguage);
         Assert.Equal("深色", local.Theme);
+        Assert.True(local.UngroupedCardExpanded);
         Assert.True(local.AutoStart);
         Assert.Equal("AltN", local.QuickCaptureHotkey);
         Assert.Equal(new List<string> { "备忘", "计划" }, local.VisibleTabs);
+
+
+        SyncFieldPolicy.ApplyRoamingSettings(local, new AppSettings { UngroupedCardExpanded = false });
+        Assert.False(local.UngroupedCardExpanded);
+        SyncFieldPolicy.ApplyRoamingSettings(local, new AppSettings());
+        Assert.False(local.UngroupedCardExpanded);
+    }
+
+    [Fact]
+    public void BuildRoamingSettings_CarriesUngroupedCardExpanded()
+    {
+
+
+        var roaming = SyncFieldPolicy.BuildRoamingSettings(new AppSettings { UngroupedCardExpanded = false });
+        Assert.False(roaming.UngroupedCardExpanded);
+        Assert.Null(SyncFieldPolicy.BuildRoamingSettings(new AppSettings()).UngroupedCardExpanded);
     }
 
     [Fact]
@@ -389,11 +407,15 @@ public class SyncContractTests
             Theme = "深色",
             AutoCheckUpdates = true,
             UpdatePendingVersion = "11.1.0",
+            MemoCardDisplayMode = "fixed",
+            PathPropertyRefreshMinutes = 60,
         });
 
         Assert.Equal("深色", roaming.Theme);
         Assert.False(roaming.AutoCheckUpdates);
         Assert.Equal("", roaming.UpdatePendingVersion);
+        Assert.Equal("auto", roaming.MemoCardDisplayMode);
+        Assert.Equal(0, roaming.PathPropertyRefreshMinutes);
     }
 
 

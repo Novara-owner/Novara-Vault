@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Novara.Models;
 
 public class MemoGroup
@@ -8,4 +10,8 @@ public class MemoGroup
     public bool IsStarred { get; set; }
     public bool IsPinned { get; set; }
     public DateTime CreatedAt { get; set; }
+
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsExpanded { get; set; }
 }

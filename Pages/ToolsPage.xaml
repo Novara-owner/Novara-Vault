@@ -231,8 +231,7 @@
                             </Button>
                             <Button x:Name="StatsToggleButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -295,8 +294,7 @@
 
                             <Button x:Name="SyncNowButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextPrimaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -315,8 +313,7 @@
                             </Button>
                             <Button x:Name="SyncPairButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -327,8 +324,7 @@
                             </Button>
                             <Button x:Name="SyncToggleButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -360,8 +356,7 @@
                                     <Button x:Name="SyncFreqButton"
                                             HorizontalAlignment="Left"
                                             Width="160" Height="36"
-                                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                                            Background="{ThemeResource AppSurfaceBrush}"
+                                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                                             Foreground="{ThemeResource AppTextPrimaryBrush}"
                                             BorderBrush="{ThemeResource AppBorderBrush}"
                                             CornerRadius="10"
@@ -559,8 +554,7 @@
                             </Button>
                             <Button x:Name="McpAuditButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextPrimaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -572,8 +566,7 @@
                             </Button>
                             <Button x:Name="McpConfigButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextPrimaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -585,8 +578,7 @@
                             </Button>
                             <Button x:Name="McpToggleButton"
                                     Width="160" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10"
@@ -643,7 +635,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" x:Name="ConnectCardTitle" FontSize="16" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" Margin="4,0,0,0" />
-                    <Button Grid.Column="2" MinWidth="160" Height="40" Style="{StaticResource SettingsDropdownButtonStyle}" Background="{ThemeResource AppSurfaceBrush}" Foreground="{ThemeResource AppTextSecondaryBrush}" BorderBrush="{ThemeResource AppBorderBrush}" CornerRadius="10" FontSize="14" VerticalAlignment="Center" Margin="-8,0,0,0" x:Name="ExportViewerButton" Click="ExportViewerButton_Click">
+                    <Button Grid.Column="2" MinWidth="160" Height="40" Style="{StaticResource NovaraSurfaceButtonStyle}" Foreground="{ThemeResource AppTextSecondaryBrush}" BorderBrush="{ThemeResource AppBorderBrush}" CornerRadius="10" FontSize="14" VerticalAlignment="Center" Margin="-8,0,0,0" x:Name="ExportViewerButton" Click="ExportViewerButton_Click">
                         <TextBlock x:Name="ExportViewerButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Button>
                 </Grid>
@@ -696,8 +688,7 @@
                                 VerticalAlignment="Center"
                                 Margin="-8,0,0,0">
                         <Button Width="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextSecondaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -711,8 +702,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                         <Button Width="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextSecondaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -726,8 +716,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
                         <Button Width="160" Height="40"
-                                Style="{StaticResource SettingsDropdownButtonStyle}"
-                                Background="{ThemeResource AppSurfaceBrush}"
+                                Style="{StaticResource NovaraSurfaceButtonStyle}"
                                 Foreground="{ThemeResource AppTextSecondaryBrush}"
                                 BorderBrush="{ThemeResource AppBorderBrush}"
                                 CornerRadius="10"
@@ -763,8 +752,7 @@
                                Margin="4,0,0,0" />
                     <Button Grid.Column="2"
                             MinWidth="160" Height="40"
-                            Style="{StaticResource SettingsDropdownButtonStyle}"
-                            Background="{ThemeResource AppSurfaceBrush}"
+                            Style="{StaticResource NovaraSurfaceButtonStyle}"
                             Foreground="{ThemeResource AppTextSecondaryBrush}"
                             BorderBrush="{ThemeResource AppBorderBrush}"
                             CornerRadius="10"
@@ -1556,8 +1544,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{x:Bind app:App.GetString(\'Setting_Backup_Auto\')}" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
                             <Button Grid.Column="1" x:Name="BackupAutoModeButton" Width="106" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10" FontSize="14" VerticalAlignment="Center"
@@ -1572,8 +1559,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{x:Bind app:App.GetString(\'Setting_Backup_Auto_Freq\')}" FontSize="14" Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
                             <Button Grid.Column="1" x:Name="BackupFreqButton" Width="106" Height="40"
-                                    Style="{StaticResource SettingsDropdownButtonStyle}"
-                                    Background="{ThemeResource AppSurfaceBrush}"
+                                    Style="{StaticResource NovaraSurfaceButtonStyle}"
                                     Foreground="{ThemeResource AppTextSecondaryBrush}"
                                     BorderBrush="{ThemeResource AppBorderBrush}"
                                     CornerRadius="10" FontSize="14" VerticalAlignment="Center"
@@ -2030,7 +2016,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="McpDeletePermissionLabelText" VerticalAlignment="Center" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" />
-                            <Button x:Name="McpDeletePermissionButton" Grid.Column="1" Height="32" Width="80" Padding="12,0,12,0" CornerRadius="8" Click="McpDeletePermissionButton_Click">
+                            <Button x:Name="McpDeletePermissionButton" Grid.Column="1" Height="32" Width="80" Padding="12,0,12,0" CornerRadius="8" Style="{StaticResource NovaraOutlineButtonStyle}" Click="McpDeletePermissionButton_Click">
                                 <TextBlock x:Name="McpDeletePermissionText" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                         </Grid>

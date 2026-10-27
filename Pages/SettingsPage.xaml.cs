@@ -147,9 +147,13 @@ public sealed partial class SettingsPage : Page
         Loaded += (_, _) =>
         {
             AnimationTitleText.Text = App.GetString("Setting_Animation_Title");
+            ToolTipService.SetToolTip(PathPropertyRefreshButton, App.GetString("Setting_PathProps_Refresh"));
+            ToolTipService.SetToolTip(MemoDisplayButton, App.GetString("Setting_MemoDisplay_Desc"));
+            UpdatePathPropertyRefreshLabel();
+            UpdateMemoDisplayLabel();
 
             if (App.IsAnimationsEnabled) CardsFloatIn.Begin();
-            else App.ShowCardsStatically(Card5, AutoLockCard, QuickCaptureCard, Card2, ContextMenuCard, Card1, Card3, CardAnimation, Card8, Card6, EdgeMenuCard, WelcomeCard, UpdateCard, Card9);
+            else App.ShowCardsStatically(Card5, AutoLockCard, QuickCaptureCard, Card2, MemoDisplayCard, PathPropertyCard, ContextMenuCard, Card1, Card3, CardAnimation, Card8, Card6, EdgeMenuCard, WelcomeCard, UpdateCard, Card9);
 
             var settings = App.Store?.Database.AppSettings;
             if (settings != null)
@@ -161,6 +165,10 @@ public sealed partial class SettingsPage : Page
                 catch { _autoStart = settings.AutoStart ? "开启" : "关闭"; }
                 _contextMenu = ContextMenuService.IsRegistered() ? "开启" : "关闭";
                 _closeBehavior = string.IsNullOrEmpty(settings.CloseBehavior) ? "直接退出" : settings.CloseBehavior;
+                _pathPropertyMinutes = settings.PathPropertyRefreshMinutes;
+                UpdatePathPropertyRefreshLabel();
+                _memoDisplayMode = MemoDisplayMode.Normalize(settings.MemoCardDisplayMode);
+                UpdateMemoDisplayLabel();
                 if (settings.VisibleTabs is { Count: > 0 } tabs)
                 {
                     _visibleTabs.Clear();
@@ -196,8 +204,10 @@ public sealed partial class SettingsPage : Page
 
     private void ApplyToggleState(Button btn, bool on)
     {
+
+
         btn.Style = on ? (Style)Application.Current.Resources["NovaraPrimaryButtonStyle"]
-                       : (Style)Resources["SettingsDropdownButtonStyle"];
+                       : (Style)Application.Current.Resources["NovaraSurfaceButtonStyle"];
         btn.Background = on ? App.GetBrush("AppPrimaryButtonBrush")
                             : App.GetBrush("AppSurfaceBrush");
         btn.Foreground = on ? new SolidColorBrush(Color.FromArgb(255, 255, 255, 255))
@@ -656,6 +666,133 @@ private void ShowThemeRestartOverlay()
 
 
 
+
+
+
+
+
+
+    private string _memoDisplayMode = MemoDisplayMode.Auto;
+
+    private void MemoDisplayButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+
+        MenuFlyoutItem MakeItem(string mode)
+        {
+            var item = new MenuFlyoutItem
+            {
+                Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+                Text = MemoDisplayLabel(mode),
+                Foreground = mode == _memoDisplayMode ? accentBrush : normalBrush
+            };
+            if (mode == _memoDisplayMode) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            item.Click += (_, _) =>
+            {
+                if (mode == _memoDisplayMode) return;
+                string old = _memoDisplayMode;
+                _memoDisplayMode = mode;
+                UpdateMemoDisplayLabel();
+                if (App.Store is { } store)
+                {
+                    store.Database.AppSettings.MemoCardDisplayMode = mode;
+                    if (!store.SaveSync())
+                    {
+                        _memoDisplayMode = old;
+                        UpdateMemoDisplayLabel();
+                        return;
+                    }
+                }
+                App.MainWindow?.ApplyMemoDisplayModeSetting();
+                App.ShowToast(App.GetString("Common_Toast_Switched"));
+            };
+            return item;
+        }
+
+        menu.Items.Add(MakeItem(MemoDisplayMode.Auto));
+        menu.Items.Add(MakeItem(MemoDisplayMode.Fixed));
+        menu.Items.Add(MakeItem(MemoDisplayMode.Memory));
+        menu.ShowAt(MemoDisplayButton, new Windows.Foundation.Point(0, MemoDisplayButton.ActualHeight + 4));
+    }
+
+    private static string MemoDisplayLabel(string mode) => App.GetString(
+        MemoDisplayMode.Normalize(mode) switch
+        {
+            var m when m == MemoDisplayMode.Fixed => "Setting_MemoDisplay_Fixed",
+            var m when m == MemoDisplayMode.Memory => "Setting_MemoDisplay_Memory",
+            _ => "Setting_MemoDisplay_Auto",
+        });
+
+    private void UpdateMemoDisplayLabel() => MemoDisplayText.Text = MemoDisplayLabel(_memoDisplayMode);
+
+    private int _pathPropertyMinutes = 0;
+
+    private void PathPropertyRefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
+        var accentBrush = App.GetBrush("AppTextPrimaryBrush");
+        var normalBrush = App.GetBrush("AppTextSecondaryBrush");
+
+        MenuFlyoutItem MakeItem(int minutes)
+        {
+            var item = new MenuFlyoutItem
+            {
+                Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"],
+                Text = PathPropertyRefreshLabel(minutes),
+                Foreground = minutes == _pathPropertyMinutes ? accentBrush : normalBrush
+            };
+            if (minutes == _pathPropertyMinutes) item.Icon = new FontIcon { Glyph = "\uE73E", FontSize = 12, Foreground = accentBrush };
+            item.Click += (_, _) =>
+            {
+                if (minutes == _pathPropertyMinutes) return;
+                int old = _pathPropertyMinutes;
+                _pathPropertyMinutes = minutes;
+                UpdatePathPropertyRefreshLabel();
+                if (App.Store is { } store)
+                {
+                    store.Database.AppSettings.PathPropertyRefreshMinutes = minutes;
+                    if (!store.SaveSync())
+                    {
+                        _pathPropertyMinutes = old;
+                        UpdatePathPropertyRefreshLabel();
+                        return;
+                    }
+                }
+                Services.PathPropertyService.SyncRefreshTimer();
+                Services.PathPropertyService.NotifyFeatureToggled();
+                App.ShowToast(App.GetString("Common_Toast_Switched"));
+            };
+            return item;
+        }
+
+        foreach (var m in new[] { 0, 15, 30, 60, 180, -1 }) menu.Items.Add(MakeItem(m));
+        menu.ShowAt(PathPropertyRefreshButton, new Windows.Foundation.Point(0, PathPropertyRefreshButton.ActualHeight + 4));
+    }
+
+
+
+    private static string PathPropertyRefreshLabel(int minutes) => minutes switch
+    {
+        15 => App.GetString("Setting_PathProps_15m"),
+        30 => App.GetString("Setting_PathProps_30m"),
+        60 => App.GetString("Setting_PathProps_1h"),
+        180 => App.GetString("Setting_PathProps_3h"),
+        -1 => App.GetString("Setting_PathProps_Off"),
+        _ => App.GetString("Setting_PathProps_Default"),
+    };
+
+    private void UpdatePathPropertyRefreshLabel()
+    {
+        PathPropertyRefreshText.Text = PathPropertyRefreshLabel(_pathPropertyMinutes);
+    }
+
+
+
+
+
+
 private void ShowSetPasswordDialog()
     {
         _animSetPwd = false;
@@ -702,6 +839,36 @@ private void ShowSetPasswordDialog()
             _animSetPwd = false;
         };
         sb.Begin();
+    }
+
+
+
+    private void SetPasswordBox_TextChanged(object sender, TextChangedEventArgs e)
+        => UpdateLockPasswordStrength(SetPasswordBox, SetPasswordStrengthText);
+
+    private void ChangePasswordNewBox_TextChanged(object sender, TextChangedEventArgs e)
+        => UpdateLockPasswordStrength(ChangePasswordNewBox, ChangePasswordStrengthText);
+
+    private static void UpdateLockPasswordStrength(TextBox box, TextBlock text)
+    {
+        var pw = box.Text;
+        if (pw.Length == 0) { text.Visibility = Visibility.Collapsed; return; }
+        text.Visibility = Visibility.Visible;
+        switch (Novara.Services.PasswordStrength.RateLockPassword(pw))
+        {
+            case Novara.Services.BackupPasswordStrength.Strong:
+                text.Text = App.GetString("Setting_EncBackup_StrengthStrong");
+                text.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50));
+                break;
+            case Novara.Services.BackupPasswordStrength.Medium:
+                text.Text = App.GetString("Setting_EncBackup_StrengthMedium");
+                text.Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00));
+                break;
+            default:
+                text.Text = App.GetString("Setting_EncBackup_StrengthWeak");
+                text.Foreground = App.GetBrush("AppDangerTextBrush");
+                break;
+        }
     }
 
     private void SetPasswordClose_Click(object sender, RoutedEventArgs e)

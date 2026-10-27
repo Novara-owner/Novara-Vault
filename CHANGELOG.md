@@ -6,6 +6,24 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [novara12] - 2026-10-28
+
+An interaction release, themed "mind and hand in concert": novara11 made every existing feature more dependable; novara12 stands on that stability and reworks how daily use feels — cards that fold away and return at a click, remember how you left them, and report their own state at a glance.
+
+### Added
+
+- **Card folding (memo & plan pages)** — group cards and the ungrouped card collapse into a compact capsule with an item count and a folding arrow; plan notes preview five lines and todos their first two sub-items. Click a title to fold or expand, and picking a card up folds it for a clear view of the list while releasing restores it. Starting a drag now takes a deliberate 750 ms press-and-hold — much longer than before, on purpose, so that title clicks and drags never collide.
+- **Display modes with follow memory** — a new display setting, shared by the memo and plan pages, offers auto-collapse, always expanded, or follow memory. In follow memory every manual fold and expand is kept across restarts and travels the encrypted sync to your other devices as optional data; older clients ignore it and keep working. Cards you never touched stay collapsed. The new default is auto-collapse — choose "Always expanded" to keep the previous look.
+- **Path page file & folder properties** — each registered path shows size and file/folder counts live as they are counted, with a breathing hint while scanning; a stall watchdog keeps large folders counting instead of freezing, and up to three paths scan at once. Hovering shows exact bytes, created/modified times and read-only/hidden flags. A third button opens the file with its default app, and rescans can repeat every 15/30 minutes, 1 h or 3 h — or be turned off.
+- **Detect button on API entries** — quick, normal and deep checks move from the context menu onto the card itself; detection history rides the same menu.
+- **Todo progress at a glance** — every todo card shows "n todos · m done" beside its title, the main item counting as one; when everything is checked, the completion badge appears and the text simplifies.
+
+### Changed
+
+- **Motion and interaction** — buttons keep their hover look while pressed (no more flash-and-replay); danger buttons gained press scaling, outline buttons wake with a brand-blue border, search-jump highlighting is keyframed and softer, the navigation bar is redrawn with mechanism-level fixes and a settle-glow finish, and Enter in the todo dialog walks to the next sub-item.
+- **Performance** — plan-page drag computes drop targets from a layout cache with a zero-op indicator instead of re-laying out the whole list on every mouse move.
+- Interaction regressions caught by the cycle's own review passes were fixed before release: a card no longer expands on its own when a new entry is placed into a group, the first expand after a silent rebuild animates instead of snapping open, fold previews fade the whole row (checkbox included), and sticky-note editing no longer pollutes fold memory recorded under another display mode.
+
 ## [novara11.R1] - 2026-10-22
 
 A focused editor hotfix: image insertion, image selection and toolbar focus in the HTML record editor.

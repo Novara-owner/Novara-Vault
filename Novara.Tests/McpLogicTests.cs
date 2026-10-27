@@ -268,6 +268,36 @@ public class McpLogicTests
         Assert.Equal("原正文", card.Content);
     }
 
+
+
+
+
+    [Fact]
+    public void UpdateTodo_NeverTouchesTheMemoryField()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateTodo(db, "原标题", "原正文", null, null);
+        var card = db.TodoCards.Single(x => x.Id.ToString() == id);
+        card.IsExpanded = true;
+
+        McpLogic.UpdateTodo(db, id, "新标题", "新正文", null, null);
+
+        Assert.True(card.IsExpanded);
+    }
+
+    [Fact]
+    public void UpdateNote_NeverTouchesTheMemoryField()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateNote(db, "原标题", "原正文", null);
+        var card = db.NoteCards.Single(x => x.Id.ToString() == id);
+        card.IsExpanded = true;
+
+        McpLogic.UpdateNote(db, id, "新标题", "新正文", null);
+
+        Assert.True(card.IsExpanded);
+    }
+
     [Fact]
     public void UpdateDiary_RejectsEmptyContent_WithoutRenamingOrRestamping()
     {

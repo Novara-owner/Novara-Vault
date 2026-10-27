@@ -334,9 +334,7 @@ public sealed partial class MainWindow : Window
 
 
 
-        if (!Services.GlobalHotkeyService.Register(Services.GlobalHotkeyService.IdLockNow,
-                Services.GlobalHotkeyService.MOD_CONTROL | Services.GlobalHotkeyService.MOD_SHIFT, 0x4C))
-            App.ShowToast(App.GetString("LockNow_HotkeyConflict"), ToastTone.Error);
+        SyncLockHotkey();
         ApplyQuickCaptureHotkey();
 
         McpService.AuthorizeClient = clientPath =>
@@ -446,6 +444,9 @@ public sealed partial class MainWindow : Window
 
 
         Services.UpdateAutoCheckService.SyncAutoCheckTimer();
+
+
+        Services.PathPropertyService.Start();
 
 
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -753,6 +754,7 @@ private bool CreateTrayIcon()
 public void BeginUpdateExit()
 {
     Services.UpdateAutoCheckService.CancelInFlight();
+    Services.PathPropertyService.Shutdown();
     _isTrayExit = true;
 }
 
@@ -777,6 +779,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         args.Cancel = true;
         _closingHandled = true;
         Services.UpdateAutoCheckService.CancelInFlight();
+        Services.PathPropertyService.Shutdown();
 
         if (RootFrame.Content is DiaryEditorPage editor)
         {
@@ -859,6 +862,15 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         if (LockScreenFrame.Visibility == Visibility.Visible) return;
         LockNow();
+    }
+
+
+
+    public static void SyncLockHotkey()
+    {
+        bool enabled = App.Store?.Database?.AppSettings?.PrivacyLockEnabled == true;
+        if (!Services.GlobalHotkeyService.ApplyLockHotkey(enabled))
+            App.ShowToast(App.GetString("LockNow_HotkeyConflict"), ToastTone.Error);
     }
 
     private void ShowQuickCapture()
@@ -1238,6 +1250,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
             CloseModalSurfacesForLock();
+            Services.PathPropertyService.PauseForLock();
             ShowLockScreen();
 
 
@@ -1307,6 +1320,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             TrashPage.CleanupExpired();
             Services.AutoBackupService.SyncAutoBackupTimer(DispatcherQueue);
             Services.UpdateAutoCheckService.SyncAutoCheckTimer();
+            Services.PathPropertyService.Start();
             if (Content is FrameworkElement root) App.ApplyLocalizedTexts(root);
 
 
@@ -1999,6 +2013,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         catch { }
         }
 
+
+
+    public void ApplyMemoDisplayModeSetting()
+    {
+        _memoPage?.ApplyMemoDisplayModeFromSettings(animate: true);
+        _planPage?.ApplyPlanDisplayModeFromSettings(animate: true);
+    }
+
     public void ApplyVisibleTabs(HashSet<string> visibleTabs)
     {
 
@@ -2006,15 +2028,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-
         var visibleItems = new List<FrameworkElement>(4);
-        foreach (var (btn, host) in new[] { (NavMemo, (FrameworkElement?)null), (NavFile, null), (NavPlan, (FrameworkElement?)NavPlanHost), (NavDiary, (FrameworkElement?)NavDiaryHost) })
+        foreach (var (btn, host) in new[] { (NavMemo, NavMemoHost), (NavFile, NavFileHost), (NavPlan, NavPlanHost), (NavDiary, NavDiaryHost) })
         {
             bool isVisible = visibleTabs.Contains(TagToTabName((string)btn.Tag));
             btn.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
-            var item = host ?? (FrameworkElement)btn;
-            if (host != null) host.Visibility = btn.Visibility;
-            if (isVisible) visibleItems.Add(item);
+            host.Visibility = btn.Visibility;
+            if (isVisible) visibleItems.Add(host);
         }
 
         NavBar.ColumnDefinitions.Clear();
@@ -2024,12 +2044,16 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             Grid.SetColumn(visibleItems[i], i);
         }
         NavIndicator.Opacity = 0;
+        _navIndicatorPlaced = false;
+
+
+
 
 
 
         if (NavBar.Visibility == Visibility.Visible)
         {
-            
+            NavBar.UpdateLayout();
             RelocateNavGlow();
         }
         UpdateNavBarVisibility();
@@ -2573,7 +2597,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         double avail = Math.Max(320.0, ((CarouselPages.Parent as FrameworkElement)?.ActualWidth ?? 992.0) - 112.0);
         CarouselPages.Width = Math.Min(880.0, avail);
         if (CarouselPages.ActualWidth < 50 || CarouselPages.ActualHeight < 50) return;
-        bool horizontal = CarouselPages.ActualHeight < 600;
+
+
+
+        bool maximized = (_appWindow?.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.State
+                         == Microsoft.UI.Windowing.OverlappedPresenterState.Maximized;
+        bool horizontal = !maximized;
         if (horizontal != _carouselPage0Horizontal)
         {
             _carouselPage0Horizontal = horizontal;
@@ -3664,6 +3693,15 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void WireNavGlowRelocation()
     {
+
+
+
+
+        try
+        {
+            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetIsTranslationEnabled(NavIndicator, true);
+        }
+        catch { }
         NavBar.SizeChanged += (_, _) => RelocateNavGlow();
     }
 
@@ -3671,8 +3709,28 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void RelocateNavGlow()
     {
+        ClampNavTabWidths();
         if (SilentPlaceNavGlow()) return;
         HookNavGlowRetry(animate: false);
+    }
+
+
+
+
+
+
+
+
+
+
+    private void ClampNavTabWidths()
+    {
+        if (NavBar.ActualWidth < 1) return;
+        double cap = NavBar.ActualWidth / 4.0 - 16;
+        NavMemoHost.MaxWidth = cap;
+        NavFileHost.MaxWidth = cap;
+        NavPlanHost.MaxWidth = cap;
+        NavDiaryHost.MaxWidth = cap;
     }
 
 
@@ -3684,19 +3742,25 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             || selected.ActualWidth < 1) return false;
 
 
-        int cols = NavBar.ColumnDefinitions.Count;
-        if (cols > 0 && NavBar.ActualWidth > 1)
-        {
-            double expected = NavBar.ActualWidth / cols - 16;
-            if (expected > 1 && Math.Abs(selected.ActualWidth - expected) > Math.Max(10, expected * 0.2))
-                return false;
-        }
+        if (!NavGlowWidthIsFresh(selected)) return false;
         var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
         SetNavGlowX(pt.X);
         NavIndicator.Width = selected.ActualWidth;
         NavIndicator.Opacity = 1;
         _navIndicatorPlaced = true;
         return true;
+    }
+
+
+
+
+
+    private bool NavGlowWidthIsFresh(Button selected)
+    {
+        int cols = NavBar.ColumnDefinitions.Count;
+        if (cols <= 0 || NavBar.ActualWidth <= 1) return true;
+        double expected = Math.Min(NavBar.ActualWidth / cols, NavBar.ActualWidth / 4.0) - 16;
+        return expected <= 1 || Math.Abs(selected.ActualWidth - expected) <= Math.Max(10, expected * 0.2);
     }
 
 
@@ -3754,6 +3818,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             HookNavGlowRetry(animate: true);
             return;
         }
+        if (!NavGlowWidthIsFresh(selected))
+        {
+
+
+            HookNavGlowRetry(animate: true);
+            return;
+        }
         var pt = selected.TransformToVisual(NavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
         NavIndicator.Width = selected.ActualWidth;
         NavIndicator.Opacity = 1;
@@ -3768,41 +3839,51 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+    private float _navGlowX;
+
     private void SetNavGlowX(double x)
     {
+        _navGlowX = (float)x;
         try
         {
             var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator);
-            visual.Offset = new System.Numerics.Vector3((float)x, visual.Offset.Y, 0);
+            visual.StopAnimation("Translation.X");
+            var jump = visual.Compositor.CreateScalarKeyFrameAnimation();
+            jump.Duration = TimeSpan.FromMilliseconds(1);
+            jump.InsertKeyFrame(1.0f, (float)x);
+            visual.StartAnimation("Translation.X", jump);
         }
         catch
         {
 
-            try { var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator); v.StopAnimation("Offset.X"); v.Offset = new System.Numerics.Vector3(0, v.Offset.Y, 0); } catch { }
+            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator).StopAnimation("Translation.X"); } catch { }
             NavIndicatorTranslate.X = x;
         }
     }
 
     private void SlideNavGlow(double x)
     {
+        var target = (float)x;
         try
         {
             var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator);
-            float startX = visual.Offset.X;
+            float startX = _navGlowX;
             var comp = visual.Compositor;
             var anim = comp.CreateScalarKeyFrameAnimation();
             anim.Duration = TimeSpan.FromMilliseconds(Services.Motion.Normal);
 
-            anim.InsertKeyFrame(0.4f, Lerp(startX, (float)x, 0.55f));
-            anim.InsertKeyFrame(0.75f, Lerp(startX, (float)x, 0.87f));
-            anim.InsertKeyFrame(1.0f, (float)x);
-            visual.StartAnimation("Offset.X", anim);
+            anim.InsertKeyFrame(0.4f, Lerp(startX, target, 0.55f));
+            anim.InsertKeyFrame(0.75f, Lerp(startX, target, 0.87f));
+            anim.InsertKeyFrame(1.0f, target);
+            visual.StartAnimation("Translation.X", anim);
+            _navGlowX = target;
         }
         catch
         {
 
-            try { var v = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator); v.StopAnimation("Offset.X"); v.Offset = new System.Numerics.Vector3(0, v.Offset.Y, 0); } catch { }
+            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(NavIndicator).StopAnimation("Translation.X"); } catch { }
             NavIndicatorTranslate.X = x;
+            _navGlowX = target;
         }
     }
 
@@ -4021,7 +4102,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (NavBar.Visibility == Visibility.Visible)
         {
 
-            NavBar.UpdateLayout();NavBar.UpdateLayout();
+            NavBar.UpdateLayout();
             RelocateNavGlow();
         }
     }
