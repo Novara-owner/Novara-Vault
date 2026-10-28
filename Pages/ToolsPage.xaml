@@ -1970,7 +1970,7 @@
         </Grid>
         <Grid x:Name="McpConfigOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <Grid x:Name="McpConfigScrim" Background="#2E000000" Tapped="McpConfigScrim_Tapped" />
-            <Border x:Name="McpConfigDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+            <Border x:Name="McpConfigDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform><CompositeTransform x:Name="McpConfigDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
@@ -2021,9 +2021,16 @@
                             </Button>
                         </Grid>
                     </Grid>
-                    <Button Grid.Row="2" Margin="0,24,0,0" HorizontalAlignment="Center" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="McpConfigClose_Click">
-                        <TextBlock x:Name="McpConfigDoneText" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Button>
+
+
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="McpConfigGuide_Click">
+                            <TextBlock x:Name="McpConfigGuideText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button HorizontalAlignment="Right" Width="160" Height="40" Style="{StaticResource NovaraPrimaryButtonStyle}" CornerRadius="10" FontSize="14" Click="McpConfigClose_Click">
+                            <TextBlock x:Name="McpConfigDoneText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>

@@ -644,7 +644,9 @@ private MenuFlyout BuildContextMenu()
         }
 
         _entrancePlayed = true;
-        if (_standaloneEntries.Count > 0) SyncUncategorizedCard();
+
+
+        if (_standaloneEntries.Count > 0) SyncUncategorizedCard(playEntrance ? entIdx : -1);
         _initialLoadCompleted = true;
         ApplyMemoDisplayMode(_appliedDisplayMode, animate: false);
         ApplyCardFilters();
@@ -1540,7 +1542,18 @@ private MenuFlyout BuildContextMenu()
             apiDetectBtn.Flyout = detectMenu;
             Grid.SetColumn(apiDetectBtn, 4);
         }
-        mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); if (apiDetectBtn != null) mainRow.Children.Add(apiDetectBtn); Grid.SetRow(mainRow, 0);
+
+
+        Button? openSiteBtn = null;
+        if (type == "网站" && !string.IsNullOrWhiteSpace(keyInfo))
+        {
+            var openBtnContent = new Viewbox { Width = 16, Height = 16, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = new PathIcon { Data = App.CreateGeometry(IconData.OpenWebsite), Foreground = App.GetBrush("IconForegroundBrush") } };
+            openSiteBtn = new Button { Width = 32, Height = 32, Style = (Style)Application.Current.Resources["NovaraIconButtonStyle"], VerticalAlignment = VerticalAlignment.Center, Content = openBtnContent, IsTabStop = false };
+
+            openSiteBtn.Click += (_, _) => OpenWebsite(keyInfo);
+            Grid.SetColumn(openSiteBtn, 4);
+        }
+        mainRow.Children.Add(typeIconViewbox); mainRow.Children.Add(infoPanel); mainRow.Children.Add(entryPinIcon); mainRow.Children.Add(entryStarIcon); if (apiDetectBtn != null) mainRow.Children.Add(apiDetectBtn); if (openSiteBtn != null) mainRow.Children.Add(openSiteBtn); Grid.SetRow(mainRow, 0);
         _entryPinIcons[card] = entryPinIcon;
         _entryStarIcons[card] = entryStarIcon;
         _entryData[card] = (type, name, keyInfo, fields);
@@ -1729,14 +1742,7 @@ private MenuFlyout BuildContextMenu()
 
             m.Items.Add(pinMi);
             m.Items.Add(starMi);
-            if (_entryData.TryGetValue(card, out var websiteData) && websiteData.type == "网站")
-            {
 
-
-                var openMi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_OpenWebsite"), Icon = new PathIcon { Data = App.CreateGeometry(IconData.OpenWebsite), Foreground = App.GetBrush("IconForegroundBrush") } };
-                openMi.Click += (s2, e2) => OpenWebsite(websiteData.keyInfo);
-                m.Items.Add(openMi);
-            }
 
             m.Items.Add(moveSub);
             m.Items.Add(editMi);
@@ -1924,7 +1930,7 @@ private MenuFlyout BuildContextMenu()
         card.PointerCaptureLost += (s, e) => { armed = false; moved = false; _pressArmedCard = null; };
     }
 
-    private void SyncUncategorizedCard()
+    private void SyncUncategorizedCard(int entranceIndex = -1)
     {
         bool hasGroups = false;
         foreach (var child in GroupsContainer.Children)
@@ -1943,6 +1949,9 @@ private MenuFlyout BuildContextMenu()
 
 
             InitializeGroupCollapsed(_uncategorizedCard, expandNew: _initialLoadCompleted);
+
+
+            if (entranceIndex >= 0) App.PlayCardEntrance(_uncategorizedCard, Math.Min(entranceIndex, 9));
         }
 
         if (_uncategorizedCard != null)

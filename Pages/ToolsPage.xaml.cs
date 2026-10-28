@@ -1079,6 +1079,12 @@ public sealed partial class ToolsPage : Page
     private const string SyncGuideUrl = "https://novara.xin/help/deploy.html";
 
 
+
+
+
+    private const string McpGuideUrl = "https://www.novara.xin/help/mcp.html";
+
+
     private const string EasterEggUrl = "https://novara.xin/easteregg.html";
 
 
@@ -3811,6 +3817,7 @@ public sealed partial class ToolsPage : Page
         McpCopyButtonText.Text = App.GetString("Setting_Mcp_Copy");
         McpDeletePermissionLabelText.Text = App.GetString("Setting_Mcp_DeletePermission");
         McpConfigDoneText.Text = App.GetString("Common_Button_Confirm");
+        McpConfigGuideText.Text = App.GetString("Setting_Mcp_Guide");
         McpResetConfirmTitleText.Text = App.GetString("Setting_Mcp_Reset_Title");
         McpResetConfirmMessageText.Text = App.GetString("Setting_Mcp_Reset_Message");
         McpResetConfirmCancelText.Text = App.GetString("Common_Button_Cancel");
@@ -4427,6 +4434,19 @@ public sealed partial class ToolsPage : Page
         HideOverlay(McpConfigOverlay, McpConfigDialog, McpConfigDialogTransform, () => _animMcpConfig = false);
     }
     private void McpConfigClose_Click(object sender, RoutedEventArgs e) => HideMcpConfigDialog();
+
+
+
+    private void McpConfigGuide_Click(object sender, RoutedEventArgs e)
+    {
+        string lang = App.CurrentLanguage.StartsWith("zh") ? "zh" : "en";
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(McpGuideUrl + "?lang=" + lang) { UseShellExecute = true }); }
+        catch (Exception ex)
+        {
+            App.ShowToast(App.GetString("Setting_Mcp_Guide_Fail"), ToastTone.Error);
+            Services.CrashLogger.LogNote("ToolsPage.McpConfigGuide", ex.Message);
+        }
+    }
     private void McpConfigScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, McpConfigScrim)) HideMcpConfigDialog(); }
 

@@ -5,7 +5,7 @@ English · [简体中文](REGRESSION_TESTS.zh-CN.md)
 How bugs fixed over the last six months map onto the automated regression surface. The project started in August 2026, so "the last six months" is the project's whole life. The bug sources are the [CHANGELOG](../CHANGELOG.md) "Fixed" entries and the verification-round summaries; the regression surface has two layers:
 
 1. **Unit / integration tests** — `Novara.Tests` (xUnit, 50+ files, 1,076 tests) covering the data, crypto, sync and server layers, which reference the shipping assemblies directly.
-2. **Static guards** — `Tools/page_lifecycle_guard.py` (1,023 checks), `Tools/reverse_verify.py` (203 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
+2. **Static guards** — `Tools/page_lifecycle_guard.py` (1,032 checks), `Tools/reverse_verify.py` (207 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
 
 ## Mapping (named fixes in the changelog)
 

@@ -5,7 +5,7 @@
 近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与验证轮次汇总；回归面有两层：
 
 1. **单元/集成测试** —— `Novara.Tests`（xUnit，50+ 文件，1,076 个测试），直接引用发行程序集，覆盖数据、加密、同步与服务端层。
-2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（1,023 条判据）、`Tools/reverse_verify.py`（203 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
+2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（1,032 条判据）、`Tools/reverse_verify.py`（207 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
 
 ## 映射（更新日志中的具名修复）
 
