@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="images/English-WelcomePage.png" alt="Novara welcome page" width="720" />
+  <img src="images/English-WelcomePage-v12.png" alt="Novara welcome page" width="720" />
 </p>
 
 ---
@@ -48,7 +48,7 @@ GCM adds **authenticated encryption**: any tampering with the encrypted file is 
 Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). And since 5.1 the vault can lock itself: on demand (**Ctrl+Shift+L**), after an idle timeout of your choosing, or whenever Windows locks its session. The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
 
 <p align="center">
-  <img src="images/English-UnlockPage.png" alt="Privacy lock screen" width="420" />
+  <img src="images/English-UnlockPage-v12.png" alt="Privacy lock screen" width="420" />
 </p>
 
 ## Memo Manager
@@ -71,7 +71,7 @@ Starred and pinned entries are lifted to the top, and every card displays its ke
 Email, account, website, and WiFi entries also accept a **TOTP secret** (paste an `otpauth://` URI or a Base32 key): the card then shows a live 6-digit code with remaining seconds, a countdown bar, and one-click copy — a proper two-factor companion without a phone.
 
 <p align="center">
-  <img src="images/English-MemoPage.png" alt="Memo manager" width="720" />
+  <img src="images/English-MemoPage-v12.png" alt="Memo manager" width="720" />
 </p>
 
 ### API Key Management & Detection
@@ -87,7 +87,7 @@ Every API Key entry ships with a **three-tier detection** system, run entirely a
 The relay probe is Novara's standout feature for the API-relay era: it sends randomized, nonce-tagged test prompts and cross-checks **identity**, **capability benchmarks**, **format compliance**, **token billing**, **tool calling**, **hidden injection**, **response poisoning**, and **long-context truncation**, then produces a weighted risk verdict (trusted / mostly trusted / suspected risk / high risk). Probe data lives in a local, updatable `ProbeDataSet.json`, and all results carry a fixed disclaimer — this is a probabilistic self-check, not a legal proof.
 
 <p align="center">
-  <img src="images/English-API.png" alt="API connectivity test and relay probe" width="720" />
+  <img src="images/English-API-v12.png" alt="API connectivity test and relay probe" width="720" />
 </p>
 
 ## File Path Manager
@@ -97,7 +97,7 @@ Save and organize file and folder paths you access frequently. One click copies 
 Novara continuously validates every saved path with instant visual feedback: a **green border** means the path exists, a **red border** means it is missing or inaccessible. Checks run on create/edit, on a 30-minute timer, on startup, on a full scan from the empty area, or via right-click on an individual card.
 
 <p align="center">
-  <img src="images/English-FilePage.png" alt="File path manager" width="720" />
+  <img src="images/English-FilePage-v12.png" alt="File path manager" width="720" />
 </p>
 
 ## Task Dashboard
@@ -109,11 +109,11 @@ A lightweight productivity board that combines to-do lists, sticky notes, and ti
 - **System reminders** — right-click the empty board to add a countdown card that rings, pulses, and closes automatically, even when Novara is not running.
 
 <p align="center">
-  <img src="images/English-PlanPage.png" alt="Task dashboard" width="720" />
+  <img src="images/English-PlanPage-v12.png" alt="Task dashboard" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/Plan Reminder.png" alt="Reminder gradient on a plan card" width="720" />
+  <img src="images/Plan Reminder-v12.png" alt="Reminder gradient on a plan card" width="720" />
 </p>
 
 ## Desktop Sticky Notes
@@ -128,7 +128,7 @@ Send any note or todo card to your desktop with one click. A dedicated lightweig
 - **Bidirectional todo sync** — checking a todo on the desktop writes back to the main app, which stays the single source of truth
 
 <p align="center">
-  <img src="images/DesktopCard.png" alt="Desktop sticky note" width="560" />
+  <img src="images/DesktopCard-v12.png" alt="Desktop sticky note" width="560" />
 </p>
 
 ## Records
@@ -142,12 +142,12 @@ A full-featured long-form platform that hosts two formats in one page:
 A filter bar (mixed / diary / documents) and per-card format badges keep everything organized. Titles are rendered as plain text and limited to 120 characters.
 
 <p align="center">
-  <img src="images/English-RecordPage.png" alt="Records list" width="720" />
+  <img src="images/English-RecordPage-v12.png" alt="Records list" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/HtmlEditor.png" alt="Rich text HTML editor" width="420" />
-  <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown editor split preview" width="420" />
+  <img src="images/HtmlEditor-v12.png" alt="Rich text HTML editor" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode-v12.png" alt="Markdown editor split preview" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -163,11 +163,11 @@ The first step of the connected era. Export your entire database — memos, path
 Host it for yourself, or send the file to someone you trust — file and password travel separately.
 
 <p align="center">
-  <img src="images/Snapshot-PC.png" alt="Snapshot viewer on desktop" width="720" />
+  <img src="images/Snapshot-PC-v12.png" alt="Snapshot viewer on desktop" width="720" />
 </p>
 <p align="center">
-  <img src="images/Snapshot-MB.png" alt="Snapshot viewer on mobile" width="300" />
-  <img src="images/Snapshot-UnlockPage-PC.png" alt="Snapshot unlock page on desktop" width="420" />
+  <img src="images/Snapshot-MB-v12.png" alt="Snapshot viewer on mobile" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC-v12.png" alt="Snapshot unlock page on desktop" width="420" />
 </p>
 
 ## Cross-Device Sync
@@ -193,8 +193,8 @@ Press **Ctrl+K** anywhere to search memos, paths, todos, notes, and records in o
 Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands — create a memo / todo / note / diary, open the recycle bin or settings, lock the vault now.
 
 <p align="center">
-  <img src="images/Search%20Page.png" alt="Global search" width="720" />
-  <img src="images/English-Search%20Page-Command%20Tools.png" alt="Command palette tools" width="720" />
+  <img src="images/Search%20Page-v12.png" alt="Global search" width="720" />
+  <img src="images/English-Search%20Page-Command%20Tools-v12.png" alt="Command palette tools" width="720" />
 </p>
 
 ## Recycle Bin
@@ -202,7 +202,7 @@ Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands
 Deleted cards are never lost instantly — they move to a **Recycle Bin** with a **7-day auto-purge**, recoverable for a week before permanent removal on the next startup. Supports restore, permanent delete (red double-confirmation), clear all, and a mixed chronological list. Recycled data is excluded from exports.
 
 <p align="center">
-  <img src="images/RecycleBin.png" alt="Recycle bin" width="720" />
+  <img src="images/RecycleBin-v12.png" alt="Recycle bin" width="720" />
 </p>
 
 ## MCP Agent Interface
@@ -236,16 +236,16 @@ Novara ships with **five complete interface languages** — 简体中文, 繁體
 Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog. Since 9.0, four paper palettes — Cream, Almond, Kraft, and Newsprint — recolor the entire app, editors and desktop sticky notes included, and new installs start on Almond. Brand accents adapt to the theme as well: dark and light keep the classic brand blue, while each paper theme carries its own softened palette color.
 
 <p align="center">
-  <img src="images/Light%20Mode.png" alt="Light theme" width="420" />
-  <img src="images/Dark%20Mode.png" alt="Dark theme" width="420" />
+  <img src="images/Light%20Mode-v12.png" alt="Light theme" width="420" />
+  <img src="images/Dark%20Mode-v12.png" alt="Dark theme" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Cream.png" alt="Paper theme - Cream" width="420" />
-  <img src="images/Paper・Almond.png" alt="Paper theme - Almond" width="420" />
+  <img src="images/Paper・Cream-v12.png" alt="Paper theme - Cream" width="420" />
+  <img src="images/Paper・Almond-v12.png" alt="Paper theme - Almond" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Kraft.png" alt="Paper theme - Kraft" width="420" />
-  <img src="images/Paper・Newsprint.png" alt="Paper theme - Newsprint" width="420" />
+  <img src="images/Paper・Kraft-v12.png" alt="Paper theme - Kraft" width="420" />
+  <img src="images/Paper・Newsprint-v12.png" alt="Paper theme - Newsprint" width="420" />
 </p>
 
 ## Settings, Tools & Data Overview
@@ -255,8 +255,8 @@ Light, Dark, and Follow System themes with a unified brand-button system (primar
 - **Data overview** — encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 
 <p align="center">
-  <img src="images/English-Settings.png" alt="Settings page" width="420" />
-  <img src="images/English-Tools.png" alt="Tools page" width="420" />
+  <img src="images/English-Settings-v12.png" alt="Settings page" width="420" />
+  <img src="images/English-Tools-v12.png" alt="Tools page" width="420" />
 </p>
 
 ## Data Import & Export

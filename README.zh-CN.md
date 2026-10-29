@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="images/Chinese-WelcomePage.png" alt="Novara 欢迎页" width="720" />
+  <img src="images/Chinese-WelcomePage-v12.png" alt="Novara 欢迎页" width="720" />
 </p>
 
 ---
@@ -48,7 +48,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 安全机制还包括 **连续 5 次输错锁定 30 分钟**——计数与锁定状态跨重启持久化，并用单调时钟抵御系统时间回拨。自 5.0 起，你还可用 **Windows Hello**（生物识别 / PIN）解锁；自 5.1 起，保险库也能自己锁上：按需（**Ctrl+Shift+L**）、按你选择的空闲时长、或 Windows 锁屏时联动锁定。锁屏跟随系统主题、全屏遮挡应用、窗口失焦自动清空输入框。
 
 <p align="center">
-  <img src="images/Chinese-UnlockPage.png" alt="隐私锁屏" width="420" />
+  <img src="images/Chinese-UnlockPage-v12.png" alt="隐私锁屏" width="420" />
 </p>
 
 ## 备忘管理
@@ -71,7 +71,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 邮箱、账户、网站、WiFi 条目还可写入 **TOTP 密钥**（粘贴 `otpauth://` URI 或 Base32 密钥）：卡片即显示实时 6 位动态码、剩余秒数、倒计时进度条与一键复制——不掏手机也能有两步验证。
 
 <p align="center">
-  <img src="images/Chinese-MemoPage.png" alt="备忘管理" width="720" />
+  <img src="images/Chinese-MemoPage-v12.png" alt="备忘管理" width="720" />
 </p>
 
 ### API Key 管理与检测
@@ -87,7 +87,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 中转站探针是 Novara 面向 API 中转时代的招牌能力：它发送随机化、带 nonce 的测试提示，交叉校验**身份真伪**、**能力基准**、**格式遵从**、**token 计费**、**工具调用**、**隐藏注入**、**响应投毒**、**长上下文截断**八项，再产出加权风险结论（可信 / 基本可信 / 疑似风险 / 高风险）。探针数据存放在本地可更新的 `ProbeDataSet.json` 中，所有结果都附固定免责声明——这是概率性自查，不构成法律凭证。
 
 <p align="center">
-  <img src="images/Chinese-API.png" alt="API 连通检测与中转站探针" width="720" />
+  <img src="images/Chinese-API-v12.png" alt="API 连通检测与中转站探针" width="720" />
 </p>
 
 ## 路径备份
@@ -97,7 +97,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色边框**表示存在，**红色边框**表示缺失或不可访问。检测在五种场景自动触发：新建/编辑、30 分钟定时、启动、空白区全量检测、单卡右键。
 
 <p align="center">
-  <img src="images/Chinese-FilePage.png" alt="路径备份" width="720" />
+  <img src="images/Chinese-FilePage-v12.png" alt="路径备份" width="720" />
 </p>
 
 ## 任务面板
@@ -109,11 +109,11 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **系统提醒**：空白处右键添加倒计时卡片，到点响铃、脉冲、自动关闭，主程序关闭也能工作。
 
 <p align="center">
-  <img src="images/Chinese-PlanPage.png" alt="任务面板" width="720" />
+  <img src="images/Chinese-PlanPage-v12.png" alt="任务面板" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/Plan Reminder.png" alt="计划卡片的提醒渐变" width="720" />
+  <img src="images/Plan Reminder-v12.png" alt="计划卡片的提醒渐变" width="720" />
 </p>
 
 ## 桌面便签
@@ -128,7 +128,7 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **待办双向同步**：桌面勾选写回主程序，主程序始终是唯一数据权威
 
 <p align="center">
-  <img src="images/DesktopCard.png" alt="桌面便签" width="560" />
+  <img src="images/DesktopCard-v12.png" alt="桌面便签" width="560" />
 </p>
 
 ## 记录页
@@ -142,12 +142,12 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 筛选栏（混合 / 日记 / 文档）与格式徽标让一切井井有条。标题以纯文本渲染，限 120 字。
 
 <p align="center">
-  <img src="images/Chinese-RecordPage.png" alt="记录页列表" width="720" />
+  <img src="images/Chinese-RecordPage-v12.png" alt="记录页列表" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/HtmlEditor.png" alt="富文本 HTML 编辑器" width="420" />
-  <img src="images/Markdown Editor - Split Preview Mode.png" alt="Markdown 编辑器分屏预览" width="420" />
+  <img src="images/HtmlEditor-v12.png" alt="富文本 HTML 编辑器" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode-v12.png" alt="Markdown 编辑器分屏预览" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -163,11 +163,11 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 自己托管，或发给你信任的人——文件和密码分开两条路走。
 
 <p align="center">
-  <img src="images/Snapshot-PC.png" alt="Snapshot 电脑端查看器" width="720" />
+  <img src="images/Snapshot-PC-v12.png" alt="Snapshot 电脑端查看器" width="720" />
 </p>
 <p align="center">
-  <img src="images/Snapshot-MB.png" alt="Snapshot 手机端查看器" width="300" />
-  <img src="images/Snapshot-UnlockPage-PC.png" alt="Snapshot 电脑端解锁页" width="420" />
+  <img src="images/Snapshot-MB-v12.png" alt="Snapshot 手机端查看器" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC-v12.png" alt="Snapshot 电脑端解锁页" width="420" />
 </p>
 
 ## 跨设备同步
@@ -193,8 +193,8 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命令模式——新建备忘 / 待办 / 便签 / 日记、打开回收站或设置、立即锁定。
 
 <p align="center">
-  <img src="images/Search%20Page.png" alt="全局搜索" width="720" />
-  <img src="images/Chinese-Search%20Page-Command%20Tools.png" alt="命令面板工具" width="720" />
+  <img src="images/Search%20Page-v12.png" alt="全局搜索" width="720" />
+  <img src="images/Chinese-Search%20Page-Command%20Tools-v12.png" alt="命令面板工具" width="720" />
 </p>
 
 ## 回收站
@@ -202,7 +202,7 @@ Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命�
 删除的卡片不会瞬间消失——移入**回收站**并支持 **7 天自动清理**，一周内可恢复，超期后下次启动永久删除。支持恢复、永久删除（红色二次确认）、清空，以及按时间倒序混合展示。回收站数据不参与导出。
 
 <p align="center">
-  <img src="images/RecycleBin.png" alt="回收站" width="720" />
+  <img src="images/RecycleBin-v12.png" alt="回收站" width="720" />
 </p>
 
 ## MCP Agent 接口
@@ -236,16 +236,16 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 浅色、深色、跟随系统三套主题，统一品牌按钮体系（主蓝 / 幽灵描边 / 危险红），全应用每个弹窗保持一致。9.0 起新增四款类纸主题——Cream、Almond、Kraft、Newsprint——整程序（含编辑器与桌面便签）一并换装，全新安装默认淡杏。品牌强调色亦随主题自适应：深色与浅色保留经典品牌蓝，类纸各款使用各自的柔化品牌色。
 
 <p align="center">
-  <img src="images/Light%20Mode.png" alt="浅色主题" width="420" />
-  <img src="images/Dark%20Mode.png" alt="深色主题" width="420" />
+  <img src="images/Light%20Mode-v12.png" alt="浅色主题" width="420" />
+  <img src="images/Dark%20Mode-v12.png" alt="深色主题" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Cream.png" alt="类纸主题 - Cream" width="420" />
-  <img src="images/Paper・Almond.png" alt="类纸主题 - Almond" width="420" />
+  <img src="images/Paper・Cream-v12.png" alt="类纸主题 - Cream" width="420" />
+  <img src="images/Paper・Almond-v12.png" alt="类纸主题 - Almond" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Kraft.png" alt="类纸主题 - Kraft" width="420" />
-  <img src="images/Paper・Newsprint.png" alt="类纸主题 - Newsprint" width="420" />
+  <img src="images/Paper・Kraft-v12.png" alt="类纸主题 - Kraft" width="420" />
+  <img src="images/Paper・Newsprint-v12.png" alt="类纸主题 - Newsprint" width="420" />
 </p>
 
 ## 设置、工具与数据概览
@@ -255,8 +255,8 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 - **数据概览** —— 加密状态、最近备份、快照份数、文件完整性与孤儿引用一览无余
 
 <p align="center">
-  <img src="images/Chinese-SettingsPage.png" alt="设置页" width="420" />
-  <img src="images/Chinese-Tools.png" alt="工具页" width="420" />
+  <img src="images/Chinese-SettingsPage-v12.png" alt="设置页" width="420" />
+  <img src="images/Chinese-Tools-v12.png" alt="工具页" width="420" />
 </p>
 
 ## 数据导入与导出
