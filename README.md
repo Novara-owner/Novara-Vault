@@ -227,6 +227,8 @@ Novara exposes a native **MCP server** (Model Context Protocol) so any AI agent 
 
 See [`docs/MCP.md`](docs/MCP.md) for the full tool reference and client configuration.
 
+The private-space container format is public, with frozen vectors and a standalone reader: [`docs/seal-container-format.md`](docs/seal-container-format.md) and [`docs/seal_reference_reader.py`](docs/seal_reference_reader.py).
+
 ## Five-Language UI
 
 Novara ships with **five complete interface languages** — 简体中文, 繁體中文, English, 한국어, and 日本語 — plus a **Follow System** option. Switching restarts the app fully translated; your data stays language-independent.

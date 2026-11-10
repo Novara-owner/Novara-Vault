@@ -74,6 +74,16 @@ jq -r '.packages[].name' novara-sync-12.0.0.spdx.json | sort -u
 
 README 顶部的徽章链接到本仓库的 [OpenSSF Scorecard](https://scorecard.dev) 评分——这是一套对仓库工程实践（分支保护、依赖锁定等）的自动化安全审计，由 OpenSSF 的基础设施计算，与我们无关。
 
+## 私密空间容器格式
+
+容器格式的完整说明见 [seal-container-format.md](seal-container-format.md)；[seal_reference_reader.py](seal_reference_reader.py) 是一个与 Novara 不共享代码的独立读取器。在仓库根目录运行冻结向量自检：
+
+```
+pip install cryptography
+python docs/seal_reference_reader.py --vector Novara.Tests/Fixtures/seal-container-v1.json \
+                                     --container Novara.Tests/Fixtures/seal-container-v1.bin
+```
+
 ## 代码签名
 
 Windows 安装包**暂未做 Authenticode 签名**：首次运行时 SmartScreen 可能弹提示。请先完成上文的 SHA-256 校验（10.1 起的版本可再完成 Sigstore 签名校验），再选择「更多信息 → 仍要运行」。该状态一旦改变，签名方式与每次发布的批准流程都写在[代码签名政策](CODE_SIGNING_POLICY.zh-CN.md)里。

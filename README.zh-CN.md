@@ -227,6 +227,8 @@ Novara 内置原生 **MCP 服务器**（Model Context Protocol），让任何 AI
 
 完整工具参考与客户端配置见 [`docs/MCP.zh-CN.md`](docs/MCP.zh-CN.md)。
 
+私密空间容器格式已公开，含冻结向量与独立参考实现：[`docs/seal-container-format.md`](docs/seal-container-format.md) 与 [`docs/seal_reference_reader.py`](docs/seal_reference_reader.py)。
+
 ## 五语言界面
 
 Novara 内置**五种完整界面语言**——简体中文、繁體中文、English、한국어、日本語——并提供「跟随系统」选项。切换后应用重启即全量翻译；你的数据始终语言无关。

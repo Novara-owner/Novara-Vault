@@ -74,6 +74,16 @@ jq -r '.packages[].name' novara-sync-12.0.0.spdx.json | sort -u
 
 The badge at the top of the README links to this repository's [OpenSSF Scorecard](https://scorecard.dev) — an automated security audit of repository practices (branch protection, dependency pinning, and so on), computed by the OpenSSF infrastructure, not by us.
 
+## Private-space container format
+
+The sealed container format is documented in [seal-container-format.md](seal-container-format.md), and [seal_reference_reader.py](seal_reference_reader.py) is an independent reader that shares no code with Novara. The frozen vector self-check runs from the repository root:
+
+```
+pip install cryptography
+python docs/seal_reference_reader.py --vector Novara.Tests/Fixtures/seal-container-v1.json \
+                                     --container Novara.Tests/Fixtures/seal-container-v1.bin
+```
+
 ## Code signing
 
 The Windows installer is **not Authenticode-signed yet**: SmartScreen may show a warning on first run. Use "More info → Run anyway" only after verifying the SHA-256 — and, for 10.1 and later, the Sigstore signature above. How the installer is signed once that changes — and who approves each release — is written down in the [code signing policy](CODE_SIGNING_POLICY.md).

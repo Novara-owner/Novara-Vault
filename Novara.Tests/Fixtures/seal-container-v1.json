@@ -1,0 +1,54 @@
+{
+  "format": "novaseal-container-v1",
+  "note": "Frozen vector for .novaseal v1. Bytes live in seal-container-v1.bin. Regenerate only with a deliberate format change.",
+  "parameters": {
+    "itemId": "AAECAwQFBgcICQoLDA0ODw==",
+    "vmk": "oKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr8=",
+    "contentKey": "wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t8=",
+    "keySlotNonce": "EBESExQVFhcYGRob",
+    "sealedAtUtc": 1790000000,
+    "chunkSize": 1048576,
+    "plaintextLength": 3145728,
+    "plaintextRule": "b[i] = (byte)(i * 31 + 7)",
+    "blockNonceRule": "u64 little-endian block index in bytes 0..7, bytes 8..11 zero"
+  },
+  "shape": {
+    "headerSize": 128,
+    "blockCount": 3,
+    "containerLength": 3145952
+  },
+  "boundaries": [
+    {
+      "name": "empty",
+      "plaintextLength": 0,
+      "blockCount": 0,
+      "containerLength": 128,
+      "header": "Tk9WQVNFQUwBAQAAAAECAwQFBgcICQoLDA0ODwAAAAAAAAAAgDuxagAAAAAAABAAEBESExQVFhcYGRobVHe3zRqCc3VSsKbaVf5yeyODzhw7KmUVgULZ91sarffbIBkWi+ysbreNcAyptDi0AAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    {
+      "name": "one-byte",
+      "plaintextLength": 1,
+      "blockCount": 1,
+      "containerLength": 161,
+      "header": "Tk9WQVNFQUwBAQAAAAECAwQFBgcICQoLDA0ODwEAAAAAAAAAgDuxagAAAAAAABAAEBESExQVFhcYGRobVHe3zRqCc3VSsKbaVf5yeyODzhw7KmUVgULZ91sarfd861C2/QA6sIBlMZBqTHYyAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    {
+      "name": "exact-chunk",
+      "plaintextLength": 1048576,
+      "blockCount": 1,
+      "containerLength": 1048736,
+      "header": "Tk9WQVNFQUwBAQAAAAECAwQFBgcICQoLDA0ODwAAEAAAAAAAgDuxagAAAAAAABAAEBESExQVFhcYGRobVHe3zRqCc3VSsKbaVf5yeyODzhw7KmUVgULZ91sarfd8sqWiEevCp9puDoiweAcwAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    {
+      "name": "chunk-plus-one",
+      "plaintextLength": 1048577,
+      "blockCount": 2,
+      "containerLength": 1048769,
+      "header": "Tk9WQVNFQUwBAQAAAAECAwQFBgcICQoLDA0ODwEAEAAAAAAAgDuxagAAAAAAABAAEBESExQVFhcYGRobVHe3zRqCc3VSsKbaVf5yeyODzhw7KmUVgULZ91sarffbeewCZwdUee2GTxRzgEm2AAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    }
+  ],
+  "digests": {
+    "containerSha256": "184f6996beb14f497acb15e2a93257655b1e85ab009e8a1f1413afb88b492abd",
+    "plaintextSha256": "bfe74807c87a64433433238baa29cb800d0e4b5f3b8c96037ab15b620e9633c5"
+  }
+}
