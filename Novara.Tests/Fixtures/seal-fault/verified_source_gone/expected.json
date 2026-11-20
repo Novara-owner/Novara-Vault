@@ -1,0 +1,7 @@
+{
+  "case": "verified_source_gone",
+  "setup": "sealed record, original gone, verified container",
+  "actions": [
+    "CompleteSealFromJournal"
+  ]
+}

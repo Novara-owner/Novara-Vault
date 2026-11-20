@@ -67,11 +67,27 @@ flowchart LR
 - **Plaintext is memory-only on the web side.** The browser reader/editor keeps decrypted data in JS memory: nothing is persisted.
 - **Local audit.** Uploads, downloads, conflict detections and conflict resolutions are recorded locally, and the device center shows each paired device's trust state and last sync.
 
+## 5. Novara Space — the sealed store (13.0+)
+
+```mermaid
+flowchart LR
+    P["Space password<br/>(independent)"] --> K["Argon2id<br/>64 MiB, 3 passes"]
+    K --> W["Wrapped space key<br/>(keywrap.nskw)"]
+    W --> I["Encrypted index<br/>(AES-256-GCM)"]
+    W --> C["Sealed containers<br/>(AES-256-GCM)"]
+```
+
+- **Its own key, its own lockout.** Novara Space has an independent password and its own five-attempt / 30-minute lockout. The space key is wrapped with an Argon2id-derived key; the index and every container are AES-256-GCM authenticated ciphertext. The main database stores nothing about the space.
+- **Outside every other chain.** Sealed content is never searched, synced, exposed to MCP, included in snapshots or the recycle bin, and survives library reset and corruption rebuild. There is no automatic path out of the store.
+- **Explicit export only.** A `.novabundle` is produced deliberately and protected by the space password; changing the password later does not re-protect old bundles. Once outside Novara, a bundle is no longer time-locked.
+- **Time lock, stated honestly.** Capsules refuse to open before their moment and detect clock rollbacks, but the lock stops casual clock changes, not someone who takes the container apart. Forgetting the space password means the content is unrecoverable.
+
 ## Trust boundaries
 
 - All user data lives in `%LocalAppData%\Novara` — no cloud, no telemetry, no accounts. The only network activity is user-triggered API connectivity checks (memos), MCP access on a local named pipe, and — if you switch it on — sync to the server you configured yourself (8.0+), plus the in-app update check against the release site (9.0+; manual by default, an optional automatic schedule since novara11). The exported Snapshot viewer file performs no network requests at all.
 - Plaintext `.novabak` exports carry integrity checksums (corruption detection, not tamper protection). `.novaenc` encrypted exports use AES-256-GCM with an independent password that is never stored and cannot be recovered — the same container protects Snapshot exports (7.0+).
 - The desktop sticky-note host (`StickNoteHost.exe`) is a separate process and holds no decryption keys; it only renders what you explicitly send to the desktop.
+- **Novara Space** (`%LocalAppData%\Novara\seal`) is a separate encrypted store with its own password and lockout; it is outside search, sync, MCP, snapshots and the recycle bin. The only exit is a deliberate `.novabundle` export.
 - Known limits are documented honestly in [SECURITY.md](../SECURITY.md) — including that Windows Hello is a software gate, not a cryptographic binding.
 
 ## Verify your download

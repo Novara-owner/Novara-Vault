@@ -17,15 +17,17 @@ public sealed partial class LockScreenPage : Page
 
     private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(30);
 
-    private static SolidColorBrush ErrorBrush => (SolidColorBrush)App.GetBrush("AppDangerTextBrush");
     private static readonly Thickness StateBorderThickness = new(2);
 
-    private SolidColorBrush _normalBorderBrush = null!;
     private bool _verifying;
     private int _failCount;
     private DispatcherTimer? _lockTimer;
 
     public event Action? UnlockSucceeded;
+
+
+
+    public event Action? SealDirectUnlocked;
 
     public event Action? CorruptDetected;
     public event Action? IoErrorDetected;
@@ -42,6 +44,9 @@ public sealed partial class LockScreenPage : Page
             LockTitle.CharacterSpacing = 0;
         }
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
+
+
+        Novara.Services.DialogDepth.AttachContainer(UnlockView);
 
 
 
@@ -62,7 +67,6 @@ public sealed partial class LockScreenPage : Page
         };
         Loaded += (_, _) =>
         {
-            _normalBorderBrush = App.GetBrush("AppBorderBrush");
             _failCount = PasswordService.GetFailCount();
 
 
@@ -220,6 +224,14 @@ public sealed partial class LockScreenPage : Page
 
         if (result?.Status == LoadStatus.Corrupted) { CorruptDetected?.Invoke(); return; }
         if (result?.Status == LoadStatus.IoError) { IoErrorDetected?.Invoke(); return; }
+        if (result?.Status == LoadStatus.KdfTooExpensive)
+        {
+
+
+            RelockIfLoadIsOrphaned(generation);
+            App.ShowToast(App.GetString("Store_Err_KdfTooExpensive"), ToastTone.Error);
+            return;
+        }
 
 
 
@@ -229,13 +241,21 @@ public sealed partial class LockScreenPage : Page
     private void UnlockButton_Click(object sender, RoutedEventArgs e) => _ = VerifyAsync();
 
     private bool _unlockStarted;
+    private bool _directUnlocked;
 
     private async System.Threading.Tasks.Task VerifyAsync()
     {
         if (_verifying) return;
         _verifying = true;
         FocusSink.Focus(FocusState.Programmatic);
-        await UnlockWithPasswordAsync(PasswordInput.Password);
+        try { await UnlockWithPasswordAsync(PasswordInput.Password); }
+        catch (Exception ex)
+        {
+
+
+            _verifying = false;
+            Novara.Services.CrashLogger.LogNote("LockScreenVerify", ex.Message);
+        }
     }
 
 
@@ -331,6 +351,13 @@ public sealed partial class LockScreenPage : Page
             IoErrorDetected?.Invoke();
             return;
         }
+        if (result != null && result.Status == LoadStatus.KdfTooExpensive)
+        {
+            _verifying = false;
+            RelockIfLoadIsOrphaned(generation);
+            App.ShowToast(App.GetString("Store_Err_KdfTooExpensive"), ToastTone.Error);
+            return;
+        }
 
 
 
@@ -344,6 +371,11 @@ public sealed partial class LockScreenPage : Page
             RelockIfLoadIsOrphaned(generation);
             return;
         }
+
+
+
+
+        if (pw.Length >= 12 && await TrySealDirectUnlockAsync(pw)) return;
 
         _failCount++;
         PasswordService.SetFailCount(_failCount);
@@ -359,6 +391,34 @@ public sealed partial class LockScreenPage : Page
         ClearInput();
         _verifying = false;
         RelockIfLoadIsOrphaned(generation);
+    }
+
+
+
+    private async System.Threading.Tasks.Task<bool> TrySealDirectUnlockAsync(string pw)
+    {
+
+
+        var lockout = new Novara.Services.SealLockout(Novara.Services.SealSpacePaths.Default.Lockout);
+        if (lockout.IsLocked) return false;
+
+        var status = await System.Threading.Tasks.Task.Run(
+            () => SealService.Current.UnlockAsync(pw, SealSessionMode.Direct));
+        if (status != SealServiceStatus.Ok)
+        {
+            if (status == SealServiceStatus.WrongPassword) lockout.RegisterFailure();
+            return false;
+        }
+
+        lockout.RegisterSuccess();
+
+
+        if (SealService.Current.ConsumeUnlockWeakened())
+            App.ShowToast(App.GetString("Seal_Unlock_Weakened"));
+
+        _directUnlocked = true;
+        PlayExitAnimation();
+        return true;
     }
 
 
@@ -435,7 +495,9 @@ private void EnterLockedState()
         try
         {
         var t = PasswordInputPanelTransform;
-        PasswordInput.BorderBrush = ErrorBrush;
+
+
+        Novara.Services.PasswordFeedback.ShowError(PasswordInput);
         PasswordInput.BorderThickness = StateBorderThickness;
 
 
@@ -455,13 +517,13 @@ private void EnterLockedState()
 
         for (int i = 0; i < 2; i++)
         {
-            PasswordInput.BorderBrush = _normalBorderBrush;
+            Novara.Services.PasswordFeedback.ClearError(PasswordInput);
             await System.Threading.Tasks.Task.Delay(120);
-            PasswordInput.BorderBrush = ErrorBrush;
+            Novara.Services.PasswordFeedback.ShowError(PasswordInput);
             await System.Threading.Tasks.Task.Delay(120);
         }
 
-        PasswordInput.BorderBrush = _normalBorderBrush;
+        Novara.Services.PasswordFeedback.ClearError(PasswordInput);
         PasswordInput.BorderThickness = new Thickness(1);
         t.X = 0;
         }
@@ -497,7 +559,11 @@ private void EnterLockedState()
         var wo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
         Storyboard.SetTarget(wo, WindowsHelloText); Storyboard.SetTargetProperty(wo, "Opacity"); sb.Children.Add(wo);
 
-        sb.Completed += (_, _) => UnlockSucceeded?.Invoke();
+        sb.Completed += (_, _) =>
+        {
+            if (_directUnlocked) SealDirectUnlocked?.Invoke();
+            else UnlockSucceeded?.Invoke();
+        };
         sb.Begin();
     }
 
@@ -540,6 +606,7 @@ private void EnterLockedState()
     }
 
     private bool _forgotAnimating;
+    private bool _forgotCdReady;
     private bool _forgotConfirming;
 
     private readonly System.Collections.Generic.Dictionary<Grid, int> _dialogGens = new();
@@ -554,6 +621,9 @@ private void EnterLockedState()
 
         DialogUi.ShowOverlay(LockRoot, _dialogGens, _dialogMap, ForgotOverlay, ForgotDialog, ForgotDialogTransform, _dialogWidthFit);
 
+
+        _forgotCdReady = false;
+        ForgotPhraseBox.Text = "";
         ForgotConfirmButton.IsEnabled = false;
         ForgotConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
         ForgotCd.Completed -= OnForgotCdCompleted;
@@ -564,19 +634,35 @@ private void EnterLockedState()
     private void OnForgotCdCompleted()
     {
         ForgotCd.Completed -= OnForgotCdCompleted;
-        ForgotConfirmButton.IsEnabled = true;
-        ForgotConfirmButton.Opacity = 1;
+        _forgotCdReady = true;
+        UpdateForgotConfirmState();
+    }
+
+    private void ForgotPhraseBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateForgotConfirmState();
+
+
+    private void UpdateForgotConfirmState()
+    {
+        var ok = _forgotCdReady
+                 && Services.DestructiveConfirm.Matches(ForgotPhraseBox.Text, App.GetString("Lock_Forgot_Phrase"));
+        ForgotConfirmButton.IsEnabled = ok;
+        ForgotConfirmButton.Opacity = ok ? 1 : Motion.CooldownDisabledOpacity;
     }
 
     private void HideForgotDialog()
     {
         if (_forgotAnimating) return;
         _forgotAnimating = true;
-        ForgotCd.Reset();
-        ForgotConfirmButton.IsEnabled = true;
-        ForgotConfirmButton.Opacity = 1;
+        ForgotCd.Stop();
+        var cdGen = ForgotCd.Generation;
 
-        DialogUi.HideOverlay(LockRoot, _dialogGens, _dialogMap, ForgotOverlay, ForgotDialog, ForgotDialogTransform, () => _forgotAnimating = false);
+        DialogUi.HideOverlay(LockRoot, _dialogGens, _dialogMap, ForgotOverlay, ForgotDialog, ForgotDialogTransform, () =>
+        {
+            ForgotCd.ResetAfterHide(cdGen);
+            ForgotPhraseBox.Text = "";
+            _forgotCdReady = false;
+            _forgotAnimating = false;
+        });
     }
 
     private void ReclampVisibleDialogs()
@@ -594,6 +680,8 @@ private void EnterLockedState()
     {
         if (_forgotConfirming) return;
         if (_verifying) return;
+
+        if (!Services.DestructiveConfirm.Matches(ForgotPhraseBox.Text, App.GetString("Lock_Forgot_Phrase"))) return;
         _forgotConfirming = true;
         _verifying = true;
         _autoUnlockSeq++;

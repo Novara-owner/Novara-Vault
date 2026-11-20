@@ -74,16 +74,21 @@ public static class PathPropertyReader
 
 
 
-        using var watchdog = new Timer(_ =>
-        {
-            try { cts.Cancel(); }
-            catch (ObjectDisposedException) { }
-        }, null, stallTimeout, Timeout.InfiniteTimeSpan);
+
+
+
+        using var watchdog = progress is null
+            ? null
+            : new Timer(_ =>
+            {
+                try { cts.Cancel(); }
+                catch (ObjectDisposedException) { }
+            }, null, stallTimeout, Timeout.InfiniteTimeSpan);
         var ct = cts.Token;
 
-        Action<PathPropertyProgress>? feeding = progress == null ? null : p =>
+        Action<PathPropertyProgress>? feeding = progress is null ? null : p =>
         {
-            watchdog.Change(stallTimeout, Timeout.InfiniteTimeSpan);
+            if (watchdog is not null) watchdog.Change(stallTimeout, Timeout.InfiniteTimeSpan);
             progress(p);
         };
         try
@@ -177,11 +182,34 @@ public static class PathPropertyReader
         long bytes = 0, files = 0, folders = 0;
         long lastPushEntries = 0;
         var sw = Stopwatch.StartNew();
-        foreach (var entry in di.EnumerateFileSystemInfos("*", options))
+        using var enumerator = di.EnumerateFileSystemInfos("*", options).GetEnumerator();
+        while (true)
         {
+
+
+
+            FileSystemInfo entry;
+            try
+            {
+                if (!enumerator.MoveNext()) break;
+                entry = enumerator.Current;
+            }
+            catch (Exception ex) when (ex is DirectoryNotFoundException or FileNotFoundException or IOException)
+            {
+                break;
+            }
             ct.ThrowIfCancellationRequested();
-            if (entry is FileInfo f) { bytes += f.Length; files++; }
-            else if (entry is DirectoryInfo) folders++;
+            try
+            {
+                if (entry is FileInfo f) { bytes += f.Length; files++; }
+                else if (entry is DirectoryInfo) folders++;
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException)
+            {
+
+
+                continue;
+            }
             if (entry is FileInfo or DirectoryInfo && (files + folders - lastPushEntries >= 512 || sw.ElapsedMilliseconds >= 150))
             {
                 lastPushEntries = files + folders;

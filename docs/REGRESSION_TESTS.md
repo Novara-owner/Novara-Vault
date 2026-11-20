@@ -4,13 +4,15 @@ English · [简体中文](REGRESSION_TESTS.zh-CN.md)
 
 How bugs fixed over the last six months map onto the automated regression surface. The project started in August 2026, so "the last six months" is the project's whole life. The bug sources are the [CHANGELOG](../CHANGELOG.md) "Fixed" entries and the verification-round summaries; the regression surface has two layers:
 
-1. **Unit / integration tests** — `Novara.Tests` (xUnit, 50+ files, 1,076 tests) covering the data, crypto, sync and server layers, which reference the shipping assemblies directly.
-2. **Static guards** — `Tools/page_lifecycle_guard.py` (1,032 checks), `Tools/reverse_verify.py` (207 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
+1. **Unit / integration tests** — `Novara.Tests` (xUnit, 50+ files, 1,670 tests) covering the data, crypto, sync, Space/seal and server layers, which reference the shipping assemblies directly.
+2. **Static guards** — `Tools/page_lifecycle_guard.py` (1,785 checks), `Tools/sync_guard.py` (314 checks), `Tools/reverse_verify.py` (437 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
 
 ## Mapping (named fixes in the changelog)
 
 | Version | Fixed issue | Regression test |
 |---|---|---|
+| 13.0 | Novara Space container, key wrap, index and journal: AES-256-GCM containers with frozen vectors, Argon2id key slots, torn-journal recovery, quarantine of unreadable journals | `SealContainerWriterTests`, `SealContainerReaderTests`, `SealKeySlotTests`, `SealKdfParamsTests`, `SealIndexTests`, `SealJournalTests`, `SealFaultInjectionTests`, `SealFormatDocTests` (CI) |
+| 13.0 | Space stays outside the other chains; backup journal gate; sync session heal after a pending rewrap; 32 MiB ceiling; viewer id isolation; ungrouped-card first entrance | `SealIntegrationTests`, `SealImportTests`, `SealExportTests`; source-form invariants in `page_lifecycle_guard` and `sync_guard`, each mutation-verified |
 | 12.0 | Follow-memory values normalize on read, ship as optional sync fields, and treat a remote null as "no opinion" | `Novara.Tests/MemoDisplayModeTests.cs` (normalize, persisted contract, untouched models) + `SyncDiffTests.UngroupedCardExpanded_*` (CI) |
 | 12.0 | Interaction regressions caught by the cycle's review passes (spontaneous ungrouped-card expand, lost first-expand animation, text-only fold fade) | Source-form invariants in `page_lifecycle_guard`, each with mutation cases |
 | 11.1 (R1) | HTML editor image picker used the wrong COM collection; multi-select was disabled | `RegressionGuardsTests.FilePicker_MultiSelectUsesShellItemArray` (CI) |
@@ -53,4 +55,4 @@ The contributing policy requires major functionality to arrive with tests, and t
 
 ---
 
-*Last updated: 2026-10-28*
+*Last updated: 2026-11-19*

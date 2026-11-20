@@ -69,7 +69,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Data.Sqlite": "[8.0.8, )",
-          "Novara.Core": "[12.0.0, )",
+          "Novara.Core": "[13.0.0, )",
           "SQLitePCLRaw.bundle_e_sqlite3": "[2.1.13, )"
         }
       }

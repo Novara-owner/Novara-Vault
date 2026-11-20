@@ -83,6 +83,15 @@ public sealed partial class StickyNoteWindow : Window
         {
 
 
+
+            if (!_firstActivationThemeApplied)
+            {
+                _firstActivationThemeApplied = true;
+                ApplyTheme(_lastTheme, force: true);
+            }
+
+
+
             try
             {
                 var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -98,7 +107,6 @@ public sealed partial class StickyNoteWindow : Window
                 _sized = true;
                 ForceInitialSize();
             }
-            ApplyTheme(_lastTheme);
         };
     }
 
@@ -148,12 +156,26 @@ public sealed partial class StickyNoteWindow : Window
                 {
 
 
+
                     var byLabel = new Dictionary<string, StickyTodoItem>();
+                    var ordinal = new Dictionary<string, int>();
                     foreach (var it in _items)
-                        if (!string.IsNullOrEmpty(it.Label) && !byLabel.ContainsKey(it.Label)) byLabel[it.Label] = it;
+                    {
+                        if (string.IsNullOrEmpty(it.Label)) continue;
+                        ordinal.TryGetValue(it.Label, out var nth);
+                        ordinal[it.Label] = nth + 1;
+                        var key = it.Label + "\u001F" + nth.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        if (!byLabel.ContainsKey(key)) byLabel[key] = it;
+                    }
+                    var incoming = new Dictionary<string, int>();
                     foreach (var it in items)
-                        if (!string.IsNullOrEmpty(it.Label) && byLabel.TryGetValue(it.Label, out var keep))
-                            it.Checked = keep.Checked;
+                    {
+                        if (string.IsNullOrEmpty(it.Label)) continue;
+                        incoming.TryGetValue(it.Label, out var nth);
+                        incoming[it.Label] = nth + 1;
+                        var key = it.Label + "\u001F" + nth.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        if (byLabel.TryGetValue(key, out var keep)) it.Checked = keep.Checked;
+                    }
                 }
                 _items = items;
                 RenderTodoList();
@@ -170,6 +192,13 @@ public sealed partial class StickyNoteWindow : Window
             if (_dueFired && dueTime.Value != DueTime) _dueRescheduled = true;
             DueTime = dueTime;
         }
+        else
+        {
+
+
+            if (_dueFired) _dueRescheduled = true;
+            DueTime = null;
+        }
         if (IsReminder)
         {
 
@@ -177,9 +206,9 @@ public sealed partial class StickyNoteWindow : Window
             NoteBox.TextWrapping = TextWrapping.Wrap;
             NoteBox.TextTrimming = TextTrimming.None;
             NoteBox.HorizontalAlignment = HorizontalAlignment.Stretch;
-            CountdownText.Visibility = Visibility.Visible;
+            CountdownText.Visibility = DueTime is null ? Visibility.Collapsed : Visibility.Visible;
             UpdateCountdown();
-            if (!_dueFired) StartCountdownTimer();
+            if (!_dueFired && DueTime is not null) StartCountdownTimer();
         }
         else
         {
@@ -359,12 +388,12 @@ public sealed partial class StickyNoteWindow : Window
             RootBorder.Background = red;
             await Task.Delay(300);
             if (_closed) return;
-            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; }
-            ApplyTheme(_lastTheme);
+            if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme, force: true); StartCountdownTimer(); return; }
+            ApplyTheme(_lastTheme, force: true);
             await Task.Delay(300);
         }
         if (_closed) return;
-        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme); StartCountdownTimer(); return; }
+        if (_dueRescheduled) { _dueFired = false; _dueRescheduled = false; ApplyTheme(_lastTheme, force: true); StartCountdownTimer(); return; }
         App.NoteWindows.Remove(NoteId);
         Close();
         App.RemoveNote(NoteId);
@@ -389,10 +418,19 @@ public sealed partial class StickyNoteWindow : Window
     private DispatcherTimer? _countdownTimer;
 
 
-    public void ApplyTheme(string theme)
+    public void ApplyTheme(string theme, bool force = false)
     {
         _lastTheme = theme;
-        App.Log($"ApplyTheme: {theme}");
+
+
+        if (!force && _themeApplied
+            && string.Equals(_appliedTheme, theme, StringComparison.Ordinal)
+            && string.Equals(_appliedColorKey, _colorKey, StringComparison.Ordinal))
+            return;
+        _themeApplied = true;
+        _appliedTheme = theme;
+        _appliedColorKey = _colorKey;
+        App.LogVerbose($"ApplyTheme: {theme}");
         bool dark = theme == "dark";
 
 
@@ -446,6 +484,10 @@ public sealed partial class StickyNoteWindow : Window
     private SolidColorBrush? _borderBrush;
     private readonly SolidColorBrush _brandBrush = new(Color.FromArgb(0xFF, 0x72, 0x76, 0xFF));
     private string _lastTheme = "light";
+    private bool _firstActivationThemeApplied;
+    private bool _themeApplied;
+    private string? _appliedTheme;
+    private string? _appliedColorKey;
     private string? _colorKey;
     private int? _persistedW, _persistedH;
     private List<StickyTodoItem>? _items;
@@ -893,8 +935,18 @@ internal static class NativeMethods
     private static nint BorderlessWndProc(nint hwnd, uint msg, nint wParam, nint lParam)
     {
         if (msg == WM_NCCALCSIZE && wParam != 0) return 0;
-        if (msg == WM_NCDESTROY && _oldProcs.Remove(hwnd, out var restore))
-            SetWindowLongPtr(hwnd, GWLP_WNDPROC, restore);
+        if (msg == WM_NCDESTROY)
+        {
+
+
+            if (_oldProcs.Remove(hwnd, out var restore))
+            {
+                var result = CallWindowProc(restore, hwnd, msg, wParam, lParam);
+                SetWindowLongPtr(hwnd, GWLP_WNDPROC, restore);
+                return result;
+            }
+            return 0;
+        }
         return _oldProcs.TryGetValue(hwnd, out var old) ? CallWindowProc(old, hwnd, msg, wParam, lParam) : 0;
     }
 

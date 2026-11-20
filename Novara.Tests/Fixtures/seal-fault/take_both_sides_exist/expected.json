@@ -1,0 +1,7 @@
+{
+  "case": "take_both_sides_exist",
+  "setup": "taken phase, entry indexed, complete target",
+  "actions": [
+    "BothSidesExist"
+  ]
+}

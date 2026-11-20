@@ -23,4 +23,7 @@ public class TodoCard
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsExpanded { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public DateTime PurgedAt { get; set; }
 }

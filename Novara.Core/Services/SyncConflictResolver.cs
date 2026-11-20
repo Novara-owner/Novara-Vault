@@ -175,7 +175,11 @@ public static class SyncConflictResolver
 
             var remoteDb = new NovaraDatabase();
             SyncPartitions.ApplyPartitions(remoteDb, applied);
-            return (SyncDiff.Compare(store.Database, remoteDb), "");
+
+
+
+            try { return (SyncDiff.Compare(store.Database, remoteDb), ""); }
+            catch (Exception e) { return (null, "conflict inspection failed: " + e.Message); }
         }
         catch (OperationCanceledException) { return (null, "cancelled"); }
         catch (InvalidDataException e) { return (null, e.Message); }

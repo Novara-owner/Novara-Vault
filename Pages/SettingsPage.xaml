@@ -962,10 +962,10 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="SetPasswordBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="SetPasswordBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordPlaceholder\')}"
-                                     MaxLength="64" TextChanged="SetPasswordBox_TextChanged" />
+                                     MaxLength="64" PasswordChanged="SetPasswordBox_PasswordChanged" />
 
                             <TextBlock x:Name="SetPasswordStrengthText" Grid.Row="2" Visibility="Collapsed"
                                        FontSize="12" Margin="0,6,0,0"
@@ -975,8 +975,8 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_ConfirmLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="SetPasswordConfirmBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="SetPasswordConfirmBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_ConfirmPlaceholder\')}"
                                      MaxLength="64" />
                         </Grid>
@@ -1081,22 +1081,25 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="20" Margin="0,24,0,0">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_OldPasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="ChangePasswordOldBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="ChangePasswordOldBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_OldPasswordPlaceholder\')}"
-                                     MaxLength="64" />
+                                     MaxLength="64" PasswordChanged="ChangePasswordOldBox_PasswordChanged" />
+                            <TextBlock x:Name="ChangePasswordOldError" Grid.Row="2" Visibility="Collapsed"
+                                       FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Grid>
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_NewPasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="ChangePasswordNewBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="ChangePasswordNewBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordPlaceholder\')}"
-                                     MaxLength="64" TextChanged="ChangePasswordNewBox_TextChanged" />
+                                     MaxLength="64" PasswordChanged="ChangePasswordNewBox_PasswordChanged" />
 
                             <TextBlock x:Name="ChangePasswordStrengthText" Grid.Row="2" Visibility="Collapsed"
                                        FontSize="12" Margin="0,6,0,0"
@@ -1106,8 +1109,8 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_ConfirmLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="ChangePasswordConfirmBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="ChangePasswordConfirmBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_ConfirmPlaceholder\')}"
                                      MaxLength="64" />
                         </Grid>
@@ -1165,13 +1168,16 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="20" Margin="0,24,0,0">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_OldPasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="ClosePrivacyLockPasswordBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="ClosePrivacyLockPasswordBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_OldPasswordPlaceholder\')}"
-                                     MaxLength="64" />
+                                     MaxLength="64" PasswordChanged="ClosePrivacyLockPasswordBox_PasswordChanged" />
+                            <TextBlock x:Name="ClosePrivacyLockPasswordError" Grid.Row="2" Visibility="Collapsed"
+                                       FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
                             <Button HorizontalAlignment="Left" Width="160" Height="40"

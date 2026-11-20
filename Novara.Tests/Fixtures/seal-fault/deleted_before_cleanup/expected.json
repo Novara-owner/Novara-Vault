@@ -1,0 +1,7 @@
+{
+  "case": "deleted_before_cleanup",
+  "setup": "entry indexed, original deleted, deleted phase recorded",
+  "actions": [
+    "FinalizeSeal"
+  ]
+}

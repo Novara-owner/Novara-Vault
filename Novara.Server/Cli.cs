@@ -74,7 +74,20 @@ public static class Cli
         if (parsed.Unknown.Count > 0) return RejectUnknown(parsed);
         if (parsed.Positional is not null) return RejectExtra(parsed.Positional, "space create");
 
-        var result = service.CreateSpace(parsed.Name ?? "novara");
+        var spaceName = parsed.Name ?? "novara";
+
+
+        var badName = spaceName.Length is 0 or > 64;
+        if (!badName)
+            foreach (var ch in spaceName)
+                if (char.IsControl(ch)) { badName = true; break; }
+        if (badName)
+        {
+            Console.Error.WriteLine("space name must be 1-64 characters with no control characters");
+            return 2;
+        }
+
+        var result = service.CreateSpace(spaceName);
         if (!result.Success) return Fail(result.Message);
 
         var credentials = result.Value!;
@@ -285,8 +298,16 @@ public static class Cli
                 json = true;
             else if (lower == "--yes")
                 yes = true;
-            else if (lower == "--name" && i + 1 < args.Length)
-                name = args[++i];
+            else if (lower == "--name")
+            {
+
+
+
+                if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    name = args[++i];
+                else
+                    unknown.Add(args[i]);
+            }
 
 
 

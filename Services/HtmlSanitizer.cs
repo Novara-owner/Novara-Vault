@@ -145,6 +145,16 @@ public static class HtmlSanitizer
                 else el.SetAttribute("style", v);
             }
         }
+
+
+
+        if (tag == "a" && el.HasAttribute("target"))
+        {
+            if (string.Equals(el.GetAttribute("target"), "_blank", StringComparison.OrdinalIgnoreCase))
+                el.SetAttribute("rel", "noopener noreferrer");
+            else
+                el.RemoveAttribute("target");
+        }
     }
 
 

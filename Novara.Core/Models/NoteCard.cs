@@ -16,4 +16,7 @@ public class NoteCard
     public DateTime? ReminderAt { get; set; }
     public DateTime? ReminderSetAt { get; set; }
     public string WorkspaceId { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public DateTime PurgedAt { get; set; }
 }

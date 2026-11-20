@@ -60,6 +60,16 @@ public static class AuditSanitizer
 
 
 
+
+
+    private static readonly Regex SealPathRegex = new(
+        @"(?:[A-Za-z]:)?[^\s""'<>]*[\\/]seal(?=[\\/]|$|[\s""'<>])[^\s""'<>]*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+
+
+
+
     public static string Clean(string? text)
     {
         if (string.IsNullOrEmpty(text)) return "";
@@ -71,6 +81,7 @@ public static class AuditSanitizer
         s = TokenRegex.Replace(s, "$1***");
         s = AuthHeaderRegex.Replace(s, "$1***");
         s = UrlUserInfoRegex.Replace(s, "$1***@");
+        s = SealPathRegex.Replace(s, "<seal>");
         s = s.Replace("\r", " ").Replace("\n", " ");
         return s.Length > MaxFieldChars ? s.Substring(0, MaxFieldChars) + "…" : s;
     }

@@ -83,6 +83,15 @@ public partial class App : Application
     public static Guid? PendingReminderId { get; private set; }
 
 
+
+    internal static void ClearPendingLaunchArguments()
+    {
+        PendingAddPath = null;
+        PendingImportMd = null;
+        PendingReminderId = null;
+    }
+
+
     public static bool McpBackground { get; private set; }
 
 
@@ -414,7 +423,9 @@ public partial class App : Application
     {
         while (d != null)
         {
-            if (d is Microsoft.UI.Xaml.Controls.Button) return true;
+
+
+            if (d is Microsoft.UI.Xaml.Controls.Primitives.ButtonBase) return true;
             d = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(d);
         }
         return false;
@@ -485,9 +496,27 @@ public partial class App : Application
 
 
 
-    public static void ShowToast(string message, ToastTone tone = ToastTone.Success)
+    public static void ShowToast(string message, ToastTone tone = ToastTone.Success, bool persistent = false)
     {
-        UiQueue?.TryEnqueue(() => MainWindow?.ShowToast(message, tone));
+        UiQueue?.TryEnqueue(() => MainWindow?.ShowToast(message, tone, persistent));
+    }
+
+
+    public static void UpdateToast(string message)
+    {
+        UiQueue?.TryEnqueue(() => MainWindow?.UpdateToast(message));
+    }
+
+
+    public static void ShowTimedToast(string message, int holdMilliseconds)
+    {
+        UiQueue?.TryEnqueue(() => MainWindow?.ShowTimedToast(message, holdMilliseconds));
+    }
+
+
+    public static void ClearToast()
+    {
+        UiQueue?.TryEnqueue(() => MainWindow?.ClearToast());
     }
 
 

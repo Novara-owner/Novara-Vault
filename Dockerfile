@@ -4,11 +4,11 @@
 #
 # NovaraSync - the server half of Novara Sync, as a container image.
 #
-# Two stages, because the SDK is ~1.7 GB and the application is a few MB of managed code plus the
-# static reader: the runtime stage carries only what the process actually loads. The runtime base is
-# Debian (glibc), not Alpine (musl) - SQLite's native library has linux-x64/arm64 builds for glibc
-# and musl has never been measured in this project, so the smaller image would be an untested
-# variable for no operational gain.
+# Two stages: the SDK is ~1.7 GB, the app a few MB, so the runtime stage carries only what the
+# process loads. Debian (glibc), not Alpine (musl): SQLite's native library is built for glibc and
+# musl has never been measured here. Both stage tags are pinned (SDK 10.0.400 / runtime 10.0.4);
+# a floating tag would let the shipped image drift from the toolchain and lock files this repo
+# validated.
 #
 # The image and the bare binary are the same code with the same environment variables; "the Docker
 # image and a bare binary behave identically" is a standing requirement, and the integration checks
@@ -43,7 +43,10 @@ COPY Directory.Build.props ./
 COPY Novara.Core/Novara.Core.csproj Novara.Core/
 COPY Novara.Sync.Server/Novara.Sync.Server.csproj Novara.Sync.Server/
 COPY Novara.Server/Novara.Server.csproj Novara.Server/
-RUN dotnet restore Novara.Server/Novara.Server.csproj
+COPY Novara.Core/packages.lock.json Novara.Core/
+COPY Novara.Sync.Server/packages.lock.json Novara.Sync.Server/
+COPY Novara.Server/packages.lock.json Novara.Server/
+RUN dotnet restore Novara.Server/Novara.Server.csproj --locked-mode
 
 # Novara.Web and the two SnapshotViewer files are build inputs, not extras: Novara.Server.csproj
 # links them into the output as Novara.Web/**, which is where the reader's default root points.
@@ -57,7 +60,7 @@ RUN dotnet publish Novara.Server/Novara.Server.csproj \
         -c Release --no-restore -o /app
 
 # ---------- runtime ----------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.4 AS runtime
 
 LABEL org.opencontainers.image.title="NovaraSync" \
       org.opencontainers.image.description="Novara Sync server: end-to-end encrypted snapshot sync and the read-only web reader." \

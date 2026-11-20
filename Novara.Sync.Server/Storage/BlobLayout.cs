@@ -57,19 +57,50 @@ internal static class BlobLayout
     public static string ChunkPath(string root, string spaceId, string chunkId)
         => Path.Combine(ChunkDirectory(root, spaceId), chunkId + ".blob");
 
+
+
+
+
+    public const int MaxChunkBytes = Novara.Services.SyncContainer.MaxChunkBytes;
+
     public static void WriteChunk(string root, string spaceId, string chunkId, byte[] data)
     {
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length > MaxChunkBytes) throw new ArgumentException("chunk is larger than the per-chunk limit", nameof(data));
         var dir = ChunkDirectory(root, spaceId);
         Directory.CreateDirectory(dir);
-        var tmp = Path.Combine(dir, chunkId + ".tmp");
-        File.WriteAllBytes(tmp, data);
-        File.Move(tmp, Path.Combine(dir, chunkId + ".blob"), overwrite: true);
+
+        var tmp = Path.Combine(dir, chunkId + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            File.WriteAllBytes(tmp, data);
+            File.Move(tmp, Path.Combine(dir, chunkId + ".blob"), overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
 
     public static byte[]? ReadChunk(string root, string spaceId, string chunkId)
     {
         var path = ChunkPath(root, spaceId, chunkId);
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        if (!File.Exists(path)) return null;
+
+        if (new FileInfo(path).Length > MaxChunkBytes) return null;
+
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            return buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
     }
 
 

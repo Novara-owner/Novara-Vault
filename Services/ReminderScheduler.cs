@@ -100,32 +100,49 @@ public static class ReminderScheduler
 
     public static void Schedule(Guid id, DateTime due)
     {
+        object? svc = null;
+        object? folder = null;
+        object? definition = null;
+
+
+
+        object? settings = null;
+        object? triggers = null;
+        object? trigger = null;
+        object? actions = null;
+        object? action = null;
         try
         {
             var svcType = Type.GetTypeFromProgID("Schedule.Service")
                 ?? throw new InvalidOperationException("Schedule.Service COM class is not registered.");
-            dynamic svc = Activator.CreateInstance(svcType)!;
-            svc.Connect();
-            dynamic folder = svc.GetFolder("\\");
-            dynamic definition = svc.NewTask(0);
 
 
 
-            definition.Settings.DisallowStartIfOnBatteries = false;
-            definition.Settings.StopIfGoingOnBatteries = false;
-            definition.Settings.StartWhenAvailable = false;
-            dynamic trigger = definition.Triggers.Create(1);
+            dynamic svcDyn = svc = Activator.CreateInstance(svcType)!;
+            svcDyn.Connect();
+            dynamic folderDyn = folder = svcDyn.GetFolder("\\");
+            dynamic definitionDyn = definition = svcDyn.NewTask(0);
 
-            trigger.StartBoundary = due.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
-            trigger.Enabled = true;
-            dynamic action = definition.Actions.Create(0);
-            action.Path = GetExecutablePath();
-            action.Arguments = "--reminder " + id.ToString("D", CultureInfo.InvariantCulture);
+
+
+            dynamic settingsDyn = settings = definitionDyn.Settings;
+            settingsDyn.DisallowStartIfOnBatteries = false;
+            settingsDyn.StopIfGoingOnBatteries = false;
+            settingsDyn.StartWhenAvailable = false;
+            dynamic triggersDyn = triggers = definitionDyn.Triggers;
+            dynamic triggerDyn = trigger = triggersDyn.Create(1);
+
+            triggerDyn.StartBoundary = due.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
+            triggerDyn.Enabled = true;
+            dynamic actionsDyn = actions = definitionDyn.Actions;
+            dynamic actionDyn = action = actionsDyn.Create(0);
+            actionDyn.Path = GetExecutablePath();
+            actionDyn.Arguments = "--reminder " + id.ToString("D", CultureInfo.InvariantCulture);
 
 
 
             var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
-            folder.RegisterTaskDefinition(TaskPrefix + id, definition, 6, null, null, 3, "D:P(A;OICI;FA;;;" + sid + ")");
+            folderDyn.RegisterTaskDefinition(TaskPrefix + id, definitionDyn, 6, null, null, 3, "D:P(A;OICI;FA;;;" + sid + ")");
         }
         catch (Exception ex)
         {
@@ -135,19 +152,51 @@ public static class ReminderScheduler
             Debug.WriteLine("ReminderScheduler.Schedule 失败: " + ex.Message);
             CrashLogger.LogNote("ReminderScheduler.Schedule", ex.ToString());
         }
+        finally
+        {
+
+
+
+            ReleaseCom(action);
+            ReleaseCom(actions);
+            ReleaseCom(trigger);
+            ReleaseCom(triggers);
+            ReleaseCom(settings);
+            ReleaseCom(definition);
+            ReleaseCom(folder);
+            ReleaseCom(svc);
+        }
+    }
+
+
+
+    private static void ReleaseCom(object? comObject)
+    {
+        if (comObject is null) return;
+        try
+        {
+            if (System.Runtime.InteropServices.Marshal.IsComObject(comObject))
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(comObject);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+
+        }
     }
 
 
     public static void Cancel(Guid id)
     {
+        object? svc = null;
+        object? folder = null;
         try
         {
             var svcType = Type.GetTypeFromProgID("Schedule.Service")
                 ?? throw new InvalidOperationException("Schedule.Service COM class is not registered.");
-            dynamic svc = Activator.CreateInstance(svcType)!;
-            svc.Connect();
-            dynamic folder = svc.GetFolder("\\");
-            folder.DeleteTask(TaskPrefix + id, 0);
+            dynamic svcDyn = svc = Activator.CreateInstance(svcType)!;
+            svcDyn.Connect();
+            dynamic folderDyn = folder = svcDyn.GetFolder("\\");
+            folderDyn.DeleteTask(TaskPrefix + id, 0);
         }
         catch (Exception ex) when (ex.HResult == unchecked((int)0x80070002))
         {
@@ -159,6 +208,11 @@ public static class ReminderScheduler
         {
             Debug.WriteLine("ReminderScheduler.Cancel 失败: " + ex.Message);
             CrashLogger.LogNote("ReminderScheduler.Cancel", ex.ToString());
+        }
+        finally
+        {
+            ReleaseCom(folder);
+            ReleaseCom(svc);
         }
     }
 }

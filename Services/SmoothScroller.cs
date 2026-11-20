@@ -42,6 +42,16 @@ internal static class SmoothScroller
         {
             try
             {
+
+
+                if (!viewer.IsLoaded)
+                {
+                    CompositionTarget.Rendering -= onFrame;
+                    _running.Remove(viewer);
+                    done.TrySetResult();
+                    return;
+                }
+
                 var t = Math.Min(1.0, clock.Elapsed.TotalMilliseconds / total);
                 var target = from * (1 - t * t * t);
 

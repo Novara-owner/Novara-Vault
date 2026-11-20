@@ -71,12 +71,20 @@ public static class ContextMenuService
 
 
 
-            using var dk = Registry.CurrentUser.OpenSubKey(DesktopMenuKey);
-            using var fk = Registry.CurrentUser.OpenSubKey(FileMenuKey);
-            using var fok = Registry.CurrentUser.OpenSubKey(FolderMenuKey);
-            using var mk = Registry.CurrentUser.OpenSubKey(MdMenuKey);
-            using var mmk = Registry.CurrentUser.OpenSubKey(MarkdownMenuKey);
-            return dk != null && fk != null && fok != null && mk != null && mmk != null;
+
+
+
+            var exe = GetExecutablePath();
+            foreach (var keyPath in new[] { DesktopMenuKey, FileMenuKey, FolderMenuKey, MdMenuKey, MarkdownMenuKey })
+            {
+                using var menu = Registry.CurrentUser.OpenSubKey(keyPath);
+                if (menu is null) return false;
+                using var cmd = Registry.CurrentUser.OpenSubKey(keyPath + @"\command");
+                var line = cmd?.GetValue("") as string;
+                if (string.IsNullOrWhiteSpace(line)) return false;
+                if (line.IndexOf(exe, StringComparison.OrdinalIgnoreCase) < 0) return false;
+            }
+            return true;
         }
         catch
         {

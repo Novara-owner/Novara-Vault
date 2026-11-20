@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -591,7 +591,7 @@ public static class ApiChatClient
             var read = await stream.ReadAsync(byteBuf.AsMemory(0, byteBuf.Length), ct);
             if (read == 0) break;
             totalBytes += read;
-            if (totalBytes > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32MB safety limit");
+            if (totalBytes > MaxResponseBodyBytes) throw new InvalidOperationException("streamed response exceeds the 32 MiB safety limit");
             var chars = decoder.GetChars(byteBuf, 0, read, charBuf, 0);
             for (var i = 0; i < chars; i++)
             {
@@ -655,7 +655,7 @@ public static class ApiChatClient
         while ((read = await stream.ReadAsync(buffer, ct)) > 0)
         {
             total += read;
-            if (total > maxBytes) throw new InvalidOperationException($"response body exceeds the {maxBytes / (1024 * 1024)}MB safety limit");
+            if (total > maxBytes) throw new InvalidOperationException($"response body exceeds the {maxBytes / (1024.0 * 1024.0):0.##} MiB safety limit");
             ms.Write(buffer, 0, read);
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());

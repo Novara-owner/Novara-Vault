@@ -52,6 +52,8 @@ public static class ReminderDueRequest
 
 
 
+    internal static readonly TimeSpan PendingMaxAge = TimeSpan.FromMinutes(10);
+
 
     public static Guid? ReadPending()
     {
@@ -59,6 +61,13 @@ public static class ReminderDueRequest
         {
             if (File.Exists(PendingPath))
             {
+
+
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(PendingPath) > PendingMaxAge)
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return null;
+                }
                 var json = File.ReadAllText(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingReminderDueFile>(json);
 

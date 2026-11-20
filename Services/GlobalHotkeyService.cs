@@ -21,11 +21,14 @@ public static class GlobalHotkeyService
     public const int IdLockNow = 2;
 
     private static IntPtr _hwnd;
+    private static IntPtr _subclassHwnd;
     private static bool _subclassInstalled;
     private static SUBCLASSPROC? _proc;
     private static Action? _onQuickCapture;
     private static Action? _onLockNow;
-    private static readonly List<int> _registered = new();
+
+
+    private static readonly Dictionary<int, (uint Modifiers, uint VirtualKey)> _registered = new();
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -47,13 +50,36 @@ public static class GlobalHotkeyService
 
     public static void Initialize(Microsoft.UI.Xaml.Window window, Action onQuickCapture, Action onLockNow)
     {
-        _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
         _onQuickCapture = onQuickCapture;
         _onLockNow = onLockNow;
+
+
+
+        var carried = _registered.ToArray();
+        if (_subclassInstalled && _proc != null && _subclassHwnd != IntPtr.Zero && _subclassHwnd != hwnd)
+        {
+            _ = RemoveWindowSubclass(_subclassHwnd, _proc, 0x4E4F51);
+            _subclassInstalled = false;
+            _subclassHwnd = IntPtr.Zero;
+        }
+
+        _hwnd = hwnd;
         if (!_subclassInstalled && _hwnd != IntPtr.Zero)
         {
-            _proc = WndProc;
+            _proc ??= WndProc;
             _subclassInstalled = SetWindowSubclass(_hwnd, _proc, 0x4E4F51, IntPtr.Zero);
+            _subclassHwnd = _subclassInstalled ? _hwnd : IntPtr.Zero;
+        }
+
+
+
+        foreach (var (id, keys) in carried)
+        {
+            if (_hwnd == IntPtr.Zero) break;
+            var ok = RegisterHotKey(_hwnd, id, keys.Modifiers | MOD_NOREPEAT, keys.VirtualKey);
+            if (ok) continue;
+            _registered.Remove(id);
         }
     }
 
@@ -64,7 +90,7 @@ public static class GlobalHotkeyService
         if (_hwnd == IntPtr.Zero) return false;
         if (RegisterHotKey(_hwnd, id, modifiers | MOD_NOREPEAT, virtualKey))
         {
-            if (!_registered.Contains(id)) _registered.Add(id);
+            _registered[id] = (modifiers, virtualKey);
             return true;
         }
         return false;
@@ -93,16 +119,18 @@ public static class GlobalHotkeyService
 
 
         if (_hwnd == IntPtr.Zero) { _registered.Clear(); return; }
-        foreach (var id in _registered.ToArray()) UnregisterHotKey(_hwnd, id);
+        foreach (var id in _registered.Keys.ToArray()) UnregisterHotKey(_hwnd, id);
         _registered.Clear();
 
 
 
-        if (_subclassInstalled && _proc != null) _ = RemoveWindowSubclass(_hwnd, _proc, 0x4E4F51);
+        if (_subclassInstalled && _proc != null && _subclassHwnd != IntPtr.Zero)
+            _ = RemoveWindowSubclass(_subclassHwnd, _proc, 0x4E4F51);
         _proc = null;
         _onQuickCapture = null;
         _onLockNow = null;
         _subclassInstalled = false;
+        _subclassHwnd = IntPtr.Zero;
         _hwnd = IntPtr.Zero;
     }
 

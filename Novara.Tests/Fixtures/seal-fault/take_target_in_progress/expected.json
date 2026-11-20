@@ -1,0 +1,7 @@
+{
+  "case": "take_target_in_progress",
+  "setup": "take_begin, entry indexed, half-written target",
+  "actions": [
+    "AskCleanupPartialTarget"
+  ]
+}

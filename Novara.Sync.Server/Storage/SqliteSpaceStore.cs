@@ -256,6 +256,65 @@ public sealed class SqliteSpaceStore : ISpaceStore
         }
     }
 
+    public void UpdateSpace(string spaceId, Action<SpaceRecord> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+        RequireSafeId(spaceId);
+
+        using var cn = Open();
+        using var tx = Guarded(() => cn.BeginTransaction());
+        try
+        {
+            var space = ReadSpaceRow(cn, tx, spaceId)
+                        ?? throw new SpaceGoneException($"space no longer exists: {spaceId}");
+            mutate(space);
+
+            using var cmd = cn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                UPDATE spaces SET
+                    name = $name, updated_at = $updated, current_version = $version,
+                    keywrap_version = $kwv, keywrap_blob = $kwb, enroll_hash = $enroll,
+                    read_token_hash = $read, quota_bytes = $quota, max_versions = $max,
+                    container_generation = $gen
+                WHERE space_id = $id;
+                """;
+            cmd.Parameters.AddWithValue("$id", space.SpaceId);
+            cmd.Parameters.AddWithValue("$name", space.Name);
+            cmd.Parameters.AddWithValue("$updated", FormatTime(space.UpdatedAt));
+            cmd.Parameters.AddWithValue("$version", space.CurrentVersion);
+            cmd.Parameters.AddWithValue("$kwv", space.KeyWrapVersion);
+            cmd.Parameters.AddWithValue("$kwb", space.KeyWrapJson);
+            cmd.Parameters.AddWithValue("$enroll", space.EnrollmentHash);
+            cmd.Parameters.AddWithValue("$read", space.ReadTokenHash);
+            cmd.Parameters.AddWithValue("$quota", space.QuotaBytes);
+            cmd.Parameters.AddWithValue("$max", space.MaxVersions);
+            cmd.Parameters.AddWithValue("$gen", space.ContainerGeneration);
+            cmd.ExecuteNonQuery();
+            tx.Commit();
+        }
+        catch (SpaceStoreException)
+        {
+            tx.Rollback();
+            throw;
+        }
+        catch (SqliteException e)
+        {
+            tx.Rollback();
+            throw new SpaceStoreException("failed to update the space", e);
+        }
+    }
+
+    private static SpaceRecord? ReadSpaceRow(SqliteConnection cn, SqliteTransaction tx, string spaceId)
+    {
+        using var cmd = cn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = SpaceSelect + " WHERE space_id = $id;";
+        cmd.Parameters.AddWithValue("$id", spaceId);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadSpace(reader) : null;
+    }
+
 
 
     public IReadOnlyList<DeviceRecord> GetDevices(string spaceId)
@@ -452,17 +511,27 @@ public sealed class SqliteSpaceStore : ISpaceStore
 
 
 
-    public void WriteBlob(string spaceId, VersionRecord version, byte[] payload)
+    public void WriteBlob(string spaceId, VersionRecord version, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(version);
-        ArgumentNullException.ThrowIfNull(payload);
         RequireSafeId(spaceId);
 
         Directory.CreateDirectory(BlobLayout.BlobDirectory(_root, spaceId));
         var path = BlobLayout.BlobPath(_root, spaceId, version);
-        var temp = path + ".tmp";
-        File.WriteAllBytes(temp, payload);
-        File.Move(temp, path, overwrite: true);
+
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                stream.Write(payload.Span);
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+            throw;
+        }
     }
 
     public byte[]? ReadBlob(string spaceId, VersionRecord version)
@@ -633,6 +702,13 @@ public sealed class SqliteSpaceStore : ISpaceStore
         => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
             ? BlobLayout.ReadChunk(_root, spaceId, chunkId.ToLowerInvariant())
             : null;
+
+    public string? ChunkPath(string spaceId, string chunkId)
+    {
+        if (!BlobLayout.IsSafeId(spaceId) || !BlobLayout.IsSafeChunkId(chunkId)) return null;
+        var id = chunkId.ToLowerInvariant();
+        return BlobLayout.ChunkExists(_root, spaceId, id) ? BlobLayout.ChunkPath(_root, spaceId, id) : null;
+    }
 
     public bool ChunkExists(string spaceId, string chunkId)
         => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)

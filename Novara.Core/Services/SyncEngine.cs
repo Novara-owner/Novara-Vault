@@ -58,7 +58,8 @@ public sealed record SyncRoundOutcome(
     long LocalVersion = 0,
     long RemoteVersion = 0,
     SyncErrorCode? ProtocolError = null,
-    bool Busy = false)
+    bool Busy = false,
+    OversizedPartition? Oversized = null)
 {
 
 
@@ -69,6 +70,14 @@ public sealed record SyncRoundOutcome(
 
 
     public bool NeedsDecision => Status is SyncRoundStatus.Conflict or SyncRoundStatus.RollbackRejected;
+}
+
+
+
+public sealed record OversizedPartition(string PartitionKey, double MiB, int LimitMiB)
+{
+    public override string ToString() =>
+        $"the {PartitionKey} partition is {MiB:0.0} MiB once sealed, over the {LimitMiB} MiB per-chunk limit - remove some large items from that section and sync again";
 }
 
 
@@ -287,6 +296,11 @@ public static class SyncEngine
                 string.Equals(known, pidHex, StringComparison.OrdinalIgnoreCase)) continue;
             var pidBytes = Convert.FromHexString(pidHex);
             var blob = SyncContainer.SealChunk(partitions[key], spaceKeyBase64, pidBytes);
+
+
+
+            if (OversizedPartitionReason(key, blob.Length) is { } oversized)
+                return new SyncRoundOutcome(SyncRoundStatus.Error, oversized.ToString(), state.BaseVersion, remoteVersion, Oversized: oversized);
             var put = await api.PutChunkAsync(pidHex, blob, ct).ConfigureAwait(false);
             if (!put.Success) return FromApiFailure(put);
         }
@@ -338,6 +352,15 @@ public static class SyncEngine
 
 
 
+    internal static OversizedPartition? OversizedPartitionReason(string partitionKey, int sealedLength)
+    {
+        if (sealedLength <= SyncContainer.MaxChunkBytes) return null;
+
+        return new OversizedPartition(partitionKey, sealedLength / (1024.0 * 1024), SyncContainer.MaxChunkBytes / (1024 * 1024));
+    }
+
+
+
     private static async Task<SyncRoundOutcome> ConflictV5Async(NovaraStore store, SyncState state, string spaceKeyBase64,
         SyncApiClient api, long remoteVersion, DateTime utcNow, CancellationToken ct)
     {
@@ -373,6 +396,21 @@ public static class SyncEngine
         if (!ManifestHasAllPartitions(manifest))
             return new SyncRoundOutcome(SyncRoundStatus.Error, "the sync manifest is missing a partition");
 
+
+
+
+
+
+        var currentStable = StableJson.SerializeToUtf8BytesStable(
+            SyncFieldPolicy.CloneForSync(store.Database), SyncPayloadApplier.SyncJsonOptions);
+        if (currentStable is null || !currentStable.AsSpan().SequenceEqual(localStable))
+        {
+            SyncStateUpdater.ObserveVersion(state, remoteVersion);
+            return new SyncRoundOutcome(SyncRoundStatus.Conflict,
+                "the local database changed while downloading the remote manifest",
+                state.BaseVersion, remoteVersion);
+        }
+
         var identical = manifest.Partitions.All(kvp =>
             localPids.TryGetValue(kvp.Key, out var localBytes) &&
             SyncPartitions.PidOf(localBytes).Equals(kvp.Value, StringComparison.OrdinalIgnoreCase));
@@ -381,7 +419,7 @@ public static class SyncEngine
 
 
             SyncStateUpdater.AfterPull(state, remoteVersion,
-                SyncEnvelopeCodec.HashPayload(SyncPayloadApplier.BuildPayloadJson(store.Database)), utcNow);
+                SyncEnvelopeCodec.HashPayload(localStable), utcNow);
             state.ServerManifestPartitions = new Dictionary<string, string>(manifest.Partitions, StringComparer.Ordinal);
             return new SyncRoundOutcome(SyncRoundStatus.AutoRebased,
                 "partition pids identical - payloads match", state.BaseVersion, remoteVersion);
@@ -548,6 +586,17 @@ public static class SyncEngine
 
 
 
+
+
+
+
+
+
+            var currentStable = StableJson.SerializeToUtf8BytesStable(
+                SyncFieldPolicy.CloneForSync(store.Database), SyncPayloadApplier.SyncJsonOptions);
+            if (currentStable is null || !currentStable.AsSpan().SequenceEqual(localStable))
+                return new SyncRoundOutcome(SyncRoundStatus.Error, "the local database changed during the pull",
+                    state.BaseVersion, download.Value.Version);
 
             var db = store.Database;
             var partitionsBefore = (db.MemoGroups, db.MemoEntries, db.PathBackupItems,

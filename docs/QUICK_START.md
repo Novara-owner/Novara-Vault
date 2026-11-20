@@ -10,7 +10,7 @@ Grab the latest installer from the [Releases](https://github.com/Novara-owner/No
 
 ## 2. Walk through the first-launch wizard
 
-The first start shows a short welcome wizard (seven pages) that introduces the tabs, the privacy lock and the data model. You can replay it later from Settings → Welcome page.
+The first start shows a short welcome wizard (eight pages) that introduces the tabs, the privacy lock, Novara Space and the data model. You can replay it later from Settings → Welcome page.
 
 ## 3. Set a privacy lock (recommended)
 
@@ -28,5 +28,7 @@ Ctrl+K opens global search from anywhere; the Settings page footer shows your ve
 ## 5. Know where your data lives
 
 Everything lives in `%LocalAppData%\Novara` (`data.novadb` plus the lock file). Tools → Data backup exports an encrypted `.novaenc` backup — keep one off the machine. Tools → Security snapshot produces a shareable encrypted snapshot; the sync features (self-hosted) and the MCP agent interface are optional and documented in [docs/MCP.md](MCP.md) and [docs/BUILD.md](BUILD.md).
+
+**Optional — Novara Space:** open it from the hamburger menu and set its own password. Sealed files and folders, and time capsules, live under `%LocalAppData%\Novara\seal\`, separate from the main database: they are not searched, not synced, not exposed to MCP, not included in snapshots or the recycle bin. Export them deliberately as a standalone `.novabundle`; forgetting the space password means the sealed content cannot be recovered.
 
 For development and self-hosting, see [docs/BUILD.md](BUILD.md).

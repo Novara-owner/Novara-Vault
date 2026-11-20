@@ -97,6 +97,9 @@ public sealed partial class GroupArrow : Grid
 
         AnimateScale(sb, 0.96, 1.0, delayMs, 160);
         _storyboard = sb;
+
+
+        sb.Completed += (_, _) => { if (ReferenceEquals(_storyboard, sb)) _storyboard = null; };
         sb.Begin();
     }
 

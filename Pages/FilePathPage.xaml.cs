@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Novara.Models;
 using Novara.Services;
@@ -89,12 +90,21 @@ public sealed partial class FilePathPage : Page
 
         DeleteConfirmOverlay.ContextRequested += (_, e) => e.Handled = true;
         ContentRoot.SizeChanged += (_, _) => ReclampVisibleDialogs();
-        Loaded += (_, _) => { LoadFromStore();
+        Loaded += (_, _) => {
+
+
+
+        PathPropertyService.Updated -= OnPathPropertyUpdated;
+        PathPropertyService.Updated += OnPathPropertyUpdated;
+        PathPropertyService.FeatureToggled -= OnPathPropertyFeatureToggled;
+        PathPropertyService.FeatureToggled += OnPathPropertyFeatureToggled;
+        LoadFromStore();
         _ = CheckAllPaths(); SyncPathPropertyTargets(); PathPropertyService.RefreshAll();
         if (_autoCheckTimer == null) { _autoCheckTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) }; _autoCheckTimer.Tick += (_, _) => _ = CheckAllPaths(); _autoCheckTimer.Start(); } };
         Unloaded += (_, _) => { PathPropertyService.Updated -= OnPathPropertyUpdated; PathPropertyService.FeatureToggled -= OnPathPropertyFeatureToggled; StopAllPropertyBreaths();
+            HidePathDropVeil();
             _pathCheckCts?.Cancel();
-            _npCheckCts?.Cancel(); _npCheckCts?.Dispose(); _npCheckCts = null;
+            _npProbePendingPath = null; _npProbeGen++;
 
 
 
@@ -121,7 +131,8 @@ public sealed partial class FilePathPage : Page
         _loadedDb = App.Store?.Database;
         EmptyHint.Visibility = Visibility.Collapsed;
         var db = App.Store?.Database;
-        if (db == null) return;
+
+        if (db == null) { UpdateEmptyHint(); return; }
 
         var entries = db.PathBackupItems.Where(x => !x.IsDeleted).ToList();
 
@@ -150,10 +161,15 @@ public sealed partial class FilePathPage : Page
         {
             await ChunkedRender.RunAsync(entries.Count, 8, DispatcherQueue, (s, e) =>
             {
+
+
+                string wsNow = App.CurrentWorkspaceId;
+                bool wsActiveNow = !string.IsNullOrEmpty(wsNow);
                 for (int i = s; i < e; i++)
                 {
                     var entry = entries[i];
                     var card = BuildPathCard(entry.Name, entry.Path, entry.Note, i);
+                    if (wsActiveNow && !string.Equals(entry.WorkspaceId ?? "", wsNow, StringComparison.Ordinal)) card.Visibility = Visibility.Collapsed;
                     _cardIds[card] = entry.Id;
                     _createdAt[card] = entry.CreatedAt;
                     if (entry.IsStarred) { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
@@ -187,11 +203,20 @@ public sealed partial class FilePathPage : Page
 
         _storeLoaded = true;
         _entrancePlayed = true;
-        ReorderCards();
-        ApplyCardFilters();
-        _ = CheckAllPaths();
-        SyncPathPropertyTargets();
-        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
+        try
+        {
+            ReorderCards();
+            ApplyCardFilters();
+            _ = CheckAllPaths();
+            SyncPathPropertyTargets();
+            if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
+        }
+        catch (Exception ex)
+        {
+
+            System.Diagnostics.Debug.WriteLine($"路径页收尾失败（页面保持已加载）: {ex}");
+            Novara.Services.CrashLogger.LogNote("FilePathPagePostRender", ex.Message);
+        }
     }
 
 
@@ -265,9 +290,13 @@ public sealed partial class FilePathPage : Page
         bool anyVisible = false;
         foreach (var c in PathList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
         if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; }
-        EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : App.GetString("Path_Empty_Tip");
+
+        var title = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : App.GetString("Path_Empty_Tip");
+        EmptyHint.Content = Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.SealEmptyArt.HandPath, Novara.Services.SealEmptyArt.ArrowPath,
+            Novara.Services.SealEmptyArt.CanvasWidth, Novara.Services.SealEmptyArt.CanvasHeight,
+            title, App.GetString("Path_Empty_Sub"));
         EmptyHint.Visibility = Visibility.Visible;
-        FloatInHint();
     }
 
 
@@ -275,6 +304,8 @@ public sealed partial class FilePathPage : Page
     {
         string wsId = App.CurrentWorkspaceId;
         bool wsActive = !string.IsNullOrEmpty(wsId);
+        bool visibilityChanged = false;
+        var becameVisible = new List<Border>();
         var db = App.Store?.Database;
 
 
@@ -291,35 +322,23 @@ public sealed partial class FilePathPage : Page
 
             if (wsById != null && _cardIds.TryGetValue(b, out var id))
                 wsMatch = wsById.TryGetValue(id, out var cw) && cw == wsId;
-            b.Visibility = wsMatch ? Visibility.Visible : Visibility.Collapsed;
+            var wanted = wsMatch ? Visibility.Visible : Visibility.Collapsed;
+            if (b.Visibility != wanted)
+            {
+                if (wanted == Visibility.Visible) becameVisible.Add(b);
+                b.Visibility = wanted;
+                visibilityChanged = true;
+            }
+        }
+
+
+
+        if (visibilityChanged)
+        {
+            if (becameVisible.Count > 0) _ = CheckPaths(becameVisible);
+            SyncPathPropertyTargets();
         }
         UpdateEmptyHint();
-    }
-
-    private void FloatInHint()
-    {
-
-        if (!App.IsAnimationsEnabled)
-        {
-            EmptyHint.Opacity = 1;
-            if (EmptyHint.RenderTransform is TranslateTransform st) st.Y = 0;
-            return;
-        }
-        EmptyHint.Opacity = 0;
-        if (EmptyHint.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            EmptyHint.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(oa, EmptyHint); Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, tt); Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
     }
 
 
@@ -352,6 +371,79 @@ public sealed partial class FilePathPage : Page
         NewPathInputBox.Text = path;
     }
 
+
+
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _pathDropWatchdog;
+
+    private void ShowPathDropVeil()
+    {
+        App.MainWindow?.ShowSealDropVeil();
+        if (_pathDropWatchdog is null)
+        {
+            _pathDropWatchdog = DispatcherQueue.CreateTimer();
+            _pathDropWatchdog.Interval = TimeSpan.FromMilliseconds(300);
+            _pathDropWatchdog.IsRepeating = false;
+            _pathDropWatchdog.Tick += (_, _) => App.MainWindow?.HideSealDropVeil();
+        }
+        _pathDropWatchdog.Stop();
+        _pathDropWatchdog.Start();
+    }
+
+    private void HidePathDropVeil()
+    {
+        App.MainWindow?.HideSealDropVeil();
+        _pathDropWatchdog?.Stop();
+    }
+
+
+
+
+
+    private bool IsAnyDialogOpen()
+        => NewPathOverlay.Visibility == Visibility.Visible
+           || DeleteConfirmOverlay.Visibility == Visibility.Visible;
+
+    private void ContentRoot_DragOver(object sender, DragEventArgs e)
+    {
+        var accept = e.DataView.Contains(StandardDataFormats.StorageItems)
+                     && !IsAnyDialogOpen();
+        e.AcceptedOperation = accept ? DataPackageOperation.Copy : DataPackageOperation.None;
+        e.Handled = true;
+        if (accept) ShowPathDropVeil(); else HidePathDropVeil();
+    }
+
+    private void ContentRoot_DragLeave(object sender, DragEventArgs e) => HidePathDropVeil();
+
+    private async void ContentRoot_Drop(object sender, DragEventArgs e)
+    {
+        HidePathDropVeil();
+        e.Handled = true;
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        if (IsAnyDialogOpen()) return;
+
+        var deferral = e.GetDeferral();
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+
+
+            var usable = items.Where(i => !string.IsNullOrEmpty(i.Path)).ToList();
+            if (usable.Count == 0)
+            {
+                App.ShowToast(App.GetString("Path_Drop_NoPath"), ToastTone.Error);
+                return;
+            }
+            OpenNewPathDialogWith(usable[0].Path);
+
+            if (usable.Count > 1) App.ShowToast(App.GetString("Path_Drop_FirstOnly"));
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
     private void ShowNewPathDialog(bool isEdit = false)
     {        _confirming = false; _newPathGen++;
         if (!isEdit)
@@ -371,6 +463,8 @@ public sealed partial class FilePathPage : Page
     private void HideNewPathDialog()
     {
         _newPathGen++;
+        _npProbeGen++;
+        _npProbePendingPath = null;
         _editingPathCard = null;
         DialogDepth.VeilHide();
         DialogUi.HideOverlay(ContentRoot, _dialogGens, _dialogMap, NewPathOverlay, NewPathDialog, NewPathDialogTransform, () => { });
@@ -445,7 +539,9 @@ public sealed partial class FilePathPage : Page
 
 
 
-    private System.Threading.CancellationTokenSource? _npCheckCts;
+    private bool _npProbeInFlight;
+    private string? _npProbePendingPath;
+    private int _npProbeGen;
 
     private async void UpdateNewPathConfirmState()
     {
@@ -456,28 +552,51 @@ public sealed partial class FilePathPage : Page
 
 
 
-
-
-        _npCheckCts?.Cancel();
-        _npCheckCts?.Dispose();
-        _npCheckCts = null;
         if (_editingPathCard == null && valid)
         {
-            var cts = _npCheckCts = new System.Threading.CancellationTokenSource();
-            var exists = false;
+            _npProbePendingPath = path;
+            if (_npProbeInFlight) return;
+            _npProbeInFlight = true;
+            var gen = _npProbeGen;
             try
             {
-                exists = await System.Threading.Tasks.Task.Run(() =>
+                while (_npProbePendingPath is { } probePath)
                 {
-                    try { return Directory.Exists(path) || File.Exists(path); }
-                    catch { return false; }
-                });
+                    _npProbePendingPath = null;
+                    bool exists = false;
+                    try
+                    {
+                        exists = await System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try { return File.Exists(probePath) || Directory.Exists(probePath); }
+                            catch { return false; }
+                        });
+                    }
+                    catch { }
+                    if (gen != _npProbeGen || !IsLoaded) return;
+
+                    if (!string.Equals(NewPathInputBox.Text.Trim().Trim('"'), probePath, StringComparison.Ordinal))
+                        continue;
+                    bool enabled = exists && !string.IsNullOrWhiteSpace(NewPathNameBox.Text.Trim());
+                    if (enabled && _editingPathCard != null && !PathContentChanged()) enabled = false;
+                    NewPathConfirmButton.IsEnabled = enabled;
+                }
             }
-            catch (System.OperationCanceledException) { return; }
-            if (cts.IsCancellationRequested) return;
-            if (!IsLoaded) return;
-            valid = exists;
+            finally
+            {
+                _npProbeInFlight = false;
+
+
+
+                if (_npProbePendingPath is not null && IsLoaded
+                    && !DispatcherQueue.TryEnqueue(UpdateNewPathConfirmState))
+                    CrashLogger.LogNote("FilePathProbe", "pending probe not re-dispatched");
+            }
+            return;
         }
+
+
+        _npProbePendingPath = null;
 
         if (valid && _editingPathCard != null && !PathContentChanged())
             valid = false;
@@ -786,7 +905,9 @@ public sealed partial class FilePathPage : Page
             Width = 44, Height = 44,
             Style = (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
             CornerRadius = new CornerRadius(12),
-            IsTabStop = false,
+
+
+            IsTabStop = true,
             Visibility = Visibility.Collapsed
         };
         openFileBtn.Content = new Viewbox
@@ -822,6 +943,7 @@ public sealed partial class FilePathPage : Page
         };
 
         ToolTipService.SetToolTip(openFileBtn, new ToolTip { Content = App.GetString("Path_OpenFile_Button"), Style = (Style)Application.Current.Resources["BrandToolTipStyle"] });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openFileBtn, App.GetString("Path_OpenFile_Button"));
         rightPanel.Children.Add(openFileBtn);
         _openFileButtons[card] = openFileBtn;
         HookCardActionButtonHover(openFileBtn, card);
@@ -831,7 +953,7 @@ public sealed partial class FilePathPage : Page
             Width = 44, Height = 44,
             Style = (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
             CornerRadius = new CornerRadius(12),
-            IsTabStop = false
+            IsTabStop = true
         };
         openBtn.Content = new Viewbox
         {
@@ -892,6 +1014,7 @@ public sealed partial class FilePathPage : Page
                 }
             }
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(openBtn, App.GetString("Path_OpenLocation_Button"));
         rightPanel.Children.Add(openBtn);
 
         var copyBtn = new Button
@@ -899,7 +1022,7 @@ public sealed partial class FilePathPage : Page
             Width = 44, Height = 44,
             Style = (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
             CornerRadius = new CornerRadius(12),
-            IsTabStop = false
+            IsTabStop = true
         };
         copyBtn.Content = new Viewbox
         {
@@ -920,6 +1043,7 @@ public sealed partial class FilePathPage : Page
             try { Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pkg); App.ShowToast(App.GetString("Common_Toast_Copied")); }
             catch { App.ShowToast(App.GetString("Common_Toast_CopyFail"), ToastTone.Error); }
         };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(copyBtn, App.GetString("Common_Copy"));
         rightPanel.Children.Add(copyBtn);
 
 
@@ -1108,15 +1232,15 @@ public sealed partial class FilePathPage : Page
             var pointer = e.Pointer;
             armed = true;
 
-            var rtb = new RenderTargetBitmap();
-            var renderOp = rtb.RenderAsync(card);
-
             timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
             timer.Tick += async (_, _) =>
             {
                 timer.Stop(); timer = null;
                 if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
-                try { await renderOp; } catch { }
+
+
+                var rtb = new RenderTargetBitmap();
+                try { await rtb.RenderAsync(card); } catch { armed = false; return; }
                 if (!armed || _dragging || !card.IsLoaded) { armed = false; return; }
                 BeginDrag(card, grabOffset, rtb);
                 try { card.CapturePointer(pointer); } catch { }
@@ -1139,6 +1263,13 @@ public sealed partial class FilePathPage : Page
             }
         };
 
+
+
+        card.PointerExited += (s, e) =>
+        {
+            if (_dragging) return;
+            armed = false; timer?.Stop(); timer = null;
+        };
         card.PointerReleased += (s, e) =>
         {
             if (_dragging && ReferenceEquals(_dragCard, card)) EndDrag();
@@ -1252,7 +1383,7 @@ public sealed partial class FilePathPage : Page
 
         if (_dropIndicator != null) PathList.Children.Remove(_dropIndicator);
         else _dropIndicator = CreateDropIndicator();
-        PathList.Children.Insert(index, _dropIndicator);
+        PathList.Children.Insert(PhysicalIndexForVisibleSlotIn(index, PathList), _dropIndicator);
         _dropIndex = index;
         _dropCacheDirty = true;
     }
@@ -1591,16 +1722,19 @@ public sealed partial class FilePathPage : Page
     private void SyncPathPropertyTargets()
     {
         var items = new List<(Guid, string)>();
+
+
+        var hidden = new HashSet<Guid>();
         foreach (var child in PathList.Children)
         {
             if (child is Border b && _cardIds.TryGetValue(b, out var id)
                 && _pathCardData.TryGetValue(b, out var data) && !string.IsNullOrWhiteSpace(data.path))
             {
-                if (b.Visibility == Visibility.Visible) items.Insert(0, (id, data.path));
-                else items.Add((id, data.path));
+                items.Add((id, data.path));
+                if (b.Visibility != Visibility.Visible) hidden.Add(id);
             }
         }
-        if (items.Count > 0) PathPropertyService.SetTargets(items, visibleFirst: true);
+        PathPropertyService.SetTargets(items, visibleFirst: true, hidden);
     }
 
     private void AttachCardContextMenu(Border card, Viewbox pinIcon, Viewbox starIcon)
@@ -1837,7 +1971,12 @@ public sealed partial class FilePathPage : Page
         SetCardIsFile(card, isFile);
     }
 
-    private async Task<int> CheckAllPaths()
+    private Task<int> CheckAllPaths()
+        => CheckPaths(PathList.Children.OfType<Border>().Where(c => c.Visibility == Visibility.Visible));
+
+
+
+    private async Task<int> CheckPaths(IEnumerable<Border> candidates)
     {
 
 
@@ -1847,9 +1986,8 @@ public sealed partial class FilePathPage : Page
         var ct = cts.Token;
 
         var targets = new List<(Border Card, string Path, long Gen)>();
-        foreach (var child in PathList.Children)
-            if (child is Border card && card.Visibility == Visibility.Visible
-                && _pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
+        foreach (var card in candidates)
+            if (_pathCardData.TryGetValue(card, out var data) && !string.IsNullOrWhiteSpace(data.path))
                 targets.Add((card, data.path, ClaimPathStatusGen(card)));
         if (targets.Count == 0) return 0;
 
@@ -1874,8 +2012,11 @@ public sealed partial class FilePathPage : Page
                 }
             });
         }
-        catch (System.OperationCanceledException) { return 0; }
-        if (ct.IsCancellationRequested) return 0;
+        catch (System.OperationCanceledException) { }
+
+
+
+
         foreach (var (card, isValid, isFile, gen) in results)
 
             if (PathList.Children.Contains(card) && IsPathStatusCurrent(card, gen))
@@ -1883,6 +2024,16 @@ public sealed partial class FilePathPage : Page
                 SetPathStatus(card, isValid);
                 SetCardIsFile(card, isFile);
             }
+
+
+        var completedCards = results.Select(r => r.Card).ToHashSet();
+        var retryCards = targets.Where(t => !completedCards.Contains(t.Card)
+                                            && PathList.Children.Contains(t.Card)
+                                            && t.Card.Visibility == Visibility.Visible
+                                            && IsPathStatusCurrent(t.Card, t.Gen))
+                                .Select(t => t.Card).ToList();
+        if (retryCards.Count > 0 && IsLoaded)
+            DispatcherQueue.TryEnqueue(() => _ = CheckPaths(retryCards));
         return targets.Count;
     }
 

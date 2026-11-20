@@ -1,0 +1,1272 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="Novara.Pages.SealPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:Novara.Pages"
+    xmlns:app="using:Novara"
+    xmlns:services="using:Novara.Services"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+
+
+
+
+
+        <Style x:Key="SealRecoveryRowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root" Background="Transparent">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Root"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.92" Duration="0:0:0.1" />
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Root"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.84" Duration="0:0:0.1" />
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Root"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0.5" Duration="0:0:0.1" />
+                                        </Storyboard>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Stretch" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Page.Resources>
+
+
+
+
+    <Grid x:Name="SealRoot" Background="{ThemeResource AppSurfaceBrush}"
+          AllowDrop="True" DragOver="SealRoot_DragOver" DragLeave="SealRoot_DragLeave" Drop="SealRoot_Drop">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+
+            <Grid x:Name="SealRecoveryBannerHost" Margin="40,8,40,0" Visibility="Collapsed" />
+
+
+
+            <Grid Grid.Row="1" x:Name="SealContentHost">
+        <Grid x:Name="SealSpaceView">
+            <ScrollViewer x:Name="SealSpaceScroll" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                <StackPanel x:Name="SealSpaceContent" Padding="40,8,40,20" Spacing="12" />
+            </ScrollViewer>
+
+
+
+
+            <ContentPresenter x:Name="SealEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+
+
+            <ContentPresenter x:Name="SealLockedState" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed" />
+
+
+            <ContentPresenter x:Name="SealNotInitState" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed" />
+
+
+
+            <TextBlock x:Name="SealListError"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"
+                       FontSize="13" Foreground="{ThemeResource AppDangerTextBrush}"
+                       Visibility="Collapsed" />
+        </Grid>
+
+        <Grid x:Name="SealCapsuleView" Visibility="Collapsed">
+            <ScrollViewer x:Name="SealCapsuleScroll" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                <StackPanel x:Name="SealCapsuleContent" Padding="40,8,40,20" Spacing="12" />
+            </ScrollViewer>
+
+
+            <ContentPresenter x:Name="SealCapsuleLockedState" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed" />
+
+
+            <ContentPresenter x:Name="SealCapsuleNotInitState" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed" />
+
+
+            <ContentPresenter x:Name="SealCapsuleEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+
+            <TextBlock x:Name="SealCapsuleListError"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"
+                       FontSize="13" Foreground="{ThemeResource AppDangerTextBrush}"
+                       Visibility="Collapsed" />
+        </Grid>
+
+        <Grid x:Name="SealSettingsView" Visibility="Collapsed">
+            <ScrollViewer x:Name="SealSettingsScroll" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                <StackPanel x:Name="SealSettingsContent" Padding="40,8,40,20" Spacing="16" />
+            </ScrollViewer>
+        </Grid>
+
+
+
+        <Grid x:Name="SealPwdOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealPwdScrim" Background="#2E000000" Tapped="SealPwdScrim_Tapped" />
+            <Border x:Name="SealPwdDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="480" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealPwdDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealPwdTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealPwdClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="14" Margin="0,16,0,0">
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="SealPwdPasswordLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <PasswordBox x:Name="SealPwdPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128"
+                                             PasswordChanged="SealPwdPassword_Changed" />
+                                <TextBlock x:Name="SealPwdStrengthText" FontSize="12" Visibility="Collapsed" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="SealPwdConfirmLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <PasswordBox x:Name="SealPwdConfirmBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128"
+                                             PasswordChanged="SealPwdPassword_Changed" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="SealPwdHintLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBox x:Name="SealPwdHintBox" Style="{StaticResource NovaraTextBoxStyle}"
+                                         Height="36" MaxLength="256" />
+                                <TextBlock x:Name="SealPwdHintNote" FontSize="11"
+                                           Foreground="{ThemeResource AppTextTertiaryBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="SealPwdErrorText" FontSize="12"
+                                       Foreground="{ThemeResource AppDangerTextBrush}"
+                                       TextWrapping="Wrap" Visibility="Collapsed" />
+
+                            <TextBlock x:Name="SealPwdWarningText" FontSize="12"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealPwdCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealPwdCancel_Click" />
+                        <Button x:Name="SealPwdConfirmButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealPwdConfirm_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+        <Grid x:Name="SealDetailOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealDetailScrim" Background="#2E000000" Tapped="SealDetailScrim_Tapped" />
+            <Border x:Name="SealDetailDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="520" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealDetailTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,40,0">
+                            <Grid x:Name="SealDetailIconHost" Width="40" Height="40"
+                                  VerticalAlignment="Center" Margin="0,0,14,0" />
+                            <TextBlock x:Name="SealDetailName" VerticalAlignment="Center"
+                                       FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
+                                       MaxWidth="360" />
+                        </StackPanel>
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealDetailClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" Margin="0,4,0,0">
+                        <StackPanel Spacing="10">
+
+                            <Grid x:Name="SealDetailRowOriginal" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelOriginal" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueOriginal" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowType" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelType" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueType" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowSize" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelSize" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueSize" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowSource" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelSource" TextAlignment="Right"
+                                           VerticalAlignment="Top" Margin="0,6,0,0" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueSource" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowSealedAt" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelSealedAt" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueSealedAt" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowExpiry" ColumnSpacing="12" MinHeight="32" Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelExpiry" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueExpiry" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowStatus" ColumnSpacing="12" MinHeight="32" Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelStatus" TextAlignment="Right"
+                                           VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueStatus" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+
+                            <Grid x:Name="SealDetailRowNote" ColumnSpacing="12" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SealDetailLabelNote" TextAlignment="Right"
+                                           VerticalAlignment="Top" Margin="0,6,0,0" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealDetailValueNote" Grid.Column="1"
+                                           VerticalAlignment="Center" FontSize="13"
+                                           TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+
+
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealDetailTakeButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealDetailTake_Click" />
+                        <Button x:Name="SealDetailDestroyButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraDangerButtonStyle}" Click="SealDetailDestroy_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+        <Grid x:Name="SealSealOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealSealScrim" Background="#2E000000" Tapped="SealSealScrim_Tapped" />
+            <Border x:Name="SealSealDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="600" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealSealTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealSealTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealSealClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+
+                    <Grid Grid.Row="1" x:Name="SealSealSegment" Height="40" Margin="0,16,0,0"
+                          CornerRadius="10" BorderThickness="1"
+                          Background="{ThemeResource AppSurfaceOverlayBrush}"
+                          BorderBrush="{ThemeResource AppBorderBrush}">
+                        <Border x:Name="SealSealSegmentThumb" Height="34" HorizontalAlignment="Left"
+                                VerticalAlignment="Center" CornerRadius="8" Margin="3,0,0,0"
+                                Background="{ThemeResource AppPrimaryButtonBrush}"
+                                IsHitTestVisible="False">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="SealSealSegmentThumbTransform" X="0" />
+                            </Border.RenderTransform>
+                        </Border>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+
+                            <Button x:Name="SealSealSegSpace" Grid.Column="0"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    BorderThickness="0" Click="SealSealSegSpace_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" CornerRadius="8">
+                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              HorizontalContentAlignment="Center"
+                                                              VerticalContentAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+
+                                    <Viewbox Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center">
+                                        <Path x:Name="SealSealSegSpaceIcon" Stretch="None" />
+                                    </Viewbox>
+                                    <TextBlock x:Name="SealSealSegSpaceText" FontSize="13"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SealSealSegCapsule" Grid.Column="1"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    BorderThickness="0" Click="SealSealSegCapsule_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" CornerRadius="8">
+                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              HorizontalContentAlignment="Center"
+                                                              VerticalContentAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                    <Viewbox Width="16" Height="16" Stretch="Uniform" VerticalAlignment="Center">
+                                        <Path x:Name="SealSealSegCapsuleIcon" Stretch="None" />
+                                    </Viewbox>
+                                    <TextBlock x:Name="SealSealSegCapsuleText" FontSize="13"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" Margin="0,14,0,0">
+                        <StackPanel Spacing="14">
+
+
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="SealSealFilesLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <StackPanel x:Name="SealSealFilesList" Spacing="4" />
+                            </StackPanel>
+
+                            <StackPanel x:Name="SealSealDisplayNamePanel" Spacing="6">
+                                <TextBlock x:Name="SealSealDisplayNameLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBox x:Name="SealSealDisplayNameBox" Height="36"
+                                         Style="{StaticResource NovaraTextBoxStyle}" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="6">
+                                <TextBlock x:Name="SealSealNoteLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBox x:Name="SealSealNoteBox" Height="80" AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Style="{StaticResource NovaraTextBoxStyle}" />
+                            </StackPanel>
+
+                            <StackPanel x:Name="SealSealExpiryPanel" Spacing="6" Visibility="Collapsed">
+                                <TextBlock x:Name="SealSealExpiryLabel" FontSize="12" FontWeight="Medium"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <ComboBox x:Name="SealSealExpiryCombo" Height="36" HorizontalAlignment="Stretch"
+                                          SelectionChanged="SealSealExpiry_Changed" />
+
+
+                                <Grid x:Name="SealSealCustomPanel" ColumnSpacing="8" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="132" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SealSealCustomValueBox" Height="36" InputScope="Number"
+                                             Style="{StaticResource NovaraTextBoxStyle}"
+                                             TextChanged="SealSealCustomValue_Changed" />
+                                    <ComboBox x:Name="SealSealCustomUnitCombo" Grid.Column="1" Height="36"
+                                              SelectionChanged="SealSealCustomUnit_Changed" />
+                                </Grid>
+                                <TextBlock x:Name="SealSealExpiryText" FontSize="12"
+                                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                                <TextBlock x:Name="SealSealExpiryError" FontSize="12"
+                                           Foreground="{ThemeResource AppDangerTextBrush}"
+                                           Visibility="Collapsed" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="SealSealPreflightText" FontSize="12"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border Grid.Row="3" Margin="0,14,0,0" CornerRadius="10" Padding="12,8"
+                            Background="{ThemeResource AppDangerHoverTintBrush}">
+                        <TextBlock x:Name="SealSealWarningText" FontSize="12"
+                                   Foreground="{ThemeResource AppDangerTextBrush}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+
+                    <Grid Grid.Row="4" Margin="0,20,0,0">
+                        <Button x:Name="SealSealCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealSealCancel_Click" />
+                        <Button x:Name="SealSealConfirmButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealSealConfirm_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealConflictOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealConflictScrim" Background="#2E000000" Tapped="SealConflictScrim_Tapped" />
+            <Border x:Name="SealConflictDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealConflictTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealConflictTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealConflictClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Spacing="6" Margin="0,16,0,0">
+                        <TextBlock x:Name="SealConflictNewNameLabel" FontSize="12" FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBox x:Name="SealConflictNameBox" Height="36"
+                                 Style="{StaticResource NovaraTextBoxStyle}" />
+                    </StackPanel>
+
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="SealConflictCancelButton" Grid.Column="0"
+                                Width="120" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealConflictCancel_Click" />
+                        <Button x:Name="SealConflictAutoButton" Grid.Column="1" HorizontalAlignment="Center"
+                                Width="120" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealConflictAuto_Click" />
+                        <Button x:Name="SealConflictRenameButton" Grid.Column="2"
+                                Width="120" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealConflictRename_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealReceiptOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealReceiptScrim" Background="#2E000000" Tapped="SealReceiptScrim_Tapped" />
+            <Border x:Name="SealReceiptDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealReceiptTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="SealReceiptTitle" Grid.Row="0" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                    <TextBlock x:Name="SealReceiptText" Grid.Row="1" Margin="0,14,0,0"
+                               FontSize="13" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}" />
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealReceiptCloseButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealReceiptClose_Click" />
+                        <Button x:Name="SealReceiptOpenButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealReceiptOpen_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealTakeErrorOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealTakeErrorScrim" Background="#2E000000" Tapped="SealTakeErrorScrim_Tapped" />
+            <Border x:Name="SealTakeErrorDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealTakeErrorTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealTakeErrorTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealTakeErrorClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <TextBlock x:Name="SealTakeErrorText" Grid.Row="1" Margin="0,14,0,0"
+                               FontSize="13" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}" />
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealTakeErrorCloseButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealTakeErrorClose_Click" />
+                        <Button x:Name="SealTakeErrorRetryButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealTakeErrorRetry_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+            </Grid>
+        </Grid>
+
+
+        <Grid x:Name="SealRecoveryOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealRecoveryScrim" Background="#2E000000" Tapped="SealRecoveryScrim_Tapped" />
+            <Border x:Name="SealRecoveryDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="600" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealRecoveryTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealRecoveryTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealRecoveryClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <TextBlock x:Name="SealRecoveryIntro" Grid.Row="1" Margin="0,12,0,0"
+                               FontSize="13" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}" />
+
+                    <ScrollViewer Grid.Row="2" Margin="0,16,0,0" MaxHeight="360"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="SealRecoveryBody" Spacing="16" />
+                    </ScrollViewer>
+
+
+
+                    <Grid x:Name="SealRecoveryFooter" Grid.Row="3" Margin="0,16,0,0"
+                          ColumnSpacing="8" Visibility="Collapsed" />
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealClockResetOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealClockResetScrim" Background="#2E000000" Tapped="SealClockResetScrim_Tapped" />
+            <Border x:Name="SealClockResetDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealClockResetTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="{x:Bind app:App.GetString('Seal_ClockReset_Title')}" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealClockResetClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString('Seal_ClockReset_Body')}"
+                               FontSize="13" TextWrapping="Wrap" LineHeight="20"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,16,0,0" />
+
+                    <Grid Grid.Row="2" Margin="0,24,0,0">
+                        <Button HorizontalAlignment="Left" Width="160" Height="40"
+                                Style="{StaticResource NovaraOutlineButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="SealClockResetCancel_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString('Common_Button_Cancel')}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button x:Name="SealClockResetConfirm" HorizontalAlignment="Right" Width="160" Height="40"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}"
+                                CornerRadius="10" FontSize="14"
+                                Click="SealClockResetConfirm_Click">
+                            <TextBlock Text="{x:Bind app:App.GetString('Seal_ClockReset_Confirm')}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealChpwOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealChpwScrim" Background="#2E000000" Tapped="SealChpwScrim_Tapped" />
+            <Border x:Name="SealChpwDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="480" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealChpwTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealChpwTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealChpwClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Spacing="10" Margin="0,16,0,0">
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SealChpwOldLabel" FontSize="12" FontWeight="Medium"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <PasswordBox x:Name="SealChpwOldBox" Height="36" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128" PasswordChanged="SealChpwBox_Changed" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SealChpwNewLabel" FontSize="12" FontWeight="Medium"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <PasswordBox x:Name="SealChpwNewBox" Height="36" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128" PasswordChanged="SealChpwBox_Changed" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SealChpwConfirmLabel" FontSize="12" FontWeight="Medium"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <PasswordBox x:Name="SealChpwConfirmBox" Height="36" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128" PasswordChanged="SealChpwBox_Changed" />
+                        </StackPanel>
+                        <TextBlock x:Name="SealChpwStrength" FontSize="12" Visibility="Collapsed" />
+                        <TextBlock x:Name="SealChpwError" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{ThemeResource AppDangerTextBrush}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealChpwCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealChpwCancel_Click" />
+                        <Button x:Name="SealChpwConfirmButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealChpwConfirm_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealHintOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealHintScrim" Background="#2E000000" Tapped="SealHintScrim_Tapped" />
+            <Border x:Name="SealHintDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealHintTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealHintTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealHintClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Spacing="8" Margin="0,16,0,0">
+                        <TextBlock x:Name="SealHintBody" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBox x:Name="SealHintBox" Height="88" MaxLength="256" AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 Style="{StaticResource NovaraTextBoxStyle}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealHintClearButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealHintClear_Click" />
+                        <Button x:Name="SealHintSaveButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealHintSave_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealAboutOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealAboutScrim" Background="#2E000000" Tapped="SealAboutScrim_Tapped" />
+            <Border x:Name="SealAboutDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="520" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealAboutTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealAboutTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealAboutClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" Margin="0,16,0,0" MaxHeight="300"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="SealAboutBody" FontSize="13" TextWrapping="Wrap" LineHeight="22"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+
+        <Grid x:Name="SealImportOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealImportScrim" Background="#2E000000" Tapped="SealImportScrim_Tapped" />
+            <Border x:Name="SealImportDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="600" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealImportTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealImportTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealImportClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+
+
+                    <Grid x:Name="SealImportSteps" Grid.Row="1" Margin="0,16,0,0" />
+
+                    <ScrollViewer x:Name="SealImportScroll" Grid.Row="2" Margin="0,16,0,0" MaxHeight="360"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  HorizontalContentAlignment="Stretch">
+                        <StackPanel x:Name="SealImportBody" Spacing="12" />
+                    </ScrollViewer>
+
+                    <Grid x:Name="SealImportFooter" Grid.Row="3" Margin="0,20,0,0" ColumnSpacing="8">
+                        <Button x:Name="SealImportCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealImportCancel_Click" />
+                        <Button x:Name="SealImportNextButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealImportNext_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+        <Grid x:Name="SealExportOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealExportScrim" Background="#2E000000" Tapped="SealExportScrim_Tapped" />
+            <Border x:Name="SealExportDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="480" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealExportTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealExportTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealExportClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Spacing="10" Margin="0,16,0,0">
+                        <TextBlock x:Name="SealExportBody" FontSize="13" TextWrapping="Wrap" LineHeight="20"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SealExportPasswordLabel" FontSize="12" FontWeight="Medium"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <PasswordBox x:Name="SealExportPasswordBox" Height="36"
+                                         Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128"
+                                         PasswordChanged="SealExportPassword_Changed" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="SealExportNote1" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                        <TextBlock x:Name="SealExportNote2" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                        <TextBlock x:Name="SealExportError" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{ThemeResource AppDangerTextBrush}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealExportCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealExportCancel_Click" />
+                        <Button x:Name="SealExportConfirmButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealExportConfirm_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealDestroyOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealDestroyScrim" Background="#2E000000" Tapped="SealDestroyScrim_Tapped" />
+            <Border x:Name="SealDestroyDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealDestroyTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <PathIcon x:Name="SealDestroyDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
+                            </Viewbox>
+                            <TextBlock x:Name="SealDestroyTitle" VerticalAlignment="Center"
+                                       FontSize="18" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
+                        </StackPanel>
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealDestroyClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+                    <TextBlock x:Name="SealDestroyTip" Grid.Row="1" Margin="0,20,0,0"
+                               FontSize="14" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppDangerTextBrush}" />
+                    <TextBlock x:Name="SealDestroyLockedTip" Grid.Row="2" Margin="0,8,0,0"
+                               FontSize="14" TextWrapping="Wrap" Visibility="Collapsed"
+                               Foreground="{ThemeResource AppDangerTextBrush}" />
+
+                    <Grid Grid.Row="3" Margin="0,20,0,0">
+                        <Button x:Name="SealDestroyCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealDestroyCancel_Click" />
+                        <services:CountdownBorder x:Name="SealDestroyCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button x:Name="SealDestroyConfirmButton" Width="160" Height="40" FontSize="14"
+                                    Style="{StaticResource NovaraDangerButtonStyle}" Click="SealDestroyConfirm_Click">
+                                <TextBlock x:Name="SealDestroyConfirmText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </services:CountdownBorder>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+        <Grid x:Name="SealFolderModeOverlay" Visibility="Collapsed"
+              HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Grid x:Name="SealFolderModeScrim" Background="#2E000000" Tapped="SealFolderModeScrim_Tapped" />
+            <Border x:Name="SealFolderModeDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="440" CornerRadius="24"
+                    Background="{ThemeResource AppDialogBgBrush}"
+                    BorderBrush="{ThemeResource AppDialogBorderBrush}"
+                    BorderThickness="1" Opacity="0">
+                <Border.RenderTransform>
+                    <CompositeTransform x:Name="SealFolderModeTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                </Border.RenderTransform>
+                <Grid Padding="28,24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <TextBlock x:Name="SealFolderModeTitle" VerticalAlignment="Center"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}"
+                                Click="SealFolderModeClose_Click">
+                            <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                  Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+
+
+                    <Grid Grid.Row="1" x:Name="SealFolderSeg" Height="40" Margin="0,20,0,0"
+                          CornerRadius="10" BorderThickness="1"
+                          Background="{ThemeResource AppSurfaceOverlayBrush}"
+                          BorderBrush="{ThemeResource AppBorderBrush}">
+                        <Border x:Name="SealFolderSegThumb" Height="34" HorizontalAlignment="Left"
+                                VerticalAlignment="Center" CornerRadius="8" Margin="3,0,0,0"
+                                Background="{ThemeResource AppPrimaryButtonBrush}"
+                                IsHitTestVisible="False">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="SealFolderSegThumbTransform" X="0" />
+                            </Border.RenderTransform>
+                        </Border>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="SealFolderSegRestore" Grid.Column="0"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    BorderThickness="0" Click="SealFolderSegRestore_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" CornerRadius="8">
+                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              HorizontalContentAlignment="Center"
+                                                              VerticalContentAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <TextBlock x:Name="SealFolderSegRestoreText" FontSize="13" />
+                            </Button>
+                            <Button x:Name="SealFolderSegArchive" Grid.Column="1"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    BorderThickness="0" Click="SealFolderSegArchive_Click">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="Transparent" CornerRadius="8">
+                                            <ContentPresenter Content="{TemplateBinding Content}"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              HorizontalContentAlignment="Center"
+                                                              VerticalContentAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <TextBlock x:Name="SealFolderSegArchiveText" FontSize="13" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                        <Button x:Name="SealFolderModeCancelButton" HorizontalAlignment="Left"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraOutlineButtonStyle}" Click="SealFolderModeCancel_Click" />
+                        <Button x:Name="SealFolderModeTakeButton" HorizontalAlignment="Right"
+                                Width="160" Height="40" CornerRadius="10" FontSize="14"
+                                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealFolderModeTake_Click" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+
+
+        <Button x:Name="SealLongOpCancelButton" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,28,28" Height="36" Padding="18,0" CornerRadius="8" FontSize="13"
+                Style="{StaticResource NovaraOutlineButtonStyle}"
+                Visibility="Collapsed" Click="SealLongOpCancel_Click" />
+
+
+        <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="False"
+                HorizontalAlignment="Left" VerticalAlignment="Top" />
+    </Grid>
+</Page>

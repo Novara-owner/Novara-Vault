@@ -32,6 +32,59 @@ public static class AutoBackupService
 
     private static string? _activeRestoreTarget;
 
+
+
+
+    public const string AutoFailureSpace = "space";
+    public const string AutoFailureMissingPair = "missing-pair";
+    public const string AutoFailureUnreadableFlag = "unreadable-flag";
+    public const string AutoFailureIo = "io";
+    public const string AutoFailureJournalPending = "journal-pending";
+    public const string AutoFailureJournalBlocked = "journal-blocked";
+
+
+    public static string RestoreJournalPath => DataFilePath + RestoreJournalSuffix;
+
+    private static long _lastAutoFailureUtcTicks;
+    private static string? _lastAutoFailureCode;
+    private static bool _lastJournalBlocked;
+    private static string? _pendingQuarantineNotice;
+
+
+    public static bool LastJournalBlocked => _lastJournalBlocked;
+
+
+    public static string? TakeQuarantineNotice()
+    {
+        var notice = _pendingQuarantineNotice;
+        _pendingQuarantineNotice = null;
+        return notice;
+    }
+
+    public static DateTime? LastAutoFailureUtc
+    {
+        get
+        {
+            var ticks = Interlocked.Read(ref _lastAutoFailureUtcTicks);
+            return ticks > 0 ? new DateTime(ticks, DateTimeKind.Utc).ToLocalTime() : null;
+        }
+    }
+
+    public static string? LastAutoFailureCode => Volatile.Read(ref _lastAutoFailureCode);
+
+    private static void NoteAutoFailure(bool isManual, string code)
+    {
+        if (isManual) return;
+        _lastAutoFailureCode = code;
+        Interlocked.Exchange(ref _lastAutoFailureUtcTicks, DateTime.UtcNow.Ticks);
+    }
+
+    private static void ClearAutoFailure()
+    {
+        _lastAutoFailureCode = null;
+        Interlocked.Exchange(ref _lastAutoFailureUtcTicks, 0);
+    }
+
     public static string BackupDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), App.DataDirName, "backups");
 
@@ -118,11 +171,13 @@ public static class AutoBackupService
     }
 
 
-    private static (string? Sha256, string? SecuritySha256) ReadManifestFor(string fileName)
+
+
+    private static (string? Sha256, string? SecuritySha256, bool Reliable) ReadManifestFor(string fileName)
     {
         try
         {
-            if (!File.Exists(ManifestPath)) return (null, null);
+            if (!File.Exists(ManifestPath)) return (null, null, true);
             (string?, string?) found = (null, null);
             foreach (var line in File.ReadLines(ManifestPath))
             {
@@ -135,9 +190,9 @@ public static class AutoBackupService
                 }
                 catch { }
             }
-            return found;
+            return (found.Item1, found.Item2, true);
         }
-        catch { return (null, null); }
+        catch { return (null, null, false); }
     }
 
 
@@ -156,7 +211,11 @@ public static class AutoBackupService
                 catch { }
                 if (file == null || !remove.Contains(file)) kept.Add(line);
             }
-            File.WriteAllLines(ManifestPath, kept);
+
+
+            var tmp = ManifestPath + ".tmp";
+            File.WriteAllLines(tmp, kept);
+            File.Move(tmp, ManifestPath, overwrite: true);
         }
         catch { }
     }
@@ -231,6 +290,18 @@ public static class AutoBackupService
             if (!File.Exists(DataFilePath)) return null;
 
 
+
+            if (File.Exists(DataFilePath + RestoreJournalSuffix))
+            {
+
+
+                NoteAutoFailure(isManual, LastJournalBlocked ? AutoFailureJournalBlocked : AutoFailureJournalPending);
+                CrashLogger.LogNote("AutoBackupService.CreateSnapshot",
+                    "snapshot aborted: an unconsumed restore journal is pending");
+                return null;
+            }
+
+
             try { App.Store?.SaveSync(); } catch { }
             Directory.CreateDirectory(BackupDir);
             var prefix = isManual ? ManualPrefix : AutoPrefix;
@@ -246,6 +317,7 @@ public static class AutoBackupService
             var encryptionFlag = ReadEncryptionFlag(DataFilePath);
             if (encryptionFlag < 0)
             {
+                NoteAutoFailure(isManual, AutoFailureUnreadableFlag);
                 CrashLogger.LogNote("AutoBackupService.CreateSnapshot",
                     "snapshot aborted: the encryption flag could not be read (" + Path.GetFileName(DataFilePath) + ")");
                 return null;
@@ -255,8 +327,26 @@ public static class AutoBackupService
 
             if (encryptionFlag == FlagEncrypted && !File.Exists(PasswordService.SecurityFilePath))
             {
+                NoteAutoFailure(isManual, AutoFailureMissingPair);
                 CrashLogger.LogNote("AutoBackupService.CreateSnapshot",
                     "snapshot aborted: the database is encrypted but the paired security.dat is missing");
+                return null;
+            }
+
+
+
+            long dataBytes = 0;
+            try { dataBytes = new FileInfo(DataFilePath).Length; } catch { }
+            long securityBytes = 0;
+            if (encryptionFlag == FlagEncrypted)
+            {
+                try { securityBytes = new FileInfo(PasswordService.SecurityFilePath).Length; } catch { }
+            }
+            if (!HasRoomForSnapshot(dataBytes, securityBytes))
+            {
+                NoteAutoFailure(isManual, AutoFailureSpace);
+                CrashLogger.LogNote("AutoBackupService.CreateSnapshot",
+                    "snapshot aborted: not enough free space in the backup directory");
                 return null;
             }
 
@@ -278,10 +368,15 @@ public static class AutoBackupService
                 try { File.SetAttributes(secPath, FileAttributes.Hidden); } catch { }
             }
             File.Move(dataTmp, path);
+
+
+
+            try { File.SetLastWriteTime(path, DateTime.Now); } catch { }
             try { File.SetAttributes(path, FileAttributes.Hidden); } catch { }
 
             AppendManifestEntry(path);
             PruneSnapshots(keepAliveName);
+            if (!isManual) ClearAutoFailure();
             return path;
         }
         catch (Exception ex)
@@ -289,6 +384,7 @@ public static class AutoBackupService
 
 
 
+            NoteAutoFailure(isManual, AutoFailureIo);
             CrashLogger.LogNote("AutoBackupService.CreateSnapshot", ex.Message);
             DeleteQuietly(path);
             DeleteQuietly(path + ".tmp");
@@ -300,6 +396,25 @@ public static class AutoBackupService
                 DeleteQuietly(SecurityPairPath(path) + ".tmp");
             }
             return null;
+        }
+    }
+
+
+
+    private static bool HasRoomForSnapshot(long dataBytes, long securityBytes)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(BackupDir));
+            if (string.IsNullOrEmpty(root)) return true;
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady) return true;
+            const long margin = 8L * 1024 * 1024;
+            return drive.AvailableFreeSpace >= dataBytes + securityBytes + margin;
+        }
+        catch
+        {
+            return true;
         }
     }
 
@@ -438,7 +553,13 @@ public static class AutoBackupService
 
 
 
-            var (expectSha, expectSecSha) = ReadManifestFor(snapshotFileName);
+            var (expectSha, expectSecSha, manifestReliable) = ReadManifestFor(snapshotFileName);
+            if (!manifestReliable)
+            {
+
+                CrashLogger.LogNote("AutoBackupService.Restore", "snapshot manifest unreadable - restore aborted: " + snapshotFileName);
+                return (false, "Setting_Backup_Restore_BadSnapshot");
+            }
             if (expectSha != null)
             {
                 var actual = Sha256OfFile(snapshotPath);
@@ -455,6 +576,23 @@ public static class AutoBackupService
                         CrashLogger.LogNote("AutoBackupService.Restore", "security pair hash mismatch vs manifest - restore aborted: " + snapshotFileName);
                         return (false, "Setting_Backup_Restore_BadSnapshot");
                     }
+                }
+            }
+
+
+
+
+            var restoreJournal = DataFilePath + RestoreJournalSuffix;
+            if (File.Exists(restoreJournal))
+            {
+                RecoverInterruptedRestore();
+                if (File.Exists(restoreJournal))
+                {
+                    CrashLogger.LogNote("AutoBackupService.Restore",
+                        "a previous restore journal is still pending - refusing to start another restore");
+
+
+                    return (false, "Setting_Backup_Restore_JournalUnreadable");
                 }
             }
 
@@ -543,14 +681,49 @@ public static class AutoBackupService
 
     public static void RecoverInterruptedRestore()
     {
+        _lastJournalBlocked = false;
         try
         {
             var journal = DataFilePath + RestoreJournalSuffix;
             if (!File.Exists(journal)) return;
-            var parts = File.ReadAllText(journal).Trim().Split('|');
+            var text = File.ReadAllText(journal).Trim();
+            var parts = text.Split('|');
+
+
+
+
             var stage = parts.Length > 0 ? parts[0] : "";
-            bool hadData = parts.Length > 1 && parts[1] == "1";
-            bool hadSec = parts.Length > 2 && parts[2] == "1";
+            bool parsed = parts.Length == 3
+                && (stage == "prepared" || stage == "data-moved" || stage == "committed")
+                && (parts[1] == "0" || parts[1] == "1")
+                && (parts[2] == "0" || parts[2] == "1");
+            if (!parsed)
+            {
+                CrashLogger.LogNote("AutoBackupService.RecoverInterruptedRestore",
+                    "unreadable restore journal - the data/security pair was left untouched");
+
+
+
+
+                try
+                {
+                    var quarantine = journal + ".unreadable-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                    try { File.SetAttributes(journal, FileAttributes.Normal); } catch { }
+                    File.Move(journal, quarantine);
+                    _pendingQuarantineNotice = Path.GetFileName(quarantine);
+                    CrashLogger.LogNote("AutoBackupService.RecoverInterruptedRestore",
+                        "unreadable restore journal quarantined: " + Path.GetFileName(quarantine));
+                }
+                catch (Exception qex)
+                {
+                    _lastJournalBlocked = true;
+                    CrashLogger.LogNote("AutoBackupService.RecoverInterruptedRestore",
+                        "journal quarantine failed: " + qex.Message);
+                }
+                return;
+            }
+            bool hadData = parts[1] == "1";
+            bool hadSec = parts[2] == "1";
             if (stage != "committed")
             {
                 var rollbackData = DataFilePath + ".restore-rollback";
@@ -582,7 +755,25 @@ public static class AutoBackupService
         }
         catch (Exception ex)
         {
+            _lastJournalBlocked = true;
             CrashLogger.LogNote("AutoBackupService.RecoverInterruptedRestore", ex.Message);
+        }
+    }
+
+
+
+    private static bool FileWasThere(string path)
+    {
+        if (File.Exists(path)) return true;
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return false;
+            return Directory.EnumerateFiles(dir, Path.GetFileName(path)).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return true;
         }
     }
 
@@ -590,8 +781,14 @@ public static class AutoBackupService
     {
         try
         {
-            File.WriteAllText(DataFilePath + RestoreJournalSuffix,
-                stage + "|" + (hadData ? "1" : "0") + "|" + (hadSec ? "1" : "0"));
+
+
+
+            var journal = DataFilePath + RestoreJournalSuffix;
+            var tmp = journal + ".tmp";
+            File.WriteAllText(tmp, stage + "|" + (hadData ? "1" : "0") + "|" + (hadSec ? "1" : "0"));
+            try { File.SetAttributes(tmp, FileAttributes.Normal); } catch { }
+            File.Move(tmp, journal, overwrite: true);
         }
         catch (Exception ex)
         {
@@ -625,6 +822,20 @@ public static class AutoBackupService
 
 
 
+        var restoreJournal = DataFilePath + RestoreJournalSuffix;
+        if (File.Exists(restoreJournal))
+        {
+            RecoverInterruptedRestore();
+            if (File.Exists(restoreJournal))
+            {
+                CrashLogger.LogNote("AutoBackupService.OverwriteWithSnapshot",
+                    "a previous restore journal is still pending - refusing to start another restore");
+                return false;
+            }
+        }
+
+
+
         foreach (var stale in new[] { tmpPath, tmpSec, rollbackData, rollbackSec })
         {
             if (File.Exists(stale))
@@ -633,8 +844,13 @@ public static class AutoBackupService
             }
         }
 
-        var hadData = File.Exists(DataFilePath);
-        var hadSec = File.Exists(PasswordService.SecurityFilePath);
+
+
+
+        var hadData = FileWasThere(DataFilePath);
+        var hadSec = FileWasThere(PasswordService.SecurityFilePath);
+
+        bool rollbackIncomplete = false;
         try
         {
 
@@ -680,6 +896,8 @@ public static class AutoBackupService
         catch
         {
 
+
+
             try
             {
                 if (hadData && File.Exists(rollbackData))
@@ -695,19 +913,37 @@ public static class AutoBackupService
                     File.Copy(rollbackSec, PasswordService.SecurityFilePath, overwrite: true);
                     try { File.SetAttributes(PasswordService.SecurityFilePath, FileAttributes.Hidden); } catch { }
                 }
+                if (!hadData)
+                {
+
+
+
+                    try { File.SetAttributes(DataFilePath, FileAttributes.Normal); } catch { }
+                    if (File.Exists(DataFilePath)) File.Delete(DataFilePath);
+                }
             }
-            catch { }
+            catch { rollbackIncomplete = true; }
             return false;
         }
         finally
         {
-            foreach (var leftover in new[] { tmpPath, tmpSec, rollbackData, rollbackSec })
+            if (rollbackIncomplete)
             {
-                try { if (File.Exists(leftover)) { File.SetAttributes(leftover, FileAttributes.Normal); File.Delete(leftover); } } catch { }
+
+
+                try { if (File.Exists(tmpPath)) { File.SetAttributes(tmpPath, FileAttributes.Normal); File.Delete(tmpPath); } } catch { }
+                try { if (File.Exists(tmpSec)) { File.SetAttributes(tmpSec, FileAttributes.Normal); File.Delete(tmpSec); } } catch { }
             }
+            else
+            {
+                foreach (var leftover in new[] { tmpPath, tmpSec, rollbackData, rollbackSec })
+                {
+                    try { if (File.Exists(leftover)) { File.SetAttributes(leftover, FileAttributes.Normal); File.Delete(leftover); } } catch { }
+                }
 
 
-            DeleteQuietly(DataFilePath + RestoreJournalSuffix);
+                DeleteQuietly(DataFilePath + RestoreJournalSuffix);
+            }
         }
     }
 

@@ -98,6 +98,17 @@ public sealed class HostedSyncServer : IAsyncDisposable
             registered.Value.DeviceId, registered.Value.DeviceToken);
     }
 
+
+
+    public async Task<(SyncApiClient Client, string SpaceId, string SpaceKey, string DeviceId, string EnrollmentSecret, string Token)>
+        CreateSpaceWithTokenAsync(string name = "test-space", string deviceName = "pc")
+    {
+        var created = Service.CreateSpace(name);
+        var spaceId = created.Value!.SpaceId;
+        var (client, deviceId, token) = await PairDeviceAsync(spaceId, created.Value.EnrollmentSecret, deviceName);
+        return (client, spaceId, SyncKeyWrap.CreateSpaceKey(), deviceId, created.Value.EnrollmentSecret, token);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _app.StopAsync();

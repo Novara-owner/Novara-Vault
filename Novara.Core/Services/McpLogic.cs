@@ -117,38 +117,41 @@ public static class McpLogic
 
 
 
-    public static List<McpItemSummary> ListItems(NovaraDatabase db, string? type)
+
+
+
+    public static List<McpItemSummary> ListItems(NovaraDatabase db, string? type, McpPerm allowed)
     {
         var result = new List<McpItemSummary>();
-        if (type == null || type == TypeMemo)
+        if ((type == null || type == TypeMemo) && (allowed & McpPerm.MemoRead) != 0)
             foreach (var e in db.MemoEntries)
                 if (!e.IsDeleted) result.Add(new McpItemSummary
                 {
                     Type = TypeMemo, Id = e.Id.ToString(), Title = e.Name, CreatedAt = e.CreatedAt,
                     IsPinned = e.IsPinned, IsStarred = e.IsStarred, GroupId = e.GroupId?.ToString()
                 });
-        if (type == null || type == TypeTodo)
+        if ((type == null || type == TypeTodo) && (allowed & McpPerm.TodoRead) != 0)
             foreach (var e in db.TodoCards)
                 if (!e.IsDeleted) result.Add(new McpItemSummary
                 {
                     Type = TypeTodo, Id = e.Id.ToString(), Title = e.Title, CreatedAt = e.CreatedAt,
                     IsPinned = e.IsPinned, IsStarred = e.IsStarred
                 });
-        if (type == null || type == TypeNote)
+        if ((type == null || type == TypeNote) && (allowed & McpPerm.NoteRead) != 0)
             foreach (var e in db.NoteCards)
                 if (!e.IsDeleted) result.Add(new McpItemSummary
                 {
                     Type = TypeNote, Id = e.Id.ToString(), Title = e.Title, CreatedAt = e.CreatedAt,
                     IsPinned = e.IsPinned, IsStarred = e.IsStarred
                 });
-        if (type == null || type == TypeDiary)
+        if ((type == null || type == TypeDiary) && (allowed & McpPerm.DiaryRead) != 0)
             foreach (var e in db.DiaryItems)
                 if (!e.IsDeleted) result.Add(new McpItemSummary
                 {
                     Type = TypeDiary, Id = e.Id, Title = e.Title, CreatedAt = e.CreatedAt, ModifiedAt = e.ModifiedAt,
                     IsPinned = e.IsPinned, IsStarred = e.IsStarred
                 });
-        if (type == null || type == TypePath)
+        if ((type == null || type == TypePath) && (allowed & McpPerm.PathRead) != 0)
             foreach (var e in db.PathBackupItems)
                 if (!e.IsDeleted) result.Add(new McpItemSummary
                 {
@@ -239,13 +242,13 @@ public static class McpLogic
 
 
 
-    public static List<McpSearchHit> SearchItems(NovaraDatabase db, string query, string? type)
+    public static List<McpSearchHit> SearchItems(NovaraDatabase db, string query, string? type, McpPerm allowed)
     {
         var result = new List<McpSearchHit>();
         if (string.IsNullOrWhiteSpace(query)) return result;
         query = query.Trim();
 
-        if (type == null || type == TypeMemo)
+        if ((type == null || type == TypeMemo) && (allowed & McpPerm.MemoRead) != 0)
             foreach (var e in db.MemoEntries)
                 if (!e.IsDeleted)
                 {
@@ -257,7 +260,7 @@ public static class McpLogic
                     var snip = SnippetOf(hay, query);
                     if (snip != null) result.Add(new McpSearchHit { Type = TypeMemo, Id = e.Id.ToString(), Title = e.Name, Snippet = snip });
                 }
-        if (type == null || type == TypeTodo)
+        if ((type == null || type == TypeTodo) && (allowed & McpPerm.TodoRead) != 0)
             foreach (var e in db.TodoCards)
                 if (!e.IsDeleted)
                 {
@@ -265,21 +268,21 @@ public static class McpLogic
                     var snip = SnippetOf(hay, query);
                     if (snip != null) result.Add(new McpSearchHit { Type = TypeTodo, Id = e.Id.ToString(), Title = e.Title, Snippet = snip });
                 }
-        if (type == null || type == TypeNote)
+        if ((type == null || type == TypeNote) && (allowed & McpPerm.NoteRead) != 0)
             foreach (var e in db.NoteCards)
                 if (!e.IsDeleted)
                 {
                     var snip = SnippetOf(e.Title + "\n" + e.Content, query);
                     if (snip != null) result.Add(new McpSearchHit { Type = TypeNote, Id = e.Id.ToString(), Title = e.Title, Snippet = snip });
                 }
-        if (type == null || type == TypeDiary)
+        if ((type == null || type == TypeDiary) && (allowed & McpPerm.DiaryRead) != 0)
             foreach (var e in db.DiaryItems)
                 if (!e.IsDeleted)
                 {
                     var snip = SnippetOf(e.Title + "\n" + e.Content, query);
                     if (snip != null) result.Add(new McpSearchHit { Type = TypeDiary, Id = e.Id, Title = e.Title, Snippet = snip });
                 }
-        if (type == null || type == TypePath)
+        if ((type == null || type == TypePath) && (allowed & McpPerm.PathRead) != 0)
             foreach (var e in db.PathBackupItems)
                 if (!e.IsDeleted)
                 {
@@ -458,6 +461,16 @@ public static class McpLogic
                 if (movedToNonSensitive)
                     throw new McpError($"不能把敏感字段「{g.Label}」的值移动到非敏感标签下（会绕过脱敏）。请先清除该值再改名。");
             }
+
+
+
+            foreach (var g in e.Fields.Where(x => IsSensitiveLabel(x.Label) && !string.IsNullOrEmpty(x.Value)))
+            {
+                bool carried = fields.Any(f => string.Equals((f.Label ?? "").Trim(),
+                    (g.Label ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+                if (!carried)
+                    throw new McpError($"fields 缺少已有敏感字段「{g.Label}」；整表替换会删除它，请显式保留该字段。");
+            }
             newFields = fields.Select(f => new EntryField { Label = f.Label, Value = f.Value, CanCopy = f.CanCopy }).ToList();
         }
 
@@ -571,6 +584,33 @@ public static class McpLogic
 
 
 
+    public static string RestoreItem(NovaraDatabase db, string type, string id)
+    {
+        switch (type)
+        {
+            case TypeMemo: { var e = FindMemoInTrash(db, id); e.IsDeleted = false; e.DeletedAt = default; break; }
+            case TypeTodo: { var e = FindTodoInTrash(db, id); e.IsDeleted = false; e.DeletedAt = default; break; }
+            case TypeNote: { var e = FindNoteInTrash(db, id); e.IsDeleted = false; e.DeletedAt = default; break; }
+            case TypeDiary: { var e = FindDiaryInTrash(db, id); e.IsDeleted = false; e.DeletedAt = default; break; }
+            case TypePath: { var e = FindPathInTrash(db, id); e.IsDeleted = false; e.DeletedAt = default; break; }
+            default: throw new McpError($"未知类型: {type}");
+        }
+        return id;
+    }
+
+
+    public class McpAuthStatus
+    {
+        public string Granted { get; set; } = "";
+        public bool DeleteGateOpen { get; set; }
+    }
+
+
+
+
+
+
+
 
 
     private static MemoEntry FindMemo(NovaraDatabase db, string id)
@@ -592,4 +632,31 @@ public static class McpLogic
     private static FilePathEntry FindPath(NovaraDatabase db, string id)
         => Guid.TryParse(id, out var g) ? db.PathBackupItems.FirstOrDefault(x => x.Id == g && !x.IsDeleted)
             ?? throw new McpError("路径条目不存在") : throw new McpError("非法 id");
+
+
+
+    private static MemoEntry FindMemoInTrash(NovaraDatabase db, string id)
+        => Guid.TryParse(id, out var g) ? db.MemoEntries.FirstOrDefault(x => x.Id == g && x.IsDeleted && x.PurgedAt == default)
+            ?? throw new McpError("备忘条目不在回收站") : throw new McpError("非法 id");
+
+    private static TodoCard FindTodoInTrash(NovaraDatabase db, string id)
+        => Guid.TryParse(id, out var g) ? db.TodoCards.FirstOrDefault(x => x.Id == g && x.IsDeleted && x.PurgedAt == default)
+            ?? throw new McpError("待办不在回收站") : throw new McpError("非法 id");
+
+    private static NoteCard FindNoteInTrash(NovaraDatabase db, string id)
+        => Guid.TryParse(id, out var g) ? db.NoteCards.FirstOrDefault(x => x.Id == g && x.IsDeleted && x.PurgedAt == default)
+            ?? throw new McpError("便签不在回收站") : throw new McpError("非法 id");
+
+    private static DiaryEntry FindDiaryInTrash(NovaraDatabase db, string id)
+        => db.DiaryItems.FirstOrDefault(x => x.Id == id && x.IsDeleted && x.PurgedAt == default)
+            ?? throw new McpError("文档不在回收站");
+
+    private static FilePathEntry FindPathInTrash(NovaraDatabase db, string id)
+        => Guid.TryParse(id, out var g) ? db.PathBackupItems.FirstOrDefault(x => x.Id == g && x.IsDeleted && x.PurgedAt == default)
+            ?? throw new McpError("路径条目不在回收站") : throw new McpError("非法 id");
+
+
+
+    public static McpAuthStatus AuthStatus(McpPerm granted, bool deleteGateOpen)
+        => new() { Granted = McpPermissions.Describe(granted), DeleteGateOpen = deleteGateOpen };
 }

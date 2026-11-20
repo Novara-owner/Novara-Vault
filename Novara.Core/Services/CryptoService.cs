@@ -209,6 +209,15 @@ public static class CryptoService
     }
 
 
+
+
+
+
+
+    internal static byte[] DeriveKeyArgon2idUncached(string password, byte[] salt, int iterations, int memoryKiB)
+        => DeriveKeyArgon2idCore(password, salt, iterations, memoryKiB, 1);
+
+
     internal static byte[] DeriveKeyArgon2idForVectorTest(string password, byte[] salt, int iterations, int memoryKiB, int lanes)
         => DeriveKeyArgon2idCore(password, salt, iterations, memoryKiB, lanes);
 
@@ -336,6 +345,49 @@ public static class CryptoService
         using var gcm = new AesGcm(key, GcmTagSize);
         gcm.Decrypt(nonce, cipher, tag, compressed, associatedData);
         return Decompress(compressed);
+    }
+
+
+
+
+
+
+
+
+    public static byte[] EncryptGcmWithNonce(byte[] plainData, byte[] key, byte[] nonce, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+        if (nonce is null || nonce.Length != GcmNonceSize) throw new ArgumentException($"nonce must be {GcmNonceSize} bytes", nameof(nonce));
+
+        var cipher = new byte[plainData.Length];
+        var tag = new byte[GcmTagSize];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Encrypt(nonce, plainData, cipher, tag, associatedData);
+
+        var result = new byte[cipher.Length + GcmTagSize];
+        cipher.CopyTo(result, 0);
+        tag.CopyTo(result, cipher.Length);
+        return result;
+    }
+
+
+
+
+
+
+    public static byte[] DecryptGcmWithNonce(byte[] data, byte[] key, byte[] nonce, byte[]? associatedData = null)
+    {
+        if (key is null || key.Length != KeySize) throw new ArgumentException($"key must be {KeySize} bytes", nameof(key));
+        if (nonce is null || nonce.Length != GcmNonceSize) throw new ArgumentException($"nonce must be {GcmNonceSize} bytes", nameof(nonce));
+        if (data.Length < GcmTagSize) throw new InvalidDataException(Loc.T("Crypto_Err_ShortCipher"));
+
+        var cipher = data.AsSpan(0, data.Length - GcmTagSize);
+        var tag = data.AsSpan(data.Length - GcmTagSize, GcmTagSize);
+
+        var plain = new byte[cipher.Length];
+        using var gcm = new AesGcm(key, GcmTagSize);
+        gcm.Decrypt(nonce, cipher, tag, plain, associatedData);
+        return plain;
     }
 
     private static byte[] Compress(byte[] data)

@@ -182,7 +182,7 @@
                       Stretch="Uniform"
                       Fill="#FFFFFFFF" />
             </Button>
-            <Border Background="Transparent" Tapped="Title_Tapped" HorizontalAlignment="Left" Margin="48,0,0,0"> 
+            <Border Background="Transparent" Tapped="Title_Tapped" HorizontalAlignment="Left" Margin="48,0,0,0">
                 <TextBlock x:Name="ToolsTitleText"
                            FontSize="20" FontWeight="SemiBold"
                            Foreground="{ThemeResource AppTextPrimaryBrush}"
@@ -378,7 +378,7 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="SyncDetailKey" Grid.Column="0"
-                                                 Style="{StaticResource NovaraTextBoxStyle}"
+                                                 Style="{StaticResource NovaraReadOnlyTextBoxStyle}"
                                                  IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
                                         <Button Tag="A11y_ViewKey" x:Name="SyncKeyViewButton" Grid.Column="1"
                                                 Width="36" VerticalAlignment="Stretch"
@@ -880,8 +880,8 @@
                         <TextBlock x:Name="ConnectPwdDesc" FontSize="13" LineHeight="20" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
                         <CheckBox x:Name="ConnectPwdUseLock" Margin="0,12,0,0" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" Checked="ConnectPwdUseLock_Changed" Unchecked="ConnectPwdUseLock_Changed" />
                         <StackPanel Margin="0,12,0,0" Spacing="8">
-                            <TextBox x:Name="ConnectPwdPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" TextChanged="ConnectPwdPasswordBox_TextChanged" />
-                            <TextBox x:Name="ConnectPwdConfirmBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" TextChanged="ConnectPwdConfirmBox_TextChanged" />
+                            <PasswordBox x:Name="ConnectPwdPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" FontSize="14" PasswordChanged="ConnectPwdPasswordBox_PasswordChanged" />
+                            <PasswordBox x:Name="ConnectPwdConfirmBox" Style="{StaticResource NovaraPasswordBoxStyle}" FontSize="14" PasswordChanged="ConnectPwdConfirmBox_PasswordChanged" />
                             <TextBlock x:Name="ConnectPwdStrengthText" FontSize="12" FontWeight="SemiBold" Visibility="Collapsed" />
                             <TextBlock x:Name="ConnectPwdStrengthHint" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource AppTextTertiaryBrush}" />
                         </StackPanel>
@@ -902,20 +902,29 @@
             <Border x:Name="ResetConfirmDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform><CompositeTransform x:Name="ResetConfirmDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" /></Border.RenderTransform>
                 <Grid Padding="28,24">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
                             <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
                                 <PathIcon x:Name="ResetConfirmDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
                             </Viewbox>
-                            <TextBlock Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppDangerTextBrush}" />
+                            <TextBlock x:Name="ResetConfirmTitleText" Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTitle\')}" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource AppDangerTextBrush}" />
                         </StackPanel>
                         <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center" Width="28" Height="28" Style="{StaticResource NovaraIconButtonStyle}" Click="ResetConfirmClose_Click">
                             <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472" Stroke="{ThemeResource IconForegroundBrush}" StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
                         </Button>
                     </Grid>
-                    <TextBlock Grid.Row="1" Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTip\')}" FontSize="14" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Margin="0,20,0,0" />
-                    <Grid Grid.Row="2" Margin="0,20,0,0">
+                    <TextBlock Grid.Row="1" x:Name="ResetConfirmTipText" Text="{x:Bind app:App.GetString(\'Setting_Reset_ConfirmTip\')}" FontSize="14" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Margin="0,20,0,0" />
+
+
+                    <StackPanel x:Name="ResetConfirmSealPanel" Grid.Row="2" Margin="0,16,0,0" Spacing="6" Visibility="Collapsed">
+                        <TextBlock x:Name="ResetConfirmSealLabel" FontSize="12" FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <PasswordBox x:Name="ResetConfirmSealPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128" PasswordChanged="ResetConfirmSealPasswordBox_PasswordChanged" />
+                        <TextBlock x:Name="ResetConfirmSealError" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{ThemeResource AppDangerTextBrush}" />
+                    </StackPanel>
+                    <Grid Grid.Row="3" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
@@ -970,6 +979,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
@@ -983,7 +993,19 @@
                         </Button>
                     </Grid>
                     <TextBlock x:Name="PageWipeFinalMessageText" Grid.Row="1" FontSize="14" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                    <Grid Grid.Row="2" Margin="0,20,0,0">
+
+
+                    <StackPanel x:Name="PageWipeFinalSealPanel" Grid.Row="2" Margin="0,16,0,0" Spacing="6" Visibility="Collapsed">
+
+
+
+                        <TextBlock x:Name="PageWipeFinalSealLabel" FontSize="12" FontWeight="Medium"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <PasswordBox x:Name="PageWipeFinalSealPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128" PasswordChanged="PageWipeFinalSealPasswordBox_PasswordChanged" />
+                        <TextBlock x:Name="PageWipeFinalSealError" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{ThemeResource AppDangerTextBrush}" />
+                    </StackPanel>
+                    <Grid Grid.Row="3" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="PageWipeFinalCancel_Click">
                             <TextBlock x:Name="PageWipeFinalCancelText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
@@ -1083,13 +1105,16 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="20" Margin="0,24,0,0">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{x:Bind app:App.GetString(\'Setting_PrivacyLock_PasswordLabel\')}" FontSize="12" FontWeight="Medium"
                                        Foreground="{ThemeResource AppTextSecondaryBrush}" Margin="0,0,0,8" />
-                            <TextBox x:Name="ImportExportPasswordBox" Grid.Row="1"
-                                     Style="{StaticResource NovaraTextBoxStyle}"
+                            <PasswordBox x:Name="ImportExportPasswordBox" Grid.Row="1"
+                                     Style="{StaticResource NovaraPasswordBoxStyle}"
                                      PlaceholderText="{x:Bind app:App.GetString(\'Setting_PrivacyLock_OldPasswordPlaceholder\')}"
-                                     MaxLength="64" />
+                                     MaxLength="64" PasswordChanged="ImportExportPasswordBox_PasswordChanged" />
+                            <TextBlock x:Name="ImportExportPasswordError" Grid.Row="2" Visibility="Collapsed"
+                                       FontSize="12" Margin="0,6,0,0"
+                                       Foreground="{ThemeResource AppDangerTextBrush}" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
                             <Button HorizontalAlignment="Left" Width="160" Height="40"
@@ -1256,13 +1281,27 @@
                                    Foreground="{ThemeResource AppDangerTextBrush}" Margin="0,6,0,0" Visibility="Collapsed" />
                     </StackPanel>
                     <StackPanel Margin="0,12,0,0" Spacing="8">
-                        <TextBox x:Name="EncPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
-                                 TextChanged="EncPasswordBox_TextChanged" />
-                        <TextBox x:Name="EncConfirmBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
-                                 TextChanged="EncConfirmBox_TextChanged" />
+                        <PasswordBox x:Name="EncPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}"
+                                     PasswordChanged="EncPasswordBox_TextChanged" />
+                        <PasswordBox x:Name="EncConfirmBox" Style="{StaticResource NovaraPasswordBoxStyle}"
+                                     PasswordChanged="EncConfirmBox_TextChanged" />
                         <TextBlock x:Name="EncStrengthText" FontSize="12" FontWeight="SemiBold" Visibility="Collapsed" />
                         <TextBlock x:Name="EncStrengthHint" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                    <CheckBox x:Name="EncIncludeSealCheckBox" Margin="0,12,0,0" FontSize="13"
+                              Foreground="{ThemeResource AppTextSecondaryBrush}"
+                              Checked="EncIncludeSeal_Changed" Unchecked="EncIncludeSeal_Changed" />
+
+
+                    <TextBlock x:Name="EncSealNote" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <StackPanel x:Name="EncSealPanel" Margin="0,8,0,0" Spacing="6" Visibility="Collapsed">
+                        <PasswordBox x:Name="EncSealPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="128"
+                                     PasswordChanged="EncSealPassword_TextChanged" />
+                        <TextBlock x:Name="EncSealPasswordError" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Foreground="{ThemeResource AppDangerTextBrush}" />
                     </StackPanel>
                     <CheckBox x:Name="EncIncludePathsCheckBox" Margin="0,12,0,0" FontSize="13"
                               Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -1297,6 +1336,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0">
                         <TextBlock x:Name="EncImportTitle" HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -1315,9 +1355,12 @@
                                FontSize="13" LineHeight="20" TextWrapping="Wrap"
                                Foreground="{ThemeResource AppTextSecondaryBrush}"
                                Margin="0,14,0,0" />
-                    <TextBox x:Name="EncImportPwdBox" Grid.Row="2" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
-                             Margin="0,14,0,0" TextChanged="EncImportPwdBox_TextChanged" />
-                    <Grid Grid.Row="3" Margin="0,20,0,0">
+                    <PasswordBox x:Name="EncImportPwdBox" Grid.Row="2" Style="{StaticResource NovaraPasswordBoxStyle}"
+                                 Margin="0,14,0,0" PasswordChanged="EncImportPwdBox_TextChanged" />
+                    <TextBlock x:Name="EncImportError" Grid.Row="3" Visibility="Collapsed"
+                               FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                               Foreground="{ThemeResource AppDangerTextBrush}" />
+                    <Grid Grid.Row="4" Margin="0,20,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="40"
                                 Style="{StaticResource NovaraOutlineButtonStyle}"
                                 CornerRadius="10" FontSize="14"
@@ -1567,6 +1610,9 @@
                                 <TextBlock x:Name="BackupFreqButtonText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                         </Grid>
+
+                        <TextBlock x:Name="BackupAutoStatusText" FontSize="12" Foreground="{ThemeResource AppDangerTextBrush}"
+                                   TextWrapping="Wrap" LineHeight="18" Visibility="Collapsed" />
                     </StackPanel>
                     <Grid Grid.Row="2" Margin="0,24,0,0">
                         <Button HorizontalAlignment="Left" Width="160" Height="40"
@@ -2509,7 +2555,8 @@
                             </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock x:Name="SyncPairKeyLabel" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" />
-                                <TextBox x:Name="SyncPairKeyBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14" TextChanged="SyncPairField_TextChanged" />
+
+                                <PasswordBox x:Name="SyncPairKeyBox" Style="{StaticResource NovaraPasswordBoxStyle}" FontSize="14" PasswordChanged="SyncPairKey_PasswordChanged" />
                             </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock x:Name="SyncPairDeviceLabel" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" />
@@ -2721,7 +2768,7 @@
                     <TextBlock x:Name="SyncKeySavedMessageText" Grid.Row="1" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="20" Margin="0,16,0,0" />
 
                     <TextBox x:Name="SyncKeySavedBox" Grid.Row="2" Margin="0,18,0,0"
-                             Style="{StaticResource NovaraTextBoxStyle}"
+                             Style="{StaticResource NovaraReadOnlyTextBoxStyle}"
                              IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
                     <StackPanel Grid.Row="3" Margin="0,16,0,0" Spacing="16">
                         <TextBlock x:Name="SyncKeySavedFootnoteText" FontSize="12" Foreground="{ThemeResource AppTextTertiaryBrush}" TextWrapping="Wrap" />
@@ -2750,7 +2797,7 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="16" Margin="0,20,0,0">
                         <TextBlock x:Name="SyncKeyViewDescText" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="20" />
-                        <TextBox x:Name="SyncKeyViewPasswordBox" Style="{StaticResource NovaraTextBoxStyle}" MaxLength="64" />
+                        <PasswordBox x:Name="SyncKeyViewPasswordBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="64" PasswordChanged="SyncKeyViewPasswordBox_PasswordChanged" />
                         <TextBlock x:Name="SyncKeyViewErrorText" FontSize="12" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
                         <Grid>
                             <Button HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="SyncKeyViewCancel_Click">
@@ -2864,7 +2911,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="SyncReadAccessTokenBox" Grid.Column="0" Style="{StaticResource NovaraTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
+                                    <TextBox x:Name="SyncReadAccessTokenBox" Grid.Column="0" Style="{StaticResource NovaraReadOnlyTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
                                     <Button x:Name="SyncReadAccessTokenCopyButton" Grid.Column="1" Width="76" Height="34" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="13" Click="SyncReadAccessTokenCopy_Click">
                                         <TextBlock x:Name="SyncReadAccessTokenCopyText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Button>
@@ -2878,7 +2925,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="SyncReadAccessLinkBox" Grid.Column="0" Style="{StaticResource NovaraTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="12" />
+                                    <TextBox x:Name="SyncReadAccessLinkBox" Grid.Column="0" Style="{StaticResource NovaraReadOnlyTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="12" />
                                     <Button x:Name="SyncReadAccessLinkCopyButton" Grid.Column="1" Width="76" Height="34" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="13" Click="SyncReadAccessLinkCopy_Click">
                                         <TextBlock x:Name="SyncReadAccessLinkCopyText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Button>
@@ -2966,7 +3013,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="SyncEditAccessTokenBox" Grid.Column="0" Style="{StaticResource NovaraTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
+                                    <TextBox x:Name="SyncEditAccessTokenBox" Grid.Column="0" Style="{StaticResource NovaraReadOnlyTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
                                     <Button x:Name="SyncEditAccessTokenCopyButton" Grid.Column="1" Width="76" Height="34" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="13" Click="SyncEditAccessTokenCopy_Click">
                                         <TextBlock x:Name="SyncEditAccessTokenCopyText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Button>
@@ -3204,7 +3251,7 @@
                     </Grid>
                     <StackPanel Grid.Row="1" Spacing="16" Margin="0,20,0,0">
                         <TextBlock x:Name="SyncKeyImportPwdDescText" FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" LineHeight="20" />
-                        <TextBox x:Name="SyncKeyImportPwdBox" Style="{StaticResource NovaraTextBoxStyle}" MaxLength="64" />
+                        <PasswordBox x:Name="SyncKeyImportPwdBox" Style="{StaticResource NovaraPasswordBoxStyle}" MaxLength="64" PasswordChanged="SyncKeyImportPwdBox_PasswordChanged" />
                         <TextBlock x:Name="SyncKeyImportPwdErrorText" FontSize="12" Foreground="{ThemeResource AppDangerTextBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
                         <Grid>
                             <Button HorizontalAlignment="Left" Width="160" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="14" Click="SyncKeyImportPwdCancel_Click">
@@ -3241,7 +3288,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="SyncKeyImportResultBox" Grid.Column="0" Style="{StaticResource NovaraTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
+                            <TextBox x:Name="SyncKeyImportResultBox" Grid.Column="0" Style="{StaticResource NovaraReadOnlyTextBoxStyle}" IsReadOnly="True" FontFamily="Consolas" FontSize="13" />
                             <Button x:Name="SyncKeyImportResultCopyButton" Grid.Column="1" Width="76" Height="40" Style="{StaticResource NovaraOutlineButtonStyle}" CornerRadius="10" FontSize="13" Click="SyncKeyImportResultCopy_Click">
                                 <TextBlock x:Name="SyncKeyImportResultCopyText" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>

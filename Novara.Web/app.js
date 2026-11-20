@@ -303,7 +303,11 @@
         }
         if (useEditorCredential) editorCredentialUsed = true;
         return response.text().then(function (text) {
-          var version = Number(response.headers.get('X-Novara-Version')) || 0;
+
+
+          var rawVersion = response.headers.get('X-Novara-Version');
+          var version = rawVersion === null ? null : Number(rawVersion);
+          if (version !== null && !Number.isFinite(version)) version = null;
           var body;
           try { body = JSON.parse(text); } catch (e) { throw failWith('m3ErrServer'); }
           return { body: body, version: version };
@@ -392,12 +396,19 @@
 
       var data = {};
       try {
+        var requests = [];
         for (var key in manifest.partitions) {
           if (!Object.prototype.hasOwnProperty.call(manifest.partitions, key)) continue;
           if (PARTITION_KEYS.indexOf(key) < 0) throw failWith('m3ErrServer');
           var pid = String(manifest.partitions[key]).toLowerCase();
           if (!/^[0-9a-f]{64}$/.test(pid)) throw failWith('m3ErrServer');
-          data[key] = await openChunk(new Uint8Array(await fetchBytes('/space/chunks/' + pid)), spaceKey, pid);
+          requests.push({ key: key, pid: pid });
+        }
+
+
+        var blobs = await Promise.all(requests.map(function (r) { return fetchBytes('/space/chunks/' + r.pid); }));
+        for (var i = 0; i < requests.length; i++) {
+          data[requests[i].key] = await openChunk(new Uint8Array(blobs[i]), spaceKey, requests[i].pid);
         }
       } catch (e) {
         throw e && e.i18nKey ? e : failWith('m3ErrServer');
@@ -419,12 +430,24 @@
       try { verified = await verifyEnvelope(envelope.body, spaceKey); }
       catch (e) { throw (e && e.i18nKey) ? e : failWith('m3ErrServer'); }
       if (!verified) throw failWith('m3ErrVerify');
+
+
+
+
+      var signedVersion = envelope.body ? Number(envelope.body.version) : NaN;
+      if (envelope.version === null || !Number.isFinite(signedVersion) || signedVersion !== envelope.version) {
+        throw failWith('m3ErrVerify');
+      }
+
       lastLoadContext = { spaceKey: spaceKey, version: envelope.version, editorCredential: editorCredentialUsed, spaceId: config.spaceId };
 
 
 
 
       var payloadBytes = bytesFromBase64(envelope.body.payload);
+
+
+      lastLoadContext.containerVersion = payloadBytes.length >= 5 ? payloadBytes[4] : 0;
       if (payloadBytes.length >= 5 && payloadBytes[4] === 5) {
         return loadManifestGeneration(envelope.body.payload, spaceKey);
       }
@@ -602,7 +625,7 @@
     var pw = document.getElementById('passwordInput');
     if (pw) { pw.value = ''; pw.type = 'password'; }
     var pwToggle = document.getElementById('passwordToggle');
-    if (pwToggle) { pwToggle.setAttribute('aria-label', 'Show password'); }
+    if (pwToggle) { pwToggle.setAttribute('aria-label', VIEWER.t('lockShowPassword')); }
   }
 
 

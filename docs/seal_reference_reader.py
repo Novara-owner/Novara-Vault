@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python3
 """seal_reference_reader.py - an independent reader for the Novara sealed container format v1.
 
 Why this file exists
@@ -36,15 +36,15 @@ import sys
 
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-except ImportError:
+except ImportError:  # pragma: no cover - dependency check only
     sys.stderr.write(
         "this reader needs AES-256-GCM: pip install cryptography\n")
     raise SystemExit(2)
 
-
-
-
-
+# ------------------------------------------------------------------ constants
+# Every number below is quoted from the format document. They are deliberately spelled out rather
+# than imported: the point of an independent reader is that it does not share a single constant with
+# the writer it is checking.
 
 CONTAINER_MAGIC = b"NOVASEAL"
 CONTAINER_HEADER_SIZE = 128
@@ -73,7 +73,7 @@ class FormatError(Exception):
     """Raised for every structural problem; the message says which rule failed."""
 
 
-
+# ------------------------------------------------------------------ helpers
 def read_key(text: str) -> bytes:
     """A 32-byte key, given as 64 hex characters or as base64."""
     raw = text.strip()
@@ -83,7 +83,7 @@ def read_key(text: str) -> bytes:
     else:
         try:
             candidate = base64.b64decode(raw, validate=True)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - any decode failure is the same user error
             raise FormatError("vmk must be 64 hex characters or base64") from exc
     if len(candidate) != KEY_SIZE:
         raise FormatError(f"vmk must be {KEY_SIZE} bytes, got {len(candidate)}")
@@ -102,7 +102,7 @@ def hexdump(data: bytes) -> str:
     return data.hex()
 
 
-
+# ------------------------------------------------------------------ container
 class Container:
     """The 128-byte header of a .novaseal container."""
 
@@ -158,7 +158,7 @@ class Container:
         try:
             return aes_gcm_decrypt(vmk, self.key_slot[0:NONCE_SIZE],
                                    self.key_slot[NONCE_SIZE:60], self.prefix)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             raise FormatError(
                 "key slot does not open: wrong master key, or the header/slot was altered") from exc
 
@@ -179,8 +179,8 @@ class Container:
             if pos + BLOCK_PREFIX_SIZE > len(self.raw):
                 raise FormatError(f"block {index} is missing: the container ends early")
             (payload_len,) = struct.unpack_from("<I", self.raw, pos)
-
-
+            # 终审 P3：与 C# SealContainerReader 同口径——minPayload = nonce + 1 + tag（明文至少
+            # 1 字节，28B 的零长块不存在，旧版接受它们），maxPayload = nonce + chunkSize + tag。
             if payload_len < NONCE_SIZE + 1 + TAG_SIZE:
                 raise FormatError(f"block {index} declares {payload_len} bytes, below the minimum for a non-empty block")
             if payload_len > NONCE_SIZE + self.chunk_size + TAG_SIZE:
@@ -202,7 +202,7 @@ class Container:
 
             try:
                 plain = aes_gcm_decrypt(content_key, nonce, payload, aad)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise FormatError(
                     f"block {index} failed authentication (wrong key, reordered, truncated or edited)") from exc
 
@@ -224,7 +224,7 @@ def parse_container(raw: bytes) -> Container:
     return Container(raw)
 
 
-
+# ------------------------------------------------------------------ index
 def parse_index(raw: bytes, vmk: bytes) -> dict:
     if len(raw) < INDEX_HEADER_SIZE + TAG_SIZE:
         raise FormatError("index file is truncated")
@@ -236,16 +236,16 @@ def parse_index(raw: bytes, vmk: bytes) -> dict:
 
     (item_count,) = struct.unpack_from("<I", raw, 9)
     nonce = raw[13:25]
-    aad = raw[8:13]
+    aad = raw[8:13]  # version || itemCount
 
     try:
         plain = aes_gcm_decrypt(vmk, nonce, raw[INDEX_HEADER_SIZE:], aad)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise FormatError("index failed authentication: wrong master key or altered file") from exc
 
     try:
         payload = json.loads(plain.decode("utf-8"))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise FormatError("index plaintext is not valid UTF-8 JSON") from exc
 
     items = payload.get("items")
@@ -256,8 +256,8 @@ def parse_index(raw: bytes, vmk: bytes) -> dict:
     if payload.get("observedMaxUtc", -1) < 0:
         raise FormatError("observedMaxUtc must not be negative")
 
-
-
+    # 终审 P3：逐条 entry 校验 + id 去重——与 C# SealedItem.IsWellFormed / SealIndex.FromPayload
+    # 一一对应；参考实现此前直接把未校验的 payload 交给调用方，宽松面正好是 C# 拒掉的那些。
     seen = set()
     for item in items:
         if not isinstance(item, dict):
@@ -303,7 +303,7 @@ def _is_hex_str(value, length: int) -> bool:
             and all(c in "0123456789abcdefABCDEF" for c in value))
 
 
-
+# ------------------------------------------------------------------ bundle
 def parse_bundle(raw: bytes, vmk: bytes, verbose: bool) -> dict:
     if len(raw) < BUNDLE_HEADER_SIZE + BUNDLE_TAIL_SIZE:
         raise FormatError("bundle is truncated")
@@ -349,7 +349,7 @@ def parse_bundle(raw: bytes, vmk: bytes, verbose: bool) -> dict:
     index_aad = (bundle_id + hashlib.sha256(keywrap).digest() + struct.pack("<I", item_count))
     try:
         index_plain = aes_gcm_decrypt(vmk, index_block[0:NONCE_SIZE], index_block[NONCE_SIZE:], index_aad)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise FormatError("bundle index failed authentication: wrong master key or altered package") from exc
 
     payload = json.loads(index_plain.decode("utf-8"))
@@ -392,7 +392,7 @@ def parse_bundle(raw: bytes, vmk: bytes, verbose: bool) -> dict:
     return {"kind": kind, "bundleId": bundle_id.hex(), "itemCount": item_count, "payload": payload}
 
 
-
+# ------------------------------------------------------------------ vector mode
 def run_vector(manifest_path: str, container_path: str, show_hex: bool) -> int:
     with open(manifest_path, "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
@@ -473,7 +473,7 @@ def run_vector(manifest_path: str, container_path: str, show_hex: bool) -> int:
     return 0 if ok else 1
 
 
-
+# ------------------------------------------------------------------ cli
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Independent reader for the Novara sealed container format v1 (read-only).")

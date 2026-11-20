@@ -2,8 +2,8 @@
 
 
 
-#define MyAppVersion "12.0.0"
-#define MyAppDisplayVersion "novara12"
+#define MyAppVersion "13.0.0"
+#define MyAppDisplayVersion "novara13"
 #define MyAppPublisher "Novara"
 #define MyAppExeName "Novara.exe"
 
@@ -85,8 +85,8 @@ chinesesimplified.UninstallShortcut=卸载 Novara
 english.UninstallShortcut=Uninstall Novara
 chinesesimplified.UninstallDataCaption=是否同时删除所有数据
 english.UninstallDataCaption=Delete all data as well?
-chinesesimplified.UninstallDataIntro=数据保存在本机 %LocalAppData%\Novara（data.novadb）。%n%n保留数据：重装后自动恢复；如需备份请先打开 Novara，在设置页导出。%n删除全部：将永久删除日记、待办、备忘等全部数据，不可恢复。
-english.UninstallDataIntro=Your data lives in %LocalAppData%\Novara (data.novadb).%n%nKeep data: it is picked up again after a reinstall. To back it up first, open Novara and export it from Settings.%nDelete all: permanently removes every diary, to-do, memo and other entry. This cannot be undone.
+chinesesimplified.UninstallDataIntro=数据保存在本机 %LocalAppData%\Novara（data.novadb 与 Novara Space 的 seal）。%n%n保留数据：重装后自动恢复；Novara Space 及其未到期的时间胶囊也会保留，仍需原独立密码。%n删除全部：将永久删除日记、待办、备忘以及 Novara Space 中的全部内容（含未到期胶囊），不可恢复。
+english.UninstallDataIntro=Your data lives in %LocalAppData%\Novara (data.novadb and the Novara Space data under seal).%n%nKeep data: it is picked up again after a reinstall. Novara Space and its unexpired time capsules are kept too; the original Novara Space password is still required.%nDelete all: permanently removes every diary, to-do, memo and all Novara Space content, including unexpired capsules. This cannot be undone.
 chinesesimplified.KeepData=保留数据（推荐）
 english.KeepData=Keep my data (recommended)
 chinesesimplified.DeleteData=删除全部数据（需输入 RESET 确认）

@@ -14,7 +14,7 @@ Novara ships a native **MCP (Model Context Protocol) server** that lets any AI a
 | Transport | stdio (standard input/output), newline-delimited JSON-RPC 2.0 |
 | Protocol versions | `2024-11-05`, `2025-03-26`, `2025-06-18` |
 | Data types | `memo` / `todo` / `note` / `diary` / `path` |
-| Tools | 14 |
+| Tools | 16 |
 
 The MCP server is a **zero-logic stdio frontend**. Every tool call is forwarded over a local named pipe to the running Novara app (the single data authority), which performs the actual read/write and persists changes.
 
@@ -84,14 +84,16 @@ All tool arguments use camelCase. IDs are GUID strings (except `diary`, whose ID
 
 Notes: `update_diary` cannot change `format`. Passing `subTexts` to `update_todo` rebuilds the list and resets checked states. For `update_memo`, changing or clearing `groupId` moves the entry between regions and therefore strips its personal marks (star and pin) — editing other fields keeps them.
 
-### Delete / List / Read / Search
+### Delete / Restore / List / Read / Search / Status
 
 | Tool | Arguments | Notes |
 |------|-----------|-------|
 | `delete_item` | `type`, `id` | Soft delete (moves to the recycle bin); requires the separate delete permission |
+| `restore_item` | `type`, `id` | Restores a soft-deleted item from the recycle bin. Requires the **update** permission for that type — restore stays available while the delete master switch is off. Star and pin marks cleared at delete time are not restored |
 | `list_items` | `type?` | Summaries only (no content); omits the recycle bin |
 | `read_item` | `type`, `id` | Full view; sensitive fields redacted |
 | `search_items` | `query`, `type?` | Full-text across all types; omits the recycle bin |
+| `get_auth_status` | — | Returns this client's granted scopes and whether the delete master switch is open; a zero-permission self-check (no data touched) |
 
 ## Security model
 
@@ -106,6 +108,8 @@ Defense-in-depth, enabled in Settings → MCP card:
 7. **Sensitive-field redaction** — fields whose label matches `密码`, `邮箱密码`, `CVV`, `API Key`, `卡号`, `证件号`, `password`, `passwd`, `apikey`, `api_key`, `api key`, `密钥`, `secret`, `token`, `key`, `cvv`, or `totp` are returned as `****`, excluded from search results, and protected against relabeling-based extraction.
 
 > **Data boundary:** `NovaraMCP.exe` never transmits data anywhere. If you connect a **cloud-hosted** AI client, the AI client itself may send data the agent reads to the AI provider you chose — that is controlled by the AI client, not by Novara. See the [Privacy Policy](../PRIVACY.md) for details.
+>
+> **Novara Space is not exposed through MCP.** Sealed items live in a separate encrypted store with its own password; no MCP tool can list, read, create, update, delete or restore them.
 
 ## Example
 

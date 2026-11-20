@@ -81,7 +81,7 @@ public static class McpService
             var helloLine = ReadLineWithTimeout(lineReader, TimeSpan.FromSeconds(10), HandshakeMaxLineChars, out var helloTooLong);
             if (helloTooLong)
             {
-                try { writer.WriteLine(JsonSerializer.Serialize(new HelloResp { Ok = false, Error = "握手内容过长" }, JsonOpts)); } catch { }
+                try { writer.WriteLine(JsonSerializer.Serialize(new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_HandshakeTooLong") }, JsonOpts)); } catch { }
                 return;
             }
             if (helloLine == null) return;
@@ -213,8 +213,8 @@ public static class McpService
         canonicalPath = clientPath;
         if (hello == null)
         {
-            Audit("auth_denied", reported, ok: false, reason: "握手无效");
-            return new HelloResp { Ok = false, Error = "握手无效" };
+            Audit("auth_denied", reported, ok: false, reason: App.GetString("Mcp_Audit_HandshakeInvalid"));
+            return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_HandshakeInvalid") };
         }
 
 
@@ -223,21 +223,24 @@ public static class McpService
 
         if (clientPath.Length == 0)
         {
-            var why = identity.FailureReason.Length > 0 ? identity.FailureReason : "无法确认客户端进程身份";
-            Audit("auth_denied", reported, ok: false, reason: why);
+
+
+        var why = identity.FailureReason.Length > 0 ? identity.FailureReason : "Mcp_Iden_Unknown";
+            Audit("auth_denied", reported, ok: false, reason: App.GetString(why));
             return new HelloResp
             {
                 Ok = false,
-                Error = why + "。请让 Agent 客户端保持运行并由它直接启动 NovaraMCP"
-                    + "（不要经一次性启动器或包装脚本），然后重试。",
+
+
+                Error = string.Format(App.GetString("Mcp_Iden_AgentAdvice"), App.GetString(why)),
             };
         }
         var identityMismatch = reported.Length > 0 && !string.Equals(reported, clientPath, StringComparison.OrdinalIgnoreCase);
         var store = App.Store;
         if (store == null || !store.IsLoaded)
         {
-            Audit("auth_denied", clientPath, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
-            return new HelloResp { Ok = false, Error = "数据库未解锁，请先在 Novara 中解锁" };
+            Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_DbLocked"));
+            return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_DbLocked") };
         }
 
 
@@ -246,20 +249,20 @@ public static class McpService
         var db = store.Database;
         if (db == null)
         {
-            Audit("auth_denied", clientPath, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
-            return new HelloResp { Ok = false, Error = "数据库未解锁，请先在 Novara 中解锁" };
+            Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_DbLocked"));
+            return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_DbLocked") };
         }
 
         var settings = db.AppSettings;
         if (!settings.McpEnabled)
         {
-            Audit("auth_denied", clientPath, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
-            return new HelloResp { Ok = false, Error = "MCP 接口已关闭，请在 Novara 设置中开启" };
+            Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_Disabled"));
+            return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_Disabled") };
         }
         if (string.IsNullOrEmpty(settings.McpToken) || !FixedTimeEquals(hello.Token, settings.McpToken))
         {
-            Audit("auth_denied", clientPath, ok: false, reason: "访问令牌无效，请到 Novara 设置页「MCP 接口」卡片复制最新配置");
-            return new HelloResp { Ok = false, Error = "访问令牌无效，请到 Novara 设置页「MCP 接口」卡片复制最新配置" };
+            Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_TokenInvalid"));
+            return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_TokenInvalid") };
         }
 
 
@@ -289,10 +292,21 @@ public static class McpService
         if (!known)
         {
             bool allowed = AuthorizeClient?.Invoke(clientPath) ?? false;
+
+
+
+
+            var storeNow = App.Store;
+            if (storeNow is null || !storeNow.IsLoaded
+                || !ReferenceEquals(storeNow, store) || !ReferenceEquals(storeNow.Database, db))
+            {
+                Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_AuthStateChanged"));
+                return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_AuthStateChanged") };
+            }
             if (!allowed)
             {
-                Audit("auth_denied", clientPath, ok: false, reason: "该进程尚未授权，请先打开 Novara 完成授权");
-                return new HelloResp { Ok = false, Error = "该进程尚未授权，请先打开 Novara 完成授权" };
+                Audit("auth_denied", clientPath, ok: false, reason: App.GetString("Mcp_Audit_NotAuthorized"));
+                return new HelloResp { Ok = false, Error = App.GetString("Mcp_Audit_NotAuthorized") };
             }
             bool addedNow = false;
             lock (WhitelistGate)
@@ -310,12 +324,12 @@ public static class McpService
             _ = store.SaveAsync();
 
 
-            if (addedNow) Audit("auth_new", clientPath, reason: identityMismatch ? $"自报身份与系统解析不一致：{reported}" : "");
+            if (addedNow) Audit("auth_new", clientPath, reason: identityMismatch ? string.Format(App.GetString("Mcp_Audit_IdentityMismatch"), reported) : "");
         }
         else
         {
 
-            Audit("auth_ok", clientPath, reason: identityMismatch ? $"自报身份与系统解析不一致：{reported}" : "");
+            Audit("auth_ok", clientPath, reason: identityMismatch ? string.Format(App.GetString("Mcp_Audit_IdentityMismatch"), reported) : "");
         }
         return new HelloResp { Ok = true };
     }
@@ -327,8 +341,10 @@ public static class McpService
 
 
     private static readonly object AuthDeniedThrottleGate = new();
-    private static DateTimeOffset _lastAuthDeniedWrite = DateTimeOffset.MinValue;
-    private static int _suppressedAuthDenied;
+
+
+    private static readonly Dictionary<string, (DateTimeOffset Last, int Suppressed)> _authDeniedWindows =
+        new(StringComparer.Ordinal);
     private static readonly TimeSpan AuthDeniedThrottleWindow = TimeSpan.FromMinutes(1);
 
 
@@ -403,7 +419,7 @@ public static class McpService
 
 
     public static void RecordTokenReset()
-        => Audit("token_reset", "", reason: "MCP access token was regenerated; existing sessions are no longer valid");
+        => Audit("token_reset", "", reason: App.GetString("Mcp_Audit_TokenReset"));
 
     public static void RecordPermissionChange(string clientPath, string detail)
         => Audit("perm_change", clientPath, reason: detail);
@@ -412,7 +428,10 @@ public static class McpService
 
 
     public static void RecordMasterSwitch(bool deleteSwitch, bool enabled)
-        => Audit(deleteSwitch ? "delete_switch" : "master_switch", "", reason: enabled ? "switched on" : "switched off");
+
+
+        => Audit(deleteSwitch ? "delete_switch" : "master_switch", "",
+        reason: enabled ? "Mcp_Audit_SwitchedOn" : "Mcp_Audit_SwitchedOff");
 
 
     public static List<string> GetAuthorizedSnapshot()
@@ -433,7 +452,7 @@ public static class McpService
         var store = App.Store;
         if (store == null || !store.IsLoaded)
         {
-            Audit("call", clientPath, req.Method, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
+            Audit("call", clientPath, req.Method, ok: false, reason: App.GetString("Mcp_Audit_DbLocked"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "数据库未解锁，请先在 Novara 中解锁" } };
         }
 
@@ -443,14 +462,14 @@ public static class McpService
         var entryDb = store.Database;
         if (entryDb == null)
         {
-            Audit("call", clientPath, req.Method, ok: false, reason: "数据库未解锁，请先在 Novara 中解锁");
+            Audit("call", clientPath, req.Method, ok: false, reason: App.GetString("Mcp_Audit_DbLocked"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "数据库未解锁，请先在 Novara 中解锁" } };
         }
 
 
         if (!entryDb.AppSettings.McpEnabled)
         {
-            Audit("call", clientPath, req.Method, ok: false, reason: "MCP 接口已关闭，请在 Novara 设置中开启");
+            Audit("call", clientPath, req.Method, ok: false, reason: App.GetString("Mcp_Audit_Disabled"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "MCP 接口已关闭，请在 Novara 设置中开启" } };
         }
 
@@ -459,18 +478,19 @@ public static class McpService
         var currentToken = entryDb.AppSettings.McpToken;
         if (string.IsNullOrEmpty(currentToken) || !FixedTimeEquals(handshakeToken, currentToken))
         {
-            Audit("call", clientPath, req.Method, ok: false, reason: "访问令牌已重置，请用最新配置重新连接");
+            Audit("call", clientPath, req.Method, ok: false, reason: App.GetString("Mcp_Audit_TokenReset"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "访问令牌已重置，请用最新配置重新连接" } };
         }
         if (store.IsSaveSuppressed)
         {
-            Audit("call", clientPath, req.Method, ok: false, reason: "已恢复备份数据，请重启 Novara 后再操作");
+            Audit("call", clientPath, req.Method, ok: false, reason: App.GetString("Mcp_Audit_RestorePending"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "已恢复备份数据，请重启 Novara 后再操作" } };
         }
 
         bool isWrite = req.Method.StartsWith("create_", StringComparison.Ordinal)
                     || req.Method.StartsWith("update_", StringComparison.Ordinal)
-                    || req.Method == "delete_item";
+                    || req.Method == "delete_item"
+                    || req.Method == "restore_item";
 
 
 
@@ -496,15 +516,29 @@ public static class McpService
 
 
 
-        var required = McpPermissions.RequiredFor(req.Method, req.Method is "read_item" or "list_items" or "search_items"
+
+
+
+        var gateType = req.Method is "read_item" or "list_items" or "search_items"
             ? validatedType
-            : GetStr(req.Params, "type"));
+            : GetStr(req.Params, "type");
+        var required = McpPermissions.RequiredFor(req.Method, gateType);
         var granted = McpPermissions.GetFor(entryDb.AppSettings, clientPath);
-        if ((granted & required) != required)
+        if (!McpPermissions.IsPermitted(granted, req.Method, gateType))
         {
-            var denyReason = $"权限不足：需要 {McpPermissions.Describe(required)}";
+
+
+            var mixedForm = req.Method is "list_items" or "search_items" && validatedType == null;
+            var denyReason = mixedForm
+                ? App.GetString("Mcp_Audit_NoReadPermission")
+                : string.Format(App.GetString("Mcp_Audit_PermissionDenied"), McpPermissions.Describe(required));
             Audit("call", clientPath, req.Method, ok: false, reason: denyReason);
-            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "权限不足，请在 Novara 设置的 MCP 授权面板中调整该客户端的权限" } };
+
+
+
+            var needDesc = mixedForm ? App.GetString("Mcp_Deny_NeedAnyRead") : McpPermissions.Describe(required);
+            var denyMsg = string.Format(App.GetString("Mcp_Deny_ClientMsg"), needDesc, McpPermissions.Describe(granted));
+            return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = denyMsg } };
         }
 
         var target = "-";
@@ -552,10 +586,12 @@ public static class McpService
             {
 
 
-                "list_items" => McpLogic.ListItems(db, validatedType),
+                "list_items" => McpLogic.ListItems(db, validatedType, granted),
                 "read_item" => McpLogic.ReadItem(db, validatedType!, ReqStr(req.Params, "id")),
-                "search_items" => McpLogic.SearchItems(db, ReqStr(req.Params, "query"), validatedType),
+                "search_items" => McpLogic.SearchItems(db, ReqStr(req.Params, "query"), validatedType, granted),
                 "delete_item" => Delete(store, ReqStr(req.Params, "type"), ReqStr(req.Params, "id"), ref postGate),
+                "restore_item" => McpLogic.RestoreItem(db, ReqStr(req.Params, "type"), ReqStr(req.Params, "id")),
+                "get_auth_status" => McpLogic.AuthStatus(granted, entryDb.AppSettings.McpDeleteEnabled),
 
                 "create_memo" => McpLogic.CreateMemo(db, ReqStr(req.Params, "name"), ReqStr(req.Params, "type"),
                     GetStr(req.Params, "keyInfo"), GetFields(req.Params), GetGuid(req.Params, "groupId"), GetStr(req.Params, "iconKey"), currentWs),
@@ -585,7 +621,20 @@ public static class McpService
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"McpService postGate 失败（已忽略，主操作已成功）: {ex}"); }
             if (isWrite)
             {
-                _ = store.SaveAsync();
+
+
+
+
+                if (!store.SaveSync())
+                {
+                    Audit("call", clientPath, req.Method, target, title, isWrite, false, App.GetString("Mcp_Audit_SaveFailed"));
+                    return new RespMsg
+                    {
+                        Id = req.Id,
+                        Ok = false,
+                        Error = new RespError { Message = "保存失败：改动未落盘，请检查磁盘空间或解锁状态后重试" },
+                    };
+                }
                 App.MainWindow?.NotifyExternalDbMutation();
             }
             Audit("call", clientPath, req.Method, target, title, isWrite, true);
@@ -599,7 +648,7 @@ public static class McpService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"McpService 执行失败: {ex}");
-            Audit("call", clientPath, req.Method, target, title, isWrite, false, "内部错误");
+            Audit("call", clientPath, req.Method, target, title, isWrite, false, App.GetString("Mcp_Audit_InternalError"));
             return new RespMsg { Id = req.Id, Ok = false, Error = new RespError { Message = "内部错误" } };
         }
     }
@@ -614,6 +663,8 @@ public static class McpService
                 return ($"list:{GetStr(req.Params, "type") ?? "all"}", "");
             if (m == "search_items")
                 return ($"search:{GetStr(req.Params, "type") ?? "all"}", McpAuditLog.TruncateTitle(GetStr(req.Params, "query")));
+            if (m == "get_auth_status")
+                return ("auth:status", "");
 
             switch (m)
             {
@@ -686,15 +737,28 @@ public static class McpService
                 lock (AuthDeniedThrottleGate)
                 {
                     var now = DateTimeOffset.UtcNow;
-                    if (now - _lastAuthDeniedWrite < AuthDeniedThrottleWindow)
+                    var key = (path ?? "") + "\u001F" + (reason ?? "");
+
+
+
+                    if (_authDeniedWindows.Count >= 256)
                     {
-                        _suppressedAuthDenied++;
+                        foreach (var stale in _authDeniedWindows
+                                     .Where(kv => now - kv.Value.Last > TimeSpan.FromMinutes(10))
+                                     .Select(kv => kv.Key).ToList())
+                            _authDeniedWindows.Remove(stale);
+                        while (_authDeniedWindows.Count >= 256)
+                            _authDeniedWindows.Remove(_authDeniedWindows.OrderBy(kv => kv.Value.Last).First().Key);
+                    }
+                    _authDeniedWindows.TryGetValue(key, out var window);
+                    if (now - window.Last < AuthDeniedThrottleWindow)
+                    {
+                        _authDeniedWindows[key] = (window.Last, window.Suppressed + 1);
                         return;
                     }
-                    if (_suppressedAuthDenied > 0)
-                        reason = $"{reason}（此前 {_suppressedAuthDenied} 条同类拒绝已合并）";
-                    _suppressedAuthDenied = 0;
-                    _lastAuthDeniedWrite = now;
+                    if (window.Suppressed > 0)
+                        reason = reason + string.Format(App.GetString("Mcp_Audit_SuppressedSuffix"), window.Suppressed);
+                    _authDeniedWindows[key] = (now, 0);
                 }
             }
             var evt = new McpAuditEvent
@@ -759,7 +823,11 @@ public static class McpService
             postGate += () => RunStickyOnUi(() =>
             {
                 if (Services.StickySync.Contains(id))
-                    Services.StickySync.UpdateNote(id, "todo", todo.Title ?? "", "", items);
+                    if (!Services.StickySync.UpdateNote(id, "todo", todo.Title ?? "", "", items))
+
+
+                    Audit("sticky_sync_failed", "", tool: "update_todo", target: id, ok: false,
+                        reason: "Setting_Mcp_Audit_Reason_StickySyncFailed");
             });
         }
         return true;
@@ -775,7 +843,10 @@ public static class McpService
             postGate += () => RunStickyOnUi(() =>
             {
                 if (Services.StickySync.Contains(id))
-                    Services.StickySync.UpdateNote(id, "note", finalTitle, finalContent);
+                    if (!Services.StickySync.UpdateNote(id, "note", finalTitle, finalContent))
+
+                    Audit("sticky_sync_failed", "", tool: "update_note", target: id, ok: false,
+                        reason: "Setting_Mcp_Audit_Reason_StickySyncFailed");
             });
         }
         return true;

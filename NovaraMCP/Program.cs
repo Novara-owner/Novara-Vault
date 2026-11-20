@@ -316,6 +316,13 @@ public static class Program
                 ["id"] = Str("条目 ID")
             }, "type", "id"),
 
+        Tool("restore_item", "恢复回收站中的软删除条目（delete_item 的逆操作；删除时清掉的置顶/星标不随恢复回来）",
+            new JsonObject
+            {
+                ["type"] = TypeEnum("条目类型"),
+                ["id"] = Str("条目 ID")
+            }, "type", "id"),
+
         Tool("list_items", "列出条目摘要（不含正文、不含回收站）",
             new JsonObject
             {
@@ -333,5 +340,8 @@ public static class Program
                 ["query"] = Str("搜索关键词"),
                 ["type"] = TypeEnum("条目类型（可选）")
             }, "query"),
+
+        Tool("get_auth_status", "查看当前客户端的授权范围与删除开关状态（零权限自查；配置完成后先调用它了解权限，避免逐个试错）",
+            new JsonObject()),
     };
 }

@@ -493,26 +493,26 @@
                     </Button>
                     <Button Grid.Row="0" Grid.Column="1"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#AAAAAA" Click="ColorItem_Click" />
+                            Background="#AAAAAA" AutomationProperties.ItemStatus="A11y_Color_Gray" Click="ColorItem_Click" />
                     <Button Grid.Row="0" Grid.Column="2"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#FF0000" Click="ColorItem_Click" />
+                            Background="#FF0000" AutomationProperties.ItemStatus="A11y_Color_Red" Click="ColorItem_Click" />
                     <Button Grid.Row="0" Grid.Column="3"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#FF8C00" Click="ColorItem_Click" />
+                            Background="#FF8C00" AutomationProperties.ItemStatus="A11y_Color_Orange" Click="ColorItem_Click" />
 
                     <Button Grid.Row="1" Grid.Column="0"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#4CAF50" Click="ColorItem_Click" />
+                            Background="#4CAF50" AutomationProperties.ItemStatus="A11y_Color_Green" Click="ColorItem_Click" />
                     <Button Grid.Row="1" Grid.Column="1"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#2196F3" Click="ColorItem_Click" />
+                            Background="#2196F3" AutomationProperties.ItemStatus="A11y_Color_Blue" Click="ColorItem_Click" />
                     <Button Grid.Row="1" Grid.Column="2"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#9C27B0" Click="ColorItem_Click" />
+                            Background="#9C27B0" AutomationProperties.ItemStatus="A11y_Color_Purple" Click="ColorItem_Click" />
                     <Button Grid.Row="1" Grid.Column="3"
                             Style="{StaticResource ColorSwatchButtonStyle}"
-                            Background="#795548" Click="ColorItem_Click" />
+                            Background="#795548" AutomationProperties.ItemStatus="A11y_Color_Brown" Click="ColorItem_Click" />
                 </Grid>
             </Border>
             </Grid>

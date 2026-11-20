@@ -1,0 +1,8 @@
+{
+  "case": "verified_source_present",
+  "setup": "sealed record, original still on disk, verified container",
+  "actions": [
+    "DiscardStaging",
+    "OfferRetrySeal"
+  ]
+}

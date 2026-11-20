@@ -57,6 +57,33 @@ public class NovaraStore
     private const int V5MemoryKiBMax = 4 * 1024 * 1024;
 
 
+
+    private const int V5WriteArgon2idIterationsMax = 10;
+    private const int V5WriteArgon2idMemoryKiBMax = 512 * 1024;
+
+
+    internal static long AvailableMemoryBytesForTests { get; set; }
+
+    private static long MemoryBudgetBytes
+        => AvailableMemoryBytesForTests > 0
+            ? AvailableMemoryBytesForTests
+            : GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+
+
+
+    internal static bool HasMemoryForArgon2id(int memoryKiB, long availableBytes)
+        => availableBytes <= 0 || (long)memoryKiB * 1024 <= availableBytes / 2;
+
+
+
+    internal static (int Iterations, int MemoryKiB) ClampV5ParamsForWrite(
+        byte algo, int iterations, int memoryKiB)
+        => algo == CryptoService.V5KdfArgon2id
+            ? (Math.Min(iterations, V5WriteArgon2idIterationsMax),
+               Math.Min(memoryKiB, V5WriteArgon2idMemoryKiBMax))
+            : (iterations, memoryKiB);
+
+
     private const int SaveDebounceMs = 300;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -170,6 +197,13 @@ public class NovaraStore
 
 
     internal void SetFileVersionForTests(byte v) => _fileVersion = v;
+
+
+    internal void SetV5KdfParamsForTests(int iterations, int memoryKiB)
+    {
+        _v5Iterations = iterations;
+        _v5MemoryKiB = memoryKiB;
+    }
 
 
 
@@ -609,6 +643,12 @@ public class NovaraStore
                     : mem == 0;
                 if (!iterOk || !memOk)
                     return Corrupted(Loc.T("Store_Err_Version"));
+
+
+
+
+                if (algo == CryptoService.V5KdfArgon2id && !HasMemoryForArgon2id(mem, MemoryBudgetBytes))
+                    return new LoadResult(LoadStatus.KdfTooExpensive, Loc.T("Store_Err_KdfTooExpensive"));
                 try
                 {
                     var key = algo == CryptoService.V5KdfArgon2id
@@ -1421,6 +1461,15 @@ private bool WriteSnapshot()
             using (var fs = new FileStream(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 var isV5 = _fileVersion == FileVersionMainV5;
+                if (isV5 && _encryptionFlag == FlagEncrypted)
+                {
+
+
+
+                    var clamped = ClampV5ParamsForWrite(_v5KdfAlgoId, _v5Iterations, _v5MemoryKiB);
+                    _v5Iterations = clamped.Iterations;
+                    _v5MemoryKiB = clamped.MemoryKiB;
+                }
                 var header = new byte[isV5 ? HeaderSizeV5 : HeaderSize];
                 BitConverter.TryWriteBytes(header.AsSpan(0, 4), Magic);
                 header[5] = _encryptionFlag;
@@ -1518,6 +1567,6 @@ private bool WriteSnapshot()
     }
 }
 
-public enum LoadStatus { Ok, EmptyCreated, Encrypted, WrongPassword, Corrupted, IoError, NeedPassword }
+public enum LoadStatus { Ok, EmptyCreated, Encrypted, WrongPassword, Corrupted, IoError, NeedPassword, KdfTooExpensive }
 
 public record LoadResult(LoadStatus Status, string? Detail = null);

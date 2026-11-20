@@ -70,6 +70,13 @@ public static class McpPermissions
             var z = Zone(typeArg);
             return z?.d ?? McpPerm.None;
         }
+
+
+        if (method == "restore_item")
+        {
+            var z = Zone(typeArg);
+            return z?.u ?? McpPerm.None;
+        }
         if (method.StartsWith("create_") || method.StartsWith("update_"))
         {
             var z = Zone(method[(method.IndexOf('_') + 1)..]);
@@ -82,12 +89,40 @@ public static class McpPermissions
 
 
 
+
+
+
             if (string.IsNullOrEmpty(typeArg)) return AllRead;
             var z = Zone(typeArg);
             return z?.r ?? McpPerm.None;
         }
         return McpPerm.None;
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    public static bool IsPermitted(McpPerm granted, string method, string? validatedType)
+    {
+        if ((method is "list_items" or "search_items") && string.IsNullOrEmpty(validatedType))
+            return (granted & AllRead) != 0;
+        if (method == "read_item" && string.IsNullOrEmpty(validatedType))
+            return false;
+        var required = RequiredFor(method, validatedType);
+        return (granted & required) == required;
+    }
+
+
+
 
 
     public static string Describe(McpPerm p)
@@ -145,9 +180,12 @@ public static class McpPermissions
     {
         if (s.McpPermMigrated) return false;
         s.McpPermMigrated = true;
+
+
+        var migrated = s.McpDeleteEnabled ? LegacyFull : LegacyFull & ~AllDelete;
         foreach (var p in s.McpAllowedProcesses)
             if (!s.McpClientPermissions.Any(r => string.Equals(r.Path, p, StringComparison.OrdinalIgnoreCase)))
-                s.McpClientPermissions.Add(new McpClientPermRecord { Path = p, Permissions = (long)LegacyFull });
+                s.McpClientPermissions.Add(new McpClientPermRecord { Path = p, Permissions = (long)migrated });
         return true;
     }
 }

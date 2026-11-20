@@ -371,22 +371,15 @@
             </Grid>
 
 
-            <Canvas x:Name="DragLayer" IsHitTestVisible="False" Grid.RowSpan="3" />
+            <Canvas x:Name="DragLayer" IsHitTestVisible="False" />
 
-                    <TextBlock x:Name="HintText"
-                               Grid.Row="2"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               TextAlignment="Center"
-                               FontSize="13"
-                               FontWeight="Light"
-                               Foreground="{ThemeResource AppTextTertiaryBrush}"
-                               Opacity="1"
-                               TextWrapping="NoWrap"
-                               MaxWidth="600"
-                               Visibility="Collapsed" />
 
-        <Grid x:Name="NewGroupDialogOverlay" Grid.RowSpan="3"
+                    <ContentControl x:Name="HintText" IsTabStop="False"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed" />
+
+        <Grid x:Name="NewGroupDialogOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -530,7 +523,7 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="NewEntryDialogOverlay" Grid.RowSpan="3"
+        <Grid x:Name="NewEntryDialogOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -896,8 +889,9 @@
                             <Button x:Name="CustomInfoAddButton"
                                     Style="{StaticResource NovaraCardActionButtonStyle}"
                                     Grid.Row="3"
-                                    Margin="0,12,0,0"
+                                    Margin="8,12,8,0"
                                     Height="40"
+                                    SizeChanged="CustomInfoAddButton_SizeChanged"
                                     HorizontalAlignment="Stretch"
                                     Background="Transparent"
                                     Foreground="{ThemeResource AppTextTertiaryBrush}"
@@ -955,7 +949,7 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="DeleteConfirmOverlay" Grid.RowSpan="3"
+        <Grid x:Name="DeleteConfirmOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1028,7 +1022,7 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="EditGroupOverlay" Grid.RowSpan="3"
+        <Grid x:Name="EditGroupOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1099,7 +1093,7 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="ApiCheckOverlay" Grid.RowSpan="3"
+        <Grid x:Name="ApiCheckOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1189,7 +1183,7 @@
             </Border>
         </Grid>
 
-        <Grid x:Name="ApiProtocolOverlay" Grid.RowSpan="3"
+        <Grid x:Name="ApiProtocolOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1288,7 +1282,7 @@
         </Grid>
 
 
-        <Grid x:Name="ApiDiagOverlay" Grid.RowSpan="3"
+        <Grid x:Name="ApiDiagOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1366,7 +1360,7 @@
         </Grid>
 
 
-        <Grid x:Name="ApiConfirmOverlay" Grid.RowSpan="3"
+        <Grid x:Name="ApiConfirmOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1447,7 +1441,7 @@
 
 
 
-        <Grid x:Name="RelayProbeRunningOverlay" Grid.RowSpan="3"
+        <Grid x:Name="RelayProbeRunningOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1531,7 +1525,7 @@
         </Grid>
 
 
-        <Grid x:Name="RelayProbeResultOverlay" Grid.RowSpan="3"
+        <Grid x:Name="RelayProbeResultOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
@@ -1643,7 +1637,7 @@
         </Grid>
 
 
-        <Grid x:Name="ApiProbeHistoryOverlay" Grid.RowSpan="3"
+        <Grid x:Name="ApiProbeHistoryOverlay"
               Visibility="Collapsed"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">

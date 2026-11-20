@@ -117,20 +117,56 @@ public static class PathPropertyService
     public static void BeginFullScan()
     {
         if (App.McpBackground || !_running || !IsFeatureEnabled()) return;
-        var db = App.Store?.Database;
-        if (db == null) return;
-        var items = db.PathBackupItems
-            .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Path))
-            .Select(x => (x.Id, x.Path))
-            .ToList();
+        List<(Guid Id, string Path)> items;
+        try
+        {
+            var db = App.Store?.Database;
+            if (db == null) return;
+            items = db.PathBackupItems
+                .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Path))
+                .Select(x => (x.Id, x.Path))
+                .ToList();
+        }
+        catch (InvalidOperationException ex)
+        {
+
+
+
+            CrashLogger.LogNote("PathPropertyService.BeginFullScan", ex.Message);
+            _ = RetryFullScanAsync();
+            return;
+        }
         SetTargets(items);
         RefreshAll();
+    }
+
+    private static async System.Threading.Tasks.Task RetryFullScanAsync()
+    {
+        try { await System.Threading.Tasks.Task.Delay(1000); } catch { return; }
+        if (App.McpBackground || !_running || !IsFeatureEnabled()) return;
+        try
+        {
+            var db = App.Store?.Database;
+            if (db == null) return;
+            var items = db.PathBackupItems
+                .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.Path))
+                .Select(x => (x.Id, x.Path))
+                .ToList();
+            SetTargets(items);
+            RefreshAll();
+        }
+        catch (Exception ex)
+        {
+
+
+            CrashLogger.LogNote("PathPropertyService.FullScanRetry", ex.Message);
+        }
     }
 
 
 
 
-    public static void SetTargets(IReadOnlyList<(Guid Id, string Path)> items, bool visibleFirst = false)
+    public static void SetTargets(IReadOnlyList<(Guid Id, string Path)> items, bool visibleFirst = false, ISet<Guid>? hidden = null)
     {
         if (!_running) return;
         if (!IsFeatureEnabled())
@@ -144,6 +180,23 @@ public static class PathPropertyService
             return;
         }
         var orderedKeys = new List<string>();
+
+
+
+        var visibleKeys = new List<string>();
+        var newKeys = new List<string>();
+        if (items.Count == 0)
+        {
+
+
+            lock (Gate)
+            {
+                _targets.Clear();
+                _queue.Clear();
+                _cache.Clear();
+            }
+            return;
+        }
         lock (Gate)
         {
             var fresh = new Dictionary<Guid, string>();
@@ -161,15 +214,33 @@ public static class PathPropertyService
                 {
                     entry.Path = path;
                 }
-                if (visibleFirst) orderedKeys.Add(key);
-                else if (entry.Last == null) orderedKeys.Add(key);
+
+
+                var isVisible = hidden is null || !hidden.Contains(id);
+                if (visibleFirst && isVisible) visibleKeys.Add(key);
+                else if (entry.Last == null) newKeys.Add(key);
             }
+            orderedKeys.AddRange(visibleKeys);
+            orderedKeys.AddRange(newKeys);
             foreach (var staleId in _targets.Keys.Where(id => !fresh.ContainsKey(id)).ToList())
                 _targets.Remove(staleId);
             foreach (var (id, key) in fresh) _targets[id] = key;
 
-            foreach (var key in orderedKeys.Distinct(StringComparer.OrdinalIgnoreCase))
+
+            var liveKeys = fresh.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var staleKey in _cache.Keys.Where(k => !liveKeys.Contains(k)).ToList())
             {
+                _queue.Remove(staleKey);
+                _cache.Remove(staleKey);
+            }
+
+
+
+
+            var keys = orderedKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            for (int i = keys.Count - 1; i >= 0; i--)
+            {
+                var key = keys[i];
                 if (_inFlight.ContainsKey(key)) continue;
                 _queue.Remove(key);
                 _queue.Insert(0, key);

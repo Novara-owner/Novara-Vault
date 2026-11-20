@@ -15,7 +15,14 @@ namespace Novara.Services;
 
 public static class MeltAnim
 {
-    private sealed class Rec { public System.EventHandler<object>? Handler; public double Val; }
+    private sealed class Rec
+    {
+        public System.EventHandler<object>? Handler;
+        public double Val;
+
+
+        public System.Action? PendingCompleted;
+    }
     private static readonly ConditionalWeakTable<FrameworkElement, Rec> _active = new();
 
 
@@ -36,7 +43,12 @@ public static class MeltAnim
             {
                 if (hold.Handler != null)
                 {
-                    if (hold.Val == targetVal) return;
+                    if (hold.Val == targetVal)
+                    {
+
+                        if (completed != null) hold.PendingCompleted += completed;
+                        return;
+                    }
 
                     if (!double.IsNaN(panel.Height)) resumeHeight = panel.Height;
                     else if (startHeightOverride.HasValue) resumeHeight = startHeightOverride;
@@ -92,6 +104,28 @@ public static class MeltAnim
             {
                 try
                 {
+
+
+                    if (!panel.IsLoaded)
+                    {
+                        try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { }
+                        _active.Remove(panel);
+
+
+
+                        try { SettleVisual(panel, expand, foldToRest, rest, topMargin); } catch { }
+
+
+
+
+
+
+                        var trailingExit = _active.TryGetValue(panel, out var recExit) ? recExit.PendingCompleted : null;
+                        try { completed?.Invoke(); } catch { }
+                        try { trailingExit?.Invoke(); } catch { }
+                        return;
+                    }
+
                     if (!_active.TryGetValue(panel, out var rec) || !ReferenceEquals(rec.Handler, handler))
                     { try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { } return; }
 
@@ -114,15 +148,23 @@ public static class MeltAnim
                         else if (foldToRest) { panel.Height = rest; panel.Opacity = 1; }
                         else { panel.Visibility = Visibility.Collapsed; panel.Height = double.NaN; panel.Opacity = 0; }
                         if (topMargin > 0) panel.Margin = new Thickness(0, topMargin, 0, 0);
+
+                        var trailing = rec.PendingCompleted;
                         completed?.Invoke();
+                        trailing?.Invoke();
                     }
                 }
                 catch
                 {
 
                     try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= handler; } catch { }
+                    var recFailure = _active.TryGetValue(panel, out var rcFailure) ? rcFailure : null;
                     _active.Remove(panel);
-                    try { panel.Clip = null; } catch { }
+                    try { SettleVisual(panel, expand, foldToRest, rest, topMargin); } catch { }
+
+
+                    try { completed?.Invoke(); } catch { }
+                    try { recFailure?.PendingCompleted?.Invoke(); } catch { }
                 }
             };
             _active.Remove(panel); _active.Add(panel, new Rec { Handler = handler, Val = expand ? 1 : 0 });
@@ -150,6 +192,17 @@ public static class MeltAnim
 
 
 
+    private static void SettleVisual(FrameworkElement panel, bool expand, bool foldToRest, double rest, double topMargin)
+    {
+        panel.Clip = null;
+        if (expand) { panel.Visibility = Visibility.Visible; panel.Height = double.NaN; panel.Opacity = 1; }
+        else if (foldToRest) { panel.Visibility = Visibility.Visible; panel.Height = rest; panel.Opacity = 1; }
+        else { panel.Visibility = Visibility.Collapsed; panel.Height = double.NaN; panel.Opacity = 0; }
+        if (topMargin > 0) panel.Margin = new Thickness(0, topMargin, 0, 0);
+    }
+
+
+
     public static void SetInstant(FrameworkElement panel, bool expanded, double topMargin = 0)
     {
         try
@@ -159,6 +212,7 @@ public static class MeltAnim
                 try { Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= hold.Handler; } catch { }
             }
             _active.Remove(panel);
+            panel.Clip = null;
             panel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
             panel.Height = double.NaN;
             panel.Opacity = expanded ? 1.0 : 0.0;

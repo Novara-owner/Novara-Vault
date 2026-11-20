@@ -338,6 +338,24 @@ public class SyncDiffTests
     }
 
     [Fact]
+    public void APurgedRowCountsAsDeleted_NotAsOnlyLocal()
+    {
+
+
+
+        var local = Db();
+        local.DiaryItems.Add(new DiaryEntry
+        {
+            Id = "purged-diary", Title = "", Content = "", IsDeleted = false, PurgedAt = DateTime.UtcNow,
+        });
+
+        var summary = SyncDiff.Compare(local, Db());
+
+        Assert.True(summary.IsIdentical);
+        Assert.Equal(0, summary.OnlyLocal);
+    }
+
+    [Fact]
     public void Dirty_OnlyListsPartitionsThatNeedADecision()
     {
         var local = Db();

@@ -27,6 +27,15 @@ public interface ISpaceStore
 
 
 
+    void UpdateSpace(string spaceId, Action<SpaceRecord> mutate);
+
+
+
+
+
+
+
+
 
 
 
@@ -76,7 +85,12 @@ public interface ISpaceStore
 
     void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions, bool requireExisting = true);
 
-    void WriteBlob(string spaceId, VersionRecord version, byte[] payload);
+    void WriteBlob(string spaceId, VersionRecord version, ReadOnlyMemory<byte> payload);
+
+
+
+    void WriteBlob(string spaceId, VersionRecord version, byte[] payload)
+        => WriteBlob(spaceId, version, (ReadOnlyMemory<byte>)payload);
     byte[]? ReadBlob(string spaceId, VersionRecord version);
 
 
@@ -91,6 +105,9 @@ public interface ISpaceStore
 
 
     byte[]? ReadChunk(string spaceId, string chunkId);
+
+
+    string? ChunkPath(string spaceId, string chunkId);
 
 
     Dictionary<string, long> ChunkSizes(string spaceId);

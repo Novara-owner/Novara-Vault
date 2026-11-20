@@ -1,0 +1,8 @@
+{
+  "case": "staging_write_in_progress",
+  "setup": "seal_begin, original on disk, half-written container",
+  "actions": [
+    "DiscardStaging",
+    "OfferRetrySeal"
+  ]
+}

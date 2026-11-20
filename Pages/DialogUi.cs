@@ -41,6 +41,12 @@ internal static class DialogUi
         ClampDialogHeight(dialog, root);
         FitDialogWidth(widthFit, dialog, root);
         dialogMap[overlay] = dialog;
+
+
+
+        dialog.IsTabStop = true;
+        dialog.TabFocusNavigation = Microsoft.UI.Xaml.Input.KeyboardNavigationMode.Cycle;
+        dialog.Focus(FocusState.Programmatic);
         sb.Begin();
     }
 
@@ -223,15 +229,20 @@ internal static class DialogUi
         sb.Completed += (_, _) =>
         {
 
-            if (gen == System.Collections.Generic.CollectionExtensions.GetValueOrDefault(gens, overlay)) overlay.Visibility = Visibility.Collapsed;
-            onCompleted();
+
+
+            if (gen == System.Collections.Generic.CollectionExtensions.GetValueOrDefault(gens, overlay))
+            {
+                overlay.Visibility = Visibility.Collapsed;
+                onCompleted();
+            }
         };
         sb.Begin();
     }
 
-    public static async void FlashTextBox(
-        Dictionary<TextBox, System.Threading.CancellationTokenSource> ctsMap,
-        Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> originalBgs, TextBox tb)
+    public static async void FlashTextBox<T>(
+        Dictionary<T, System.Threading.CancellationTokenSource> ctsMap,
+        Dictionary<T, Microsoft.UI.Xaml.Media.Brush> originalBgs, T tb) where T : Control
     {
         if (ctsMap.TryGetValue(tb, out var prev)) { prev.Cancel(); prev.Dispose(); }
         var cts = new System.Threading.CancellationTokenSource();
@@ -257,7 +268,7 @@ internal static class DialogUi
         cts.Dispose();
     }
 
-    public static void CancelAllFlashes(Dictionary<TextBox, System.Threading.CancellationTokenSource> ctsMap)
+    public static void CancelAllFlashes<T>(Dictionary<T, System.Threading.CancellationTokenSource> ctsMap) where T : Control
     {
         foreach (var cts in ctsMap.Values) { cts.Cancel(); cts.Dispose(); }
         ctsMap.Clear();

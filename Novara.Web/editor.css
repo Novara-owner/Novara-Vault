@@ -10,7 +10,7 @@
 
 
 #editUploadButton .icon {
-  color: #7276FF;
+  color: var(--accent);
 }
 
 #editUploadButton:disabled .icon {
@@ -65,8 +65,8 @@
 }
 
 .edit-button.is-primary {
-  background: #7276FF;
-  border-color: #7276FF;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
   font-weight: 600;
 }
@@ -122,7 +122,7 @@
 .edit-check input[type='checkbox'] {
   width: 18px;
   height: 18px;
-  accent-color: #7276FF;
+  accent-color: var(--accent);
   flex: none;
 }
 
@@ -135,6 +135,8 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   padding: 20px;
 }
 
@@ -153,7 +155,7 @@
 .edit-conflict-card h2 {
   margin: 0 0 10px;
   font-size: 17px;
-  color: #7276FF;
+  color: var(--accent);
 }
 
 .edit-conflict-card p {
@@ -167,6 +169,13 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+
+.edit-conflict-actions.is-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .edit-conflict-actions .edit-button {
@@ -213,8 +222,8 @@
 }
 
 .edit-kind.is-selected {
-  background: #7276FF;
-  border-color: #7276FF;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
   font-weight: 600;
 }

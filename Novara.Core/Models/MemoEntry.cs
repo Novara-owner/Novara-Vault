@@ -18,4 +18,9 @@ public class MemoEntry
 
     public string IconKey { get; set; } = "";
     public string WorkspaceId { get; set; } = "";
+
+
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public DateTime PurgedAt { get; set; }
 }

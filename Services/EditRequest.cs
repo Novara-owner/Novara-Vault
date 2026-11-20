@@ -23,6 +23,9 @@ public static class EditRequest
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         App.DataDirName, "pending-edit.json");
 
+
+    internal static readonly TimeSpan PendingMaxAge = TimeSpan.FromMinutes(10);
+
     private static EventWaitHandle? _evt;
     private static Thread? _thread;
     private static volatile bool _running;
@@ -67,6 +70,13 @@ public static class EditRequest
         {
             if (File.Exists(PendingPath))
             {
+
+
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(PendingPath) > PendingMaxAge)
+                {
+                    try { File.Delete(PendingPath); } catch { }
+                    return null;
+                }
                 var json = File.ReadAllText(PendingPath);
                 var j = JsonSerializer.Deserialize<PendingEdit>(json);
 

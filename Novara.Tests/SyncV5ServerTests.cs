@@ -239,6 +239,132 @@ public class SyncV5ServerTests : IDisposable
 
 
         Assert.True(service.PutChunk(space, first, new byte[600]).Success);
+
+
+
+        Assert.True(service.PutChunk(space, first, new byte[800]).Success);
+        Assert.Equal(800, store.ChunkSizes(spaceId).Values.Sum());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ChunkQuota_ReclaimsEvictableVersionsBeforeRefusing(bool fileBackend)
+    {
+
+
+
+
+
+        ISpaceStore store = fileBackend ? new FileSpaceStore(_dir) : new SqliteSpaceStore(_dir);
+        var service = new SpaceService(store, new SyncServerOptions
+        {
+            StorageRoot = _dir,
+            DefaultQuotaBytes = 2000,
+            DefaultMaxVersions = 10,
+        });
+        var created = service.CreateSpace("v5");
+        Assert.True(created.Success);
+        var spaceKey = SyncKeyWrap.CreateSpaceKey();
+        var registered = service.RegisterDevice(created.Value!.SpaceId, created.Value.EnrollmentSecret, "pc");
+        var spaceId = created.Value.SpaceId;
+        var deviceId = registered.Value!.DeviceId;
+        var device = store.GetDevice(spaceId, deviceId)!;
+
+        var body1 = Enumerable.Repeat((byte)1, 800).ToArray();
+        var body2 = Enumerable.Repeat((byte)2, 800).ToArray();
+        var chunk1 = PushChunk(service, store, spaceId, body1);
+        var firstPush = service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 0, new Dictionary<string, string> { ["memoEntries"] = chunk1 }),
+            0, false, containerV5Capable: true, chunkIds: new List<string> { chunk1 });
+        Assert.True(firstPush.Success, firstPush.Message);
+
+        var chunk2 = PushChunk(service, store, spaceId, body2);
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 1, new Dictionary<string, string> { ["memoEntries"] = chunk2 }),
+            1, false, containerV5Capable: true, chunkIds: new List<string> { chunk2 }).Success);
+
+
+
+        var stored = store.GetVersions(spaceId);
+        Assert.Equal(2, stored.Count);
+        Assert.All(stored, v => Assert.True(v.Retained));
+        Assert.Equal(1600, store.ChunkSizes(spaceId).Values.Sum());
+
+
+
+        var body3 = Enumerable.Repeat((byte)3, 500).ToArray();
+        var chunk3 = Convert.ToHexString(SHA256.HashData(body3)).ToLowerInvariant();
+        var put = service.PutChunk(store.GetSpace(spaceId)!, chunk3, body3);
+
+        Assert.True(put.Success, put.Message);
+        Assert.Equal(SyncErrorCode.NotFound, service.GetChunk(store.GetSpace(spaceId)!, chunk1, true, true).Error);
+        Assert.True(service.GetChunk(store.GetSpace(spaceId)!, chunk2, true, true).Success);
+    }
+
+    [Fact]
+    public void ChunkQuota_ReclaimKeepsChunksUploadedBeforeTheirManifest()
+    {
+
+
+
+        var (service, store, spaceKey, spaceId, deviceId) = NewPairedServer(quotaBytes: 2000);
+        var device = store.GetDevice(spaceId, deviceId)!;
+
+        var chunk1 = PushChunk(service, store, spaceId, Enumerable.Repeat((byte)1, 800).ToArray());
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 0, new Dictionary<string, string> { ["memoEntries"] = chunk1 }),
+            0, false, containerV5Capable: true, chunkIds: new List<string> { chunk1 }).Success);
+
+        var chunk2 = PushChunk(service, store, spaceId, Enumerable.Repeat((byte)2, 800).ToArray());
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 1, new Dictionary<string, string> { ["memoEntries"] = chunk2 }),
+            1, false, containerV5Capable: true, chunkIds: new List<string> { chunk2 }).Success);
+
+
+
+        var inFlight = PushChunk(service, store, spaceId, Enumerable.Repeat((byte)3, 400).ToArray());
+        var next = Convert.ToHexString(SHA256.HashData(Enumerable.Repeat((byte)4, 400).ToArray())).ToLowerInvariant();
+        var put = service.PutChunk(store.GetSpace(spaceId)!, next, Enumerable.Repeat((byte)4, 400).ToArray());
+
+        Assert.True(put.Success, put.Message);
+
+        Assert.Equal(SyncErrorCode.NotFound, service.GetChunk(store.GetSpace(spaceId)!, chunk1, true, true).Error);
+        Assert.True(service.GetChunk(store.GetSpace(spaceId)!, chunk2, true, true).Success);
+        Assert.True(service.GetChunk(store.GetSpace(spaceId)!, inFlight, true, true).Success);
+
+
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 2, new Dictionary<string, string> { ["memoEntries"] = inFlight }),
+            2, false, containerV5Capable: true, chunkIds: new List<string> { inFlight }).Success);
+    }
+
+    [Fact]
+    public void ChunkQuota_DoesNotEvictVersionsThatFreeNoChunkBytes()
+    {
+
+
+
+        var (service, store, spaceKey, spaceId, deviceId) = NewPairedServer(quotaBytes: 2000);
+        var device = store.GetDevice(spaceId, deviceId)!;
+
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedV4Envelope(spaceKey, spaceId, deviceId, 0), 0, false, containerV5Capable: true).Success);
+        var chunk = PushChunk(service, store, spaceId, Enumerable.Repeat((byte)7, 600).ToArray());
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedManifestEnvelope(spaceKey, spaceId, deviceId, 1, new Dictionary<string, string> { ["memoEntries"] = chunk }),
+            1, false, containerV5Capable: true, chunkIds: new List<string> { chunk }).Success);
+        Assert.Equal(600, store.ChunkSizes(spaceId).Values.Sum());
+
+        var oversized = Convert.ToHexString(SHA256.HashData(Enumerable.Repeat((byte)8, 1500).ToArray())).ToLowerInvariant();
+        var put = service.PutChunk(store.GetSpace(spaceId)!, oversized, Enumerable.Repeat((byte)8, 1500).ToArray());
+
+        Assert.False(put.Success);
+        Assert.Equal(SyncErrorCode.QuotaExceeded, put.Error);
+
+        var v4 = store.GetVersions(spaceId).Single(v => v.Version == 1);
+        Assert.True(v4.Retained);
+        Assert.NotNull(store.ReadBlob(spaceId, v4));
     }
 
 

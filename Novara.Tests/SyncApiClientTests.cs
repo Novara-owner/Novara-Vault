@@ -394,6 +394,41 @@ public class SyncApiClientTests
     }
 
     [Fact]
+    public async Task GetData_RejectsWhenHeaderDisagreesWithSignedEnvelope()
+    {
+
+
+
+        var spaceKey = SyncKeyWrap.CreateSpaceKey();
+        var envelope = SealedEnvelope(spaceKey, "space-1", "device-1", baseVersion: 1);
+        using var http = new HttpClient(new StubHandler(HttpStatusCode.OK, envelope,
+            (SyncApi.VersionHeader, "3")));
+        using var client = new SyncApiClient("https://novara.example.com", "space-1", "device-1", "token", httpClient: http);
+
+        var result = await client.GetDataAsync();
+
+        Assert.False(result.Success);
+        Assert.Equal(SyncErrorCode.BadRequest, result.Error);
+        Assert.Contains("signed envelope", result.Message);
+    }
+
+    [Fact]
+    public async Task GetData_AcceptsWhenHeaderMatchesSignedEnvelope()
+    {
+        var spaceKey = SyncKeyWrap.CreateSpaceKey();
+        var envelope = SealedEnvelope(spaceKey, "space-1", "device-1", baseVersion: 1);
+        using var http = new HttpClient(new StubHandler(HttpStatusCode.OK, envelope,
+            (SyncApi.VersionHeader, "2")));
+        using var client = new SyncApiClient("https://novara.example.com", "space-1", "device-1", "token", httpClient: http);
+
+        var result = await client.GetDataAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, result.Value!.Version);
+        Assert.Equal(envelope, result.Value.Json);
+    }
+
+    [Fact]
     public async Task PutData_WithoutVersionInBody_FailsInsteadOfDegradingToZero()
     {
         using var http = new HttpClient(new StubHandler(HttpStatusCode.OK, "{}"));

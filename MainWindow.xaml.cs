@@ -25,8 +25,12 @@ public sealed partial class MainWindow : Window
     private DiaryEditorPage _diaryEditorPage = null!;
     private SettingsPage _settingsPage = null!;
     private ToolsPage _toolsPage = null!;
+    private SealPage _sealPage = null!;
+    private bool _sealMode;
+    private TextBlock? _sealReturnLabel;
     private Button? _selectedNavButton;
     private Microsoft.UI.Xaml.Media.ThemeShadow? _navShadow;
+    private Microsoft.UI.Xaml.Media.ThemeShadow? _sealNavShadow;
 
 
 
@@ -64,6 +68,14 @@ public sealed partial class MainWindow : Window
     public void MarkTrashChanged() => _trashChanged = true;
 
     private Border? _toast;
+    private TextBlock? _toastText;
+
+
+    private const int ToastDefaultHoldMilliseconds = 1500;
+    private int _toastHoldMilliseconds = ToastDefaultHoldMilliseconds;
+
+
+    private bool _toastPersistent;
 
 
     private const string ToastCheckIconPath = "M929.28 189.44l-417.28 417.28-158.208-158.208-53.248 53.248 184.832 184.832 26.624 25.6 26.624-25.6 443.904-443.904-53.248-53.248z m-417.28-158.72c-266.24 0-480.768 214.528-480.768 480.768s214.528 480.768 480.768 480.768 480.768-214.528 480.768-480.768c0-51.712-7.168-103.424-25.6-151.552l-59.904 58.88c7.168 29.696 11.776 59.392 11.776 92.672 0 225.792-181.248 407.04-407.04 407.04s-407.04-181.248-407.04-407.04 181.248-407.04 407.04-407.04c111.104 0 210.432 44.032 281.088 114.688L844.8 167.424c-84.992-84.992-203.264-136.704-332.8-136.704z";
@@ -73,10 +85,14 @@ public sealed partial class MainWindow : Window
 
 
 
-    public void ShowToast(string message, ToastTone tone = ToastTone.Success)
+
+
+    public void ShowToast(string message, ToastTone tone = ToastTone.Success, bool persistent = false)
     {
+        var holdMilliseconds = _toastHoldMilliseconds;
+        _toastHoldMilliseconds = ToastDefaultHoldMilliseconds;
         if (string.IsNullOrWhiteSpace(message)) return;
-        if (_toast != null) { ToastHost.Children.Remove(_toast); _toast = null; }
+        if (_toast != null) { ToastHost.Children.Remove(_toast); _toast = null; _toastText = null; }
 
         var toast = new Border
         {
@@ -115,16 +131,19 @@ public sealed partial class MainWindow : Window
                 },
         };
         row.Children.Add(icon);
-        row.Children.Add(new TextBlock
+        var text = new TextBlock
         {
             Text = message,
             FontSize = 14,
             Foreground = App.GetBrush("AppTextPrimaryBrush"),
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+        _toastText = text;
+        row.Children.Add(text);
         toast.Child = row;
         toast.RenderTransform = new TranslateTransform { Y = 12 };
         _toast = toast;
+        _toastPersistent = persistent;
         ToastHost.Children.Add(toast);
 
         var sb = new Storyboard();
@@ -132,15 +151,51 @@ public sealed partial class MainWindow : Window
         Storyboard.SetTarget(fadeIn, toast); Storyboard.SetTargetProperty(fadeIn, "Opacity"); sb.Children.Add(fadeIn);
         var slide = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(slide, toast.RenderTransform); Storyboard.SetTargetProperty(slide, "Y"); sb.Children.Add(slide);
+        if (persistent) { sb.Begin(); return; }
+
         sb.Completed += (_, _) =>
         {
             var fadeOut = new Storyboard();
-            var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromMilliseconds(1500) };
+            var fo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, holdMilliseconds)) };
             Storyboard.SetTarget(fo, toast); Storyboard.SetTargetProperty(fo, "Opacity"); fadeOut.Children.Add(fo);
-            fadeOut.Completed += (_, _) => { if (_toast == toast) { ToastHost.Children.Remove(toast); _toast = null; } };
+            fadeOut.Completed += (_, _) => { if (_toast == toast) { ToastHost.Children.Remove(toast); _toast = null; _toastText = null; } };
             fadeOut.Begin();
         };
         sb.Begin();
+    }
+
+
+
+    public void UpdateToast(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        if (_toast is null)
+        {
+
+
+            if (SealToast.IsActive) ShowToast(message, persistent: true);
+            return;
+        }
+        if (_toastText is null || !_toastPersistent) return;
+        _toastText.Text = message;
+    }
+
+
+    public void ShowTimedToast(string message, int holdMilliseconds)
+    {
+        _toastHoldMilliseconds = holdMilliseconds;
+        ShowToast(message);
+    }
+
+
+
+    public void ClearToast()
+    {
+        if (_toast is null || !_toastPersistent) return;
+        ToastHost.Children.Remove(_toast);
+        _toast = null;
+        _toastText = null;
+        _toastPersistent = false;
     }
 
     public string CloseBehavior
@@ -177,6 +232,12 @@ public sealed partial class MainWindow : Window
     private bool _themeRestartCancelled;
     private bool _exitSaving;
     private bool _welcomeFading;
+    private Services.SandShatter? _shatter;
+    private bool _shatterWarming;
+    private Storyboard? _shatterFade;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _shatterLockWatch;
+    private Task<bool>? _welcomeSaveTask;
+    private bool _carouselPrepared;
     private bool _closeAllowed;
     private bool _animCorruptHide;
     private bool _rebuildInFlight;
@@ -203,12 +264,26 @@ public sealed partial class MainWindow : Window
         {
             WelcomeSubtitle.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa");
         }
-        CarouselPageList = new[] { CarouselPage0, CarouselPage1, CarouselPage2, CarouselPage3, CarouselPage4, CarouselPage5, CarouselPage6 };
+        CarouselPageList = new[] { CarouselPage0, CarouselPage1, CarouselPage2, CarouselPage3, CarouselPageSeal, CarouselPage4, CarouselPage5, CarouselPage6 };
+        SealGuidePageList = new[] { SealGuidePage1, SealGuidePage2, SealGuidePage3, SealGuidePage4, SealGuidePage5 };
+        SealGuideBleed.SizeChanged += (_, e) =>
+        {
+            if (_sealGuidePage == 1 && e.NewSize.Width + 952 > _sealGuideMarqueeCapacity) BuildSealGuideMarquee();
+        };
+        SealGuideMarqueeHost.SizeChanged += (_, _) => SealGuideMarqueeHost.Clip = new RectangleGeometry
+
+        {
+            Rect = new Windows.Foundation.Rect(0, 0, SealGuideMarqueeHost.ActualWidth, SealGuideMarqueeHost.ActualHeight)
+        };
+        EnsureSealGuidePage1Art();
         BuildCarouselChrome();
 
 
 
         Services.DialogDepth.AttachContainer((Grid)Content, driveChrome: false);
+
+
+        Services.DialogDepth.AttachContainer(SealGuideOverlay, driveChrome: false);
 
         ApplyStartupTheme();
 
@@ -225,10 +300,11 @@ public sealed partial class MainWindow : Window
         CustomTitleBar.Visibility = Visibility.Collapsed;
         BottomToolbarPanel.Visibility = Visibility.Collapsed;
 
-        WelcomeEntryAnimation.Completed += (_, _) => WelcomeHintBreathing.Begin();
+
+
         WelcomeOverlay.Loaded += (_, _) =>
         {
-            if (_storeInitialized && App.Store is not { IsEncrypted: true }) WelcomeEntryAnimation.Begin();
+            if (_storeInitialized && App.Store is not { IsEncrypted: true }) { WarmWelcomeShatter(); WelcomeEntryAnimation.Begin(); }
         };
         InitNavIcons();
         if (Content is FrameworkElement sideMenuRoot)
@@ -256,13 +332,19 @@ public sealed partial class MainWindow : Window
                 if (AutoUpdateOverlay.Visibility == Visibility.Visible) { AutoUpdateCancel_Click(this, new RoutedEventArgs()); e.Handled = true; }
                 else if (ThemeRestartOverlay.Visibility == Visibility.Visible) { HideThemeRestartOverlay(); e.Handled = true; }
                 else if (SaveFailedOverlay.Visibility == Visibility.Visible) { HideSaveFailedDialog(); e.Handled = true; }
+                else if (_sealMode && (SealUnlockContent.Visibility == Visibility.Visible || SealLockedView.Visibility == Visibility.Visible))
+                {
+
+                    TryLeaveSealGate();
+                    e.Handled = true;
+                }
             };
 
 
 
 
             var ctrlK = new KeyboardAccelerator { Key = Windows.System.VirtualKey.K, Modifiers = Windows.System.VirtualKeyModifiers.Control };
-            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus() && LockScreenFrame.Visibility != Visibility.Visible && !IsWelcomeCarouselUp) OpenSearchPage(); };
+            ctrlK.Invoked += (_, _) => { if (!HasTextInputFocus() && LockScreenFrame.Visibility != Visibility.Visible && !IsWelcomeCarouselUp && !_sealMode) OpenSearchPage(); };
             root.KeyboardAccelerators.Add(ctrlK);
             root.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
 
@@ -295,6 +377,16 @@ public sealed partial class MainWindow : Window
         ExitCommand = new RelayCommand(ExitApp);
     }
 
+
+
+    private void ApplyWelcomeBrandFont()
+    {
+        if (App.CurrentLanguage == "en-US")
+            WelcomeSubtitle.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa");
+        else
+            WelcomeSubtitle.ClearValue(Microsoft.UI.Xaml.Controls.TextBlock.FontFamilyProperty);
+    }
+
     private void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
         if (_windowLoadedHandled) return;
@@ -307,6 +399,12 @@ public sealed partial class MainWindow : Window
 
         var langHint = App.LoadLanguageHint();
         App.ApplyLanguage(langHint ?? "");
+
+
+
+
+        App.ApplyAutomationNames(this);
+        ApplyWelcomeBrandFont();
 
 
 
@@ -344,7 +442,14 @@ public sealed partial class MainWindow : Window
 
 
             var gate = new System.Threading.ManualResetEventSlim(false);
-            DispatcherQueue.TryEnqueue(() => QueueOrShowMcpAuthorize(clientPath, r => { allowed = r; try { gate.Set(); } catch { } }));
+
+
+            if (!DispatcherQueue.TryEnqueue(() => QueueOrShowMcpAuthorize(clientPath, r => { allowed = r; try { gate.Set(); } catch { } })))
+            {
+                Services.CrashLogger.LogNote("McpAuthorize", "the UI queue refused the authorization prompt - denying");
+                gate.Dispose();
+                return false;
+            }
 
 
             bool answered;
@@ -366,29 +471,12 @@ public sealed partial class MainWindow : Window
         Services.StickySync.StartWatching((id, states) => _planPage?.ApplyExternalTodoState(id, states));
 
 
-        var pendingId = Novara.Services.EditRequest.ReadPending();
-        if (pendingId.HasValue)
-            DispatcherQueue.TryEnqueue(() => HandleEditRequest(pendingId.Value));
 
 
-        var pendingPath = App.PendingAddPath ?? Novara.Services.AddPathRequest.ReadPending();
-        if (!string.IsNullOrWhiteSpace(pendingPath))
-            DispatcherQueue.TryEnqueue(() => HandleAddPathRequest(pendingPath));
+
+        if (App.Store is { IsLoaded: true }) ConsumePendingExternalRequests();
 
 
-        var pendingMd = App.PendingImportMd ?? Novara.Services.MdImportRequest.ReadPending();
-        if (!string.IsNullOrWhiteSpace(pendingMd))
-            DispatcherQueue.TryEnqueue(() => HandleImportMdRequest(pendingMd));
-
-
-        var pendingReminder = Novara.Services.ReminderEditRequest.ReadPending();
-        if (pendingReminder != null)
-            DispatcherQueue.TryEnqueue(() => HandleReminderEditRequest(pendingReminder));
-
-
-        var pendingDue = App.PendingReminderId ?? Novara.Services.ReminderDueRequest.ReadPending();
-        if (pendingDue.HasValue)
-            DispatcherQueue.TryEnqueue(() => HandleReminderDueRequest(pendingDue.Value));
         Novara.Services.ReminderDueRequest.StartListening(id => DispatcherQueue.TryEnqueue(() => HandleReminderDueRequest(id)));
 
 
@@ -409,13 +497,19 @@ public sealed partial class MainWindow : Window
         NavPlanText.Text = App.GetString("Nav_Tab_Plan");
         NavDiaryText.Text = App.GetString("Nav_Tab_Diary");
 
+        SealNavSpaceText.Text = App.GetString("Seal_Tab_Space");
+        SealNavCapsuleText.Text = App.GetString("Seal_Tab_Capsule");
+        SealNavSettingsText.Text = App.GetString("Setting_Title_Page");
+
 
         WelcomeSubtitle.CharacterSpacing = App.CurrentLanguage switch
         {
-            "zh-CN" or "zh-TW" => 850,
-            "en-US" => 150,
+            "zh-CN" or "zh-TW" => 180,
+            "en-US" => 80,
             _ => 0
         };
+
+        WelcomeVersionBadge.Text = Novara.Services.UpdateService.CurrentVersion;
 
 
         var welcomeSettings = App.Store?.Database.AppSettings;
@@ -453,6 +547,9 @@ public sealed partial class MainWindow : Window
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Closing += AppWindow_Closing;
+
+
+        Closed += (_, _) => { RemoveTrayIcon(); ReleaseSingleInstance(); };
         UpdateWorkspaceSwitcherPosition();
 
 
@@ -503,7 +600,10 @@ public sealed partial class MainWindow : Window
         _storeInitialized = true;
         ApplyEdgeMenuSide(App.Store?.Database.AppSettings.EdgeMenuSide ?? "左侧");
         if (!skipWelcome && App.Store is not { IsEncrypted: true })
+        {
+            WarmWelcomeShatter();
             WelcomeEntryAnimation.Begin();
+        }
     }
 
     private void UpdateTrayIcon()
@@ -555,8 +655,7 @@ private bool CreateTrayIcon()
         {
             var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
             menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_ShowWindow"), Command = ShowWindowCommand });
-            menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_LockNow"), Command = new Services.RelayCommand(() => { if (LockScreenFrame.Visibility == Visibility.Visible) return;
-                if (App.Store is { IsLoaded: true, IsEncrypted: true }) LockNow(); else App.ShowToast(App.GetString("Tray_LockNeedLock"), ToastTone.Error); }) });
+            menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_LockNow"), Command = new Services.RelayCommand(LockNowOrSealDirect) });
             menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(new MenuFlyoutItem { Text = App.GetString("Tray_Exit"), Command = ExitCommand });
 
@@ -659,15 +758,31 @@ private bool CreateTrayIcon()
 
 
 
+    public enum RestartOutcome { Ok, SaveFailed, EditorDirty, LaunchFailed }
 
 
 
-    internal static bool RestartNow()
+
+
+
+    internal static RestartOutcome RestartNow()
     {
         try
         {
             var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) return false;
+            if (string.IsNullOrEmpty(exe)) return RestartOutcome.LaunchFailed;
+
+
+
+
+            if (App.Store?.SaveSync() == false) return RestartOutcome.SaveFailed;
+            if (App.MainWindow is { } pending && pending._diaryEditorPage is { HasUnsavedEdits: true })
+            {
+
+
+                CrashLogger.LogNote("Restart", "aborted: the cached editor still holds unsaved edits");
+                return RestartOutcome.EditorDirty;
+            }
             ReleaseSingleInstance();
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
         }
@@ -676,10 +791,10 @@ private bool CreateTrayIcon()
 
             AcquireSingleInstance();
             System.Diagnostics.Debug.WriteLine("Novara 重启闭环：新进程启动失败，保持当前会话");
-            return false;
+            return RestartOutcome.LaunchFailed;
         }
         if (App.MainWindow is { } mw) { mw.SetRestarting(); mw.ExitApp(saveFirst: false); }
-        return true;
+        return RestartOutcome.Ok;
     }
 
 
@@ -737,10 +852,16 @@ private bool CreateTrayIcon()
 
 
 
-    public static async Task FlushPendingEditorForRestartAsync()
+    public static async Task<bool> FlushPendingEditorForRestartAsync()
     {
         if (App.MainWindow is { } mw && mw._diaryEditorPage is { } ed)
-            await FlushEditorForExitAsync(ed);
+        {
+
+
+            var (_, refused) = await FlushEditorForExitAsync(ed);
+            return refused && ed.HasUnsavedEdits;
+        }
+        return false;
     }
 
 
@@ -758,7 +879,18 @@ public void BeginUpdateExit()
     _isTrayExit = true;
 }
 
-private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+
+
+    private void ReleaseShatterEngine()
+    {
+
+        _shatterLockWatch?.Stop();
+        _shatterLockWatch = null;
+        try { _shatter?.Dispose(); } catch { }
+        _shatter = null;
+    }
+
+    private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (!_isTrayExit && CloseBehavior == "托盘驻留" && _trayIcon != null)
         {
@@ -778,6 +910,25 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         }
         args.Cancel = true;
         _closingHandled = true;
+
+
+
+
+
+        if (_restarting || _isTrayExit)
+        {
+
+
+
+            try { await FlushPendingEditorForRestartAsync(); } catch { }
+
+
+
+            if (!_restarting) { try { App.Store?.SaveSync(); } catch { } }
+            _closeAllowed = true;
+            this.Close();
+            return;
+        }
         Services.UpdateAutoCheckService.CancelInFlight();
         Services.PathPropertyService.Shutdown();
 
@@ -816,10 +967,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-        if (_restarting) { _closeAllowed = true; this.Close(); return; }
-
-
-        if (_isTrayExit) { _closeAllowed = true; this.Close(); return; }
         try { if (App.Store?.SaveSync() == false) { _closeAllowed = false; _closingHandled = false; return; } }
         catch { _closeAllowed = false; _closingHandled = false; return; }
         try { Services.AutoBackupService.TakeExitSnapshotIfDue(); } catch { }
@@ -853,6 +1000,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
 
         if (LockScreenFrame.Visibility == Visibility.Visible) { ShowMainWindow(); return; }
+        if (_sealMode) return;
         if (IsWelcomeCarouselUp) return;
         if (App.Store?.IsSaveSuppressed == true) return;
         ShowQuickCapture();
@@ -860,8 +1008,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void OnLockNowHotkey()
     {
-        if (LockScreenFrame.Visibility == Visibility.Visible) return;
-        LockNow();
+        LockNowOrSealDirect();
     }
 
 
@@ -877,7 +1024,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
 
 
-        if (LockScreenFrame.Visibility == Visibility.Visible || IsWelcomeCarouselUp) return;
+
+        if (LockScreenFrame.Visibility == Visibility.Visible || IsWelcomeCarouselUp || _sealMode) return;
         if (AutoUpdateOverlay.Visibility == Visibility.Visible || ThemeRestartOverlay.Visibility == Visibility.Visible) return;
         if (_veilCount > 0) return;
         if (QuickCaptureOverlay.Visibility == Visibility.Visible) { QuickCaptureBox.Focus(FocusState.Programmatic); QuickCaptureBox.SelectAll(); return; }
@@ -991,6 +1139,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (_exitSaving) return;
         _exitSaving = true;
         _isTrayExit = true;
+        ReleaseShatterEngine();
         try
         {
 
@@ -1099,6 +1248,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private int _lockStrikes;
     private bool _lockSuppressWarned;
 
+
+    private int _sealDirectAutoLockSeconds;
+    private bool _sealDirectAutoLockOnSystemLock;
+
     private void StartAutoLockWatcher()
     {
         if (_autoLockTimer != null) return;
@@ -1113,10 +1266,26 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private void CheckAutoLock()
     {
+
+        if (_sealMode && SealService.Current.Mode == SealSessionMode.Direct && SealService.Current.IsUnlocked)
+        {
+            if (_sealDirectAutoLockOnSystemLock)
+            {
+                _lockStrikes = IsInputDesktopUnavailable() ? _lockStrikes + 1 : 0;
+                if (_lockStrikes >= 2) { _lockStrikes = 0; LockSealDirect(); return; }
+            }
+            else if (_lockStrikes != 0) _lockStrikes = 0;
+            if (_sealDirectAutoLockSeconds > 0 && GetIdleSeconds() >= _sealDirectAutoLockSeconds) LockSealDirect();
+            return;
+        }
+
         if (LockScreenFrame.Visibility == Visibility.Visible) return;
         if (App.Store is not { IsLoaded: true, IsEncrypted: true }) return;
         if (IsRestoreBarrierBlockingLock(userInitiated: false)) return;
         var st = App.Store.Database.AppSettings;
+
+        _sealDirectAutoLockSeconds = st.AutoLockSeconds;
+        _sealDirectAutoLockOnSystemLock = st.AutoLockOnSystemLock;
 
 
 
@@ -1222,7 +1391,46 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             {
                 await FlushEditorForExitAsync(ed);
             }
+
+
+
+
+            try
+            {
+                if (_welcomeSaveTask is { } welcomeSave && !welcomeSave.Wait(2000))
+                    CrashLogger.LogNote("Welcome", "exit commit wait timed out - the background flag write is still running");
+            }
+            catch (Exception ex)
+            {
+                CrashLogger.LogNote("Welcome", "exit commit wait failed: " + ex.Message);
+            }
+
+
+
+
+            try
+            {
+                if (WelcomeOverlay.Visibility == Visibility.Visible
+                    && App.Store?.Database.AppSettings is { HasCompletedWelcome: true } welcomeSettings)
+                    welcomeSettings.HasCompletedWelcome = false;
+            }
+            catch (Exception ex) { CrashLogger.LogNote("Welcome", "flag rollback failed: " + ex.Message); }
+
+
+            if (WelcomeShatterHost.Visibility == Visibility.Visible)
+            {
+                _shatterLockWatch?.Stop();
+                _shatter?.Cancel();
+                OnShatterFinished(null, EventArgs.Empty);
+                _welcomeFading = false;
+            }
             try { App.Store!.SaveSync(); } catch { }
+
+            if (App.Store?.Database.AppSettings is { } sealPolicy)
+            {
+                _sealDirectAutoLockSeconds = sealPolicy.AutoLockSeconds;
+                _sealDirectAutoLockOnSystemLock = sealPolicy.AutoLockOnSystemLock;
+            }
             App.RelockStore();
             relocked = true;
             BindStoreSaveFailed();
@@ -1237,6 +1445,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 _meltSb?.Stop(); _meltSb = null;
                 ResetCarouselMeltLayer();
                 _pageAnimLock = false;
+
+
+                NormalizeCarouselPages(_carouselPage);
                 CarouselBlurHost.Visibility = Visibility.Collapsed;
                 WelcomeCarousel.Opacity = 0;
                 WelcomeCarousel.Visibility = Visibility.Collapsed;
@@ -1251,6 +1462,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
             CloseModalSurfacesForLock();
             Services.PathPropertyService.PauseForLock();
+
+
+            SealService.Current.Lock();
+            _sealPage?.ResetAfterSessionLock();
+            ExitSealShell();
             ShowLockScreen();
 
 
@@ -1288,11 +1504,24 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         var page = new LockScreenPage();
         page.UnlockSucceeded += HideLockScreen;
+        page.SealDirectUnlocked += OnSealDirectUnlocked;
 
         page.CorruptDetected += ShowCorruptStoreDialog;
         page.IoErrorDetected += ShowIoErrorDialog;
         LockScreenFrame.Content = page;
         LockScreenFrame.Visibility = Visibility.Visible;
+    }
+
+
+
+    private void OnSealDirectUnlocked()
+    {
+        LockScreenFrame.Visibility = Visibility.Collapsed;
+        LockScreenFrame.Content = null;
+
+
+        WelcomeOverlay.Visibility = Visibility.Collapsed;
+        NavigateToSeal();
     }
 
     private void HideLockScreen()
@@ -1301,6 +1530,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         LockScreenFrame.Content = null;
         ReloadPages();
 
+        ConsumePendingExternalRequests();
         if (App.Store is { } store)
         {
             store.Database.AppSettings ??= new AppSettings();
@@ -1338,6 +1568,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
                 WelcomeOverlay.Visibility = Visibility.Visible;
+                WarmWelcomeShatter();
                 WelcomeEntryAnimation.Begin();
             }
         }
@@ -1356,7 +1587,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-        if (_themeChangedWhileLocked) { _themeChangedWhileLocked = false; if (App.CurrentTheme == "跟随系统") ShowThemeRestartOverlay(); }
+
+
+
+        if (_themeChangedWhileLocked && !_carouselInterruptedByLock)
+        {
+            _themeChangedWhileLocked = false;
+            if (App.CurrentTheme == "跟随系统") ShowThemeRestartOverlay();
+        }
 
 
         ApplyQuickCaptureHotkey();
@@ -1384,9 +1622,28 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private int _veilCount;
 
+
+
+
+
+
+    public void ShowSealDropVeil()
+    {
+        if (SealDropVeil.Visibility != Visibility.Visible)
+        {
+            DialogDepth.ApplyBackdropBlur(SealDropVeil);
+            SealDropVeil.Visibility = Visibility.Visible;
+        }
+    }
+
+
+    public void HideSealDropVeil() => SealDropVeil.Visibility = Visibility.Collapsed;
+
     public void VeilShow()
     {
-        EnsureChromeBlur();
+
+
+
         _veilCount++;
         ChromeScrim.Visibility = Visibility.Visible;
 
@@ -1547,19 +1804,25 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         MigrateConfirmText.Text = App.GetString("Common_Button_Confirm");
     }
 
+
+
+
     private void UpdateWelcomeLayout(double w, double h)
     {
         if (h <= 0) return;
         double scale = Math.Clamp(h / 800.0, 0.85, 1.6);
-        WelcomeLogo.Width = WelcomeLogo.Height = 80 * scale;
-        WelcomeTitleText.FontSize = WelcomeTitleShadowText.FontSize = 80 * scale;
-        WelcomeSubtitle.FontSize = 34 * scale;
-        WelcomeHint.FontSize = 14 * scale;
+        WelcomeLogo.Width = WelcomeLogo.Height = 96 * scale;
+        WelcomeTitleText.FontSize = WelcomeTitleShadowText.FontSize = 32 * scale;
+        WelcomeSubtitle.FontSize = 16 * scale;
+        WelcomeHint.FontSize = 12 * scale;
+        WelcomeVersionBadge.FontSize = 11 * scale;
+        WelcomeHintLine.Width = 28 * scale;
+        WelcomeHintLine.Height = Math.Max(1.0, 1.5 * scale);
 
-        WelcomeLogoTransform.Y = -0.2875 * h;
-        WelcomeTitleTransform.Y = -0.075 * h + 2;
-        WelcomeSubtitleTransform.Y = 0.1125 * h;
-        WelcomeHintTransform.Y = 0.43 * h;
+        WelcomeLogoTransform.TranslateY = -0.08 * h;
+        WelcomeTitleTransform.Y = -0.08 * h + (48 + 36 + 15) * scale;
+        WelcomeSubtitleTransform.Y = 0.38 * h;
+        WelcomeHintTransform.Y = 0.44 * h;
     }
 
     private void ApplyStartupTheme()
@@ -1759,9 +2022,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var idle = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         var hover = App.GetBrush("AppPrimaryButtonHoverBrush");
 
-        void AddItem(string[] paths, string textKey, System.Action action)
+        TextBlock AddItem(StackPanel host, string[] paths, string textKey, System.Action action)
         {
-            var group = new GeometryGroup();
+            var group = new GeometryGroup { FillRule = FillRule.Nonzero };
             foreach (var p in paths)
                 group.Children.Add((Geometry)cv(typeof(Geometry), p));
             var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -1774,19 +2037,33 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 Fill = white,
                 VerticalAlignment = VerticalAlignment.Center
             });
-            content.Children.Add(new TextBlock
+            var label = new TextBlock
             {
                 Text = App.GetString(textKey),
                 FontSize = 14,
                 Foreground = white,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            content.Children.Add(label);
             var item = new Border
             {
                 Background = idle,
                 CornerRadius = new CornerRadius(10),
                 Padding = new Thickness(10, 8, 10, 8),
                 Child = content
+            };
+
+
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(item, label.Text);
+
+
+            item.IsTabStop = true;
+            item.KeyDown += (_, e) =>
+            {
+                if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+                e.Handled = true;
+                action();
+                CloseMenuSidePanel();
             };
             item.PointerEntered += (_, _) => item.Background = hover;
             item.PointerExited += (_, _) => item.Background = idle;
@@ -1795,14 +2072,50 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 action();
                 CloseMenuSidePanel();
             };
-            MenuSideItems.Children.Add(item);
+            host.Children.Add(item);
+            return label;
         }
 
 
-        AddItem(IconData.Tools, "Menu_Tools", () => NavigateToTools());
-        AddItem(IconData.Search, "Menu_Search", () => OpenSearchPage());
-        AddItem(new[] { IconData.Delete }, "Trash_Title", () => OpenTrashPage());
-        AddItem(IconData.Settings, "Setting_Title_Page", () => NavigateToSettings());
+        AddItem(MenuSideItems, IconData.SealSpace, "Menu_Seal", () => NavigateToSeal());
+        AddItem(MenuSideItems, IconData.Tools, "Menu_Tools", () => NavigateToTools());
+        AddItem(MenuSideItems, IconData.Search, "Menu_Search", () => OpenSearchPage());
+        AddItem(MenuSideItems, new[] { IconData.Delete }, "Trash_Title", () => OpenTrashPage());
+        AddItem(MenuSideItems, IconData.Settings, "Setting_Title_Page", () => NavigateToSettings());
+
+
+        _sealReturnLabel = AddItem(SealSideItems, new[] { IconData.Back },
+            SealService.Current.Mode == SealSessionMode.Direct ? "Seal_ReturnLock" : "Seal_ReturnHome",
+            ReturnHomeFromSeal);
+
+
+        SealNavSpacePath.Data = BuildNonzeroGeometry(IconData.SealSpace);
+        SealNavCapsulePath.Data = BuildNonzeroGeometry(IconData.Capsule);
+        SealNavSettingsPath.Data = BuildNonzeroGeometry(IconData.SealSettings);
+        SealNavSpaceButton.Translation = new System.Numerics.Vector3(0f, 0f, 20f);
+
+
+        try
+        {
+            if (_sealNavShadow == null)
+            {
+                _sealNavShadow = new ThemeShadow();
+                _sealNavShadow.Receivers.Add(SealNavShadowReceiver);
+                foreach (var btn in new[] { SealNavSpaceButton, SealNavCapsule, SealNavSettings })
+                    btn.Shadow = _sealNavShadow;
+            }
+        }
+        catch { }
+    }
+
+
+    private static Geometry BuildNonzeroGeometry(string[] paths)
+    {
+        var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
+        var group = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var path in paths)
+            group.Children.Add((Geometry)cv(typeof(Geometry), path));
+        return group;
     }
 
 
@@ -2082,14 +2395,33 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 #endif
     }
 
-    private void ShowWelcomeCarousel()
+
+
+
+    private void PrepareWelcomeCarousel()
     {
+        if (_carouselPrepared) return;
+        _carouselPrepared = true;
         _carouselPage = 0;
         ApplyCarouselTexts();
         UpdateCarouselMetrics();
         SetCarouselPage(0, animate: false);
         EnsureCarouselBlur();
         ResetCarouselMeltLayer();
+    }
+
+    private void ShowWelcomeCarousel()
+    {
+        if (!_carouselPrepared) PrepareWelcomeCarousel();
+
+
+        else
+        {
+
+
+            NormalizeCarouselPages(0);
+            SetCarouselPage(0, animate: false);
+        }
         CarouselBlurHost.Visibility = Visibility.Visible;
         WelcomeCarousel.Visibility = Visibility.Visible;
         WelcomeCarousel.UpdateLayout();
@@ -2104,6 +2436,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private void CloseWelcomeCarousel()
     {
         StopCarouselFloat();
+        _carouselPrepared = false;
         _pageSb?.Stop(); _pageSb = null;
         _meltSb?.Stop(); _meltSb = null;
         _pageAnimLock = false;
@@ -2115,6 +2448,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         {
             s.HasCompletedCarousel = true;
             _ = App.Store?.SaveAsync();
+        }
+        ReplayDeferredExternalRequests();
+
+
+        if (_themeChangedWhileLocked)
+        {
+            _themeChangedWhileLocked = false;
+            if (App.CurrentTheme == "跟随系统") ShowThemeRestartOverlay();
         }
     }
 
@@ -2245,6 +2586,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+
+
+
     private Microsoft.UI.Composition.SpriteVisual? _chromeBlurVisual;
     private void EnsureChromeBlur()
     {
@@ -2297,8 +2641,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             _floatAmps = new[] { 5.0, 6.0, 5.0, 7.0 };
             _floatTransforms = new[] { CarouselFloatT0, CarouselFloatT1, CarouselFloatT2, CarouselFloatT3 };
             _floatScales = new[] { CarouselMenuScale0, CarouselMenuScale1, CarouselMenuScale2, CarouselMenuScale3 };
-            _floatTabPhases = new[] { Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4 };
-            _floatTabTransforms = new[] { CarouselP1FloatT0, CarouselP1FloatT1, CarouselP1FloatT2, CarouselP1FloatT3 };
         }
         var t = (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency - _carouselFloatStart;
 
@@ -2317,11 +2659,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 transforms[i].Y = _floatAmps![i] * Math.Sin(2 * Math.PI * t / _floatPeriods![i] + phases[i]) + _menuHoverLift[i];
                 scales[i].ScaleX = scales[i].ScaleY = _menuHoverScale[i];
             }
-
-            var tabPhases = _floatTabPhases!;
-            var tabTransforms = _floatTabTransforms!;
-            for (int i = 0; i < 4; i++)
-                tabTransforms[i].Y = 6 * Math.Sin(2 * Math.PI * t / 3.0 + tabPhases[i]);
         }
         ApplyCarouselDemo(t - _carouselDemoStart);
     }
@@ -2332,8 +2669,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private double[]? _floatAmps;
     private Microsoft.UI.Xaml.Media.TranslateTransform[]? _floatTransforms;
     private Microsoft.UI.Xaml.Media.ScaleTransform[]? _floatScales;
-    private double[]? _floatTabPhases;
-    private Microsoft.UI.Xaml.Media.TranslateTransform[]? _floatTabTransforms;
 
 
 
@@ -2369,10 +2704,6 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselFloatT1.Y = 0;
         CarouselFloatT2.Y = 0;
         CarouselFloatT3.Y = 0;
-        CarouselP1FloatT0.Y = 0;
-        CarouselP1FloatT1.Y = 0;
-        CarouselP1FloatT2.Y = 0;
-        CarouselP1FloatT3.Y = 0;
 
         CarouselDemoCursorTranslate.X = DemoCursorStartX;
         CarouselDemoCursorTranslate.Y = DemoCursorStartY;
@@ -2399,74 +2730,13 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
+
     private void BuildCarouselPage1()
     {
-        BuildCarouselP1Tab(CarouselP1BtnMemo, IconData.NavMemo);
-        BuildCarouselP1Tab(CarouselP1BtnFile, IconData.NavFile);
-        BuildCarouselP1Tab(CarouselP1BtnPlan, IconData.NavPlan);
-        BuildCarouselP1Tab(CarouselP1BtnDiary, IconData.NavDiary);
-    }
-
-
-    private static void BuildCarouselP1Tab(Button btn, string iconPath)
-    {
-        btn.Content = new Microsoft.UI.Xaml.Shapes.Path
-        {
-            Width = 24,
-            Height = 24,
-            Stretch = Stretch.Uniform,
-            Data = App.CreateGeometry(iconPath),
-            Fill = App.GetBrush("IconForegroundBrush"),
-        };
-    }
-
-    private void CarouselP1Tab_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is string introKey)
-            SetCarouselP1Selection(btn, introKey);
-    }
-
-    private Microsoft.UI.Xaml.Media.ThemeShadow? _carouselP1Shadow;
-
-    private void SetCarouselP1Selection(Button selected, string introKey)
-    {
-
-
-
-
-        var buttons = new[] { CarouselP1BtnMemo, CarouselP1BtnFile, CarouselP1BtnPlan, CarouselP1BtnDiary };
-        var dimBrush = App.GetBrush("AppTextTertiaryBrush");
-        var brandBrush = App.GetBrush("AppPrimaryButtonBrush");
-        var iconBrush = App.GetBrush("IconForegroundBrush");
-        var clearBg = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
-        var raisedBg = App.GetBrush("NavFaceRaisedBrush");
-        try
-        {
-            if (_carouselP1Shadow == null)
-            {
-                _carouselP1Shadow = new Microsoft.UI.Xaml.Media.ThemeShadow();
-                _carouselP1Shadow.Receivers.Add(CarouselP1ShadowReceiver);
-                foreach (var b in buttons) b.Shadow = _carouselP1Shadow;
-            }
-        }
-        catch { }
-        foreach (var b in buttons)
-        {
-            bool sel = b == selected;
-            b.Background = sel ? raisedBg : clearBg;
-            b.Foreground = sel ? brandBrush : dimBrush;
-            b.Translation = sel ? new System.Numerics.Vector3(0f, 0f, 20f) : System.Numerics.Vector3.Zero;
-            SetNavOpacity(b, sel ? 1.0 : 0.6, NavBar.IsLoaded);
-            if (b.Content is Microsoft.UI.Xaml.Shapes.Path icon)
-                icon.Fill = sel ? brandBrush : iconBrush;
-        }
-
-        CarouselP1Intro.Text = App.GetString(introKey);
-        CarouselP1Intro.Opacity = 0;
-        var sb = new Storyboard();
-        var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200) };
-        Storyboard.SetTarget(oi, CarouselP1Intro); Storyboard.SetTargetProperty(oi, "Opacity"); sb.Children.Add(oi);
-        sb.Begin();
+        CarouselP1IconMemo.Data = App.CreateGeometry(IconData.NavMemo);
+        CarouselP1IconFile.Data = App.CreateGeometry(IconData.NavFile);
+        CarouselP1IconPlan.Data = App.CreateGeometry(IconData.NavPlan);
+        CarouselP1IconDiary.Data = App.CreateGeometry(IconData.NavDiary);
     }
 
 
@@ -2538,6 +2808,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselDemoCursorTranslate.Y = cy;
         CarouselDemoMenuTranslate.X = -6 * handleP;
         CarouselDemoPanelTranslate.X = -118 * (1 - panelP);
+
+
+
+        CarouselDemoSidePanel.Visibility = panelP > 0 ? Visibility.Visible : Visibility.Collapsed;
         CarouselDemoGhostHover.Opacity = ghostHl;
     }
 
@@ -2569,6 +2843,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselHotkey3Chip.Text = "Ctrl + Shift + L";
         CarouselP5SnapIcon.Data = App.CreateGeometry(IconData.Document);
         CarouselP5SyncIcon.Data = App.CreateGeometry(IconData.MdLink);
+
+        CarouselSealIcon1.Data = App.CreateGeometry(IconData.Import);
+        CarouselSealIcon2.Data = App.CreateGeometry(IconData.Lock);
+        CarouselSealIcon3.Data = BuildNonzeroGeometry(IconData.Capsule);
+        CarouselSealIcon4.Data = BuildNonzeroGeometry(IconData.SealSpace);
     }
 
 
@@ -2635,7 +2914,24 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselP0Title.Text = App.GetString("Carousel_P0_Title");
         BuildCarouselMenus();
         CarouselP1Title.Text = App.GetString("Carousel_P1_Title");
-        SetCarouselP1Selection(CarouselP1BtnMemo, "Carousel_P1_Memo");
+
+        CarouselP1NameMemo.Text = App.GetString("Nav_Tab_Memo");
+        CarouselP1DescMemo.Text = App.GetString("Carousel_P1_Memo");
+        CarouselP1NameFile.Text = App.GetString("Nav_Tab_File");
+        CarouselP1DescFile.Text = App.GetString("Carousel_P1_Path");
+        CarouselP1NamePlan.Text = App.GetString("Nav_Tab_Plan");
+        CarouselP1DescPlan.Text = App.GetString("Carousel_P1_Plan");
+        CarouselP1NameDiary.Text = App.GetString("Nav_Tab_Diary");
+        CarouselP1DescDiary.Text = App.GetString("Carousel_P1_Diary");
+
+
+
+
+
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CarouselP1CardMemo, App.GetString("Nav_Tab_Memo"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CarouselP1CardFile, App.GetString("Nav_Tab_File"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CarouselP1CardPlan, App.GetString("Nav_Tab_Plan"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CarouselP1CardDiary, App.GetString("Nav_Tab_Diary"));
         CarouselP2Title.Text = App.GetString("Carousel_P2_Title");
         CarouselP2Intro.Text = App.GetString("Carousel_P2_Desc");
         CarouselHotkey1Desc.Text = App.GetString("Carousel_Hotkey_Search_Desc");
@@ -2647,7 +2943,17 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselLockTitle.Text = App.GetString("Setting_PrivacyLock_Title");
         CarouselLockHelloText.Text = App.GetString("Setting_WinHello_Title");
         CarouselLockSetupText.Text = App.GetString("Setting_PrivacyLock_Setup");
-        CarouselP4Title.Text = App.GetString("Carousel_P4_Title");
+        CarouselSealTitle.Text = App.GetString("Carousel_Seal_Title");
+        CarouselSealB1Title.Text = App.GetString("Carousel_Seal_B1_Title");
+        CarouselSealB1Body.Text = App.GetString("Carousel_Seal_B1_Body");
+        CarouselSealB2Title.Text = App.GetString("Carousel_Seal_B2_Title");
+        CarouselSealB2Body.Text = App.GetString("Carousel_Seal_B2_Body");
+        CarouselSealB3Title.Text = App.GetString("Carousel_Seal_B3_Title");
+        CarouselSealB3Body.Text = App.GetString("Carousel_Seal_B3_Body");
+        CarouselSealB4Title.Text = App.GetString("Carousel_Seal_B4_Title");
+        CarouselSealB4Body.Text = App.GetString("Carousel_Seal_B4_Body");
+        CarouselSealBody.Text = App.GetString("Carousel_Seal_Body");
+        SetCarouselBrandTitle(CarouselP4Title, App.GetString("Carousel_P4_Title"));
         CarouselP4B1.Text = App.GetString("Carousel_P4_B1");
         CarouselP4B2.Text = App.GetString("Carousel_P4_B2");
         CarouselP4B3.Text = App.GetString("Carousel_P4_B3");
@@ -2661,12 +2967,37 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         CarouselP5SyncTitle.Text = App.GetString("Sync_Card_Title");
         CarouselP5SyncDesc.Text = App.GetString("Carousel_P5_SyncDesc");
         CarouselP5Body.Text = App.GetString("Carousel_P5_Body");
-        CarouselP6B1.Text = App.GetString("Carousel_P6_B1");
+        SetCarouselBrandTitle(CarouselP6B1, App.GetString("Carousel_P6_B1"));
         CarouselP6B2.Text = App.GetString("Carousel_P6_B2");
         CarouselP6B3.Text = App.GetString("Carousel_P6_B3");
         CarouselP6GitHubLink.Content = App.GetString("Carousel_P6_GitHub");
-        CarouselSkipButton.Text = App.GetString("Carousel_Skip");
+        CarouselSkipButton.Content = App.GetString("Carousel_Skip");
         UpdateCarouselBottomBar();
+    }
+
+
+
+    private static void SetCarouselBrandTitle(TextBlock target, string text)
+    {
+        target.Inlines.Clear();
+        int i = 0;
+        while (i < text.Length)
+        {
+            int hit = text.IndexOf("Novara", i, StringComparison.Ordinal);
+            if (hit < 0)
+            {
+                target.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = text[i..] });
+                break;
+            }
+            if (hit > i)
+                target.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = text[i..hit] });
+            target.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run
+            {
+                Text = "Novara",
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa"),
+            });
+            i = hit + "Novara".Length;
+        }
     }
 
     private void UpdateCarouselBottomBar()
@@ -2689,6 +3020,20 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private Storyboard? _meltSb;
     private Microsoft.UI.Composition.CompositionBrush? _carouselBlurBrush;
 
+
+
+
+    private void NormalizeCarouselPages(int index)
+    {
+        if (index < 0 || index >= CarouselPageList.Length) return;
+        for (int i = 0; i < CarouselPageList.Length; i++)
+        {
+            CarouselPageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+            if (_pageTrans != null) _pageTrans[i].X = 0;
+            CarouselPageList[i].Opacity = 1;
+        }
+    }
+
     private void SetCarouselPage(int index, bool animate = true)
     {
 
@@ -2706,12 +3051,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var newPage = CarouselPageList[index];
         if (!animate || !App.IsAnimationsEnabled || _pageTrans == null || CarouselPages.ActualWidth < 50)
         {
-            for (int i = 0; i < CarouselPageList.Length; i++)
-            {
-                CarouselPageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
-                if (_pageTrans != null) _pageTrans[i].X = 0;
-                CarouselPageList[i].Opacity = 1;
-            }
+            NormalizeCarouselPages(index);
             return;
         }
 
@@ -2765,10 +3105,20 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         else SetCarouselPage(_carouselPage + 1);
     }
 
-    private void CarouselSkip_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private void CarouselSkip_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => CarouselSkip();
+
+    private void CarouselSkip_Click(object sender, RoutedEventArgs e) => CarouselSkip();
+
+    private void CarouselSkip()
     {
         if (_carouselMelting) return;
-        CloseWelcomeCarousel();
+
+
+        _pageSb?.Stop(); _pageSb = null; _pageAnimLock = false;
+
+
+        int last = CarouselPageList.Length - 1;
+        if (_carouselPage < last) SetCarouselPage(last);
     }
 
 
@@ -2955,16 +3305,36 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         sb.Children.Add(da);
     }
 
-    private void ShowMainContent()
+    private void ShowMainContent(bool replayDeferred = true, bool landingContentOnly = false)
     {
-        BottomToolbarPanel.Visibility = Visibility.Visible;
-        CustomTitleBar.Visibility = Visibility.Visible;
+
+
+
+
+        if (!landingContentOnly)
+        {
+            BottomToolbarPanel.Visibility = Visibility.Visible;
+            CustomTitleBar.Visibility = Visibility.Visible;
+        }
         NavBar.Visibility = Visibility.Visible;
 
         var (tab, navButton) = FirstVisibleTab();
         NavigateToPage(tab);
         UpdateNavSelection(navButton);
         UpdateNavBarVisibility();
+        if (!landingContentOnly)
+        {
+            UpdateWorkspaceSwitcher();
+        }
+        if (replayDeferred) ReplayDeferredExternalRequests();
+    }
+
+
+
+    private void ShowMainChrome()
+    {
+        BottomToolbarPanel.Visibility = Visibility.Visible;
+        CustomTitleBar.Visibility = Visibility.Visible;
         UpdateWorkspaceSwitcher();
     }
 
@@ -3023,8 +3393,11 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (App.Store is not { IsLoaded: true }) return;
         if (_welcomeFading) return;
         _welcomeFading = true;
-        WelcomeHintBreathing.Pause();
 
+
+
+        if (App.IsAnimationsEnabled && BeginWelcomeShatter(e.GetPosition((FrameworkElement)Content)))
+            return;
 
         if (App.IsAnimationsEnabled && BeginWelcomeMelt(e.GetPosition((FrameworkElement)Content)))
             return;
@@ -3050,7 +3423,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             }
             _welcomeFading = false;
             WelcomeOverlay.Visibility = Visibility.Collapsed;
-            WelcomeExitCommit();
+            CommitWelcomeExitWithRetry();
             ShowMainContent();
             MaybeShowWelcomeCarousel();
             NavBar.Opacity = 0;
@@ -3062,6 +3435,210 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             fadeIn.Begin();
         };
         fadeOut.Begin();
+    }
+
+
+
+    private void WarmWelcomeShatter()
+    {
+        PrepareWelcomeCarousel();
+        if (_shatter != null || _shatterWarming) return;
+        _shatterWarming = true;
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                var root = Content as FrameworkElement;
+                var win = new Windows.Foundation.Size(
+                    Math.Max(320, root?.ActualWidth ?? 1280), Math.Max(240, root?.ActualHeight ?? 800));
+                _shatter = await Services.SandShatter.TryCreateAsync(win);
+                if (_shatter != null)
+                {
+                    WelcomeShatterHost.Children.Clear();
+                    WelcomeShatterHost.Children.Add(_shatter.Layer);
+                    _shatter.Finished += OnShatterFinished;
+                }
+            }
+            catch (Exception ex)
+            {
+                Services.CrashLogger.LogNote("SandShatter", "warm hook failed: " + ex);
+                _shatter = null;
+            }
+            finally
+            {
+                _shatterWarming = false;
+            }
+        });
+    }
+
+
+    private void OnShatterFinished(object? sender, EventArgs e)
+    {
+        _shatterLockWatch?.Stop();
+
+
+        if (_shatter?.TakeSummary() is { } perfSummary)
+            DispatcherQueue.TryEnqueue(() =>
+                _ = System.Threading.Tasks.Task.Run(() => Services.CrashLogger.LogPerf("SandShatter", perfSummary)));
+        if (_welcomeResizeHook is not null && Content is FrameworkElement wroot)
+        {
+            wroot.SizeChanged -= _welcomeResizeHook;
+            _welcomeResizeHook = null;
+        }
+        _shatterFade?.Stop();
+        _shatterFade = null;
+        WelcomeShatterHost.Visibility = Visibility.Collapsed;
+        WelcomeLogo.Opacity = 1;
+        WelcomeTitleGroup.Opacity = 1;
+        WelcomeSubtitle.Opacity = 1;
+        WelcomeHintGroup.Opacity = 1;
+        WelcomeVersionBadge.Opacity = 0.55;
+
+
+
+        if (WelcomeOverlay.Visibility != Visibility.Visible && LockScreenFrame.Visibility != Visibility.Visible)
+        {
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                var swCar = System.Diagnostics.Stopwatch.StartNew();
+                MaybeShowWelcomeCarousel();
+                long msCar = swCar.ElapsedMilliseconds;
+                _ = System.Threading.Tasks.Task.Run(() =>
+                    Services.CrashLogger.LogPerf("SandShatter", $"carousel show (deferred): {msCar}ms"));
+            });
+        }
+    }
+
+
+
+
+
+    private Microsoft.UI.Xaml.SizeChangedEventHandler? _welcomeResizeHook;
+
+    private void OnWelcomeRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+
+
+        _shatter?.Resize(new Windows.Foundation.Size(e.NewSize.Width, e.NewSize.Height));
+    }
+
+    private bool BeginWelcomeShatter(Windows.Foundation.Point pt)
+    {
+        if (_shatter == null) { WarmWelcomeShatter(); return false; }
+        var root = (FrameworkElement)Content;
+        if (root == null || root.ActualWidth < 50 || root.ActualHeight < 50) return false;
+        try
+        {
+
+
+
+
+            WelcomeEntryAnimation.Stop();
+
+            var logoRect = WelcomeLogo.TransformToVisual(root)
+                .TransformBounds(new Windows.Foundation.Rect(0, 0, WelcomeLogo.ActualWidth, WelcomeLogo.ActualHeight));
+            _shatter.Burst(logoRect, pt, new Windows.Foundation.Size(root.ActualWidth, root.ActualHeight));
+            WelcomeShatterHost.Visibility = Visibility.Visible;
+            WelcomeLogo.Opacity = 0;
+
+
+            _welcomeSaveTask = Task.Run(() => WelcomeExitCommit());
+
+
+            ShowMainContent(replayDeferred: false, landingContentOnly: true);
+
+
+
+            _shatterLockWatch?.Stop();
+            _shatterLockWatch = DispatcherQueue.CreateTimer();
+            _shatterLockWatch.Interval = TimeSpan.FromMilliseconds(100);
+            _shatterLockWatch.IsRepeating = true;
+            _shatterLockWatch.Tick += (_, _) =>
+            {
+                if (LockScreenFrame.Visibility != Visibility.Visible) return;
+                _shatterLockWatch?.Stop();
+                _shatter?.Cancel();
+                OnShatterFinished(null, EventArgs.Empty);
+                _welcomeFading = false;
+            };
+            _shatterLockWatch.Start();
+            if (_welcomeResizeHook is null)
+            {
+                _welcomeResizeHook = OnWelcomeRootSizeChanged;
+                root.SizeChanged += _welcomeResizeHook;
+            }
+
+
+            var sb = new Storyboard();
+            AddMeltDouble(sb, WelcomeTitleGroup, "Opacity", 1, 0, 350, Motion.Standard(), 0);
+            AddMeltDouble(sb, WelcomeSubtitle, "Opacity", 1, 0, 350, Motion.Standard(), 0);
+            AddMeltDouble(sb, WelcomeHintGroup, "Opacity", 1, 0, 350, Motion.Standard(), 0);
+            AddMeltDouble(sb, WelcomeVersionBadge, "Opacity", 0.55, 0, 350, Motion.Standard(), 0);
+            _shatterFade = sb;
+            sb.Begin();
+
+            var prep = DispatcherQueue.CreateTimer();
+            prep.Interval = TimeSpan.FromMilliseconds(620);
+            prep.IsRepeating = false;
+            prep.Tick += (_, _) =>
+            {
+                prep.Stop();
+                var swTick = System.Diagnostics.Stopwatch.StartNew();
+
+
+                if (LockScreenFrame.Visibility == Visibility.Visible)
+                {
+                    _shatter?.Cancel();
+                    OnShatterFinished(null, EventArgs.Empty);
+                    _welcomeFading = false;
+
+
+                    return;
+                }
+                _welcomeFading = false;
+
+
+
+                bool committed = false;
+                try
+                {
+                    var saveTask = _welcomeSaveTask;
+                    if (saveTask is not null && saveTask.Wait(2000) && saveTask.Status == TaskStatus.RanToCompletion)
+                        committed = saveTask.Result;
+                }
+                catch (Exception ex)
+                {
+                    CrashLogger.LogNote("Welcome", "exit commit wait: " + ex.Message);
+                }
+
+                if (!committed) CommitWelcomeExitWithRetry();
+                long msCommit = swTick.ElapsedMilliseconds;
+                WelcomeOverlay.Visibility = Visibility.Collapsed;
+                UpdateNavBarVisibility();
+                ShowMainChrome();
+                ReplayDeferredExternalRequests();
+                long msMain = swTick.ElapsedMilliseconds;
+
+                NavBar.Opacity = 0;
+                var fadeIn = new Storyboard();
+                var oi = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
+                Storyboard.SetTarget(oi, NavBar);
+                Storyboard.SetTargetProperty(oi, "Opacity");
+                fadeIn.Children.Add(oi);
+                fadeIn.Begin();
+                _ = System.Threading.Tasks.Task.Run(() => Services.CrashLogger.LogPerf("SandShatter",
+                    $"swap tick: commit={msCommit}ms main={msMain - msCommit}ms total={swTick.ElapsedMilliseconds}ms"));
+            };
+            prep.Start();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("SandShatter", "burst failed: " + ex.Message);
+            _shatter.Cancel();
+            OnShatterFinished(null, EventArgs.Empty);
+            return false;
+        }
     }
 
 
@@ -3109,7 +3686,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         AddMeltDouble(sb, WelcomeLogo, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
         AddMeltDouble(sb, WelcomeTitleGroup, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
         AddMeltDouble(sb, WelcomeSubtitle, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
-        AddMeltDouble(sb, WelcomeHint, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeHintGroup, "Opacity", 1, 0, 1400, Motion.Standard(), 200);
+        AddMeltDouble(sb, WelcomeVersionBadge, "Opacity", 0.55, 0, 1400, Motion.Standard(), 200);
         AddMeltDouble(sb, WelcomeMeltLayer, "Opacity", 1, 0, 300, Motion.Decelerate(), 1600);
 
 
@@ -3127,7 +3705,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 return;
             }
             _welcomeFading = false;
-            WelcomeExitCommit();
+            CommitWelcomeExitWithRetry();
             WelcomeOverlay.Visibility = Visibility.Collapsed;
             ShowMainContent();
             MaybeShowWelcomeCarousel();
@@ -3151,7 +3729,8 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             WelcomeLogo.Opacity = 1;
             WelcomeTitleGroup.Opacity = 1;
             WelcomeSubtitle.Opacity = 1;
-            WelcomeHint.Opacity = 1;
+            WelcomeHintGroup.Opacity = 1;
+            WelcomeVersionBadge.Opacity = 0.55;
 
         };
         sb.Begin();
@@ -3159,11 +3738,34 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     }
 
 
-    private void WelcomeExitCommit()
+
+    private void CommitWelcomeExitWithRetry()
     {
-        if (App.Store == null) return;
-        App.Store.Database.AppSettings.HasCompletedWelcome = true;
-        App.Store.SaveSync();
+        if (WelcomeExitCommit()) return;
+        if (!WelcomeExitCommit()) CrashLogger.LogNote("Welcome", "exit commit retry failed");
+    }
+
+
+
+    private bool WelcomeExitCommit()
+    {
+        try
+        {
+
+
+
+            var store = App.Store;
+            if (store is not { IsLoaded: true }) return false;
+            store.Database.AppSettings.HasCompletedWelcome = true;
+            if (store.SaveSync()) return true;
+            CrashLogger.LogNote("Welcome", "exit commit was not persisted");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote("Welcome", "exit commit failed: " + ex.Message);
+            return false;
+        }
     }
 
     private void NavButton_Click(object sender, RoutedEventArgs e)
@@ -3199,11 +3801,139 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         }
     }
 
+    private readonly List<Action> _deferredExternalRequests = new();
+    private readonly HashSet<string> _deferredExternalKeys = new(StringComparer.Ordinal);
+    private bool _replayingExternalRequests;
+    private readonly HashSet<string> _deferredDropLogged = new(StringComparer.Ordinal);
+    private bool _startupPendingConsumed;
+    private bool _startupPendingConsuming;
+
+
+    private const int MaxDeferredExternalRequests = 16;
+
+
+
+
+
+    private void DeferExternalRequest(Action request, string key)
+    {
+        if (_deferredExternalRequests.Count >= MaxDeferredExternalRequests)
+        {
+
+
+            if (_deferredDropLogged.Add(key))
+                Services.CrashLogger.LogNote("DeferredExternalRequest",
+                    $"dropped '{key}': queue is at its {MaxDeferredExternalRequests}-request bound");
+            return;
+        }
+
+
+        if (!_deferredExternalKeys.Add(key)) return;
+        _deferredExternalRequests.Add(request);
+    }
+
+    private void ReplayDeferredExternalRequests()
+    {
+        if (_deferredExternalRequests.Count == 0 || _replayingExternalRequests) return;
+        if (App.Store is not { IsLoaded: true }) return;
+        if (WelcomeOverlay.Visibility == Visibility.Visible || IsWelcomeCarouselUp || IsSealSurfaceBlocking()) return;
+        _replayingExternalRequests = true;
+
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                if (App.Store is not { IsLoaded: true }) return;
+                if (WelcomeOverlay.Visibility == Visibility.Visible || IsWelcomeCarouselUp || IsSealSurfaceBlocking()) return;
+                var requests = _deferredExternalRequests.ToArray();
+                _deferredExternalRequests.Clear();
+                _deferredExternalKeys.Clear();
+                _deferredDropLogged.Clear();
+                foreach (var request in requests)
+                {
+
+
+                    try { request(); }
+                    catch (Exception ex) { Services.CrashLogger.LogNote("DeferredExternalRequest", ex.Message); }
+                }
+            }
+            finally { _replayingExternalRequests = false; }
+        }))
+            _replayingExternalRequests = false;
+    }
+
+
+
+
+    private void ConsumePendingExternalRequests()
+    {
+        if (_startupPendingConsumed || _startupPendingConsuming) return;
+        _startupPendingConsuming = true;
+
+
+        var complete = false;
+        try
+        {
+
+        var pendingId = Novara.Services.EditRequest.ReadPending();
+        if (pendingId.HasValue)
+            DispatcherQueue.TryEnqueue(() => HandleEditRequest(pendingId.Value));
+
+
+        var pendingPath = App.PendingAddPath ?? Novara.Services.AddPathRequest.ReadPending();
+        if (!string.IsNullOrWhiteSpace(pendingPath))
+            DispatcherQueue.TryEnqueue(() => HandleAddPathRequest(pendingPath));
+
+
+        var pendingMd = App.PendingImportMd ?? Novara.Services.MdImportRequest.ReadPending();
+        if (!string.IsNullOrWhiteSpace(pendingMd))
+            DispatcherQueue.TryEnqueue(() => HandleImportMdRequest(pendingMd));
+
+
+        var pendingReminder = Novara.Services.ReminderEditRequest.ReadPending();
+        if (pendingReminder != null)
+            DispatcherQueue.TryEnqueue(() => HandleReminderEditRequest(pendingReminder));
+
+
+        var pendingDue = App.PendingReminderId ?? Novara.Services.ReminderDueRequest.ReadPending();
+        if (pendingDue.HasValue)
+            DispatcherQueue.TryEnqueue(() => HandleReminderDueRequest(pendingDue.Value));
+
+
+
+        App.ClearPendingLaunchArguments();
+        complete = true;
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("ConsumePendingExternalRequests", ex.Message);
+        }
+        finally
+        {
+            _startupPendingConsuming = false;
+            if (complete) _startupPendingConsumed = true;
+        }
+    }
+
+
+
+    private bool IsSealSurfaceBlocking()
+        => _sealMode
+            || SealGuideOverlay.Visibility == Visibility.Visible
+            || SealUnlockContent.Visibility == Visibility.Visible;
+
 
     public void HandleEditRequest(Guid id)
     {
-        if (App.Store is not { IsLoaded: true }) return;
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
+
+
+        if (App.Store is not { IsLoaded: true } || WelcomeOverlay.Visibility == Visibility.Visible
+            || IsSealSurfaceBlocking() || IsWelcomeCarouselUp)
+        {
+            DeferExternalRequest(() => HandleEditRequest(id), "edit:" + id);
+            return;
+        }
         if (!IsTabVisible("Plan")) { RefuseHiddenTabAction("Plan"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3234,9 +3964,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void HandleAddPathRequest(string path)
     {
-        if (App.Store is not { IsLoaded: true }) return;
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
-        if (IsWelcomeCarouselUp) return;
+        if (App.Store is not { IsLoaded: true } || WelcomeOverlay.Visibility == Visibility.Visible
+            || IsSealSurfaceBlocking() || IsWelcomeCarouselUp)
+        {
+            DeferExternalRequest(() => HandleAddPathRequest(path), "add-path:" + path);
+            return;
+        }
         if (!IsTabVisible("File")) { RefuseHiddenTabAction("File"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3252,9 +3985,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void HandleImportMdRequest(string filePath)
     {
-        if (App.Store is not { IsLoaded: true }) return;
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
-        if (IsWelcomeCarouselUp) return;
+        if (App.Store is not { IsLoaded: true } || WelcomeOverlay.Visibility == Visibility.Visible
+            || IsSealSurfaceBlocking() || IsWelcomeCarouselUp)
+        {
+            DeferExternalRequest(() => HandleImportMdRequest(filePath), "md-import:" + filePath);
+            return;
+        }
         if (!IsTabVisible("Diary")) { RefuseHiddenTabAction("Diary"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3269,9 +4005,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void HandleReminderEditRequest(Novara.Services.PendingReminderEdit p)
     {
-        if (App.Store is not { IsLoaded: true }) return;
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
-        if (IsWelcomeCarouselUp) return;
+        if (App.Store is not { IsLoaded: true } || WelcomeOverlay.Visibility == Visibility.Visible
+            || IsSealSurfaceBlocking() || IsWelcomeCarouselUp)
+        {
+            DeferExternalRequest(() => HandleReminderEditRequest(p), "reminder-edit:" + p.Id);
+            return;
+        }
         if (!IsTabVisible("Plan")) { RefuseHiddenTabAction("Plan"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3286,9 +4025,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void HandleReminderDueRequest(Guid id)
     {
-        if (App.Store is not { IsLoaded: true }) return;
-        if (WelcomeOverlay.Visibility == Visibility.Visible) return;
-        if (IsWelcomeCarouselUp) return;
+        if (App.Store is not { IsLoaded: true } || WelcomeOverlay.Visibility == Visibility.Visible
+            || IsSealSurfaceBlocking() || IsWelcomeCarouselUp)
+        {
+            DeferExternalRequest(() => HandleReminderDueRequest(id), "reminder-due:" + id);
+            return;
+        }
         if (!IsTabVisible("Plan")) { RefuseHiddenTabAction("Plan"); return; }
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         FlushEditorDirty();
@@ -3333,7 +4075,39 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (LockScreenFrame.Visibility == Visibility.Visible || WelcomeOverlay.Visibility == Visibility.Visible) return;
         if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
         if (ReferenceEquals(RootFrame.Content, _searchPage)) { _searchPage?.FocusSearch(); return; }
-        FlushEditorDirty();
+
+
+
+
+        if (RootFrame.Content is DiaryEditorPage editor)
+        {
+            if (_searchOpeningFromEditor) return;
+            _searchOpeningFromEditor = true;
+            OpenSearchPageAfterEditorFlushAsync(editor);
+            return;
+        }
+        ShowSearchPageCore();
+    }
+
+    private bool _searchOpeningFromEditor;
+
+    private async void OpenSearchPageAfterEditorFlushAsync(DiaryEditorPage editor)
+    {
+        try
+        {
+            await FlushEditorForExitAsync(editor);
+
+
+            if (!ReferenceEquals(RootFrame.Content, editor)) return;
+            if (LockScreenFrame.Visibility == Visibility.Visible || WelcomeOverlay.Visibility == Visibility.Visible) return;
+            if (RestorePendingBlocksNavigation()) { RefuseRestorePending(); return; }
+            ShowSearchPageCore();
+        }
+        finally { _searchOpeningFromEditor = false; }
+    }
+
+    private void ShowSearchPageCore()
+    {
         _preSearchContent = RootFrame.Content;
         _searchPage ??= new SearchPage();
         _searchPage.ApplyTexts();
@@ -3388,6 +4162,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         if (LockScreenFrame.Visibility == Visibility.Visible) return false;
         if (WelcomeOverlay.Visibility == Visibility.Visible) return false;
         if (IsWelcomeCarouselUp) return false;
+        if (_sealMode) return false;
         if (IsFullscreenPage(RootFrame.Content)) return false;
 
 
@@ -3468,6 +4243,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 break;
             case "open_trash":
                 OpenTrashPage();
+                break;
+            case "open_seal":
+                NavigateToSeal();
                 break;
             case "lock_now":
                 if (App.Store is { IsEncrypted: true }) LockNow();
@@ -3700,9 +4478,14 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         try
         {
             Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetIsTranslationEnabled(NavIndicator, true);
+
+            Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.SetIsTranslationEnabled(SealNavIndicator, true);
         }
         catch { }
         NavBar.SizeChanged += (_, _) => RelocateNavGlow();
+
+
+        SealNavBar.SizeChanged += (_, _) => RelocateSealGlow();
     }
 
 
@@ -3731,6 +4514,21 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         NavFileHost.MaxWidth = cap;
         NavPlanHost.MaxWidth = cap;
         NavDiaryHost.MaxWidth = cap;
+    }
+
+
+
+
+
+
+
+    private void ClampSealTabWidths()
+    {
+        if (SealNavBar.ActualWidth < 1) return;
+        double cap = SealNavBar.ActualWidth / 4.0 - 16;
+        SealNavSpaceHost.MaxWidth = cap;
+        SealNavCapsuleHost.MaxWidth = cap;
+        SealNavSettingsHost.MaxWidth = cap;
     }
 
 
@@ -3890,6 +4688,1121 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
 
+
+    private int _sealTabIndex = -1;
+    private bool _sealIndicatorPlaced;
+    private float _sealGlowX;
+    private bool _sealGlowRetryHooked;
+
+    private void SealNavSpace_Click(object sender, RoutedEventArgs e) => SelectSealTab(0);
+    private void SealNavCapsule_Click(object sender, RoutedEventArgs e) => SelectSealTab(1);
+    private void SealNavSettings_Click(object sender, RoutedEventArgs e) => SelectSealTab(2);
+
+
+    private void SelectSealTab(int index)
+    {
+        if (index < 0 || index > 2) return;
+        bool animateGlow = index != _sealTabIndex;
+
+
+        if (index != _sealTabIndex) _sealPage?.CloseDialogsOnLeave();
+        _sealTabIndex = index;
+        _sealPage?.ShowView(index);
+        UpdateSealNavSelection(index, animateGlow);
+        _sealPage?.StealFocus();
+    }
+
+
+
+
+
+    private Grid[] SealGuidePageList = System.Array.Empty<Grid>();
+    private int _sealGuidePage = -1;
+    private Storyboard? _sealGuideMarqueeSb;
+    private double _sealGuideMarqueeCapacity;
+    private int _sealGuideMarqueeGen;
+
+
+    private void ShowSealGuideAt(int index)
+    {
+        SealUnlockContent.Visibility = Visibility.Collapsed;
+        SealGateFooterPanel.Visibility = Visibility.Collapsed;
+        SealGuidePages.Visibility = Visibility.Visible;
+        SealGuideBottomBar.Visibility = Visibility.Visible;
+        SealGuideOverlay.Visibility = Visibility.Visible;
+        SealGuideOverlay.UpdateLayout();
+
+        if (index != SealGuidePageList.Length - 1) EnqueueSealGuideMarqueeBuild();
+        ApplySealGuidePage1Texts();
+        ApplySealGuidePage2Texts();
+        ApplySealGuidePage3Texts();
+        ApplySealGuidePage4Texts();
+        ApplySealGuidePage5Texts();
+        SetSealGuidePage(index);
+    }
+
+
+
+    private void EnqueueSealGuideMarqueeBuild()
+    {
+        var gen = ++_sealGuideMarqueeGen;
+        _sealGuideMarqueeSb?.Stop();
+        _sealGuideMarqueeSb = null;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (gen != _sealGuideMarqueeGen) return;
+            BuildSealGuideMarquee();
+        });
+    }
+
+
+    private void EnsureSealGuidePage1Art()
+    {
+        SealGuideP1TabSpaceIcon.Data = BuildNonzeroGeometry(IconData.SealSpace);
+        SealGuideP1TabCapsuleIcon.Data = BuildNonzeroGeometry(IconData.Capsule);
+    }
+
+    private void ApplySealGuidePage1Texts()
+    {
+
+        SealGuideP1Title.Inlines.Clear();
+        SealGuideP1Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Seal_Guide5_P1_Title_A") });
+        SealGuideP1Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run
+        {
+            Text = App.GetString("Seal_Name"),
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Assets/Fonts/Comfortaa.ttf#Comfortaa"),
+        });
+        SealGuideP1Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Seal_Guide5_P1_Title_B") });
+
+        SealGuideP1TabSpaceText.Text = App.GetString("Seal_Tab_Space");
+        SealGuideP1TabCapsuleText.Text = App.GetString("Seal_Tab_Capsule");
+        SealGuideP1S1.Text = App.GetString("Seal_Guide5_P1_S1");
+        SealGuideP1S2.Text = App.GetString("Seal_Guide5_P1_S2");
+        SealGuideP1S3.Text = App.GetString("Seal_Guide5_P1_S3");
+        SealGuideP1S4.Text = App.GetString("Seal_Guide5_P1_S4");
+        SealGuideP1S5.Text = App.GetString("Seal_Guide5_P1_S5");
+        SealGuideP1S6.Text = App.GetString("Seal_Guide5_P1_S6");
+    }
+
+    private void ApplySealGuidePage2Texts()
+    {
+        SealGuideP2Sentence.Text = App.GetString("Seal_Guide5_P2_Sentence");
+        SealGuideP2Subline.Text = App.GetString("Seal_Guide5_P2_Subline");
+    }
+
+    private void ApplySealGuidePage3Texts()
+    {
+        SealGuideP3Kicker.Text = App.GetString("Seal_Tab_Capsule");
+
+        SealGuideP3Title.Inlines.Clear();
+        SealGuideP3Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Seal_Guide5_P3_TitleA") });
+        SealGuideP3Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run
+        {
+            Text = App.GetString("Seal_Guide5_P3_TitleNum"),
+            Foreground = App.GetBrush("AppPrimaryButtonBrush"),
+        });
+        SealGuideP3Title.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = App.GetString("Seal_Guide5_P3_TitleB") });
+        SealGuideP3Start.Text = App.GetString("Seal_Guide5_P3_Tick1");
+        SealGuideP3End.Text = App.GetString("Seal_Guide5_P3_End");
+        SealGuideP3Body.Text = App.GetString("Seal_Guide5_P3_Body");
+        SealGuideP3L1.Text = App.GetString("Seal_Guide5_P3_L1");
+        SealGuideP3L2.Text = App.GetString("Seal_Guide5_P3_L2");
+        SealGuideP3L3.Text = App.GetString("Seal_Guide5_P3_L3");
+        SealGuideP3L4.Text = App.GetString("Seal_Guide5_P3_L4");
+        SealGuideP3L5.Text = App.GetString("Seal_Guide5_P3_L5");
+        SealGuideP3L6.Text = App.GetString("Seal_Guide5_P3_L6");
+    }
+
+
+
+    private void ApplySealGuidePage4Texts()
+    {
+        SealGuideP4Kicker.Text = App.GetString("Seal_Guide5_P4_Kicker");
+        SealGuideP4Title.Text = App.GetString("Seal_Guide5_P4_Title");
+        SealGuideP4Lead.Text = App.GetString("Seal_Guide5_P4_Lead");
+        SealGuideP4PasswordBox.PlaceholderText = App.GetString("Lock_Password_Placeholder");
+        SealGuideP4RightName.Text = App.GetString("Seal_Name");
+        SealGuideP4LeftCap.Text = App.GetString("Seal_Guide5_P4_LeftCap");
+        SealGuideP4RightCap.Text = App.GetString("Seal_Guide5_P4_RightCap");
+        SealGuideP4Foot1.Text = App.GetString("Seal_Guide5_P4_Foot1");
+        SealGuideP4Foot2.Text = App.GetString("Seal_Guide5_P4_Foot2");
+    }
+
+
+
+    private void ApplySealGuidePage5Texts()
+    {
+        SealGuideP5Brand.Text = App.GetString("Seal_Name");
+        SealGuideP5Sub.Text = App.GetString("Seal_Guide5_P5_Sub");
+        SealGuideP5C1T.Text = App.GetString("Seal_Guide5_P5_C1_T");
+        SealGuideP5C1D.Text = App.GetString("Seal_Guide5_P5_C1_D");
+        SealGuideP5C2T.Text = App.GetString("Seal_Guide5_P5_C2_T");
+        SealGuideP5C2D.Text = App.GetString("Seal_Guide5_P5_C2_D");
+        SealGuideP5C3T.Text = App.GetString("Seal_Guide5_P5_C3_T");
+        SealGuideP5C3D.Text = App.GetString("Seal_Guide5_P5_C3_D");
+        SealGuideP5C4T.Text = App.GetString("Seal_Guide5_P5_C4_T");
+        SealGuideP5C4D.Text = App.GetString("Seal_Guide5_P5_C4_D");
+        SealGuideP5C5T.Text = App.GetString("Seal_Guide5_P5_C5_T");
+        SealGuideP5C5D.Text = App.GetString("Seal_Guide5_P5_C5_D");
+        SealGuideP5C6T.Text = App.GetString("Seal_Guide5_P5_C6_T");
+        SealGuideP5C6D.Text = App.GetString("Seal_Guide5_P5_C6_D");
+        SealGuideP5Note.Text = App.GetString("Seal_Guide5_P5_Note");
+    }
+
+
+
+
+    private void SetSealGuidePage(int index)
+    {
+        if (index < 0 || index >= SealGuidePageList.Length) return;
+        if (_sealGuidePage == index)
+        {
+            UpdateSealGuideBottomBar(index);
+            return;
+        }
+        _sealGuidePage = index;
+        UpdateSealGuideBottomBar(index);
+        if (index == SealGuidePageList.Length - 1) MarkSpaceGuideSeen();
+        UpdateSealGuideFields(index);
+        for (int i = 0; i < SealGuidePageList.Length; i++)
+        {
+            SealGuidePageList[i].Visibility = i == index ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (index < SealGuidePageList.Length - 1 && _sealGuideMarqueeSb == null) EnqueueSealGuideMarqueeBuild();
+        SealGuidePrimaryButton.Focus(FocusState.Programmatic);
+    }
+
+    private void UpdateSealGuideBottomBar(int index)
+    {
+        bool last = index == SealGuidePageList.Length - 1;
+        SealGuidePrimaryButton.Content = App.GetString(last ? "Seal_FirstRun_SetPassword" : "Seal_Tour_Next");
+        SealGuideSkipButton.Content = App.GetString(last ? "Seal_FirstRun_Skip" : "Seal_Tour_Skip");
+
+        SealGuideImportButton.Content = App.GetString("Seal_FirstRun_Import");
+        SealGuideImportButton.Visibility = last ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+
+    private void UpdateSealGuideFields(int index)
+    {
+        SealGuideP2Field.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        SealGuideP3Field.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        if (index == 1)
+        {
+            EnsureSealGuideMarqueeCapacity();
+            if (_sealGuideMarqueeSb == null) BuildSealGuideMarquee();
+            _sealGuideMarqueeSb?.Begin();
+        }
+        else _sealGuideMarqueeSb?.Stop();
+    }
+
+
+
+
+    private void BuildSealGuideMarquee()
+    {
+        _sealGuideMarqueeGen++;
+        var rows = new[] { SealGuideMarqueeRow0, SealGuideMarqueeRow1, SealGuideMarqueeRow2,
+                           SealGuideMarqueeRow3, SealGuideMarqueeRow4, SealGuideMarqueeRow5 };
+        foreach (var row in rows) row.Children.Clear();
+        _sealGuideMarqueeSb?.Stop();
+        var all = SealGlyphs.All.ToList();
+        var rng = new Random();
+        for (int i = all.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (all[i], all[j]) = (all[j], all[i]);
+        }
+        const double iconSize = 28;
+        const double gap = 40;
+        const double step = iconSize + gap;
+        const double rowWidth = 14 * step;
+        double windowWidth = SealGuideBleed.ActualWidth;
+        if (windowWidth < 50) windowWidth = 800;
+        int copies = Math.Max(2, (int)Math.Ceiling((windowWidth + rowWidth) / rowWidth));
+        _sealGuideMarqueeCapacity = copies * rowWidth;
+        var sb = new Storyboard();
+        for (int r = 0; r < 6; r++)
+        {
+            var canvas = new Canvas
+            {
+                Width = rowWidth * copies,
+                Height = 56,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            for (int copy = 0; copy < copies; copy++)
+            {
+                for (int k = 0; k < 14; k++)
+                {
+                    var glyph = all[(r * 14 + k) % all.Count];
+                    var icon = SealIconFactory.Create(glyph, iconSize);
+                    icon.Opacity = 0.45 + rng.NextDouble() * 0.15;
+                    icon.IsHitTestVisible = false;
+                    Canvas.SetLeft(icon, copy * rowWidth + k * step);
+                    Canvas.SetTop(icon, 14);
+                    canvas.Children.Add(icon);
+                }
+            }
+            var tx = new TranslateTransform();
+            canvas.RenderTransform = tx;
+            rows[r].Children.Add(canvas);
+            bool right = r % 2 == 0;
+            var anim = new DoubleAnimation
+            {
+                From = right ? -rowWidth : 0,
+                To = right ? 0 : -rowWidth,
+                Duration = TimeSpan.FromSeconds(16 + rng.NextDouble() * 10),
+                RepeatBehavior = RepeatBehavior.Forever,
+            };
+            Storyboard.SetTarget(anim, tx);
+            Storyboard.SetTargetProperty(anim, "X");
+            sb.Children.Add(anim);
+        }
+
+
+        _sealGuideMarqueeSb = sb;
+
+
+        if (SealGuideP2Field.Visibility == Visibility.Visible) sb.Begin();
+    }
+
+
+
+    private void EnsureSealGuideMarqueeCapacity()
+    {
+        const double rowWidth = 14 * 68;
+        var width = SealGuideBleed.ActualWidth;
+        if (width < 50) return;
+        if (width + rowWidth > _sealGuideMarqueeCapacity) BuildSealGuideMarquee();
+    }
+
+
+    private void SealGuide_WheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        if (SealGuidePages.Visibility != Visibility.Visible || _sealGuidePage < 0)
+        {
+            e.Handled = true;
+            return;
+        }
+        var delta = e.GetCurrentPoint(SealGuideOverlay).Properties.MouseWheelDelta;
+        if (delta < 0) SetSealGuidePage(_sealGuidePage + 1);
+        else if (delta > 0) SetSealGuidePage(_sealGuidePage - 1);
+        e.Handled = true;
+    }
+
+    private void SealGuidePrimary_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sealGuidePage >= 0 && _sealGuidePage < SealGuidePageList.Length - 1)
+        {
+            SetSealGuidePage(_sealGuidePage + 1);
+            return;
+        }
+        SealGuideSetPwd_Click(sender, e);
+    }
+
+
+
+    private void SealGuideImport_Click(object sender, RoutedEventArgs e)
+    {
+        EnterSealShell(skipGate: true);
+        _sealPage?.ShowSealImportDialog();
+    }
+
+    private void SealGuideSkip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sealGuidePage >= 0 && _sealGuidePage < SealGuidePageList.Length - 1)
+        {
+            SetSealGuidePage(SealGuidePageList.Length - 1);
+            return;
+        }
+        HideSealGuide();
+
+
+
+        _sealPage?.StealFocus();
+    }
+
+
+
+    private void SealGuideSetPwd_Click(object sender, RoutedEventArgs e)
+    {
+        HideSealGuide();
+        _sealPage?.ShowPasswordDialog(succeeded =>
+        {
+            if (succeeded) return;
+            ShowSealGuideAt(SealGuidePageList.Length - 1);
+        });
+    }
+
+
+    private void HideSealGuide()
+    {
+
+        _sealCountdownBreathing?.Stop();
+        SealLockCountdown.Opacity = 1;
+        _sealGuidePage = -1;
+        _sealGuideMarqueeSb?.Stop();
+        SealGuideP2Field.Visibility = Visibility.Collapsed;
+        SealGuideP3Field.Visibility = Visibility.Collapsed;
+        SealGuidePages.Visibility = Visibility.Collapsed;
+        SealGuideBottomBar.Visibility = Visibility.Collapsed;
+        foreach (var page in SealGuidePageList)
+        {
+            page.Visibility = Visibility.Collapsed;
+        }
+        SealGuideOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void MarkSpaceGuideSeen()
+    {
+        var s = App.Store?.Database.AppSettings;
+        if (s != null && !s.SpaceGuideSeen)
+        {
+            s.SpaceGuideSeen = true;
+            _ = App.Store?.SaveAsync();
+        }
+    }
+
+
+
+    private Novara.Services.SealLockout? _sealLockout;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _sealLockTimer;
+    private bool _sealUnlockBusy;
+    private bool _sealUnlockErrorActive;
+    private bool _sealShakeRunning;
+    private bool _sealLockedShown;
+    private bool _sealUnlockExiting;
+
+    private bool _sealReturning;
+    private Storyboard? _sealEntrySb;
+    private Storyboard? _sealExitSb;
+    private Storyboard? _sealCountdownBreathing;
+
+    private static bool SpaceIsInitialized()
+        => new Novara.Services.SealSpaceStore(Novara.Services.SealSpacePaths.Default).Exists();
+
+
+
+
+    private void ShowSealGate()
+    {
+        if (SpaceIsInitialized())
+        {
+            ShowSealUnlockPage();
+            return;
+        }
+#if DEBUG
+        ShowSealGuideAt(0);
+#else
+        var seen = App.Store?.Database.AppSettings?.SpaceGuideSeen ?? false;
+        ShowSealGuideAt(seen ? SealGuidePageList.Length - 1 : 0);
+#endif
+    }
+
+
+
+
+
+
+
+    private bool _sealForgotCdReady;
+    private bool _sealForgotConfirming;
+    private bool _sealForgotHiding;
+    private Storyboard? _sealForgotHideSb;
+
+    private void SealForgot_Tapped(object sender, TappedRoutedEventArgs e) => ShowSealForgotDialog();
+
+
+    private void SealGateBack_Tapped(object sender, TappedRoutedEventArgs e) => TryLeaveSealGate();
+
+    private void ShowSealForgotDialog()
+    {
+        _sealForgotConfirming = false;
+        _sealForgotCdReady = false;
+        SealForgotDangerIcon.Data = App.CreateGeometry(IconData.Danger);
+        SealForgotTitle.Text = App.GetString("Seal_Forgot_Title");
+        SealForgotWarning.Text = App.GetString("Seal_Forgot_Warning");
+        SealForgotPhraseLabel.Text = App.GetString("Seal_Forgot_PhraseLabel");
+        SealForgotPhrase.Text = App.GetString("Seal_Forgot_Phrase");
+        SealForgotCancelButton.Content = App.GetString("Common_Button_Cancel");
+        SealForgotConfirmButton.Content = App.GetString("Seal_Forgot_Confirm");
+        SealForgotPhraseBox.Text = "";
+        SealForgotConfirmButton.IsEnabled = false;
+        SealForgotConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
+
+
+
+        _sealForgotHiding = false;
+        _sealForgotHideSb?.Stop();
+        _sealForgotHideSb = null;
+        SealForgotScrim.Opacity = 0;
+        SealForgotDialog.Opacity = 0;
+        SealForgotDialogTransform.ScaleX = 0.92; SealForgotDialogTransform.ScaleY = 0.92; SealForgotDialogTransform.TranslateY = 20;
+        SealForgotOverlay.Visibility = Visibility.Visible;
+        DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, SealForgotOverlay, SealForgotDialog, _dialogWidthFit);
+        var showSb = new Storyboard();
+        var scrimIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
+        Storyboard.SetTarget(scrimIn, SealForgotScrim); Storyboard.SetTargetProperty(scrimIn, "Opacity");
+        showSb.Children.Add(scrimIn);
+        var dialogIn = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
+        Storyboard.SetTarget(dialogIn, SealForgotDialog); Storyboard.SetTargetProperty(dialogIn, "Opacity");
+        showSb.Children.Add(dialogIn);
+        Motion.AddDialogShowTransform(showSb, SealForgotDialogTransform);
+        showSb.Begin();
+        SealForgotCd.Completed -= OnSealForgotCdCompleted;
+        SealForgotCd.Completed += OnSealForgotCdCompleted;
+        SealForgotCd.Start(Motion.CooldownSeconds);
+    }
+
+    private void OnSealForgotCdCompleted()
+    {
+        SealForgotCd.Completed -= OnSealForgotCdCompleted;
+        _sealForgotCdReady = true;
+        UpdateSealForgotConfirmState();
+    }
+
+    private void SealForgotPhraseBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateSealForgotConfirmState();
+
+
+    private void UpdateSealForgotConfirmState()
+    {
+        var ok = _sealForgotCdReady
+                 && Services.DestructiveConfirm.Matches(SealForgotPhraseBox.Text, App.GetString("Seal_Forgot_Phrase"));
+        SealForgotConfirmButton.IsEnabled = ok;
+        SealForgotConfirmButton.Opacity = ok ? 1 : Motion.CooldownDisabledOpacity;
+    }
+
+    private void HideSealForgotDialog()
+    {
+
+
+
+
+
+        if (_sealForgotHiding) return;
+        _sealForgotHiding = true;
+        var cdGen = SealForgotCd.Generation;
+        SealForgotCd.Stop();
+        var sb = new Storyboard();
+        var scrimOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(scrimOut, SealForgotScrim); Storyboard.SetTargetProperty(scrimOut, "Opacity");
+        sb.Children.Add(scrimOut);
+        var dialogOut = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
+        Storyboard.SetTarget(dialogOut, SealForgotDialog); Storyboard.SetTargetProperty(dialogOut, "Opacity");
+        sb.Children.Add(dialogOut);
+        var sx = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(sx, SealForgotDialogTransform); Storyboard.SetTargetProperty(sx, "ScaleX");
+        sb.Children.Add(sx);
+        var sy = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(sy, SealForgotDialogTransform); Storyboard.SetTargetProperty(sy, "ScaleY");
+        sb.Children.Add(sy);
+        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(ty, SealForgotDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
+        sb.Children.Add(ty);
+        sb.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_sealForgotHideSb, sb)) return;
+            _sealForgotHideSb = null;
+            SealForgotOverlay.Visibility = Visibility.Collapsed;
+            SealForgotPhraseBox.Text = "";
+            _sealForgotCdReady = false;
+            SealForgotCd.ResetAfterHide(cdGen);
+            _sealForgotHiding = false;
+        };
+        _sealForgotHideSb = sb;
+        sb.Begin();
+    }
+
+    private void SealForgotClose_Click(object sender, RoutedEventArgs e) => HideSealForgotDialog();
+    private void SealForgotCancel_Click(object sender, RoutedEventArgs e) => HideSealForgotDialog();
+    private void SealForgotScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, SealForgotScrim)) HideSealForgotDialog();
+    }
+
+    private async void SealForgotConfirm_Click(object sender, RoutedEventArgs e)
+    {
+        if (_sealForgotConfirming) return;
+
+        if (!Services.DestructiveConfirm.Matches(SealForgotPhraseBox.Text, App.GetString("Seal_Forgot_Phrase")))
+            return;
+
+        _sealForgotConfirming = true;
+        SealForgotConfirmButton.IsEnabled = false;
+        try
+        {
+            var status = await Novara.Services.SealService.Current.ClearWithoutSessionAsync();
+            if (status != SealServiceStatus.Ok)
+            {
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+                Services.CrashLogger.LogNote("SealForgot", status.ToString());
+                return;
+            }
+
+            HideSealForgotDialog();
+
+            ExitSealShell();
+            ResetSealLockedState();
+            ShowSealGate();
+            App.ShowToast(App.GetString("Seal_Forgot_Done"));
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("SealForgot", ex.Message);
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+        }
+        finally { _sealForgotConfirming = false; }
+    }
+
+    private void ShowSealUnlockPage()
+    {
+        ApplySealUnlockTexts();
+        HideSealGuide();
+        SealUnlockContent.Visibility = Visibility.Visible;
+        SealGateFooterPanel.Visibility = Visibility.Visible;
+        SealGuideOverlay.Visibility = Visibility.Visible;
+        SealGuideOverlay.UpdateLayout();
+
+        var hint = new Novara.Services.SealSpaceStore(Novara.Services.SealSpacePaths.Default).ReadHint();
+        SealUnlockHint.Text = hint ?? string.Empty;
+        SealUnlockHint.Visibility = string.IsNullOrWhiteSpace(hint) ? Visibility.Collapsed : Visibility.Visible;
+
+        SealUnlockError.Visibility = Visibility.Collapsed;
+        _sealUnlockErrorActive = false;
+
+        SealUnlockTitleTransform.X = 0;
+        SealUnlockPanelTransform.X = 0;
+        _sealUnlockExiting = false;
+
+        Novara.Services.PasswordFeedback.ClearError(SealUnlockPasswordBox);
+        SealUnlockPasswordBox.BorderThickness = new Thickness(1);
+        SealUnlockPasswordBox.Password = string.Empty;
+        SealUnlockError.Visibility = Visibility.Collapsed;
+        RefreshSealLockState();
+        PlaySealUnlockEntry();
+        if (!(_sealLockout?.IsLocked ?? false)) SealUnlockPasswordBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ApplySealUnlockTexts()
+    {
+
+        SealUnlockTitle.Text = App.GetString("Seal_Name");
+        SealUnlockPasswordBox.PlaceholderText = App.GetString("Seal_Unlock_Placeholder");
+
+        SealLockedTitle.Text = App.GetString("Lock_Locked_Title");
+        SealLockedDesc.Text = App.GetString("Lock_Locked_Desc");
+        SealLockWaitHint.Text = App.GetString("Lock_Locked_WaitHint");
+        SealLockFooter.Text = App.GetString("Lock_Locked_Footer");
+        SealForgotText.Text = App.GetString("Lock_Forgot_Hint");
+
+        SealGateBackText.Text = App.GetString(
+            SealService.Current.Mode == SealSessionMode.Direct ? "Seal_ReturnLock" : "Seal_ReturnHome");
+    }
+
+
+
+
+    private void PlaySealUnlockEntry()
+    {
+        _sealExitSb?.Stop();
+        _sealEntrySb?.Stop();
+
+        SealUnlockTitle.Opacity = 0;
+        SealUnlockPanel.Opacity = 0;
+        SealUnlockTitleTransform.Y = 0;
+        SealUnlockHint.Opacity = 1;
+        SealUnlockError.Opacity = 1;
+        SealForgotText.Opacity = 0;
+        SealGateBackText.Opacity = 0;
+        _sealEntrySb = new Storyboard();
+
+        void Fade(DependencyObject target, string property, double from, double to, int ms, int delay)
+        {
+            var a = new DoubleAnimation
+            {
+                From = from,
+                To = to,
+                Duration = TimeSpan.FromMilliseconds(ms),
+                BeginTime = TimeSpan.FromMilliseconds(delay),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            Storyboard.SetTarget(a, target);
+            Storyboard.SetTargetProperty(a, property);
+            _sealEntrySb!.Children.Add(a);
+        }
+
+        Fade(SealUnlockTitle, "Opacity", 0, 1, 800, 100);
+        Fade(SealUnlockTitleTransform, "Y", 20, 0, 800, 100);
+        Fade(SealUnlockPanel, "Opacity", 0, 1, 600, 350);
+        Fade(SealUnlockHint, "Opacity", 0, 1, 600, 450);
+        Fade(SealUnlockError, "Opacity", 0, 1, 600, 550);
+
+        Fade(SealForgotText, "Opacity", 0, 0.45, 600, 650);
+        Fade(SealGateBackText, "Opacity", 0, 0.45, 600, 650);
+        _sealEntrySb.Begin();
+    }
+
+
+
+    private void ShowSealLocked()
+    {
+        if (_sealLockedShown) return;
+        _sealLockedShown = true;
+        SealUnlockContent.Visibility = Visibility.Collapsed;
+        SealGateFooterPanel.Visibility = Visibility.Collapsed;
+        SealLockedView.Opacity = 0;
+        SealLockedView.Visibility = Visibility.Visible;
+
+        var sb = new Storyboard();
+        var fade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(300),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Storyboard.SetTarget(fade, SealLockedView);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        sb.Children.Add(fade);
+        sb.Begin();
+
+        _sealCountdownBreathing?.Stop();
+        _sealCountdownBreathing = new Storyboard { RepeatBehavior = RepeatBehavior.Forever, AutoReverse = true };
+        var breath = new DoubleAnimation
+        {
+            From = 0.55,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(3000),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+        };
+        Storyboard.SetTarget(breath, SealLockCountdown);
+        Storyboard.SetTargetProperty(breath, "Opacity");
+        _sealCountdownBreathing.Children.Add(breath);
+        _sealCountdownBreathing.Begin();
+    }
+
+
+    private void HideSealLocked()
+    {
+        if (!_sealLockedShown) return;
+        _sealLockedShown = false;
+        _sealCountdownBreathing?.Stop();
+        SealLockedView.Visibility = Visibility.Collapsed;
+        SealLockCountdown.Opacity = 1;
+        SealUnlockContent.Visibility = Visibility.Visible;
+        SealGateFooterPanel.Visibility = Visibility.Visible;
+        PlaySealUnlockEntry();
+        SealUnlockPasswordBox.Focus(FocusState.Programmatic);
+    }
+
+
+
+
+
+    private void ResetSealLockedState()
+    {
+        StopSealLockTimer();
+        if (!_sealLockedShown) return;
+        _sealLockedShown = false;
+        _sealCountdownBreathing?.Stop();
+        SealLockedView.Visibility = Visibility.Collapsed;
+        SealLockCountdown.Opacity = 1;
+        SealUnlockContent.Visibility = Visibility.Visible;
+    }
+
+
+    private void RefreshSealLockState()
+    {
+        var lockout = _sealLockout ??= new Novara.Services.SealLockout(Novara.Services.SealSpacePaths.Default.Lockout);
+        var left = lockout.Remaining;
+        bool locked = left > TimeSpan.Zero;
+
+        SealUnlockPasswordBox.IsEnabled = !locked && !_sealUnlockBusy;
+        SealUnlockButton.IsEnabled = !locked && !_sealUnlockBusy;
+
+        if (locked)
+        {
+
+            SealLockCountdown.Text = left.ToString(@"hh\:mm\:ss");
+            ShowSealLocked();
+            StartSealLockTimer();
+        }
+        else
+        {
+            StopSealLockTimer();
+            HideSealLocked();
+        }
+    }
+
+    private void StartSealLockTimer()
+    {
+        if (_sealLockTimer is null)
+        {
+            _sealLockTimer = DispatcherQueue.CreateTimer();
+            _sealLockTimer.Interval = TimeSpan.FromSeconds(1);
+            _sealLockTimer.IsRepeating = true;
+            _sealLockTimer.Tick += (_, _) => RefreshSealLockState();
+        }
+        if (!_sealLockTimer.IsRunning) _sealLockTimer.Start();
+    }
+
+    private void StopSealLockTimer() => _sealLockTimer?.Stop();
+
+    private void SealUnlock_Click(object sender, RoutedEventArgs e) => _ = TryUnlockSealAsync();
+
+
+
+
+    private void TryLeaveSealGate()
+    {
+        if (!_sealMode) return;
+        if (_sealUnlockBusy || _sealUnlockExiting) return;
+        ReturnHomeFromSeal();
+    }
+
+    private void SealUnlockPassword_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+
+
+
+        if (_sealUnlockBusy) return;
+        if (_sealUnlockErrorActive && string.IsNullOrEmpty(SealUnlockPasswordBox.Password)) return;
+        _sealUnlockErrorActive = false;
+        SealUnlockPasswordBox.ClearValue(PasswordBox.BorderBrushProperty);
+        SealUnlockError.Visibility = Visibility.Collapsed;
+    }
+
+    private async void SealUnlockPassword_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            e.Handled = true;
+            TryLeaveSealGate();
+            return;
+        }
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        e.Handled = true;
+        await TryUnlockSealAsync();
+    }
+
+    private async Task TryUnlockSealAsync()
+    {
+        if (_sealUnlockBusy) return;
+        var lockout = _sealLockout ??= new Novara.Services.SealLockout(Novara.Services.SealSpacePaths.Default.Lockout);
+        if (lockout.IsLocked) { RefreshSealLockState(); return; }
+
+        SealFocusSink.Focus(FocusState.Programmatic);
+
+        var pw = SealUnlockPasswordBox.Password ?? string.Empty;
+        if (pw.Length == 0)
+        {
+
+            _sealUnlockErrorActive = false;
+            SealUnlockError.Visibility = Visibility.Collapsed;
+
+
+
+            _sealUnlockBusy = true;
+            SealUnlockButton.IsEnabled = false;
+            try
+            {
+                await ShakeSealUnlockAsync();
+            }
+            finally
+            {
+                _sealUnlockBusy = false;
+                SealUnlockButton.IsEnabled = true;
+                SealUnlockPasswordBox.Focus(FocusState.Programmatic);
+            }
+            return;
+        }
+
+        _sealUnlockBusy = true;
+        SealUnlockButton.IsEnabled = false;
+        SealUnlockPasswordBox.IsEnabled = false;
+        try
+        {
+            var status = await Task.Run(() => Novara.Services.SealService.Current.UnlockAsync(pw));
+            if (status == Novara.Services.SealServiceStatus.Ok)
+            {
+                lockout.RegisterSuccess();
+                SealUnlockPasswordBox.Password = string.Empty;
+
+
+                if (Novara.Services.SealService.Current.ConsumeUnlockWeakened())
+                    App.ShowToast(App.GetString("Seal_Unlock_Weakened"));
+                PlaySealUnlockExit();
+                return;
+            }
+
+            if (status == Novara.Services.SealServiceStatus.WrongPassword)
+            {
+
+
+                lockout.RegisterFailure();
+                var lockedNow = lockout.IsLocked;
+                _sealUnlockErrorActive = false;
+                SealUnlockError.Visibility = Visibility.Collapsed;
+                SealUnlockPasswordBox.Password = string.Empty;
+                if (!lockedNow && !_sealUnlockExiting) await ShakeSealUnlockAsync();
+            }
+            else if (status == Novara.Services.SealServiceStatus.NotUnlocked)
+            {
+
+
+            }
+            else
+            {
+                _sealUnlockErrorActive = true;
+                SealUnlockPasswordBox.Password = string.Empty;
+                SealUnlockPasswordBox.ClearValue(PasswordBox.BorderBrushProperty);
+                SealUnlockError.Text = status switch
+                {
+                    Novara.Services.SealServiceStatus.NotInitialized => App.GetString("Seal_Unlock_NotReady"),
+                    Novara.Services.SealServiceStatus.VersionUnsupported => App.GetString("Seal_Pwd_Err_Unsupported"),
+                    _ => App.GetString("Seal_Pwd_Err_Io"),
+                };
+                SealUnlockError.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex)
+        {
+
+
+
+            CrashLogger.LogNote("SealGateUnlock", ex.GetType().Name);
+            _sealUnlockErrorActive = true;
+            SealUnlockPasswordBox.Password = string.Empty;
+            SealUnlockError.Text = App.GetString("Seal_Pwd_Err_Io");
+            SealUnlockError.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            _sealUnlockBusy = false;
+            RefreshSealLockState();
+            if (!lockout.IsLocked) SealUnlockPasswordBox.Focus(FocusState.Programmatic);
+        }
+    }
+
+
+
+    private void PlaySealUnlockExit()
+    {
+        if (_sealUnlockExiting) return;
+        _sealUnlockExiting = true;
+
+        var sb = new Storyboard();
+        _sealExitSb = sb;
+
+        var tx = new DoubleAnimation { To = -240, Duration = TimeSpan.FromMilliseconds(500), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+        Storyboard.SetTarget(tx, SealUnlockTitleTransform); Storyboard.SetTargetProperty(tx, "X"); sb.Children.Add(tx);
+        var to = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
+        Storyboard.SetTarget(to, SealUnlockTitle); Storyboard.SetTargetProperty(to, "Opacity"); sb.Children.Add(to);
+
+        var bx = new DoubleAnimation { To = 240, Duration = TimeSpan.FromMilliseconds(500), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+        Storyboard.SetTarget(bx, SealUnlockPanelTransform); Storyboard.SetTargetProperty(bx, "X"); sb.Children.Add(bx);
+        var bo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
+        Storyboard.SetTarget(bo, SealUnlockPanel); Storyboard.SetTargetProperty(bo, "Opacity"); sb.Children.Add(bo);
+
+
+        var ho = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
+        Storyboard.SetTarget(ho, SealUnlockHint); Storyboard.SetTargetProperty(ho, "Opacity"); sb.Children.Add(ho);
+        var eo = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(500) };
+        Storyboard.SetTarget(eo, SealUnlockError); Storyboard.SetTargetProperty(eo, "Opacity"); sb.Children.Add(eo);
+
+        sb.Completed += (_, _) =>
+        {
+            _sealUnlockExiting = false;
+            HideSealGuide();
+            SealUnlockTitleTransform.X = 0;
+            SealUnlockTitle.Opacity = 1;
+            SealUnlockPanelTransform.X = 0;
+            SealUnlockPanel.Opacity = 1;
+            _sealPage?.RefreshItems();
+            _sealPage?.StealFocus();
+        };
+        sb.Begin();
+    }
+
+
+
+    private async Task ShakeSealUnlockAsync()
+    {
+        if (_sealShakeRunning || _sealUnlockExiting) return;
+        _sealShakeRunning = true;
+        try
+        {
+
+
+            Novara.Services.PasswordFeedback.ShowError(SealUnlockPasswordBox);
+            SealUnlockPasswordBox.BorderThickness = new Thickness(2);
+
+
+
+            var shake = new Storyboard();
+            var sx = new DoubleAnimationUsingKeyFrames();
+            Storyboard.SetTarget(sx, SealUnlockPanelTransform);
+            Storyboard.SetTargetProperty(sx, "X");
+            foreach (var (ms, v) in new[] { (0, 0.0), (50, -8.0), (150, 7.0), (250, -5.0), (340, 3.0), (400, 0.0) })
+                sx.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms)), Value = v });
+            shake.Children.Add(sx);
+            var shaken = new TaskCompletionSource();
+            shake.Completed += (_, _) => shaken.TrySetResult();
+            shake.Begin();
+            await shaken.Task;
+
+            for (int i = 0; i < 2; i++)
+            {
+                Novara.Services.PasswordFeedback.ClearError(SealUnlockPasswordBox);
+                await Task.Delay(120);
+                Novara.Services.PasswordFeedback.ShowError(SealUnlockPasswordBox);
+                await Task.Delay(120);
+            }
+
+            Novara.Services.PasswordFeedback.ClearError(SealUnlockPasswordBox);
+            SealUnlockPasswordBox.BorderThickness = new Thickness(1);
+            SealUnlockPanelTransform.X = 0;
+        }
+        finally { _sealShakeRunning = false; }
+    }
+
+    private Button? SealTabButton(int index) => index switch
+    {
+        0 => SealNavSpaceButton,
+        1 => SealNavCapsule,
+        2 => SealNavSettings,
+        _ => null,
+    };
+
+
+
+    private void UpdateSealNavSelection(int index, bool animateGlow)
+    {
+        var brand = App.GetBrush("AppPrimaryButtonBrush");
+        var dim = App.GetBrush("AppTextTertiaryBrush");
+        var icon = App.GetBrush("IconForegroundBrush");
+        var clearBg = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+        var raisedBg = App.GetBrush("NavFaceRaisedBrush");
+        var items = new (Button Btn, Microsoft.UI.Xaml.Shapes.Path Icon, TextBlock Text)[]
+        {
+            (SealNavSpaceButton, SealNavSpacePath, SealNavSpaceText),
+            (SealNavCapsule, SealNavCapsulePath, SealNavCapsuleText),
+            (SealNavSettings, SealNavSettingsPath, SealNavSettingsText),
+        };
+        for (int i = 0; i < items.Length; i++)
+        {
+            bool selected = i == index;
+            items[i].Btn.Background = selected ? raisedBg : clearBg;
+            items[i].Btn.Translation = selected ? new System.Numerics.Vector3(0f, 0f, 20f) : System.Numerics.Vector3.Zero;
+            SetNavOpacity(items[i].Btn, selected ? 1.0 : 0.6, SealNavBar.IsLoaded);
+            SetNavOpacity(items[i].Icon, selected ? 1.0 : 0.6, SealNavBar.IsLoaded);
+            items[i].Btn.Foreground = selected ? brand : dim;
+            items[i].Icon.Fill = selected ? brand : icon;
+            items[i].Text.Foreground = selected ? brand : dim;
+        }
+        var btn = SealTabButton(index);
+        if (btn == null) return;
+        if (!TryPlaceSealGlow(btn, animateGlow)) HookSealGlowRetry();
+    }
+
+
+
+    private bool TryPlaceSealGlow(Button btn, bool animate)
+    {
+        if (SealNavBar.Visibility != Visibility.Visible || btn.Visibility != Visibility.Visible || btn.ActualWidth < 1) return false;
+        double expected = SealNavBar.ActualWidth / 4.0 - 16;
+        if (expected > 1 && Math.Abs(btn.ActualWidth - expected) > Math.Max(10, expected * 0.2)) return false;
+        var pt = btn.TransformToVisual(SealNavBar).TransformPoint(new Windows.Foundation.Point(0, 0));
+        SealNavIndicator.Width = btn.ActualWidth;
+        SealNavIndicator.Opacity = 1;
+        if (!animate || !_sealIndicatorPlaced)
+        {
+            SetSealGlowX(pt.X);
+            _sealIndicatorPlaced = true;
+            return true;
+        }
+        SlideSealGlow(pt.X);
+        return true;
+    }
+
+    private void SetSealGlowX(double x)
+    {
+        _sealGlowX = (float)x;
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(SealNavIndicator);
+            visual.StopAnimation("Translation.X");
+            var jump = visual.Compositor.CreateScalarKeyFrameAnimation();
+            jump.Duration = TimeSpan.FromMilliseconds(1);
+            jump.InsertKeyFrame(1.0f, (float)x);
+            visual.StartAnimation("Translation.X", jump);
+        }
+        catch
+        {
+            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(SealNavIndicator).StopAnimation("Translation.X"); } catch { }
+            SealNavIndicatorTranslate.X = x;
+        }
+    }
+
+    private void SlideSealGlow(double x)
+    {
+        var target = (float)x;
+        try
+        {
+            var visual = Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(SealNavIndicator);
+            float startX = _sealGlowX;
+            var anim = visual.Compositor.CreateScalarKeyFrameAnimation();
+            anim.Duration = TimeSpan.FromMilliseconds(Services.Motion.Normal);
+
+            anim.InsertKeyFrame(0.4f, Lerp(startX, target, 0.55f));
+            anim.InsertKeyFrame(0.75f, Lerp(startX, target, 0.87f));
+            anim.InsertKeyFrame(1.0f, target);
+            visual.StartAnimation("Translation.X", anim);
+            _sealGlowX = target;
+        }
+        catch
+        {
+            try { Microsoft.UI.Xaml.Hosting.ElementCompositionPreview.GetElementVisual(SealNavIndicator).StopAnimation("Translation.X"); } catch { }
+            SealNavIndicatorTranslate.X = x;
+            _sealGlowX = target;
+        }
+    }
+
+
+    private void RelocateSealGlow()
+    {
+        ClampSealTabWidths();
+        var btn = SealTabButton(_sealTabIndex);
+        if (btn != null && TryPlaceSealGlow(btn, animate: false)) return;
+        HookSealGlowRetry();
+    }
+
+
+
+    private void HookSealGlowRetry()
+    {
+        if (_sealGlowRetryHooked) return;
+        _sealGlowRetryHooked = true;
+        EventHandler<object>? handler = null;
+        void Unhook()
+        {
+            if (!_sealGlowRetryHooked) return;
+            _sealGlowRetryHooked = false;
+            if (handler != null) SealNavBar.LayoutUpdated -= handler;
+        }
+        void TryOnce()
+        {
+            var btn = SealTabButton(_sealTabIndex);
+            if (btn != null && TryPlaceSealGlow(btn, animate: true)) { Unhook(); return; }
+            if (SealNavBar.Visibility != Visibility.Visible) Unhook();
+        }
+        handler = (_, _) => TryOnce();
+        SealNavBar.LayoutUpdated += handler;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, TryOnce);
+    }
+
+
     private static void SetNavOpacity(Microsoft.UI.Xaml.FrameworkElement el, double opacity, bool animate)
     {
         try
@@ -3944,7 +5857,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         menu.Items.Add(MakeItem(App.GetString("Diary_Filter_All"), "all", IconData.Mix));
         menu.Items.Add(MakeItem(App.GetString("Diary_Filter_Document"), "document", IconData.Document));
         menu.Items.Add(MakeItem(App.GetString("Diary_Filter_Diary"), "diary", IconData.NewDiary));
-        menu.ShowAt(NavDiary, new Windows.Foundation.Point(0, NavDiary.ActualHeight + 4));
+
+
+        menu.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight;
+        menu.ShowAt(NavDiaryFilterButton, new Windows.Foundation.Point(NavDiaryFilterButton.ActualWidth, NavDiaryFilterButton.ActualHeight + 4));
     }
 
     private void NavPlanFilterButton_Click(object sender, RoutedEventArgs e)
@@ -3968,7 +5884,9 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         menu.Items.Add(MakeItem(App.GetString("Diary_Filter_All"), "all", IconData.Mix));
         menu.Items.Add(MakeItem(App.GetString("Plan_Filter_Todo"), "todo", string.Join(" ", IconData.Todo)));
         menu.Items.Add(MakeItem(App.GetString("Plan_Filter_Note"), "note", string.Join(" ", IconData.Note)));
-        menu.ShowAt(NavPlan, new Windows.Foundation.Point(0, NavPlan.ActualHeight + 4));
+
+        menu.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedRight;
+        menu.ShowAt(NavPlanFilterButton, new Windows.Foundation.Point(NavPlanFilterButton.ActualWidth, NavPlanFilterButton.ActualHeight + 4));
     }
 
 
@@ -4090,6 +6008,12 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             NavBar.Visibility = Visibility.Collapsed;
             return;
         }
+
+        if (_sealMode)
+        {
+            NavBar.Visibility = Visibility.Collapsed;
+            return;
+        }
         int count = 0;
         foreach (var b in new[] { NavMemo, NavFile, NavPlan, NavDiary })
             if (b.Visibility == Visibility.Visible) count++;
@@ -4109,6 +6033,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     public void ReloadPages()
     {
+        ExitSealShell();
         _memoPage = null!;
         _filePathPage = null!;
         _planPage = null!;
@@ -4118,6 +6043,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _diaryEditorPage = null!;
         _settingsPage = null!;
         _toolsPage = null!;
+        _sealPage = null!;
         _previousContent = null;
 
 
@@ -4127,7 +6053,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         _preSearchContent = null;
         _preTrashContent = null;
         _trashChanged = false;
-        if (RootFrame.Content is SettingsPage or ToolsPage or DiaryEditorPage or SearchPage or TrashPage)
+        if (RootFrame.Content is SettingsPage or ToolsPage or SealPage or DiaryEditorPage or SearchPage or TrashPage)
         {
             var (tab, nav) = ResolveNavTarget(_selectedNavButton?.Tag as string ?? "Memo");
             NavigateToPage(tab);
@@ -4221,6 +6147,245 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     }
 
 
+
+    private void NavigateToSeal()
+    {
+        _sealPage ??= new SealPage();
+
+        if (ReferenceEquals(RootFrame.Content, _sealPage)) return;
+        _previousContent = RootFrame.Content;
+
+        var fadeOut = new Storyboard();
+        var oa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(120), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(oa, RootFrame);
+        Storyboard.SetTargetProperty(oa, "Opacity");
+        fadeOut.Children.Add(oa);
+        fadeOut.Completed += (s, e) =>
+        {
+            RootFrame.Content = _sealPage;
+            EnterSealShell();
+            _sealPage.StealFocus();
+            var fadeIn = new Storyboard();
+            var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            Storyboard.SetTarget(oi, RootFrame);
+            Storyboard.SetTargetProperty(oi, "Opacity");
+            fadeIn.Children.Add(oi);
+            fadeIn.Begin();
+        };
+        fadeOut.Begin();
+    }
+
+
+
+
+    private void EnterSealShell(bool skipGate = false)
+    {
+        _sealReturning = false;
+        _sealMode = true;
+        NavBar.Visibility = Visibility.Collapsed;
+        SealNavBar.Visibility = Visibility.Visible;
+
+
+        SealNavBar.UpdateLayout();
+        ClampSealTabWidths();
+        SealNavBar.UpdateLayout();
+
+        _sealIndicatorPlaced = false;
+        _sealTabIndex = -1;
+        SelectSealTab(0);
+
+
+
+
+        if (skipGate || (SealService.Current.Mode == SealSessionMode.Direct && SealService.Current.IsUnlocked))
+        {
+            SealUnlockContent.Visibility = Visibility.Collapsed;
+            HideSealGuide();
+        }
+        else
+        {
+            ShowSealGate();
+        }
+
+
+        if (MenuSideItems.Children.Count == 0) BuildMenuSideItems();
+
+        if (_sealReturnLabel is not null)
+            _sealReturnLabel.Text = App.GetString(
+                SealService.Current.Mode == SealSessionMode.Direct ? "Seal_ReturnLock" : "Seal_ReturnHome");
+        MenuSideItems.Visibility = Visibility.Collapsed;
+        SealSideItems.Visibility = Visibility.Visible;
+        TitleBrandText.Text = "Novara Space";
+        WorkspaceSwitcherButton.Visibility = Visibility.Collapsed;
+        BottomToolbarPanel.Visibility = Visibility.Visible;
+        CustomTitleBar.Visibility = Visibility.Visible;
+        CloseMenuSidePanel();
+    }
+
+
+
+    private void ExitSealShell()
+    {
+        if (!_sealMode) return;
+        _sealMode = false;
+        ResetSealLockedState();
+        HideSealGuide();
+        SealNavBar.Visibility = Visibility.Collapsed;
+        MenuSideItems.Visibility = Visibility.Visible;
+        SealSideItems.Visibility = Visibility.Collapsed;
+        TitleBrandText.Text = "Novara";
+        UpdateWorkspaceSwitcher();
+        UpdateNavBarVisibility();
+        ReplayDeferredExternalRequests();
+    }
+
+
+
+
+    public void ReturnToSealWizardAfterRollback()
+    {
+        ExitSealShell();
+        ShowSealGate();
+    }
+
+
+
+    public void ReturnHomeFromSeal()
+    {
+        if (!_sealMode) return;
+
+
+
+        if (_sealReturning) return;
+        _sealReturning = true;
+
+        if (SealService.Current.Mode == SealSessionMode.Direct)
+        {
+            _sealReturning = false;
+            LockSealDirect();
+            return;
+        }
+        var fadeOut = new Storyboard();
+        var oa = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(120), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(oa, RootFrame);
+        Storyboard.SetTargetProperty(oa, "Opacity");
+        fadeOut.Children.Add(oa);
+        fadeOut.Completed += (s, e) => CompleteSealDeparture();
+        fadeOut.Begin();
+
+
+
+        _ = SealDepartureWatchdogAsync();
+    }
+
+    private async System.Threading.Tasks.Task SealDepartureWatchdogAsync()
+    {
+        try { await System.Threading.Tasks.Task.Delay(500); } catch { return; }
+        if (!_sealReturning) return;
+
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_sealReturning) CompleteSealDeparture();
+        }))
+            _sealReturning = false;
+    }
+
+
+    private void CompleteSealDeparture()
+    {
+        if (!_sealReturning) return;
+
+
+
+        SealService.Current.Lock();
+        _sealPage?.ResetAfterSessionLock();
+
+
+        WelcomeOverlay.Visibility = Visibility.Collapsed;
+        ExitSealShell();
+        RestorePreviousContent();
+        RestoreChromeFor(RootFrame.Content);
+        _previousContent = null;
+
+        var fadeIn = new Storyboard();
+        var oi = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(200), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        Storyboard.SetTarget(oi, RootFrame);
+        Storyboard.SetTargetProperty(oi, "Opacity");
+        fadeIn.Children.Add(oi);
+        fadeIn.Begin();
+        _sealReturning = false;
+    }
+
+
+
+    private void LockSealDirect()
+    {
+        if (!_sealMode) return;
+        if (SealService.Current.Mode != SealSessionMode.Direct) return;
+        if (LockScreenFrame.Visibility == Visibility.Visible) return;
+
+        SealService.Current.Lock();
+        _sealPage?.ResetAfterSessionLock();
+
+
+        WelcomeOverlay.Visibility = Visibility.Collapsed;
+        ExitSealShell();
+        RestorePreviousContent();
+        RestoreChromeFor(RootFrame.Content);
+        _previousContent = null;
+        LockScreenFrame.Content = null;
+        ShowLockScreen();
+    }
+
+
+    private void LockNowOrSealDirect()
+    {
+        if (_sealMode && SealService.Current.Mode == SealSessionMode.Direct && SealService.Current.IsUnlocked)
+        {
+            LockSealDirect();
+            return;
+        }
+
+        if (LockScreenFrame.Visibility == Visibility.Visible) return;
+        if (App.Store is { IsLoaded: true, IsEncrypted: true }) LockNow();
+        else App.ShowToast(App.GetString("Tray_LockNeedLock"), ToastTone.Error);
+    }
+
+
+
+    private void RestorePreviousContent()
+    {
+        Button? fallback = null;
+        if (_selectedNavButton != null && _selectedNavButton.Visibility != Visibility.Visible)
+        {
+            foreach (var b in new[] { NavMemo, NavFile, NavPlan, NavDiary })
+            {
+                if (b.Visibility == Visibility.Visible) { fallback = b; break; }
+            }
+        }
+        if (fallback?.Tag is string tag)
+        {
+            NavigateToPage(tag);
+            UpdateNavSelection(fallback);
+            _previousContent = null;
+        }
+        else if (_previousContent == null)
+        {
+            var (tab, nav) = ResolveNavTarget(_selectedNavButton?.Tag as string ?? "Memo");
+            NavigateToPage(tab);
+            UpdateNavSelection(nav);
+            _previousContent = null;
+        }
+        else
+        {
+            _previousContent = FreshIfStale(_previousContent);
+            RootFrame.Content = _previousContent;
+            _previousContent = null;
+        }
+    }
+
+
     private void NavigateToTools(bool openWorkspace = false)
     {
         _toolsPage ??= new ToolsPage();
@@ -4308,27 +6473,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         fadeOut.Completed += (s, e) =>
         {
 
-            Button? fallback = null;
-            if (_selectedNavButton != null && _selectedNavButton.Visibility != Visibility.Visible)
-            {
-                foreach (var b in new[] { NavMemo, NavFile, NavPlan, NavDiary })
-                {
-                    if (b.Visibility == Visibility.Visible) { fallback = b; break; }
-                }
-            }
-            if (fallback != null && fallback.Tag is string tag)
-            {
-                NavigateToPage(tag);
-                UpdateNavSelection(fallback);
-                _previousContent = RootFrame.Content;
-            }
-            else
-            {
-
-
-                _previousContent = FreshIfStale(_previousContent);
-                RootFrame.Content = _previousContent;
-            }
+            RestorePreviousContent();
 
 
 
@@ -4390,15 +6535,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, StoreCorruptDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogShowTransform(sb, StoreCorruptDialogTransform);
         sb.Begin();
     }
 
@@ -4410,15 +6547,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(da, StoreCorruptDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, StoreCorruptDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogHideTransform(sb, StoreCorruptDialogTransform);
         _corruptHideSb = sb;
         sb.Completed += (_, _) =>
         {
@@ -4471,6 +6600,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
                 {
                     LockScreenFrame.Visibility = Visibility.Collapsed;
                     LockScreenFrame.Content = null;
+
+
+                    WelcomeOverlay.Visibility = Visibility.Visible;
+                    WarmWelcomeShatter();
                     WelcomeEntryAnimation.Begin();
                 }
                 else
@@ -4500,15 +6633,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, SaveFailedDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, SaveFailedDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, SaveFailedDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, SaveFailedDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogShowTransform(sb, SaveFailedDialogTransform);
         sb.Begin();
     }
 
@@ -4520,15 +6645,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(da, SaveFailedDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, SaveFailedDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, SaveFailedDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, SaveFailedDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogHideTransform(sb, SaveFailedDialogTransform);
         _saveFailedHideSb = sb;
         sb.Completed += (_, _) =>
         {
@@ -4563,6 +6680,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
            && StoreCorruptOverlay.Visibility != Visibility.Visible
            && SaveFailedOverlay.Visibility != Visibility.Visible
            && MigrateFormatOverlay.Visibility != Visibility.Visible
+           && !IsSealSurfaceBlocking()
            && _veilCount == 0;
 
 
@@ -4684,6 +6802,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
             _settingsPage?.NotifyPendingVersionChanged();
         }
         Services.UpdateAutoCheckService.ClearPendingRelease();
+        _autoUpdateRelease = null;
         HideAutoUpdateOverlay();
     }
 
@@ -4693,6 +6812,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
         var rel = _autoUpdateRelease;
         Services.UpdateAutoCheckService.ClearPendingRelease();
+        _autoUpdateRelease = null;
         HideAutoUpdateOverlay();
         if (rel == null) return;
         Pages.SettingsPage.PendingAutoUpdateRelease = rel;
@@ -4704,6 +6824,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
     {
 
 
+
+
+
+        if (IsSealSurfaceBlocking() || IsWelcomeCarouselUp) return;
         if (AutoUpdateOverlay.Visibility == Visibility.Visible || _autoUpdateAnimating) return;
         if (QuickCaptureOverlay.Visibility == Visibility.Visible) return;
 
@@ -4717,7 +6841,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
         ThemeRestartDialog.Opacity = 0;
-        ThemeRestartDialogTransform.ScaleX = 0.92; ThemeRestartDialogTransform.ScaleY = 0.92; ThemeRestartDialogTransform.TranslateY = 20;
+        ThemeRestartDialogTransform.ScaleX = 0.94; ThemeRestartDialogTransform.ScaleY = 0.94; ThemeRestartDialogTransform.TranslateY = 24;
         ThemeRestartOverlay.Visibility = Visibility.Visible; DialogUi.RegisterDialogClamp((Grid)Content, _dialogMap, ThemeRestartOverlay, ThemeRestartDialog, _dialogWidthFit);
         var sb = new Storyboard();
         var sa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(250) };
@@ -4726,15 +6850,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, ThemeRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogShowTransform(sb, ThemeRestartDialogTransform);
         sb.Completed += (_, _) => _themeRestartAnimating = false;
         sb.Begin();
     }
@@ -4755,15 +6871,7 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
         var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(da, ThemeRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogHideTransform(sb, ThemeRestartDialogTransform);
         sb.Completed += (_, _) =>
         {
             if (!ReferenceEquals(_themeRestartHideSb, sb)) return;
@@ -4785,36 +6893,27 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
 
 
-        if (RootFrame.Content is DiaryEditorPage pendingEditor)
+
+        if (await FlushPendingEditorForRestartAsync())
         {
-            await FlushEditorForExitAsync(pendingEditor);
-            if (_themeRestartCancelled) { _restarting = false; return; }
+
+            _restarting = false;
+            return;
         }
+        if (_themeRestartCancelled) { _restarting = false; return; }
 
         HideThemeRestartOverlay();
 
 
-        if (App.Store?.SaveSync() == false)
-        {
-            _restarting = false;
-            return;
-        }
 
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exe)) { _restarting = false; return; }
-            ReleaseSingleInstance();
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = exe, UseShellExecute = true });
-        }
-        catch
-        {
 
-            AcquireSingleInstance();
-            _restarting = false;
-            return;
-        }
-        ExitApp(saveFirst: false);
+        var outcome = RestartNow();
+        if (outcome == RestartOutcome.Ok) return;
+        _restarting = false;
+        if (outcome == RestartOutcome.EditorDirty)
+            App.ShowToast(App.GetString("Common_Restart_EditorDirty"), ToastTone.Error);
+        else if (outcome == RestartOutcome.SaveFailed)
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
     }
 
     private void ThemeRestartCancel_Click(object sender, RoutedEventArgs e)
@@ -4843,7 +6942,10 @@ private async void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs
 
     private readonly List<(string ClientPath, Action<bool> Result, DateTimeOffset EnqueuedAt)> _mcpAuthorizeQueue = new();
     private const int McpAuthorizeQueueLimit = 8;
-    private static readonly TimeSpan McpAuthorizeQueueMaxAge = TimeSpan.FromSeconds(100);
+
+
+
+    private static readonly TimeSpan McpAuthorizeQueueMaxAge = TimeSpan.FromSeconds(15);
 
     private void DrainMcpAuthorizeQueue()
     {

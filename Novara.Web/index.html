@@ -48,7 +48,7 @@
         </div>
         <div class="m3-field">
           <label class="field-label" for="passwordInput" data-i18n="m3PasswordLabel"></label>
-          <div class="password-wrap"><input id="passwordInput" class="password-input" type="password" autocomplete="current-password" data-i18n-placeholder="m3PasswordPlaceholder" aria-describedby="unlockError"><button id="passwordToggle" class="password-toggle" type="button" data-i18n-aria="lockShowPassword"><svg class="icon icon-outline" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.3-5.5 9.5-5.5S21.5 12 21.5 12s-3.3 5.5-9.5 5.5S2.5 12 2.5 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></button></div>
+          <div class="password-wrap"><input id="passwordInput" class="password-input" type="password" autocomplete="off" data-i18n-placeholder="m3PasswordPlaceholder" aria-describedby="unlockError"><button id="passwordToggle" class="password-toggle" type="button" data-i18n-aria="lockShowPassword"><svg class="icon icon-outline" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.3-5.5 9.5-5.5S21.5 12 21.5 12s-3.3 5.5-9.5 5.5S2.5 12 2.5 12Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg></button></div>
         </div>
         <div id="unlockError" class="unlock-error" role="alert" aria-live="polite"></div>
         <button class="unlock-button" type="submit" data-i18n="m3Unlock"></button>
@@ -86,7 +86,7 @@
 
   <div id="editSyncHint" class="edit-sync-hint" hidden></div>
   <div id="editCreateOverlay" class="edit-conflict" hidden>
-    <div class="edit-conflict-card" role="dialog" aria-labelledby="editCreateTitle">
+    <div class="edit-conflict-card" role="dialog" aria-modal="true" aria-labelledby="editCreateTitle">
       <h2 id="editCreateTitle"></h2>
       <div class="edit-create-kinds">
         <button class="edit-button edit-kind" type="button" data-editor-kind="memo"></button>
@@ -96,14 +96,14 @@
       </div>
       <input id="editCreateName" class="edit-input" type="text" autocomplete="off" />
       <input id="editCreateDetail" class="edit-input" type="text" autocomplete="off" />
-      <div class="edit-conflict-actions">
+      <div class="edit-conflict-actions is-row">
         <button id="editCreateSave" class="edit-button is-primary" type="button"></button>
         <button id="editCreateCancel" class="edit-button" type="button"></button>
       </div>
     </div>
   </div>
   <div id="editConflictOverlay" class="edit-conflict" hidden>
-    <div class="edit-conflict-card" role="dialog" aria-labelledby="editConflictTitle">
+    <div class="edit-conflict-card" role="dialog" aria-modal="true" aria-labelledby="editConflictTitle">
       <h2 id="editConflictTitle"></h2>
       <p id="editConflictInfo"></p>
       <div class="edit-conflict-actions">

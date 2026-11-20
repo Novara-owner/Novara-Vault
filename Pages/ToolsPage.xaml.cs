@@ -55,6 +55,15 @@ public sealed partial class ToolsPage : Page
 
     private bool _statsEnabled;
     private bool _statsExpanded;
+    private int _statsGeneration;
+
+
+
+
+    private static readonly object IntegrityGate = new();
+    private static Task<Novara.Services.DataFileIntegrity>? _integrityTask;
+    private static (long Length, DateTime WriteUtc)? _integrityTaskStamp;
+    private static (long Length, DateTime WriteUtc, Novara.Services.DataFileIntegrity Value)? _integrityCached;
     private bool _animPageWipe;
     private bool _animPageWipeFinal;
     private bool _animPageGroupLoss;
@@ -84,6 +93,9 @@ public sealed partial class ToolsPage : Page
     private bool _pendingReloadAfterImport;
 
     private bool _animEncExport;
+
+    private bool _sealUsable;
+    private bool _sealPending;
     private bool _animEncImportPwd;
     private bool _encImportInFlight;
     private bool _animConnectPwd;
@@ -100,8 +112,8 @@ public sealed partial class ToolsPage : Page
     private bool _animImportResult;
     private Action? _pendingVerifiedAction;
 
-    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
-    private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
+    private readonly Dictionary<Control, System.Threading.CancellationTokenSource> _flashCtsMap = new();
+    private readonly Dictionary<Control, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
 
 
     internal async void ScrollToMain()
@@ -222,6 +234,11 @@ public sealed partial class ToolsPage : Page
             PageWipeFinalCd.Reset();
             ResetConfirmCd.Reset();
             ResetConfirmOverlay.Visibility = Visibility.Collapsed;
+
+
+
+            _wipeDialogGeneration++;
+            _resetDialogGeneration++;
             SyncAdoptOverlay.Visibility = Visibility.Collapsed;
             SyncAuditOverlay.Visibility = Visibility.Collapsed;
             SyncAuditClearConfirmOverlay.Visibility = Visibility.Collapsed;
@@ -261,6 +278,27 @@ public sealed partial class ToolsPage : Page
             _importedSpaceKey = null;
             SyncKeySavedBox.Text = "";
             SyncKeyImportResultBox.Text = "";
+
+
+
+            SyncReadAccessTokenBox.Text = "";
+            SyncEditAccessTokenBox.Text = "";
+            SyncPairKeyBox.Password = "";
+            SyncPairEnrollmentBox.Text = "";
+
+
+
+            ConnectPwdPasswordBox.Password = "";
+            ConnectPwdConfirmBox.Password = "";
+            EncPasswordBox.Password = "";
+            EncConfirmBox.Password = "";
+            EncSealPasswordBox.Password = "";
+            EncImportPwdBox.Password = "";
+            ImportExportPasswordBox.Password = "";
+            ResetConfirmSealPasswordBox.Password = "";
+            PageWipeFinalSealPasswordBox.Password = "";
+            SyncKeyViewPasswordBox.Password = "";
+            SyncKeyImportPwdBox.Password = "";
             _animSyncKeyImportPwd = _animSyncKeyImportResult = false;
             _editorAccessToken = null;
             _animSyncDeviceCenter = _animSyncDeviceRevokeConfirm = _animSyncDeviceResetConfirm = false;
@@ -286,6 +324,10 @@ public sealed partial class ToolsPage : Page
             _pendingRevokePath = null;
             _pendingEncImportPath = null;
             _pendingDeleteIsClearAll = false;
+
+
+
+            if (_pendingReloadAfterImport) { _pendingReloadAfterImport = false; App.MainWindow?.ReloadPages(); }
             _pendingReloadAfterImport = false;
 
             _pendingMcpPermPath = null;
@@ -374,7 +416,23 @@ public sealed partial class ToolsPage : Page
     }
 
 
-    private void FlashTextBox(TextBox tb) => DialogUi.FlashTextBox(_flashCtsMap, _flashOriginalBgs, tb);
+    private void FlashTextBox(Control tb) => DialogUi.FlashTextBox(_flashCtsMap, _flashOriginalBgs, tb);
+
+
+    private static void ShowPasswordError(PasswordBox box, TextBlock error, string message)
+    {
+
+        PasswordFeedback.ShowError(box);
+        error.Text = message;
+        error.Visibility = Visibility.Visible;
+        box.Focus(FocusState.Programmatic);
+    }
+
+    private static void ClearPasswordError(PasswordBox box, TextBlock error)
+    {
+        PasswordFeedback.ClearError(box);
+        error.Visibility = Visibility.Collapsed;
+    }
 
     private void ApplyToggleState(Button btn, bool on)
     {
@@ -448,7 +506,9 @@ public sealed partial class ToolsPage : Page
         if (BackupRestoreOverlay.Visibility == Visibility.Visible) { HideBackupRestoreDialog(); e.Handled = true; return; }
         if (BackupDeleteOverlay.Visibility == Visibility.Visible) { HideBackupDeleteDialog(); e.Handled = true; return; }
         if (BackupRestoreConfirmOverlay.Visibility == Visibility.Visible) { CancelBackupRestoreConfirm(); e.Handled = true; return; }
-        if (BackupDeleteConfirmOverlay.Visibility == Visibility.Visible) { HideBackupDeleteConfirmDialog(); e.Handled = true; return; }
+
+
+        if (BackupDeleteConfirmOverlay.Visibility == Visibility.Visible) { ClearBackupDeletePending(); HideBackupDeleteConfirmDialog(); e.Handled = true; return; }
         if (BackupRestartOverlay.Visibility == Visibility.Visible) { e.Handled = true; RestartApp(rollbackOnFail: true); return; }
         if (ExportMdNoticeOverlay.Visibility == Visibility.Visible) { HideExportMdNoticeDialog(); e.Handled = true; return; }
         if (McpPermOverlay.Visibility == Visibility.Visible) { HideMcpPermDialog(); e.Handled = true; return; }
@@ -777,6 +837,8 @@ public sealed partial class ToolsPage : Page
 
     private void WorkspaceDeleteConfirm_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animWorkspaceDelete) return;
         var wid = _pendingDeleteWorkspaceId;
         if (string.IsNullOrEmpty(wid)) { HideWorkspaceDelete(); return; }
         var db = App.Store?.Database;
@@ -814,29 +876,157 @@ public sealed partial class ToolsPage : Page
             return item;
         }
         var allItem = MakeItem(App.GetString("DataWipe_All"));
+
+
+        var libOnlyItem = MakeItem(App.GetString("DataWipe_LibOnly"));
         var memoItem = MakeItem(App.GetString("DataWipe_Memo"));
         var pathItem = MakeItem(App.GetString("DataWipe_Path"));
         var planItem = MakeItem(App.GetString("DataWipe_Plan"));
         var diaryItem = MakeItem(App.GetString("DataWipe_Diary"));
-        allItem.Click += (_, _) => RunPrivacyGated(ShowResetConfirmDialogFlow);
+
+
+        var sealItem = MakeItem(App.GetString("Seal_Name"));
+        allItem.Click += (_, _) => RunPrivacyGated(() => ShowResetConfirmDialogFlow(includeSeal: true));
+        libOnlyItem.Click += (_, _) => RunPrivacyGated(() => ShowResetConfirmDialogFlow(includeSeal: false));
         memoItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("memo"));
         pathItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("path"));
         planItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("plan"));
         diaryItem.Click += (_, _) => RunPrivacyGated(() => ShowPageWipeDialog("diary"));
-        menu.Items.Add(allItem); menu.Items.Add(memoItem); menu.Items.Add(pathItem); menu.Items.Add(planItem); menu.Items.Add(diaryItem);
+        sealItem.Click += (_, _) => RunPrivacyGated(ShowSealWipeDialog);
+        menu.Items.Add(allItem); menu.Items.Add(libOnlyItem); menu.Items.Add(memoItem); menu.Items.Add(pathItem); menu.Items.Add(planItem); menu.Items.Add(diaryItem); menu.Items.Add(sealItem);
         menu.ShowAt(ResetDataButton, new Windows.Foundation.Point(0, ResetDataButton.ActualHeight + 4));
     }
 
-    private void ShowResetConfirmDialogFlow()
+
+
+
+    private const int SealWipePage = 4;
+
+
+
+
+
+
+    private int _wipeDialogGeneration;
+    private int _resetDialogGeneration;
+
+
+
+
+
+
+    private void ShowSealWipeDialog()
+    {
+        if (!SpaceExists())
+        {
+            App.ShowToast(App.GetString("DataWipe_Seal_NotEnabled"));
+            return;
+        }
+
+        _pageWipePage = SealWipePage;
+        _wipeDialogGeneration++;
+        PageWipeFinalTitleText.Text = App.GetString("Seal_Name");
+        PageWipeFinalMessageText.Text = App.GetString("DataWipe_Seal_Desc");
+        PageWipeFinalCancelText.Text = App.GetString("Common_Button_Cancel");
+        PageWipeFinalOkText.Text = App.GetString("DataWipe_Seal_Btn");
+
+        PageWipeFinalSealPanel.Visibility = Visibility.Visible;
+        PageWipeFinalSealLabel.Text = App.GetString("Seal_Exp_PasswordLabel");
+        PageWipeFinalSealPasswordBox.Password = "";
+        PageWipeFinalSealError.Visibility = Visibility.Collapsed;
+        PageWipeFinalCd.Completed -= OnPageWipeFinalCdCompleted;
+        PageWipeFinalCd.Completed += OnPageWipeFinalCdCompleted;
+        PageWipeFinalOkButton.IsEnabled = false;
+        PageWipeFinalOkButton.Opacity = Motion.CooldownDisabledOpacity;
+        _animPageWipeFinal = false;
+        ShowOverlay(PageWipeFinalOverlay, PageWipeFinalDialog, PageWipeFinalDialogTransform);
+        PageWipeFinalCd.Start(Motion.CooldownSeconds);
+    }
+
+
+
+
+
+
+    private static SealServiceStatus ClearSealSpace()
+    {
+        try
+        {
+
+            var service = SealService.Current;
+            return service.IsUnlocked
+                ? service.ClearAsync().GetAwaiter().GetResult()
+                : service.ClearWithoutSessionAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("ToolsPage.SealClear", ex.Message);
+            return SealServiceStatus.IoError;
+        }
+    }
+
+    private void RunSealWipe()
+    {
+        var status = ClearSealSpace();
+        if (status != SealServiceStatus.Ok)
+        {
+            var message = status switch
+            {
+                SealServiceStatus.Busy => App.GetString("Seal_Space_Busy"),
+                SealServiceStatus.RequiresFullSession => App.GetString("Seal_SealErr_FullSession"),
+                _ => App.GetString("DataWipe_Seal_FailDesc"),
+            };
+            ShowImportResult(App.GetString("DataWipe_Seal_FailTitle"), message);
+            return;
+        }
+
+        App.MainWindow?.ReloadPages();
+        App.ShowToast(App.GetString("DataWipe_Seal_Done"));
+    }
+
+    private void ShowResetConfirmDialogFlow(bool includeSeal = true)
     {
 
+
+        _resetIncludesSeal = includeSeal;
+        ResetConfirmTitleText.Text = App.GetString(includeSeal ? "Setting_Reset_ConfirmTitle" : "DataWipe_LibOnly_Title");
+        ResetConfirmTipText.Text = App.GetString(includeSeal ? "Setting_Reset_ConfirmTip" : "DataWipe_LibOnly_Desc");
+
         _resetConfirmBusy = false;
+        _resetDialogGeneration++;
         ResetConfirmCd.Completed -= OnResetConfirmCdCompleted;
         ResetConfirmCd.Completed += OnResetConfirmCdCompleted;
         ResetConfirmButton.IsEnabled = false;
         ResetConfirmButton.Opacity = Motion.CooldownDisabledOpacity;
+
+
+        ResetConfirmSealPanel.Visibility = includeSeal && SpaceExists() ? Visibility.Visible : Visibility.Collapsed;
+        ResetConfirmSealLabel.Text = App.GetString("Seal_Exp_PasswordLabel");
+        ResetConfirmSealPasswordBox.Password = "";
+        ResetConfirmSealError.Visibility = Visibility.Collapsed;
         ShowResetConfirmDialog();
         ResetConfirmCd.Start(Motion.CooldownSeconds);
+    }
+
+
+    private static bool SpaceExists() => new SealSpaceStore(SealSpacePaths.Default).Exists();
+
+
+
+
+
+    private static async System.Threading.Tasks.Task<bool> SpacePasswordMatchesAsync(string password)
+    {
+        try
+        {
+            return await System.Threading.Tasks.Task.Run(
+                () => new SealSpaceStore(SealSpacePaths.Default).MatchesPassword(password));
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("ToolsPage.SealPwdVerify", ex.Message);
+            return false;
+        }
     }
 
     private void OnResetConfirmCdCompleted()
@@ -865,6 +1055,10 @@ public sealed partial class ToolsPage : Page
         PageWipeMessageText.Text = string.Format(App.GetString("DataWipe_Stat"), App.GetString(titleKey), count ?? 0);
         PageWipeSoftText.Text = App.GetString("DataWipe_Soft_Btn");
         PageWipeHardText.Text = App.GetString("DataWipe_Hard_Btn");
+
+        PageWipeFinalSealPanel.Visibility = Visibility.Collapsed;
+        PageWipeFinalSealPasswordBox.Password = "";
+        PageWipeFinalSealError.Visibility = Visibility.Collapsed;
         _animPageWipe = false;
         ShowOverlay(PageWipeOverlay, PageWipeDialog, PageWipeDialogTransform);
     }
@@ -892,6 +1086,7 @@ public sealed partial class ToolsPage : Page
     private void PageWipeHardButton_Click(object sender, RoutedEventArgs e)
     {
         HidePageWipeDialog();
+        _wipeDialogGeneration++;
         PageWipeFinalTitleText.Text = App.GetString("DataWipe_Final_Title");
         PageWipeFinalMessageText.Text = string.Format(App.GetString("DataWipe_Final_Desc"), App.GetString(PageWipeNames[_pageWipePage]));
         PageWipeFinalCancelText.Text = App.GetString("Common_Button_Cancel");
@@ -916,20 +1111,119 @@ public sealed partial class ToolsPage : Page
     {
         if (_animPageWipeFinal) return;
         _animPageWipeFinal = true;
-        PageWipeFinalCd.Reset();
-        HideOverlay(PageWipeFinalOverlay, PageWipeFinalDialog, PageWipeFinalDialogTransform, () => _animPageWipeFinal = false);
+        _wipeDialogGeneration++;
+        PageWipeFinalCd.Stop();
+        var cdGen = PageWipeFinalCd.Generation;
+
+        PageWipeFinalSealPasswordBox.Password = "";
+        PageWipeFinalSealError.Visibility = Visibility.Collapsed;
+        HideOverlay(PageWipeFinalOverlay, PageWipeFinalDialog, PageWipeFinalDialogTransform, () =>
+        {
+            PageWipeFinalCd.ResetAfterHide(cdGen);
+            _animPageWipeFinal = false;
+        });
     }
     private void PageWipeFinalClose_Click(object sender, RoutedEventArgs e) => HidePageWipeFinalDialog();
     private void PageWipeFinalCancel_Click(object sender, RoutedEventArgs e) => HidePageWipeFinalDialog();
     private void PageWipeFinalScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, PageWipeFinalScrim)) HidePageWipeFinalDialog(); }
-    private void PageWipeFinalOk_Click(object sender, RoutedEventArgs e)
+    private async void PageWipeFinalOk_Click(object sender, RoutedEventArgs e)
     {
 
         if (_animPageWipeFinal) return;
+
+
+        var page = _pageWipePage;
+        var generation = _wipeDialogGeneration;
+
+
+
+        if (page == SealWipePage && !await VerifySealWipePasswordAsync(generation)) return;
+
+
+        if (generation != _wipeDialogGeneration) return;
+        if (PageWipeFinalOverlay.Visibility != Visibility.Visible) return;
+
         HidePageWipeFinalDialog();
-        PerformPageWipe(_pageWipePage, soft: false);
+        PerformPageWipe(page, soft: false);
     }
+
+    private bool _sealWipeVerifying;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    private async System.Threading.Tasks.Task<bool> VerifySealWipePasswordAsync(int generation)
+    {
+        if (_sealWipeVerifying) return false;
+
+        var pw = PageWipeFinalSealPasswordBox.Password;
+        if (pw.Length == 0)
+        {
+            if (generation != _wipeDialogGeneration) return false;
+            ShowSealWipeError(App.GetString("Seal_Exp_Err_SpacePassword"));
+            return false;
+        }
+
+        _sealWipeVerifying = true;
+        PageWipeFinalOkButton.IsEnabled = false;
+        bool ok;
+        try
+        {
+
+            ok = await System.Threading.Tasks.Task.Run(
+                () => new SealSpaceStore(SealSpacePaths.Default).MatchesPassword(pw));
+        }
+        catch (Exception ex)
+        {
+            Services.CrashLogger.LogNote("ToolsPage.SealWipeVerify", ex.Message);
+            ok = false;
+        }
+        finally
+        {
+            _sealWipeVerifying = false;
+        }
+
+
+        if (generation != _wipeDialogGeneration) return false;
+
+        PageWipeFinalOkButton.IsEnabled = true;
+        if (!ok)
+        {
+            ShowSealWipeError(App.GetString("Seal_Exp_Err_SpacePassword"));
+            return false;
+        }
+
+        PageWipeFinalSealError.Visibility = Visibility.Collapsed;
+        PasswordFeedback.ClearError(PageWipeFinalSealPasswordBox);
+        return true;
+    }
+
+    private void ShowSealWipeError(string message)
+    {
+        PageWipeFinalSealError.Text = message;
+        PageWipeFinalSealError.Visibility = Visibility.Visible;
+        PasswordFeedback.ShowError(PageWipeFinalSealPasswordBox);
+
+
+        try { PageWipeFinalSealPasswordBox.Focus(FocusState.Programmatic); } catch { }
+    }
+
+    private void ResetConfirmSealPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        => ClearPasswordError(ResetConfirmSealPasswordBox, ResetConfirmSealError);
+
+    private void PageWipeFinalSealPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        => ClearPasswordError(PageWipeFinalSealPasswordBox, PageWipeFinalSealError);
 
     private void ShowPageGroupLossDialog()
     {
@@ -961,6 +1255,9 @@ public sealed partial class ToolsPage : Page
 
     private void PerformPageWipe(int page, bool soft)
     {
+
+        if (page == SealWipePage) { RunSealWipe(); return; }
+
         var store = App.Store; if (store == null) return;
         var db = store.Database;
         var now = DateTime.Now;
@@ -1129,8 +1426,8 @@ public sealed partial class ToolsPage : Page
         ConnectPwdUseLock.Visibility = PrivacyLockEnabledNow ? Visibility.Visible : Visibility.Collapsed;
 
         ConnectPwdDesc.Text = App.GetString(PrivacyLockEnabledNow ? "Connect_Pwd_Desc" : "Connect_Pwd_Desc_NoLock");
-        ConnectPwdPasswordBox.Text = "";
-        ConnectPwdConfirmBox.Text = "";
+        ConnectPwdPasswordBox.Password = "";
+        ConnectPwdConfirmBox.Password = "";
         ConnectPwdStrengthText.Visibility = Visibility.Collapsed;
         ConnectPwdConfirmButton.IsEnabled = false;
         _animConnectPwd = false;
@@ -1141,6 +1438,9 @@ public sealed partial class ToolsPage : Page
     {
         if (_animConnectPwd) return;
         _animConnectPwd = true;
+
+        ConnectPwdPasswordBox.Password = "";
+        ConnectPwdConfirmBox.Password = "";
         HideOverlay(ConnectPwdOverlay, ConnectPwdDialog, ConnectPwdDialogTransform, () => _animConnectPwd = false);
     }
 
@@ -1155,16 +1455,16 @@ public sealed partial class ToolsPage : Page
         bool useLock = ConnectPwdUseLock.IsChecked == true;
         ConnectPwdPasswordBox.IsEnabled = !useLock;
         ConnectPwdConfirmBox.IsEnabled = !useLock;
-        if (useLock) { ConnectPwdPasswordBox.Text = ""; ConnectPwdConfirmBox.Text = ""; ConnectPwdStrengthText.Visibility = Visibility.Collapsed; }
+        if (useLock) { ConnectPwdPasswordBox.Password = ""; ConnectPwdConfirmBox.Password = ""; ConnectPwdStrengthText.Visibility = Visibility.Collapsed; }
         UpdateConnectPwdConfirmState();
     }
 
-    private void ConnectPwdPasswordBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
-    private void ConnectPwdConfirmBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
+    private void ConnectPwdPasswordBox_PasswordChanged(object sender, RoutedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
+    private void ConnectPwdConfirmBox_PasswordChanged(object sender, RoutedEventArgs e) => UpdateConnectPwdStrengthAndConfirm();
 
     private void UpdateConnectPwdStrengthAndConfirm()
     {
-        var pw = ConnectPwdPasswordBox.Text;
+        var pw = ConnectPwdPasswordBox.Password;
         if (pw.Length == 0) { ConnectPwdStrengthText.Visibility = Visibility.Collapsed; }
         else
         {
@@ -1193,7 +1493,7 @@ public sealed partial class ToolsPage : Page
     {
 
         bool valid = ConnectPwdUseLock.IsChecked == true
-            || (ConnectPwdPasswordBox.Text.Length > 0 && ConnectPwdPasswordBox.Text == ConnectPwdConfirmBox.Text);
+            || (ConnectPwdPasswordBox.Password.Length > 0 && ConnectPwdPasswordBox.Password == ConnectPwdConfirmBox.Password);
         ConnectPwdConfirmButton.IsEnabled = valid;
     }
 
@@ -1204,18 +1504,18 @@ public sealed partial class ToolsPage : Page
         _pickerFlowBusy = true;
         try
         {
+
+            string? password = ConnectPwdUseLock.IsChecked == true ? App.Store?.Password : ConnectPwdPasswordBox.Password;
             HideConnectPwdDialog();
-            await ExportSnapshotFlowAsync();
+            await ExportSnapshotFlowAsync(password);
         }
         finally { _pickerFlowBusy = false; }
     }
 
-    private async System.Threading.Tasks.Task ExportSnapshotFlowAsync()
+    private async System.Threading.Tasks.Task ExportSnapshotFlowAsync(string? password)
     {
         try
         {
-
-            string? password = ConnectPwdUseLock.IsChecked == true ? App.Store?.Password : ConnectPwdPasswordBox.Text;
             if (string.IsNullOrEmpty(password))
             {
                 ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
@@ -1324,16 +1624,23 @@ public sealed partial class ToolsPage : Page
     {
         if (_animResetConfirm) return;
         _animResetConfirm = true;
-        ResetConfirmCd.Reset();
-        ResetConfirmButton.IsEnabled = true;
-        ResetConfirmButton.Opacity = 1;
+        _resetDialogGeneration++;
+        ResetConfirmCd.Stop();
+        var cdGen = ResetConfirmCd.Generation;
+        ResetConfirmSealPasswordBox.Password = "";
+        ResetConfirmSealError.Visibility = Visibility.Collapsed;
         var sb = new Storyboard();
         var so = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(so, ResetConfirmScrim); Storyboard.SetTargetProperty(so, "Opacity"); sb.Children.Add(so);
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ResetConfirmDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, ResetConfirmDialogTransform);
-        sb.Completed += (_, _) => { ResetConfirmOverlay.Visibility = Visibility.Collapsed; _animResetConfirm = false; };
+        sb.Completed += (_, _) =>
+        {
+            ResetConfirmCd.ResetAfterHide(cdGen);
+            ResetConfirmOverlay.Visibility = Visibility.Collapsed;
+            _animResetConfirm = false;
+        };
         sb.Begin();
     }
 
@@ -1346,22 +1653,80 @@ public sealed partial class ToolsPage : Page
     }
 
     private bool _resetConfirmBusy;
+    private bool _resetIncludesSeal = true;
     private bool _pickerFlowBusy;
 
-    private void ResetConfirmButton_Click(object sender, RoutedEventArgs e)
+    private async void ResetConfirmButton_Click(object sender, RoutedEventArgs e)
     {
         if (_resetConfirmBusy) return;
         _resetConfirmBusy = true;
+
+        var generation = _resetDialogGeneration;
+
+
+
+
+
+        if (ResetConfirmSealPanel.Visibility == Visibility.Visible
+            && !await VerifyResetSealPasswordAsync(generation))
+        {
+            _resetConfirmBusy = false;
+            return;
+        }
+
+        if (generation != _resetDialogGeneration) return;
+
+
+        if (ResetConfirmOverlay.Visibility != Visibility.Visible) return;
 
         HideResetConfirmDialog();
 
 
 
 
-        PerformReset();
+        PerformReset(_resetIncludesSeal);
     }
 
-    private void PerformReset()
+    private bool _resetSealVerifying;
+
+
+    private async System.Threading.Tasks.Task<bool> VerifyResetSealPasswordAsync(int generation)
+    {
+        if (_resetSealVerifying) return false;
+
+        var pw = ResetConfirmSealPasswordBox.Password;
+        if (pw.Length == 0)
+        {
+            if (generation != _resetDialogGeneration) return false;
+            ShowResetSealError();
+            return false;
+        }
+
+        _resetSealVerifying = true;
+        ResetConfirmButton.IsEnabled = false;
+        var ok = await SpacePasswordMatchesAsync(pw);
+        _resetSealVerifying = false;
+
+        if (generation != _resetDialogGeneration) return false;
+
+        ResetConfirmButton.IsEnabled = true;
+        if (!ok)
+        {
+            ShowResetSealError();
+            return false;
+        }
+
+        ResetConfirmSealError.Visibility = Visibility.Collapsed;
+        PasswordFeedback.ClearError(ResetConfirmSealPasswordBox);
+        return true;
+    }
+
+    private void ShowResetSealError()
+    {
+        ShowPasswordError(ResetConfirmSealPasswordBox, ResetConfirmSealError, App.GetString("Seal_Exp_Err_SpacePassword"));
+    }
+
+    private void PerformReset(bool includeSeal)
     {
 
 
@@ -1383,6 +1748,11 @@ public sealed partial class ToolsPage : Page
 
         var (snapshotsDeleted, snapshotsFailed) = AutoBackupService.ClearAll();
 
+
+
+        var sealStatus = includeSeal ? ClearSealSpace() : SealServiceStatus.Ok;
+        var sealCleared = sealStatus == SealServiceStatus.Ok;
+
         if (remindersBefore is not null)
         {
 
@@ -1401,9 +1771,9 @@ public sealed partial class ToolsPage : Page
 
 
         Services.SyncService.MarkRestorePendingConfirmOrWarn("reset/import");
-        if (snapshotsFailed > 0)
+        if (snapshotsFailed > 0 || !sealCleared)
         {
-            Services.CrashLogger.LogNote("Reset", $"snapshot clear incomplete: deleted={snapshotsDeleted} failed={snapshotsFailed}");
+            Services.CrashLogger.LogNote("Reset", $"snapshot clear incomplete: deleted={snapshotsDeleted} failed={snapshotsFailed}; seal={sealStatus}");
             App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
         }
         else App.ShowToast(App.GetString("Common_Toast_Reset"));
@@ -1569,7 +1939,9 @@ public sealed partial class ToolsPage : Page
             var path = FilePicker.PickSaveFile(string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Backup_FilePrefix"), DateTime.Now), new[] { (App.GetString("Setting_Backup_FilePrefix"), new[] { ".novabak" }) });
             if (path == null) return;
 
-            bool ok = App.Store?.ExportBackup(path, includePaths) ?? false;
+
+
+            bool ok = await System.Threading.Tasks.Task.Run(() => App.Store?.ExportBackup(path, includePaths) ?? false);
             ShowImportResult(ok ? App.GetString("Setting_Export_Success") : App.GetString("Setting_Export_Fail"),
                 ok ? App.GetString("Setting_Export_SuccessDesc") : App.GetString("Setting_Export_FailDesc"));
         }
@@ -1685,7 +2057,8 @@ public sealed partial class ToolsPage : Page
     {
         _pendingVerifiedAction = null;
         ImportExportPasswordTitle.Text = title;
-        ImportExportPasswordBox.Text = "";
+        ImportExportPasswordBox.Password = "";
+        ClearPasswordError(ImportExportPasswordBox, ImportExportPasswordError);
         ImportExportPasswordDialogTransform.ScaleX = 0.94; ImportExportPasswordDialogTransform.ScaleY = 0.94; ImportExportPasswordDialogTransform.TranslateY = 24;
         ImportExportPasswordDialog.Opacity = 0;
         ImportExportPasswordScrim.Opacity = 0;
@@ -1712,7 +2085,7 @@ public sealed partial class ToolsPage : Page
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ImportExportPasswordDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, ImportExportPasswordDialogTransform);
-        sb.Completed += (_, _) => { ImportExportPasswordOverlay.Visibility = Visibility.Collapsed; _animImportPwd = false; };
+        sb.Completed += (_, _) => { ImportExportPasswordOverlay.Visibility = Visibility.Collapsed; ImportExportPasswordBox.Password = ""; ClearPasswordError(ImportExportPasswordBox, ImportExportPasswordError); _animImportPwd = false; };
         sb.Begin();
     }
 
@@ -1801,14 +2174,42 @@ public sealed partial class ToolsPage : Page
         EncConfirmBox.PlaceholderText = App.GetString("Setting_EncBackup_ConfirmHint");
         EncStrengthHint.Text = App.GetString("Setting_EncBackup_StrengthHint");
         EncIncludePathsCheckBox.Content = App.GetString("Setting_ExportOptions_IncludePaths");
+
+        EncIncludeSealCheckBox.Content = App.GetString("Seal_Exp_Include");
+        EncSealPasswordBox.PlaceholderText = App.GetString("Seal_Exp_SpacePwdHint");
+        var sealReady = SealSpaceReadyForExport();
+        EncIncludeSealCheckBox.Visibility = sealReady.Visible ? Visibility.Visible : Visibility.Collapsed;
+
+
+        EncIncludeSealCheckBox.IsEnabled = sealReady.Usable;
+
+
+
+        EncIncludeSealCheckBox.Opacity = sealReady.Usable ? 1.0 : 0.45;
+        EncIncludeSealCheckBox.Foreground = sealReady.Usable
+            ? App.GetBrush("AppTextSecondaryBrush")
+            : App.GetBrush("AppTextTertiaryBrush");
+        EncSealPasswordBox.Password = "";
+        ClearPasswordError(EncSealPasswordBox, EncSealPasswordError);
+
+
+
+        _sealUsable = sealReady.Usable;
+        _sealPending = sealReady.Pending;
+
+
+
+
+        EncIncludeSealCheckBox.IsChecked = sealReady.Usable;
+        ApplySealOptionState();
         EncExportCancelText.Text = App.GetString("Common_Button_Cancel");
         EncExportConfirmText.Text = App.GetString("Setting_EncBackup_ConfirmButton");
 
         EncUseLockCheckBox.IsChecked = false;
         EncUseLockCheckBox.Visibility = PrivacyLockEnabledNow ? Visibility.Visible : Visibility.Collapsed;
         EncUseLockWarn.Visibility = Visibility.Collapsed;
-        EncPasswordBox.Text = "";
-        EncConfirmBox.Text = "";
+        EncPasswordBox.Password = "";
+        EncConfirmBox.Password = "";
         EncStrengthText.Visibility = Visibility.Collapsed;
         EncIncludePathsCheckBox.IsChecked = false;
         EncExportConfirmButton.IsEnabled = false;
@@ -1820,6 +2221,13 @@ public sealed partial class ToolsPage : Page
     {
         if (_animEncExport) return;
         _animEncExport = true;
+
+
+        EncPasswordBox.Password = "";
+        EncConfirmBox.Password = "";
+        EncSealPasswordBox.Password = "";
+        EncStrengthText.Visibility = Visibility.Collapsed;
+        EncExportConfirmButton.IsEnabled = false;
         HideOverlay(EncExportOverlay, EncExportDialog, EncExportDialogTransform, () => _animEncExport = false);
     }
 
@@ -1838,19 +2246,19 @@ public sealed partial class ToolsPage : Page
         EncConfirmBox.IsEnabled = !useLock;
         if (useLock)
         {
-            EncPasswordBox.Text = "";
-            EncConfirmBox.Text = "";
+            EncPasswordBox.Password = "";
+            EncConfirmBox.Password = "";
             EncStrengthText.Visibility = Visibility.Collapsed;
         }
         UpdateEncExportConfirmState();
     }
 
-    private void EncPasswordBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateEncStrengthAndConfirm();
-    private void EncConfirmBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateEncStrengthAndConfirm();
+    private void EncPasswordBox_TextChanged(object sender, RoutedEventArgs e) => UpdateEncStrengthAndConfirm();
+    private void EncConfirmBox_TextChanged(object sender, RoutedEventArgs e) => UpdateEncStrengthAndConfirm();
 
     private void UpdateEncStrengthAndConfirm()
     {
-        var pw = EncPasswordBox.Text;
+        var pw = EncPasswordBox.Password;
         if (pw.Length == 0)
         {
             EncStrengthText.Visibility = Visibility.Collapsed;
@@ -1883,7 +2291,9 @@ public sealed partial class ToolsPage : Page
 
 
         bool valid = EncUseLockCheckBox.IsChecked == true
-            || (EncPasswordBox.Text.Length > 0 && EncPasswordBox.Text == EncConfirmBox.Text);
+            || (EncPasswordBox.Password.Length > 0 && EncPasswordBox.Password == EncConfirmBox.Password);
+
+        if (EncIncludeSealCheckBox.IsChecked == true) valid = valid && EncSealPasswordBox.Password.Length > 0;
         EncExportConfirmButton.IsEnabled = valid;
     }
 
@@ -1894,24 +2304,123 @@ public sealed partial class ToolsPage : Page
         try
         {
             bool includePaths = EncIncludePathsCheckBox.IsChecked == true;
+
+            bool includeSeal = EncIncludeSealCheckBox.IsChecked == true;
+            var spacePassword = EncSealPasswordBox.Password;
+
+            if (includeSeal)
+            {
+                bool spaceOk;
+                try { spaceOk = await System.Threading.Tasks.Task.Run(() => SealService.Current.MatchesSpacePassword(spacePassword)); }
+                catch { spaceOk = false; }
+                if (!spaceOk)
+                {
+                    ShowPasswordError(EncSealPasswordBox, EncSealPasswordError, App.GetString("Seal_Exp_Err_SpacePassword"));
+                    return;
+                }
+            }
+            var password = EncUseLockCheckBox.IsChecked == true ? App.Store?.Password : EncPasswordBox.Password;
             HideEncExportDialog();
-            await ExportEncBackupFlowAsync(includePaths);
+            await ExportEncBackupFlowAsync(includePaths, includeSeal, password, spacePassword);
         }
         finally { _pickerFlowBusy = false; }
     }
 
-    private async System.Threading.Tasks.Task ExportEncBackupFlowAsync(bool includePaths)
+
+
+
+
+
+
+
+    private static (bool Visible, bool Usable, bool Pending) SealSpaceReadyForExport()
     {
         try
         {
-            var password = EncUseLockCheckBox.IsChecked == true
-                ? App.Store?.Password
-                : EncPasswordBox.Text;
+            if (!new SealSpaceStore(SealSpacePaths.Default).Exists()) return (false, false, false);
+            if (!SealService.Current.IsUnlocked) return (true, false, false);
+
+            var plan = SealService.Current.GetRecoveryPlan();
+            var pending = plan.Status == SealServiceStatus.Ok && plan.Value is { HasPendingDecisions: true };
+            return (true, !pending, pending);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (false, false, false);
+        }
+    }
+
+
+
+
+
+
+    private void ApplySealOptionState()
+    {
+        var on = EncIncludeSealCheckBox.IsChecked == true;
+
+
+
+
+        if (_sealPending)
+        {
+            EncSealNote.Text = App.GetString("Seal_Exp_Err_Pending");
+            EncSealNote.Foreground = App.GetBrush("AppDangerTextBrush");
+            EncSealNote.Visibility = Visibility.Visible;
+        }
+        else if (!_sealUsable)
+        {
+            EncSealNote.Text = App.GetString("Seal_Exp_NeedUnlock");
+            EncSealNote.Foreground = App.GetBrush("AppTextSecondaryBrush");
+            EncSealNote.Visibility = Visibility.Visible;
+        }
+        else if (on)
+        {
+            EncSealNote.Text = App.GetString("Seal_Exp_IncludeNote");
+            EncSealNote.Foreground = App.GetBrush("AppTextTertiaryBrush");
+            EncSealNote.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            EncSealNote.Visibility = Visibility.Collapsed;
+        }
+
+        EncSealPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!on) EncSealPasswordBox.Password = "";
+        UpdateEncExportConfirmState();
+    }
+
+    private void EncIncludeSeal_Changed(object sender, RoutedEventArgs e) => ApplySealOptionState();
+
+    private void EncSealPassword_TextChanged(object sender, RoutedEventArgs e)
+    {
+        ClearPasswordError(EncSealPasswordBox, EncSealPasswordError);
+        UpdateEncExportConfirmState();
+    }
+
+    private async System.Threading.Tasks.Task ExportEncBackupFlowAsync(
+        bool includePaths, bool includeSeal, string? password, string? spacePassword)
+    {
+        try
+        {
             if (string.IsNullOrEmpty(password)) return;
-            var path = FilePicker.PickSaveFile(string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString("Setting_Archive_ExportEncrypted"), DateTime.Now), new[] { (App.GetString("Setting_Archive_ExportEncrypted"), new[] { ".novaenc" }) });
+
+            var (suffix, extension) = includeSeal ? ("Seal_Exp_BackupPrefix", ".novabundle") : ("Setting_Archive_ExportEncrypted", ".novaenc");
+            var path = FilePicker.PickSaveFile(
+                string.Format("{0}_{1:yyyyMMdd_HHmmss}", App.GetString(suffix), DateTime.Now),
+                new[] { (App.GetString(suffix), new[] { extension }) });
             if (path == null) return;
 
-            bool ok = App.Store?.ExportBackupEncrypted(path, password, includePaths) ?? false;
+            if (includeSeal)
+            {
+                await ExportWithSealAsync(path, password, includePaths, spacePassword ?? "");
+                return;
+            }
+
+
+
+            bool ok = await System.Threading.Tasks.Task.Run(() => App.Store?.ExportBackupEncrypted(path, password, includePaths) ?? false);
             if (ok)
             {
 
@@ -1932,14 +2441,99 @@ public sealed partial class ToolsPage : Page
         }
     }
 
+
+
+
+
+
+
+
+
+    private async System.Threading.Tasks.Task ExportWithSealAsync(
+        string targetPath, string backupPassword, bool includePaths, string spacePassword)
+    {
+        var temporary = Path.Combine(
+            Path.GetTempPath(), "novara-seal-export-" + Guid.NewGuid().ToString("N") + ".novaenc");
+        var staging = targetPath + ".partial";
+
+
+        SealToast.Begin(App.GetString("Seal_Exp_Progress"));
+
+        try
+        {
+
+
+            var backupOk = await System.Threading.Tasks.Task
+                .Run(() => App.Store?.ExportBackupEncrypted(temporary, backupPassword, includePaths) ?? false)
+                .ConfigureAwait(true);
+
+            if (!backupOk)
+            {
+                SealToast.Abort();
+                ShowImportResult(App.GetString("Setting_Export_Fail"), App.GetString("Setting_Export_FailDesc"));
+                return;
+            }
+
+            var backup = await File.ReadAllBytesAsync(temporary).ConfigureAwait(true);
+
+            var status = await System.Threading.Tasks.Task
+                .Run(() => SealService.Current
+                    .ExportAsync(staging, spacePassword, SealBundleWriter.KindItemsWithBackup, backup)
+                    .GetAwaiter().GetResult())
+                .ConfigureAwait(true);
+
+            if (status != SealServiceStatus.Ok)
+            {
+
+                var message = status switch
+                {
+                    SealServiceStatus.WrongPassword => App.GetString("Seal_Exp_Err_SpacePassword"),
+                    SealServiceStatus.NotUnlocked => App.GetString("Seal_Exp_Err_NeedUnlock"),
+                    SealServiceStatus.RequiresFullSession => App.GetString("Seal_SealErr_FullSession"),
+                    SealServiceStatus.Busy => App.GetString("Seal_Space_Busy"),
+                    _ => App.GetString("Setting_Export_FailDesc"),
+                };
+                SealToast.Abort();
+                ShowImportResult(App.GetString("Setting_Export_Fail"), message);
+                return;
+            }
+
+            File.Move(staging, targetPath, overwrite: true);
+            SealToast.Abort();
+            ShowImportResult(App.GetString("Setting_EncExport_SuccessTitle"), App.GetString("Setting_EncExport_SealDesc"));
+        }
+        finally
+        {
+
+            SealToast.Abort();
+            TryDeleteFile(temporary);
+            TryDeleteFile(staging);
+            TryDeleteFile(staging + ".tmp");
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+
+        }
+    }
+
     private void ShowEncImportPwdDialog()
     {
         EncImportTitle.Text = App.GetString("Setting_EncBackup_Title");
         EncImportDesc.Text = App.GetString("Setting_ImportEnc_Desc");
-        EncImportPwdBox.PlaceholderText = App.GetString("Setting_EncBackup_PasswordHint");
+
+
         EncImportCancelText.Text = App.GetString("Common_Button_Cancel");
         EncImportConfirmText.Text = App.GetString("Common_Button_Confirm");
-        EncImportPwdBox.Text = "";
+        EncImportPwdBox.Password = "";
+        ClearPasswordError(EncImportPwdBox, EncImportError);
         EncImportConfirmButton.IsEnabled = false;
         _animEncImportPwd = false;
         ShowOverlay(EncImportPwdOverlay, EncImportPwdDialog, EncImportPwdDialogTransform);
@@ -1950,6 +2544,8 @@ public sealed partial class ToolsPage : Page
         if (_animEncImportPwd || _encImportInFlight) return;
         _animEncImportPwd = true;
         _pendingEncImportPath = null;
+        EncImportPwdBox.Password = "";
+        ClearPasswordError(EncImportPwdBox, EncImportError);
         HideOverlay(EncImportPwdOverlay, EncImportPwdDialog, EncImportPwdDialogTransform, () => _animEncImportPwd = false);
     }
 
@@ -1958,14 +2554,17 @@ public sealed partial class ToolsPage : Page
     private void EncImportPwdScrim_Tapped(object sender, TappedRoutedEventArgs e)
     { if (ReferenceEquals(e.OriginalSource, EncImportPwdScrim)) HideEncImportPwdDialog(); }
 
-    private void EncImportPwdBox_TextChanged(object sender, TextChangedEventArgs e)
-        => EncImportConfirmButton.IsEnabled = EncImportPwdBox.Text.Length > 0;
+    private void EncImportPwdBox_TextChanged(object sender, RoutedEventArgs e)
+    {
+        EncImportConfirmButton.IsEnabled = EncImportPwdBox.Password.Length > 0;
+        ClearPasswordError(EncImportPwdBox, EncImportError);
+    }
 
     private async void EncImportPwdConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_animEncImportPwd || _encImportInFlight) return;
-        var pw = EncImportPwdBox.Text;
-        if (pw.Length == 0) { FlashTextBox(EncImportPwdBox); return; }
+        var pw = EncImportPwdBox.Password;
+        if (pw.Length == 0) { ShowPasswordError(EncImportPwdBox, EncImportError, App.GetString("Store_Err_WrongPassword")); return; }
         var path = _pendingEncImportPath;
         if (string.IsNullOrEmpty(path)) { HideEncImportPwdDialog(); return; }
         var remindersBefore = Services.ReminderScheduler.Snapshot(App.Store?.Database);
@@ -1984,7 +2583,7 @@ public sealed partial class ToolsPage : Page
         finally
         {
             _encImportInFlight = false;
-            EncImportConfirmButton.IsEnabled = EncImportPwdBox.Text.Length > 0;
+            EncImportConfirmButton.IsEnabled = EncImportPwdBox.Password.Length > 0;
         }
         if (failed)
         {
@@ -1996,7 +2595,7 @@ public sealed partial class ToolsPage : Page
 
         if (result != null && result.Status == LoadStatus.Corrupted && result.Detail == Loc.T("Store_Err_BackupAuthFail"))
         {
-            FlashTextBox(EncImportPwdBox);
+            ShowPasswordError(EncImportPwdBox, EncImportError, App.GetString("Store_Err_BackupAuthFail"));
             return;
         }
         HideEncImportPwdDialog();
@@ -2289,7 +2888,7 @@ public sealed partial class ToolsPage : Page
         sb.AppendLine();
         foreach (var g in groups)
         {
-            sb.AppendLine($"### 📁 {g.Name}");
+            sb.AppendLine($"### {g.Name}");
             var inGroup = entries.Where(e => e.GroupId == g.Id).ToList();
             if (inGroup.Count == 0) { sb.AppendLine(App.GetString("Export_Empty")); sb.AppendLine(); continue; }
             foreach (var e in inGroup)
@@ -2304,7 +2903,7 @@ public sealed partial class ToolsPage : Page
         var uncategorized = entries.Where(e => !e.GroupId.HasValue).ToList();
         if (uncategorized.Count > 0)
         {
-            sb.AppendLine($"### 📁 {App.GetString("Export_Section_Uncategorized")}");
+            sb.AppendLine($"### {App.GetString("Export_Section_Uncategorized")}");
             foreach (var e in uncategorized)
             {
                 sb.AppendLine($"- **{e.Name}**");
@@ -2420,12 +3019,15 @@ public sealed partial class ToolsPage : Page
 
     private bool _importPwdVerifyInFlight;
 
+    private void ImportExportPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        => ClearPasswordError(ImportExportPasswordBox, ImportExportPasswordError);
+
     private async void ImportExportPasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_animImportPwd) return;
         if (_importPwdVerifyInFlight) return;
-        var pw = ImportExportPasswordBox.Text.Trim();
-        if (pw.Length < 6) { FlashTextBox(ImportExportPasswordBox); return; }
+        var pw = ImportExportPasswordBox.Password.Trim();
+        if (pw.Length < 6) { ShowPasswordError(ImportExportPasswordBox, ImportExportPasswordError, App.GetString("Store_Err_WrongPassword")); return; }
 
 
         _importPwdVerifyInFlight = true;
@@ -2439,7 +3041,7 @@ public sealed partial class ToolsPage : Page
             _importPwdVerifyInFlight = false;
             if (confirmButton != null) confirmButton.IsEnabled = true;
         }
-        if (!verified) { FlashTextBox(ImportExportPasswordBox); return; }
+        if (!verified) { ShowPasswordError(ImportExportPasswordBox, ImportExportPasswordError, App.GetString("Store_Err_WrongPassword")); return; }
 
 
 
@@ -3062,6 +3664,45 @@ public sealed partial class ToolsPage : Page
         ApplyToggleState(BackupAutoModeButton, _autoBackupEnabled);
     }
 
+
+
+
+
+    private static bool IsSwitchedOnReason(string reason)
+        => reason == "Mcp_Audit_SwitchedOn"
+           || reason == AppResources.Zh["Mcp_Audit_SwitchedOn"]
+           || reason == AppResources.En["Mcp_Audit_SwitchedOn"]
+           || reason == AppResources.ZhTw["Mcp_Audit_SwitchedOn"]
+           || reason == AppResources.Ko["Mcp_Audit_SwitchedOn"]
+           || reason == AppResources.Ja["Mcp_Audit_SwitchedOn"]
+           || reason.EndsWith("on", StringComparison.OrdinalIgnoreCase);
+
+    private void UpdateBackupAutoStatus()
+    {
+
+        if (AutoBackupService.TakeQuarantineNotice() is { } quarantinedName)
+            App.ShowToast(string.Format(App.GetString("Setting_Backup_Auto_FailJournalQuarantined"), quarantinedName));
+        var failedAt = AutoBackupService.LastAutoFailureUtc;
+        if (failedAt is null)
+        {
+            BackupAutoStatusText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        string reason = AutoBackupService.LastAutoFailureCode switch
+        {
+            AutoBackupService.AutoFailureSpace => App.GetString("Setting_Backup_Auto_FailSpace"),
+            AutoBackupService.AutoFailureMissingPair => App.GetString("Setting_Backup_Auto_FailPair"),
+            AutoBackupService.AutoFailureUnreadableFlag => App.GetString("Setting_Backup_Auto_FailRead"),
+            AutoBackupService.AutoFailureJournalPending => App.GetString("Setting_Backup_Auto_FailJournal"),
+            AutoBackupService.AutoFailureJournalBlocked => App.GetString("Setting_Backup_Auto_FailJournalBlocked"),
+            _ => App.GetString("Setting_Backup_Auto_FailIo"),
+        };
+        BackupAutoStatusText.Text = string.Format(
+            App.GetString("Setting_Backup_Auto_FailFormat"), failedAt.Value.ToString("g"), reason);
+        BackupAutoStatusText.Visibility = Visibility.Visible;
+    }
+
     private void BackupFreqButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["GlassMenuFlyoutPresenterStyle"] };
@@ -3166,6 +3807,7 @@ public sealed partial class ToolsPage : Page
         _draftAutoBackup = _autoBackupEnabled;
         _draftBackupFreq = _backupFreqIndex;
         UpdateBackupAutoModeButton();
+        UpdateBackupAutoStatus();
         BackupFreqRow.Opacity = _autoBackupEnabled ? 1.0 : 0.35;
         BackupFreqButton.IsEnabled = _autoBackupEnabled;
         ShowOverlay(BackupAutoOverlay, BackupAutoDialog, BackupAutoDialogTransform);
@@ -3272,7 +3914,12 @@ public sealed partial class ToolsPage : Page
         }
         else
         {
-            App.ShowToast(App.GetString(restoreErrorKey ?? "Store_Err_IoFail"), ToastTone.Error);
+
+
+            var restoreErrorText = restoreErrorKey == "Setting_Backup_Restore_JournalUnreadable"
+                ? string.Format(App.GetString(restoreErrorKey), AutoBackupService.RestoreJournalPath)
+                : App.GetString(restoreErrorKey ?? "Store_Err_IoFail");
+            App.ShowToast(restoreErrorText, ToastTone.Error);
         }
     }
     private void BackupRestoreConfirmCancel_Click(object sender, RoutedEventArgs e) => CancelBackupRestoreConfirm();
@@ -3382,11 +4029,22 @@ public sealed partial class ToolsPage : Page
     {
         if (_restarting) return;
         _restarting = true;
-        if (!Novara.MainWindow.RestartNow())
-        {
+        var outcome = Novara.MainWindow.RestartNow();
+        if (outcome == Novara.MainWindow.RestartOutcome.Ok) return;
+        _restarting = false;
 
-            _restarting = false;
-            HandleRestartFailure(rollbackOnFail);
+
+        switch (outcome)
+        {
+            case Novara.MainWindow.RestartOutcome.EditorDirty:
+                App.ShowToast(App.GetString("Common_Restart_EditorDirty"), ToastTone.Error);
+                break;
+            case Novara.MainWindow.RestartOutcome.SaveFailed:
+                App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
+                break;
+            default:
+                HandleRestartFailure(rollbackOnFail);
+                break;
         }
     }
 
@@ -3656,24 +4314,11 @@ public sealed partial class ToolsPage : Page
         string firstUse = times.Count > 0 ? times.Min().ToString("yyyy-MM-dd HH:mm") : App.GetString("Setting_Stats_Never");
 
 
-        var snapshots = Services.AutoBackupService.ListSnapshots();
-        var lastBackup = snapshots.Count > 0
-            ? snapshots.Max(s => s.Timestamp).ToString("yyyy-MM-dd HH:mm")
-            : App.GetString("Setting_Stats_None");
-        string integrityValue;
-        bool integrityWarn;
-        var integrity = Services.DatabaseHealth.VerifyDataFile(Services.NovaraStore.DefaultFilePath);
-        switch (integrity)
-        {
-            case Novara.Services.DataFileIntegrity.DigestVerified:
-                integrityValue = "✓"; integrityWarn = false; break;
-            case Novara.Services.DataFileIntegrity.EncryptedStructured:
-                integrityValue = App.GetString("Setting_Stats_IntegrityEnc"); integrityWarn = false; break;
-            default:
-                integrityValue = "✗"; integrityWarn = true; break;
-        }
-        var orphans = Novara.Services.DatabaseHealth.CountOrphanMemoEntries(db);
-        bool orphanWarn = orphans > 0;
+
+
+        const string healthPlaceholder = "…";
+        const string integrityValue = "…";
+        const bool integrityWarn = false;
 
 
 
@@ -3706,18 +4351,20 @@ public sealed partial class ToolsPage : Page
             (App.GetString("Setting_Stats_Storage"), storage, true, false),
             (App.GetString("Setting_Stats_Starred"),
                 (entries.Count(e => e.IsStarred) + paths.Count(p => p.IsStarred) + todos.Count(t => t.IsStarred) + notes.Count(n => n.IsStarred) + diaries.Count(d => d.IsStarred) + documents.Count(d => d.IsStarred)).ToString(), true, false),
+
+
             (App.GetString("Setting_Stats_Trash"),
-                (db.MemoEntries.Count(x => x.IsDeleted) + db.PathBackupItems.Count(x => x.IsDeleted) + db.TodoCards.Count(x => x.IsDeleted) + db.NoteCards.Count(x => x.IsDeleted) + db.DiaryItems.Count(x => x.IsDeleted)).ToString(), true, false),
+                (db.MemoEntries.Count(x => x.IsDeleted && x.PurgedAt == default) + db.PathBackupItems.Count(x => x.IsDeleted && x.PurgedAt == default) + db.TodoCards.Count(x => x.IsDeleted && x.PurgedAt == default) + db.NoteCards.Count(x => x.IsDeleted && x.PurgedAt == default) + db.DiaryItems.Count(x => x.IsDeleted && x.PurgedAt == default)).ToString(), true, false),
             (App.GetString("Setting_Stats_LastActive"), lastActive, true, false),
             (App.GetString("Setting_Stats_FirstUse"), firstUse, true, false),
             (App.GetString("Setting_Stats_Encryption"),
                 (App.Store is { IsEncrypted: true } ? App.GetString("Setting_Stats_EncOn") : App.GetString("Setting_Stats_EncOff")), true, false),
-            (App.GetString("Setting_Stats_LastBackup"), lastBackup, true, false),
+            (App.GetString("Setting_Stats_LastBackup"), healthPlaceholder, true, false),
 
 
-            (App.GetString("Setting_Stats_SnapshotCount"), snapshots.Count.ToString(), true, false),
+            (App.GetString("Setting_Stats_SnapshotCount"), healthPlaceholder, true, false),
             (App.GetString("Setting_Stats_Integrity"), integrityValue, true, integrityWarn),
-            (App.GetString("Setting_Stats_Orphans"), orphanWarn ? orphans.ToString() : "✓", true, orphanWarn),
+            (App.GetString("Setting_Stats_Orphans"), healthPlaceholder, true, false),
 
 
             (App.GetString("Setting_Stats_SyncStatus"),
@@ -3739,6 +4386,10 @@ public sealed partial class ToolsPage : Page
         for (int c = 0; c < cols; c++) StatsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (int r = 0; r < rows; r++) StatsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
+        TextBlock? integrityText = null;
+        TextBlock? lastBackupText = null;
+        TextBlock? snapshotCountText = null;
+        TextBlock? orphansText = null;
         for (int i = 0; i < visible.Count; i++)
         {
             var (label, value, _, warn) = visible[i];
@@ -3766,12 +4417,142 @@ public sealed partial class ToolsPage : Page
                 Foreground = App.GetBrush("AppTextSecondaryBrush"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
+            if (label == App.GetString("Setting_Stats_Integrity")) integrityText = valueText;
+            else if (label == App.GetString("Setting_Stats_LastBackup")) lastBackupText = valueText;
+            else if (label == App.GetString("Setting_Stats_SnapshotCount")) snapshotCountText = valueText;
+            else if (label == App.GetString("Setting_Stats_Orphans")) orphansText = valueText;
             sp.Children.Add(valueText);
             sp.Children.Add(labelText);
             block.Child = sp;
             Grid.SetColumn(block, i % cols);
             Grid.SetRow(block, i / cols);
             StatsGrid.Children.Add(block);
+        }
+
+
+        var generation = ++_statsGeneration;
+        if (integrityText is not null) ProbeIntegrity(integrityText, generation);
+        if (lastBackupText is not null || snapshotCountText is not null || orphansText is not null)
+            ProbeHealth(lastBackupText, snapshotCountText, orphansText, generation);
+    }
+
+
+    private void ProbeIntegrity(TextBlock target, int generation)
+    {
+        var path = Novara.Services.NovaraStore.DefaultFilePath;
+        (long Length, DateTime WriteUtc)? stamp = null;
+        Task<Novara.Services.DataFileIntegrity> task;
+        lock (IntegrityGate)
+        {
+            stamp = DataFileStamp(path);
+            if (stamp is { } s && _integrityCached is { } hit && hit.Length == s.Length && hit.WriteUtc == s.WriteUtc)
+            {
+                ApplyIntegrityResult(target, generation, hit.Value);
+                return;
+            }
+
+            if (_integrityTask is { IsCompleted: false } live && _integrityTaskStamp == stamp)
+                task = live;
+            else
+            {
+                _integrityTaskStamp = stamp;
+                task = _integrityTask = System.Threading.Tasks.Task.Run(() =>
+                {
+                    try { return Novara.Services.DatabaseHealth.VerifyDataFile(path); }
+                    catch { return Novara.Services.DataFileIntegrity.Failed; }
+                });
+            }
+        }
+
+        var startedStamp = stamp;
+        _ = task.ContinueWith(done =>
+        {
+            var integrity = done.Result;
+            lock (IntegrityGate)
+            {
+
+
+
+                if (startedStamp is { } s) _integrityCached = (s.Length, s.WriteUtc, integrity);
+            }
+            DispatcherQueue.TryEnqueue(() => ApplyIntegrityResult(target, generation, integrity));
+        }, System.Threading.Tasks.TaskScheduler.Default);
+    }
+
+    private static (long Length, DateTime WriteUtc)? DataFileStamp(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? (info.Length, info.LastWriteTimeUtc) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private void ApplyIntegrityResult(TextBlock target, int generation,
+        Novara.Services.DataFileIntegrity integrity)
+    {
+        if (generation != _statsGeneration || !StatsGrid.Children.Contains(target)) return;
+        var (value, warn) = integrity switch
+        {
+            Novara.Services.DataFileIntegrity.DigestVerified => ("✓", false),
+            Novara.Services.DataFileIntegrity.EncryptedStructured => (App.GetString("Setting_Stats_IntegrityEnc"), false),
+            _ => ("✗", true),
+        };
+        target.Text = value;
+        target.Foreground = App.GetBrush(warn ? "AppDangerTextBrush" : "AppPrimaryButtonBrush");
+    }
+
+
+
+
+
+    private void ProbeHealth(TextBlock? lastBackupText, TextBlock? snapshotCountText, TextBlock? orphansText,
+        int generation)
+    {
+        var db = App.Store?.Database;
+
+        var groupIds = db == null ? new List<Guid>() : db.MemoGroups.Select(g => g.Id).ToList();
+        var entryGroups = db == null ? new List<Guid?>() : db.MemoEntries.Select(e => e.GroupId).ToList();
+        var noneText = App.GetString("Setting_Stats_None");
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            string lastBackup = noneText;
+            int snapshotCount = 0;
+            int orphans = 0;
+            try
+            {
+                var snapshots = Services.AutoBackupService.ListSnapshots();
+                snapshotCount = snapshots.Count;
+                if (snapshotCount > 0) lastBackup = snapshots.Max(s => s.Timestamp).ToString("yyyy-MM-dd HH:mm");
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"概览快照枚举失败: {ex.Message}"); }
+            try
+            {
+
+
+                orphans = Novara.Services.DatabaseHealth.CountOrphanMemoEntries(groupIds, entryGroups);
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"概览孤儿扫描失败: {ex.Message}"); }
+            DispatcherQueue.TryEnqueue(() =>
+                ApplyHealthResult(lastBackupText, snapshotCountText, orphansText, generation, lastBackup, snapshotCount, orphans));
+        });
+    }
+
+    private void ApplyHealthResult(TextBlock? lastBackupText, TextBlock? snapshotCountText, TextBlock? orphansText,
+        int generation, string lastBackup, int snapshotCount, int orphans)
+    {
+        if (generation != _statsGeneration) return;
+        if (lastBackupText is not null && StatsGrid.Children.Contains(lastBackupText)) lastBackupText.Text = lastBackup;
+        if (snapshotCountText is not null && StatsGrid.Children.Contains(snapshotCountText))
+            snapshotCountText.Text = snapshotCount.ToString();
+        if (orphansText is not null && StatsGrid.Children.Contains(orphansText))
+        {
+            orphansText.Text = orphans > 0 ? orphans.ToString() : "✓";
+            if (orphans > 0) orphansText.Foreground = App.GetBrush("AppDangerTextBrush");
         }
     }
 
@@ -4237,7 +5018,7 @@ public sealed partial class ToolsPage : Page
 
         var appliedBits = McpService.ReadClientPermissions(path);
         if (previousBits != appliedBits)
-            McpService.RecordPermissionChange(path, $"permission matrix changed: 0x{(long)previousBits:X} -> 0x{(long)appliedBits:X}");
+            McpService.RecordPermissionChange(path, App.GetString("Setting_Mcp_Audit_Reason_Perm") + " " + Novara.Services.McpPermissions.Describe(appliedBits));
         PersistSetting(_ => { });
         BuildMcpAuthorizedList();
         HideMcpPermDialog();
@@ -4330,15 +5111,32 @@ public sealed partial class ToolsPage : Page
             "auth_denied" => App.GetString("Setting_Mcp_Audit_Ev_Denied"),
             "revoke" => App.GetString("Setting_Mcp_Audit_Ev_Revoke"),
             "audit_cleared" => App.GetString("Setting_Mcp_Audit_Ev_Cleared"),
+
+
+            "perm_change" => App.GetString("Setting_Mcp_Audit_Ev_PermChange"),
+            "token_reset" => App.GetString("Setting_Mcp_Audit_Ev_TokenReset"),
+            "master_switch" => App.GetString("Setting_Mcp_Audit_Ev_MasterSwitch"),
+            "delete_switch" => App.GetString("Setting_Mcp_Audit_Ev_DeleteSwitch"),
+            "sticky_sync_failed" => App.GetString("Setting_Mcp_Audit_Ev_StickySyncFailed"),
             _ => evt.Tool,
         };
         line1.Children.Add(new TextBlock { Text = evLabel, FontSize = 12, Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center });
         line1.Children.Add(new TextBlock { Text = evt.Ts, FontSize = 11, Foreground = App.GetBrush("AppTextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
         info.Children.Add(line1);
 
-        string desc = evt.Ev == "call"
-            ? (evt.Title.Length > 0 ? $"{evt.Target} · {evt.Title}" : evt.Target)
-            : evt.Reason;
+        string desc = evt.Ev switch
+        {
+            "call" => evt.Title.Length > 0 ? $"{evt.Target} · {evt.Title}" : evt.Target,
+
+
+            "token_reset" => App.GetString("Setting_Mcp_Audit_Reason_TokenReset"),
+
+
+            "master_switch" or "delete_switch" => App.GetString(
+                IsSwitchedOnReason(evt.Reason) ? "Setting_Mcp_Audit_Reason_On" : "Setting_Mcp_Audit_Reason_Off"),
+            "sticky_sync_failed" => App.GetString("Setting_Mcp_Audit_Reason_StickySyncFailed"),
+            _ => evt.Reason,
+        };
         if (desc.Length > 0)
         {
             var descText = new TextBlock
@@ -4552,6 +5350,14 @@ public sealed partial class ToolsPage : Page
         var settings = App.Store?.Database.AppSettings;
         if (settings == null) return;
         settings.McpDeleteEnabled = enabled;
+        if (!enabled)
+        {
+
+
+            var keep = ~(long)Novara.Services.McpPermissions.AllDelete;
+            foreach (var record in settings.McpClientPermissions)
+                record.Permissions &= keep;
+        }
         Novara.Services.McpService.RecordMasterSwitch(deleteSwitch: true, enabled);
         App.Store?.SaveAsync();
         UpdateMcpDeletePermissionButton(enabled);
@@ -4590,6 +5396,8 @@ public sealed partial class ToolsPage : Page
     { if (ReferenceEquals(e.OriginalSource, McpDeleteConfirmScrim)) HideMcpDeleteConfirmDialog(); }
     private void McpDeleteConfirmOk_Click(object sender, RoutedEventArgs e)
     {
+
+        if (_animMcpDeleteConfirm) return;
         HideMcpDeleteConfirmDialog();
         SetMcpDeleteEnabled(true);
     }
@@ -4919,7 +5727,26 @@ public sealed partial class ToolsPage : Page
         else if (!state.Enabled) key = "Sync_Status_PairedOff";
         else if (Services.SyncService.IsSyncing) key = "Sync_Status_Syncing";
         else key = SyncOutcomeStatusKey(_lastSyncOutcome, fallback: state.Enabled ? "Sync_Status_Ready" : "Sync_Status_PairedOff");
-        SyncDetailState.Text = App.GetString(key);
+        var statusText = App.GetString(key);
+
+
+
+
+
+        if (_lastSyncOutcome?.Oversized is { } oversize)
+        {
+            var partitionTab = oversize.PartitionKey switch
+            {
+                "memoEntries" or "memoGroups" => "Nav_Tab_Memo",
+                "pathBackupItems" => "Nav_Tab_File",
+                "todoCards" or "noteCards" => "Nav_Tab_Plan",
+                "diaryItems" => "Nav_Tab_Diary",
+                _ => "Sync_Status_PartitionOther",
+            };
+            statusText += " · " + string.Format(App.GetString("Sync_Oversize_Partition"),
+                App.GetString(partitionTab), oversize.MiB, oversize.LimitMiB);
+        }
+        SyncDetailState.Text = statusText;
 
         var attention = state.Enabled && IsSyncPaired(state) && (Services.SyncService.KeyWrapStale
             || Services.SyncService.CredentialUnavailable
@@ -5129,7 +5956,7 @@ public sealed partial class ToolsPage : Page
         SyncPairServerBox.Text = Services.SyncService.State.ServerUrl;
         SyncPairSpaceBox.Text = "";
         SyncPairEnrollmentBox.Text = "";
-        SyncPairKeyBox.Text = "";
+        SyncPairKeyBox.Password = "";
         SyncPairDeviceBox.Text = Environment.MachineName;
         UpdateSyncPairConfirmState();
         ShowOverlay(SyncPairOverlay, SyncPairDialog, SyncPairDialogTransform);
@@ -5150,11 +5977,17 @@ public sealed partial class ToolsPage : Page
 
     private void SyncPairField_TextChanged(object sender, TextChangedEventArgs e) => UpdateSyncPairConfirmState();
 
+
+
+    private void SyncPairKey_PasswordChanged(object sender, RoutedEventArgs e) => UpdateSyncPairConfirmState();
+
     private void HideSyncPairDialog()
     {
         if (_syncPairInFlight) return;
         if (_animSyncPair) return;
         _animSyncPair = true;
+
+        SyncPairKeyBox.Password = "";
         HideOverlay(SyncPairOverlay, SyncPairDialog, SyncPairDialogTransform, () => _animSyncPair = false);
     }
 
@@ -5191,7 +6024,7 @@ public sealed partial class ToolsPage : Page
                 SyncPairServerBox.Text.Trim(),
                 SyncPairSpaceBox.Text.Trim(),
                 SyncPairEnrollmentBox.Text.Trim(),
-                SyncPairKeyBox.Text.Trim(),
+                SyncPairKeyBox.Password.Trim(),
                 deviceName);
 
             _syncPairInFlight = false;
@@ -5575,6 +6408,18 @@ public sealed partial class ToolsPage : Page
 
 
 
+    private void SyncKeyViewPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        ClearPasswordError(SyncKeyViewPasswordBox, SyncKeyViewErrorText);
+        if (!_syncKeyFlowInFlight) SyncKeyViewConfirmButton.IsEnabled = SyncKeyViewPasswordBox.Password.Length > 0;
+    }
+
+    private void SyncKeyImportPwdBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        ClearPasswordError(SyncKeyImportPwdBox, SyncKeyImportPwdErrorText);
+        if (!_syncKeyFlowInFlight) SyncKeyImportPwdConfirmButton.IsEnabled = SyncKeyImportPwdBox.Password.Length > 0;
+    }
+
     private void SyncKeyViewButton_Click(object sender, RoutedEventArgs e)
     {
 
@@ -5587,8 +6432,9 @@ public sealed partial class ToolsPage : Page
         }
 
         _animSyncKeyView = false;
-        SyncKeyViewPasswordBox.Text = "";
-        SyncKeyViewErrorText.Visibility = Visibility.Collapsed;
+        SyncKeyViewPasswordBox.Password = "";
+        ClearPasswordError(SyncKeyViewPasswordBox, SyncKeyViewErrorText);
+        SyncKeyViewConfirmButton.IsEnabled = false;
         ShowOverlay(SyncKeyViewOverlay, SyncKeyViewDialog, SyncKeyViewDialogTransform);
         SyncKeyViewPasswordBox.Focus(FocusState.Programmatic);
     }
@@ -5598,7 +6444,12 @@ public sealed partial class ToolsPage : Page
         if (_syncKeyFlowInFlight) return;
         if (_animSyncKeyView) return;
         _animSyncKeyView = true;
-        HideOverlay(SyncKeyViewOverlay, SyncKeyViewDialog, SyncKeyViewDialogTransform, () => _animSyncKeyView = false);
+        HideOverlay(SyncKeyViewOverlay, SyncKeyViewDialog, SyncKeyViewDialogTransform, () =>
+        {
+            SyncKeyViewPasswordBox.Password = "";
+            ClearPasswordError(SyncKeyViewPasswordBox, SyncKeyViewErrorText);
+            _animSyncKeyView = false;
+        });
     }
 
     private void SyncKeyViewClose_Click(object sender, RoutedEventArgs e) => HideSyncKeyViewDialog();
@@ -5612,7 +6463,14 @@ public sealed partial class ToolsPage : Page
         _syncKeyFlowInFlight = true;
         try
         {
-            var password = SyncKeyViewPasswordBox.Text;
+            var password = SyncKeyViewPasswordBox.Password;
+
+
+            if (string.IsNullOrEmpty(password))
+            {
+                ShowPasswordError(SyncKeyViewPasswordBox, SyncKeyViewErrorText, App.GetString("Sync_Key_View_Error"));
+                return;
+            }
 
             var revealed = await Task.Run(() => Services.SyncService.RevealSpaceKey(password));
             _syncKeyFlowInFlight = false;
@@ -5622,8 +6480,7 @@ public sealed partial class ToolsPage : Page
             if (revealed is null)
             {
 
-                SyncKeyViewErrorText.Visibility = Visibility.Visible;
-                FlashTextBox(SyncKeyViewPasswordBox);
+                ShowPasswordError(SyncKeyViewPasswordBox, SyncKeyViewErrorText, App.GetString("Sync_Key_View_Error"));
                 return;
             }
 
@@ -5678,8 +6535,9 @@ public sealed partial class ToolsPage : Page
 
             _pendingImportPath = path;
             _animSyncKeyImportPwd = false;
-            SyncKeyImportPwdBox.Text = "";
-            SyncKeyImportPwdErrorText.Visibility = Visibility.Collapsed;
+            SyncKeyImportPwdBox.Password = "";
+            ClearPasswordError(SyncKeyImportPwdBox, SyncKeyImportPwdErrorText);
+            SyncKeyImportPwdConfirmButton.IsEnabled = false;
             ShowOverlay(SyncKeyImportPwdOverlay, SyncKeyImportPwdDialog, SyncKeyImportPwdDialogTransform);
             SyncKeyImportPwdBox.Focus(FocusState.Programmatic);
         }
@@ -5696,7 +6554,8 @@ public sealed partial class ToolsPage : Page
         if (_syncKeyFlowInFlight) return;
         if (_animSyncKeyImportPwd) return;
         _animSyncKeyImportPwd = true;
-        SyncKeyImportPwdBox.Text = "";
+        SyncKeyImportPwdBox.Password = "";
+        ClearPasswordError(SyncKeyImportPwdBox, SyncKeyImportPwdErrorText);
         _pendingImportPath = null;
         HideOverlay(SyncKeyImportPwdOverlay, SyncKeyImportPwdDialog, SyncKeyImportPwdDialogTransform, () => _animSyncKeyImportPwd = false);
     }
@@ -5715,7 +6574,13 @@ public sealed partial class ToolsPage : Page
         _syncKeyFlowInFlight = true;
         try
         {
-            var password = SyncKeyImportPwdBox.Text;
+            var password = SyncKeyImportPwdBox.Password;
+
+            if (string.IsNullOrEmpty(password))
+            {
+                ShowPasswordError(SyncKeyImportPwdBox, SyncKeyImportPwdErrorText, App.GetString("Store_Err_WrongPassword"));
+                return;
+            }
 
             var outcome = await Task.Run(() => Services.SyncService.ImportSpaceKeyFile(path, password));
             _syncKeyFlowInFlight = false;
@@ -5729,9 +6594,7 @@ public sealed partial class ToolsPage : Page
             if (!outcome.Ok)
             {
 
-                SyncKeyImportPwdErrorText.Text = App.GetString(outcome.Message);
-                SyncKeyImportPwdErrorText.Visibility = Visibility.Visible;
-                FlashTextBox(SyncKeyImportPwdBox);
+                ShowPasswordError(SyncKeyImportPwdBox, SyncKeyImportPwdErrorText, App.GetString(outcome.Message));
                 return;
             }
 

@@ -1,6 +1,7 @@
 var CACHE_PREFIX = 'novara-web-shell-';
-var CACHE = CACHE_PREFIX + 'v27';
+var CACHE = CACHE_PREFIX + 'v38';
 var SCOPE = self.registration.scope;
+var SHELL_ORIGIN = new URL(SCOPE).origin;
 
 
 var SHELL = ['', 'index.html', 'viewer.css', 'app.css', 'editor.css', 'viewer.js', 'app.js', 'edit.js', 'manifest.webmanifest', 'icon.png']
@@ -41,6 +42,9 @@ self.addEventListener('fetch', function (event) {
   if (request.method !== 'GET') return;
 
   var url = new URL(request.url);
+
+
+  if (url.origin !== SHELL_ORIGIN) return;
 
   var canonical = SHELL_PATHS[url.pathname];
   if (!canonical) return;

@@ -101,6 +101,9 @@ public sealed partial class PlanPage : Page
 
         SetReminderDatePicker.DateChanged += (_, _) => UpdateSetReminderConfirmState();
         SetReminderTimePicker.TimeChanged += (_, _) => UpdateSetReminderConfirmState();
+
+        ReminderDatePicker.DateChanged += (_, _) => UpdateReminderConfirmState();
+        ReminderTimePicker.TimeChanged += (_, _) => UpdateReminderConfirmState();
         Loaded += (_, _) => { LoadFromStore(); RefreshAllReminderBorders(); };
         RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs();
         Unloaded += (_, _) => { NewTodoOverlay.Visibility = Visibility.Collapsed; NewNoteOverlay.Visibility = Visibility.Collapsed; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; ReminderOverlay.Visibility = Visibility.Collapsed;
@@ -156,7 +159,15 @@ public sealed partial class PlanPage : Page
         var db = App.Store?.Database;
 
 
-        if (db == null) { _bulkLoading = false; _storeLoaded = false; return; }
+
+        if (db == null) { _bulkLoading = false; _storeLoaded = false; UpdateEmptyHint(); return; }
+
+
+
+
+        _appliedDisplayMode = MemoDisplayMode.Normalize(db.AppSettings.MemoCardDisplayMode);
+        bool memoryMode = _appliedDisplayMode == MemoDisplayMode.Memory;
+        bool modeExpanded = _appliedDisplayMode == MemoDisplayMode.Fixed;
 
         var todos = db.TodoCards.Where(x => !x.IsDeleted).ToList();
         var notes = db.NoteCards.Where(x => !x.IsDeleted).ToList();
@@ -194,27 +205,34 @@ public sealed partial class PlanPage : Page
         {
             await ChunkedRender.RunAsync(sorted.Count, 8, DispatcherQueue, (s, e) =>
             {
+
+
+
+                string wsNow = App.CurrentWorkspaceId;
+                bool wsActiveNow = !string.IsNullOrEmpty(wsNow);
                 for (int i = s; i < e; i++)
                 {
                     var it = sorted[i];
                     if (it.IsTodo)
                     {
                         var t = todoById[it.Id];
-                        var card = BuildTodoCard(t.Title, t.IconKey, t.MainText, t.SubTexts, t.CheckedStates, t.IsExpanded);
+                        var card = BuildTodoCard(t.Title, t.IconKey, t.MainText, t.SubTexts, t.CheckedStates, memoryMode ? t.IsExpanded : modeExpanded);
                         _cardIds[card] = t.Id;
                         _createdAt[card] = t.CreatedAt;
                         if (t.IsStarred) { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
                         if (t.IsPinned) { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
+                        if (wsActiveNow && !string.Equals(t.WorkspaceId ?? "", wsNow, StringComparison.Ordinal)) card.Visibility = Visibility.Collapsed;
                         if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx);
                     }
                     else
                     {
                         var n = noteById[it.Id];
-                        var card = BuildNoteCard(n.Title, n.IconKey, n.Content, n.IsExpanded);
+                        var card = BuildNoteCard(n.Title, n.IconKey, n.Content, memoryMode ? n.IsExpanded : modeExpanded);
                         _cardIds[card] = n.Id;
                         _createdAt[card] = n.CreatedAt;
                         if (n.IsStarred) { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
                         if (n.IsPinned) { _pinnedCards.Add(card); if (_pinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
+                        if (wsActiveNow && !string.Equals(n.WorkspaceId ?? "", wsNow, StringComparison.Ordinal)) card.Visibility = Visibility.Collapsed;
                         if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx);
                     }
                     entIdx++;
@@ -243,14 +261,24 @@ public sealed partial class PlanPage : Page
 
         _entrancePlayed = true;
         _bulkLoading = false;
-        ReorderCards();
+        try
+        {
+            ReorderCards();
 
 
-        _appliedDisplayMode = MemoDisplayMode.Normalize(db.AppSettings.MemoCardDisplayMode);
-        ApplyPlanDisplayMode(_appliedDisplayMode, animate: false);
-        ApplyCardFilters();
-        RefreshAllReminderBorders();
-        if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
+
+            ApplyPlanDisplayMode(_appliedDisplayMode, animate: false);
+            ApplyCardFilters();
+            RefreshAllReminderBorders();
+            if (_persistAfterRender) { _persistAfterRender = false; PersistOrderAndSave(); }
+        }
+        catch (Exception ex)
+        {
+
+
+            System.Diagnostics.Debug.WriteLine($"计划页收尾失败（页面保持已加载）: {ex}");
+            Novara.Services.CrashLogger.LogNote("PlanPagePostRender", ex.Message);
+        }
     }
 
     private void PersistOrderAndSave()
@@ -347,7 +375,23 @@ public sealed partial class PlanPage : Page
         App.Store?.SaveAsync();
     }
 
-    private void UpdateEmptyHint() { bool anyVisible = false; foreach (var c in CardList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; } if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; } EmptyHint.Visibility = Visibility.Visible; EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch { "todo" => App.GetString("Plan_Filter_Todo_Empty"), "note" => App.GetString("Plan_Filter_Note_Empty"), _ => App.GetString("Plan_Empty_Tip") }; FloatInHint(); }
+    private void UpdateEmptyHint()
+    {
+        bool anyVisible = false;
+        foreach (var c in CardList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
+        if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; }
+
+        var title = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch
+        {
+            "todo" => App.GetString("Plan_Filter_Todo_Empty"),
+            "note" => App.GetString("Plan_Filter_Note_Empty"),
+            _ => App.GetString("Plan_Empty_Tip"),
+        };
+        EmptyHint.Content = Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.EmptyStateArt.ClickBody, Novara.Services.EmptyStateArt.ClickAccent, 1024, 1024,
+            title, App.GetString("Plan_Empty_Sub"));
+        EmptyHint.Visibility = Visibility.Visible;
+    }
 
 
     public string GetFilter() => _currentFilter;
@@ -386,26 +430,6 @@ public sealed partial class PlanPage : Page
             b.Visibility = (typeMatch && wsMatch) ? Visibility.Visible : Visibility.Collapsed;
         }
         UpdateEmptyHint();
-    }
-
-    private void FloatInHint()
-    {
-        EmptyHint.Opacity = 0;
-        if (!App.IsAnimationsEnabled) { EmptyHint.Opacity = 1; if (EmptyHint.RenderTransform is TranslateTransform st) st.Y = 0; return; }
-        if (EmptyHint.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            EmptyHint.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(oa, EmptyHint); Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, tt); Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
     }
 
     private void RootGrid_ContextRequested(UIElement s, ContextRequestedEventArgs a) { var m = BuildEmptyAreaMenu(); if (a.TryGetPosition(s, out var p)) m.ShowAt(s, p); else m.ShowAt(s, new Point(0, 0)); }
@@ -511,7 +535,10 @@ public sealed partial class PlanPage : Page
         if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(ReminderContentBox); return; }
         var d = ReminderDatePicker.Date;
         var t = ReminderTimePicker.Time;
-        var due = new DateTimeOffset(d.Year, d.Month, d.Day, t.Hours, t.Minutes, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(d.Year, d.Month, d.Day)));
+
+
+        var localDue = new DateTime(d.Year, d.Month, d.Day, t.Hours, t.Minutes, 0);
+        var due = new DateTimeOffset(localDue, TimeZoneInfo.Local.GetUtcOffset(localDue));
 
         if (due.LocalDateTime <= DateTime.Now) { _confirming = false; App.ShowToast(App.GetString("Reminder_Past_Time"), ToastTone.Error); FlashTextBox(ReminderContentBox); return; }
 
@@ -611,7 +638,11 @@ public sealed partial class PlanPage : Page
 
     private void UpdateReminderConfirmState()
     {
-        ConfirmReminderDialogButton.IsEnabled = !string.IsNullOrWhiteSpace(ReminderContentBox.Text);
+
+
+        var due = ReminderDatePicker.Date.Date + ReminderTimePicker.Time;
+        ConfirmReminderDialogButton.IsEnabled =
+            !string.IsNullOrWhiteSpace(ReminderContentBox.Text) && due > DateTime.Now;
     }
 
     private void UpdateTodoConfirmState()
@@ -708,8 +739,11 @@ public sealed partial class PlanPage : Page
                     if (_todoData.TryGetValue(nc, out var nd2)) te.CheckedStates = new List<bool>(nd2.checkedStates);
                 }
 
-                if (Services.StickySync.Contains(editTid.ToString()))
-                    Services.StickySync.UpdateNote(editTid.ToString(), "todo", name, "", BuildTodoItems(mainText, subTexts, newStates));
+                if (Services.StickySync.Contains(editTid.ToString())
+                    && !Services.StickySync.UpdateNote(editTid.ToString(), "todo", name, "", BuildTodoItems(mainText, subTexts, newStates)))
+                {
+                    App.ShowToast(App.GetString("Common_Toast_Failed"));
+                }
                 if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
@@ -768,6 +802,16 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         Grid.SetRow(tr, 0); root.Children.Add(tr);
         var lp = new StackPanel { Margin = new Thickness(32, 8, 0, 0) }; Grid.SetRow(lp, 1); root.Children.Add(lp);
         card.Child = root;
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, title);
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            OnPlanHeaderClick(card);
+        };
 
         int total = 1 + subTexts.Count;
 
@@ -835,7 +879,18 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         int subCount = sp.Children.Count;
         bool preview = collapsed && PlanCollapsePolicy.ShouldShowTodoExpand(subCount);
         bool alreadyCollapsed = preview && !double.IsNaN(host.Height) && CollapsedRowsHidden(sp);
-        ApplyTodoRowStates(card, sp, preview, alreadyCollapsed);
+
+
+        bool deferPreviewMetrics = animate && preview && !alreadyCollapsed;
+        if (!deferPreviewMetrics) ApplyTodoRowStates(card, sp, preview, alreadyCollapsed);
+        else
+        {
+
+
+
+            for (int i = PlanCollapsePolicy.TodoPreviewRows; i < sp.Children.Count; i++)
+                if (sp.Children[i] is Grid row) row.IsHitTestVisible = false;
+        }
         if (alreadyCollapsed) return;
 
         double rest = PlanCollapsePolicy.TodoPreviewRows * PlanCollapsePolicy.TodoPreviewRowHeight;
@@ -853,9 +908,24 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
             HideCollapsedRows(sp);
             return;
         }
-        Services.MeltAnim.Begin(host, expand: false, restHeight: rest, durationMs: durationMs, completed: () =>
+
+
+
+        double expandedRest = rest;
+        double measured = 0;
+        for (int i = 0; i < Math.Min(PlanCollapsePolicy.TodoPreviewRows, sp.Children.Count); i++)
+            if (sp.Children[i] is FrameworkElement row && row.ActualHeight > 0)
+
+
+
+                measured += row.ActualHeight + row.Margin.Top + row.Margin.Bottom;
+        if (measured > 0) expandedRest = measured;
+
+        Services.MeltAnim.Begin(host, expand: false, restHeight: expandedRest, durationMs: durationMs, completed: () =>
         {
+            ApplyTodoRowStates(card, sp, preview: true, keepExtraRowsHidden: true);
             HideCollapsedRows(sp);
+            host.Height = rest;
             host.Clip = null;
         });
     }
@@ -1088,7 +1158,10 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
             if (t != null) { t.CheckedStates = new List<bool>(states); App.Store?.SaveAsync(); }
 
             if (Services.StickySync.Contains(cid.ToString()) && _todoData.TryGetValue(card, out var td))
-                Services.StickySync.UpdateNote(cid.ToString(), "todo", td.title ?? "", "", BuildTodoItems(td.mainText, td.subTexts, states));
+                if (!Services.StickySync.UpdateNote(cid.ToString(), "todo", td.title ?? "", "", BuildTodoItems(td.mainText, td.subTexts, states)))
+                {
+                    App.ShowToast(App.GetString("Common_Toast_Failed"));
+                }
         }
     }
 
@@ -1241,7 +1314,18 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         var tw = new Grid(); tw.Children.Add(tb);
         Grid.SetColumn(tw, 1); row.Children.Add(tw);
         void UpdateVisual() => UpdateRowVisual(row, checkedStates[index]);
-        cb.Tapped += (_, _) => { checkedStates[index] = !checkedStates[index]; UpdateVisual(); OnTodoRowCheckedChanged(card, checkedStates, index); };
+        void ToggleRow() { checkedStates[index] = !checkedStates[index]; UpdateVisual(); OnTodoRowCheckedChanged(card, checkedStates, index); }
+
+
+        cb.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(cb, text);
+        cb.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            ToggleRow();
+        };
+        cb.Tapped += (_, _) => ToggleRow();
         UpdateVisual();
         list.Children.Add(row);
         return row;
@@ -1403,6 +1487,10 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         if (_dragging || !card.IsLoaded) return;
         _dragging = true;
         _dragCard = card;
+
+
+        _dropCache = null;
+        _dropCacheDirty = true;
         _grabOffset = grabOffset;
         _dropIndex = _dragOriginIndex = CountVisibleBeforeIn(card, CardList);
         int gen = ++_dragGeneration;
@@ -1512,6 +1600,10 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         StopAutoScroll();
         ResetCardBorder(card);
         card.Opacity = 1;
+
+
+
+        _dropCache = null; _dropCacheDirty = true;
         RestoreDragFolds(animate: false);
         _pressArmedCard = null;
     }
@@ -1562,6 +1654,9 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
                 _dropCache.Add((fe, top, fe.ActualHeight / 2));
             }
         }
+
+
+        _dropCacheDirty = false;
     }
 
     private void UpdateDropIndicator(int index)
@@ -1587,7 +1682,7 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
         if (_dropIndex == index && _dropIndicator != null) return;
         if (_dropIndicator != null) CardList.Children.Remove(_dropIndicator);
         else _dropIndicator = CreateDropIndicator();
-        CardList.Children.Insert(index, _dropIndicator);
+        CardList.Children.Insert(PhysicalIndexForVisibleSlotIn(index, CardList), _dropIndicator);
         _dropIndex = index;
         _dropCacheDirty = true;
     }
@@ -1690,6 +1785,10 @@ private Border BuildTodoCard(string title, string iconKey, string mainText, List
             PersistManualOrder();
         }
         RestoreDragFolds(animate: true);
+
+
+        _dropCache = null;
+        _dropCacheDirty = true;
         _pressArmedCard = null;
     }
 
@@ -1800,7 +1899,13 @@ PersistOrderAndSave(); };
             if (onDesktop)
             {
                 var cdi = new MenuFlyoutItem { Style = (Style)Application.Current.Resources["GlassMenuFlyoutItemStyle"], Text = App.GetString("Menu_CancelDesktopNote"), Icon = new PathIcon { Data = (Geometry)cv(typeof(Geometry), IconData.CancelDesktop), Foreground = App.GetBrush("IconForegroundBrush") } };
-                cdi.Click += (_, _) => { if (cardId != null) Services.StickySync.RemoveNote(cardId); App.ShowToast(App.GetString("Common_Toast_Recalled")); };
+                cdi.Click += (_, _) =>
+                {
+
+                    bool removed = cardId != null && Services.StickySync.RemoveNote(cardId);
+                    App.ShowToast(App.GetString(removed ? "Common_Toast_Recalled" : "Common_Toast_Failed"),
+                                  removed ? ToastTone.Success : ToastTone.Error);
+                };
                 m.Items.Add(cdi);
             }
             else
@@ -1927,7 +2032,8 @@ PersistOrderAndSave(); };
             if (t != null) { t.ReminderAt = due; t.ReminderSetAt = DateTime.Now; }
         }
         App.Store?.SaveAsync();
-        Services.ReminderScheduler.Schedule(id, due);
+
+        _ = System.Threading.Tasks.Task.Run(() => Services.ReminderScheduler.Schedule(id, due));
         RefreshReminderBorder(card);
         StartReminderRefresh();
     }
@@ -1949,7 +2055,8 @@ PersistOrderAndSave(); };
             if (t != null) { t.ReminderAt = null; t.ReminderSetAt = null; }
         }
         App.Store?.SaveAsync();
-        Services.ReminderScheduler.Cancel(id);
+
+        _ = System.Threading.Tasks.Task.Run(() => Services.ReminderScheduler.Cancel(id));
         _reminderCards.Remove(card);
         ResetCardBorder(card);
     }
@@ -2337,7 +2444,7 @@ PersistOrderAndSave(); };
     private void OnDeleteConfirmHideCompleted(int hideGen) { if (hideGen != _deleteConfirmHideGen) return; DeleteConfirmOverlay.Visibility = Visibility.Collapsed; _pendingDeleteCard = null; _deleteConfirming = false; }
     private void DeleteConfirmClose_Click(object s, RoutedEventArgs e) => HideDeleteConfirmDialog();
     private void DeleteConfirmScrim_Tapped(object s, TappedRoutedEventArgs e) { if (ReferenceEquals(e.OriginalSource, DeleteConfirmScrim)) HideDeleteConfirmDialog(); }
-    private void DeleteConfirmButton_Click(object s, RoutedEventArgs e) { if (_pendingDeleteCard == null) { HideDeleteConfirmDialog(); return; } if (_deleteConfirming) return; _deleteConfirming = true; { bool isNote = _pendingDeleteCard.Tag is string tg && tg == "note"; _starredCards.Remove(_pendingDeleteCard); _pinnedCards.Remove(_pendingDeleteCard); _pinIcons.Remove(_pendingDeleteCard); _starIcons.Remove(_pendingDeleteCard); _todoData.Remove(_pendingDeleteCard); _todoCollapsed.Remove(_pendingDeleteCard); _todoCompletedBadges.Remove(_pendingDeleteCard); _todoProgressTexts.Remove(_pendingDeleteCard); _noteData.Remove(_pendingDeleteCard); _noteExpanded.Remove(_pendingDeleteCard); _todoRowPanels.Remove(_pendingDeleteCard); _todoSubPanels.Remove(_pendingDeleteCard); _todoSubHosts.Remove(_pendingDeleteCard); _noteContentHosts.Remove(_pendingDeleteCard); _noteContentBlocks.Remove(_pendingDeleteCard); _noteFadeOverlays.Remove(_pendingDeleteCard); _createdAt.Remove(_pendingDeleteCard); _reminderCards.Remove(_pendingDeleteCard); _dueShown.Remove(_pendingDeleteCard);
+    private void DeleteConfirmButton_Click(object s, RoutedEventArgs e) { if (_pendingDeleteCard == null) { HideDeleteConfirmDialog(); return; } if (_deleteConfirming) return; _deleteConfirming = true; { bool isNote = _pendingDeleteCard.Tag is string tg && tg == "note"; _starredCards.Remove(_pendingDeleteCard); _pinnedCards.Remove(_pendingDeleteCard); _pinIcons.Remove(_pendingDeleteCard); _starIcons.Remove(_pendingDeleteCard); _todoData.Remove(_pendingDeleteCard); _todoCollapsed.Remove(_pendingDeleteCard); _todoCompletedBadges.Remove(_pendingDeleteCard); _todoProgressTexts.Remove(_pendingDeleteCard); _noteData.Remove(_pendingDeleteCard); _noteExpanded.Remove(_pendingDeleteCard); _expandableNotes.Remove(_pendingDeleteCard); _todoRowPanels.Remove(_pendingDeleteCard); _todoSubPanels.Remove(_pendingDeleteCard); _todoSubHosts.Remove(_pendingDeleteCard); _noteContentHosts.Remove(_pendingDeleteCard); _noteContentBlocks.Remove(_pendingDeleteCard); _noteFadeOverlays.Remove(_pendingDeleteCard); _createdAt.Remove(_pendingDeleteCard); _reminderCards.Remove(_pendingDeleteCard); _dueShown.Remove(_pendingDeleteCard);
 
             _lastReminderColor.Remove(_pendingDeleteCard);
             if (_cardIds.Remove(_pendingDeleteCard, out var delId))
@@ -2566,7 +2673,7 @@ PersistOrderAndSave(); };
     }
 
     private void NewNoteConfirm_Click(object s, RoutedEventArgs e) { if (_confirming) return; _confirming = true; bool isEdit = _editingNoteCard != null;
-        var name = NoteNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(NoteNameBox); return; } var iconKey = _noteSelectedIconKey ?? GetRandomIconKey(); var content = NoteContentBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(NoteContentBox); return; } if (_editingNoteCard != null) { var old = _editingNoteCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); bool wasReminder = _reminderCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; bool wasExpanded = _noteExpanded.TryGetValue(old, out var we) && we; _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _noteData.Remove(old); _noteExpanded.Remove(old); _noteContentHosts.Remove(old); _noteContentBlocks.Remove(old); _noteFadeOverlays.Remove(old); _createdAt.Remove(old); _reminderCards.Remove(old); _dueShown.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildNoteCard(name, iconKey, content, wasExpanded); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } if (wasReminder) { _reminderCards.Add(nc); } App.PlayCardEntrance(nc);
+        var name = NoteNameBox.Text.Trim(); if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(NoteNameBox); return; } var iconKey = _noteSelectedIconKey ?? GetRandomIconKey(); var content = NoteContentBox.Text.Trim(); if (string.IsNullOrWhiteSpace(content)) { _confirming = false; FlashTextBox(NoteContentBox); return; } if (_editingNoteCard != null) { var old = _editingNoteCard; bool wasStar = _starredCards.Contains(old); bool wasPin = _pinnedCards.Contains(old); bool wasReminder = _reminderCards.Contains(old); var oldCreated = _createdAt.TryGetValue(old, out var oc) ? oc : DateTime.Now; bool wasExpanded = _noteExpanded.TryGetValue(old, out var we) && we; _starredCards.Remove(old); _pinnedCards.Remove(old); _pinIcons.Remove(old); _starIcons.Remove(old); _noteData.Remove(old); _noteExpanded.Remove(old); _expandableNotes.Remove(old); _noteContentHosts.Remove(old); _noteContentBlocks.Remove(old); _noteFadeOverlays.Remove(old); _createdAt.Remove(old); _reminderCards.Remove(old); _dueShown.Remove(old); CardList.Children.Remove(old); _bulkLoading = true; var nc = BuildNoteCard(name, iconKey, content, wasExpanded); _bulkLoading = false; _createdAt[nc] = oldCreated; if (wasStar) { _starredCards.Add(nc); if (_starIcons.TryGetValue(nc, out var si)) si.Visibility = Visibility.Visible; } if (wasPin) { _pinnedCards.Add(nc); if (_pinIcons.TryGetValue(nc, out var pi)) pi.Visibility = Visibility.Visible; } if (wasReminder) { _reminderCards.Add(nc); } App.PlayCardEntrance(nc);
 
             if (_cardIds.TryGetValue(old, out var editNid))
             {
@@ -2580,7 +2687,10 @@ PersistOrderAndSave(); };
                 }
 
                 if (Services.StickySync.Contains(editNid.ToString()))
-                    Services.StickySync.UpdateNote(editNid.ToString(), "note", name, content);
+                    if (!Services.StickySync.UpdateNote(editNid.ToString(), "note", name, content))
+                    {
+                        App.ShowToast(App.GetString("Common_Toast_Failed"));
+                    }
                 if (wasReminder) RefreshReminderBorder(nc);
             }
             _cardIds.Remove(old);
@@ -2640,6 +2750,16 @@ PersistOrderAndSave(); };
         _noteContentBlocks[card] = contentBlock;
         _noteFadeOverlays[card] = fadeOverlay;
         card.Child = root;
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, title);
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            OnPlanHeaderClick(card);
+        };
 
 
 

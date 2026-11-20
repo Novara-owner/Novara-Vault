@@ -42,6 +42,7 @@ public partial class CountdownBorder : Grid
     private double _totalSeconds;
     private DateTimeOffset _end;
     private bool _built;
+    private int _generation;
 
 
     public event Action? Completed;
@@ -62,6 +63,7 @@ public partial class CountdownBorder : Grid
     public void Start(int seconds)
     {
         Build();
+        _generation++;
         Reset();
         if (_content is not Button btn) { Completed?.Invoke(); return; }
 
@@ -124,6 +126,25 @@ public partial class CountdownBorder : Grid
         if (_content is Button charged)
             charged.Opacity = Motion.CooldownDisabledOpacity
                 + (1 - Motion.CooldownDisabledOpacity) * progress;
+    }
+
+
+
+
+    public void Stop()
+    {
+        if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTick; _timer = null; }
+    }
+
+
+
+    public int Generation => _generation;
+
+
+
+    public void ResetAfterHide(int generation)
+    {
+        if (generation == _generation) Reset();
     }
 
 

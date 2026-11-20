@@ -44,7 +44,8 @@
                              Style="{StaticResource NovaraSearchBoxStyle}"
                              VerticalAlignment="Center"
                              MaxLength="200"
-                             Margin="40,0,132,0" />
+                             Margin="40,0,132,0"
+                             GotFocus="SearchBox_GotFocus" LostFocus="SearchBox_LostFocus" />
 
                 </Grid>
             </Border>
@@ -61,24 +62,7 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Spacing="10"
-                    Visibility="Collapsed">
-            <Viewbox x:Name="EmptyHintIconBox" Width="56" Height="56" Stretch="Uniform" Opacity="1"
-                     Visibility="Collapsed">
-                <PathIcon x:Name="EmptyHintIcon" Foreground="{ThemeResource AppTextSecondaryBrush}" />
-            </Viewbox>
-            <TextBlock x:Name="EmptyHintText"
-                       HorizontalAlignment="Center"
-                       TextAlignment="Center"
-                       FontSize="13" FontWeight="Light"
-                       Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="1" TextWrapping="NoWrap" MaxWidth="600" />
-            <TextBlock x:Name="CmdHintText"
-                       HorizontalAlignment="Center"
-                       TextAlignment="Center"
-                       FontSize="12" FontWeight="Light"
-                       Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="1" Visibility="Collapsed" />
-        </StackPanel>
+                    Visibility="Collapsed" />
 
 
         <Button x:Name="FocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />

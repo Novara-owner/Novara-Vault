@@ -26,7 +26,7 @@ internal static class McpClientIdentity
         try
         {
             if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientPid) || clientPid == 0)
-                return AgentIdentity.Unresolved("无法确认管道对端进程");
+                return AgentIdentity.Unresolved("Mcp_Iden_PeerProcess");
 
 
 
@@ -34,7 +34,7 @@ internal static class McpClientIdentity
 
             var clientImage = ImagePathOf((int)clientPid);
             if (clientImage is null)
-                return AgentIdentity.Unresolved("无法确认管道客户端（NovaraMCP.exe）的映像路径");
+                return AgentIdentity.Unresolved("Mcp_Iden_ClientImage");
             var clientProblem = VerifyClientImage(clientImage);
             if (clientProblem.Length > 0) return AgentIdentity.Unresolved(clientProblem);
 
@@ -43,7 +43,7 @@ internal static class McpClientIdentity
 
 
 
-            if (parentPid <= 0) return AgentIdentity.Unresolved("无法确认启动 NovaraMCP 的 Agent 进程");
+            if (parentPid <= 0) return AgentIdentity.Unresolved("Mcp_Iden_ParentProcess");
 
 
 
@@ -52,19 +52,19 @@ internal static class McpClientIdentity
 
 
             var clientCreated = CreationTimeOf((int)clientPid);
-            if (clientCreated is null) return AgentIdentity.Unresolved("无法确认 NovaraMCP 的启动时刻");
+            if (clientCreated is null) return AgentIdentity.Unresolved("Mcp_Iden_ClientImage");
             var parentCreated = CreationTimeOf(parentPid);
             if (parentCreated is null)
-                return AgentIdentity.Unresolved("启动 NovaraMCP 的 Agent 进程已经退出（它不能再作为授权身份）");
+                return AgentIdentity.Unresolved("Mcp_Iden_ParentGone");
             if (parentCreated > clientCreated)
-                return AgentIdentity.Unresolved("启动 NovaraMCP 的 Agent 进程已经退出，且该进程号已被另一个进程占用");
+                return AgentIdentity.Unresolved("Mcp_Iden_ParentPidReused");
 
             var imagePath = ImagePathOf(parentPid);
             return imagePath is null
-                ? AgentIdentity.Unresolved("无法确认启动 NovaraMCP 的进程映像路径")
+                ? AgentIdentity.Unresolved("Mcp_Iden_ParentProcess")
                 : AgentIdentity.Resolved(imagePath);
         }
-        catch { return AgentIdentity.Unresolved("无法确认客户端进程身份"); }
+        catch { return AgentIdentity.Unresolved("Mcp_Iden_Unknown"); }
     }
 
 
@@ -75,21 +75,21 @@ internal static class McpClientIdentity
     {
         var name = Path.GetFileName(clientImagePath);
         if (!string.Equals(name, "NovaraMCP.exe", StringComparison.OrdinalIgnoreCase))
-            return $"连接的进程不是 NovaraMCP.exe（{name}），已拒绝：只有随 Novara 发布的 MCP 转发器可以接入";
+            return "Mcp_Iden_ClientRejected";
 
         var shipped = ShippedClientCandidates();
         if (shipped.Count == 0)
-            return "无法定位随 Novara 发布的 NovaraMCP.exe，无法校验连接方身份（已拒绝）";
+            return "Mcp_Iden_ForwarderMissing";
 
         var full = Path.GetFullPath(clientImagePath);
         foreach (var candidate in shipped)
             if (string.Equals(candidate, full, StringComparison.OrdinalIgnoreCase)) return "";
 
-        var clientHash = HashFile(full);
-        if (clientHash == null) return "无法读取连接方映像以校验身份（已拒绝）";
+        var clientHash = IdentityHash(full);
+        if (clientHash == null) return "Mcp_Iden_ForwarderMissing";
         foreach (var candidate in shipped)
-            if (string.Equals(HashFile(candidate), clientHash, StringComparison.Ordinal)) return "";
-        return "连接的 NovaraMCP.exe 与随 Novara 发布的版本不一致（已拒绝），请使用主程序目录中的 NovaraMCP.exe";
+            if (string.Equals(IdentityHash(candidate), clientHash, StringComparison.Ordinal)) return "";
+        return "Mcp_Iden_ClientMismatch";
     }
 
 
@@ -135,6 +135,19 @@ internal static class McpClientIdentity
         }
         catch { }
         return found;
+    }
+
+
+
+
+
+    private static string? IdentityHash(string exePath)
+    {
+        var exeHash = HashFile(exePath);
+        if (exeHash == null) return null;
+        var dll = Path.Combine(Path.GetDirectoryName(exePath) ?? "", "NovaraMCP.dll");
+        var dllHash = File.Exists(dll) ? HashFile(dll) : "none";
+        return dllHash == null ? null : exeHash + ":" + dllHash;
     }
 
     private static string? HashFile(string path)

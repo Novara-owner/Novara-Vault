@@ -175,6 +175,14 @@ public static class SyncHostSetup
 
 
 
+        app.Use(async (context, next) =>
+        {
+            context.Items[SocketPeerItemKey] = context.Connection.RemoteIpAddress;
+            await next();
+        });
+
+
+
 
 
         app.UseForwardedHeaders(BuildForwardedHeaders(trustedProxies, warn));
@@ -212,8 +220,15 @@ public static class SyncHostSetup
 
         app.Use(async (context, next) =>
         {
+
+            var socketPeer = context.Items.TryGetValue(SocketPeerItemKey, out var snap)
+                ? snap as IPAddress
+                : context.Connection.RemoteIpAddress;
+
+            var forwarded = context.Request.Headers.ContainsKey("X-Forwarded-For")
+                || context.Request.Headers.ContainsKey("X-Forwarded-Proto");
             if (context.Request.Path.StartsWithSegments(SyncApi.ApiPrefix)
-                && RequiresSecureTransport(context.Request.IsHttps, context.Connection.RemoteIpAddress))
+                && RequiresSecureTransport(context.Request.IsHttps, socketPeer, forwarded, context.Request.Host.Host))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 context.Response.ContentType = "application/json";
@@ -304,8 +319,22 @@ public static class SyncHostSetup
 
 
 
-    public static bool RequiresSecureTransport(bool isHttps, IPAddress? remoteAddress)
-        => !isHttps && (remoteAddress is null || !IPAddress.IsLoopback(remoteAddress));
+
+
+    public static bool RequiresSecureTransport(bool isHttps, IPAddress? socketPeer,
+        bool forwardedHeadersPresent, string? host)
+        => !isHttps && !IsLocalConnection(socketPeer, forwardedHeadersPresent, host);
+
+
+    private static bool IsLocalConnection(IPAddress? socketPeer, bool forwardedHeadersPresent, string? host)
+    {
+        if (socketPeer is null || !IPAddress.IsLoopback(socketPeer)) return false;
+        if (forwardedHeadersPresent) return false;
+        return host is "localhost" or "127.0.0.1" or "::1";
+    }
+
+
+    public const string SocketPeerItemKey = "novara.socket-peer";
 
 
 

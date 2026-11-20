@@ -14,17 +14,11 @@
 
     <Grid x:Name="RootGrid" ContextRequested="RootGrid_ContextRequested">
 
-        <TextBlock x:Name="EmptyHint"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   TextAlignment="Center"
-                   FontSize="13"
-                   FontWeight="Light"
-                   Foreground="{ThemeResource AppTextTertiaryBrush}"
-                   Opacity="1"
-                   TextWrapping="NoWrap"
-                   MaxWidth="600"
-                   Visibility="Visible" />
+
+        <ContentControl x:Name="EmptyHint" IsTabStop="False"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Visibility="Visible" />
 
         <ScrollViewer x:Name="DiaryScrollViewer"
                       VerticalScrollBarVisibility="Auto"

@@ -182,6 +182,59 @@ public class SqliteSpaceStoreTests : IDisposable
         Assert.Empty(Assert.Single(file.GetVersions(spaceId)).ChunkIds);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BothBackends_UpdateSpace_PreservesFieldsOwnedByOtherWriters(bool sqlite)
+    {
+        ISpaceStore store = sqlite ? new SqliteSpaceStore(_dir) : new FileSpaceStore(_dir);
+        var id = sqlite ? "update-sqlite" : "update-file";
+        store.SaveSpace(new SpaceRecord
+        {
+            SpaceId = id,
+            Name = "s",
+            EnrollmentHash = "old",
+            CurrentVersion = 4,
+            ContainerGeneration = 4,
+        });
+
+
+
+        store.UpdateSpace(id, s => s.EnrollmentHash = "rotated");
+        store.UpdateSpace(id, s =>
+        {
+            s.CurrentVersion = 5;
+            s.ContainerGeneration = 5;
+        });
+
+        var read = store.GetSpace(id)!;
+        Assert.Equal("rotated", read.EnrollmentHash);
+        Assert.Equal(5, read.CurrentVersion);
+        Assert.Equal(5, read.ContainerGeneration);
+        Assert.Throws<SpaceGoneException>(() => store.UpdateSpace("missing-" + id, s => s.Name = "x"));
+    }
+
+    [Fact]
+    public void FileStore_TouchDevice_KeepsRevokedAndTokenHash()
+    {
+        var store = new FileSpaceStore(_dir);
+        store.SaveSpace(new SpaceRecord { SpaceId = "dev-sp", Name = "s" });
+        store.SaveDevice("dev-sp", new DeviceRecord
+        {
+            DeviceId = "d1",
+            Name = "pc",
+            TokenHash = "h1",
+            Revoked = true,
+        });
+
+        store.TouchDevice("dev-sp", "d1", DateTime.UtcNow);
+
+        var device = store.GetDevice("dev-sp", "d1")!;
+        Assert.True(device.Revoked);
+        Assert.Equal("h1", device.TokenHash);
+        Assert.NotNull(device.LastSeenAt);
+    }
+
 
 
     [Fact]

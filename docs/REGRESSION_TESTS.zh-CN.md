@@ -4,13 +4,15 @@
 
 近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与验证轮次汇总；回归面有两层：
 
-1. **单元/集成测试** —— `Novara.Tests`（xUnit，50+ 文件，1,076 个测试），直接引用发行程序集，覆盖数据、加密、同步与服务端层。
-2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（1,032 条判据）、`Tools/reverse_verify.py`（207 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
+1. **单元/集成测试** —— `Novara.Tests`（xUnit，50+ 文件，1,670 个测试），直接引用发行程序集，覆盖数据、加密、同步、Space/封存与服务端层。
+2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（1,785 条判据）、`Tools/sync_guard.py`（314 条判据）、`Tools/reverse_verify.py`（437 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
 
 ## 映射（更新日志中的具名修复）
 
 | 版本 | 修复 | 回归测试 |
 |---|---|---|
+| 13.0 | Novara Space 容器、密钥包裹、索引与 journal：AES-256-GCM 容器与冻结向量、Argon2id 密钥槽、撕裂 journal 恢复、不可读 journal 隔离 | `SealContainerWriterTests`、`SealContainerReaderTests`、`SealKeySlotTests`、`SealKdfParamsTests`、`SealIndexTests`、`SealJournalTests`、`SealFaultInjectionTests`、`SealFormatDocTests`（CI） |
+| 13.0 | 空间不进入其余链路；备份 journal 门；补发密钥后同步自愈；32 MiB 上限；查看器 id 隔离；未分类卡首轮入场 | `SealIntegrationTests`、`SealImportTests`、`SealExportTests`；`page_lifecycle_guard` 与 `sync_guard` 源码形态不变量，各配变异用例 |
 | 12.0 | 跟随记忆值读取时归一化、以可选同步字段出站、远端 null 视为「无意见」 | `Novara.Tests/MemoDisplayModeTests.cs`（归一化/持久化契约/未触及模型）+ `SyncDiffTests.UngroupedCardExpanded_*`（CI） |
 | 12.0 | 本周期自审抓到的交互回归（未分类卡自己展开、首展丢动效、渐隐只落文字层） | `page_lifecycle_guard` 源码形态不变量，各配变异用例 |
 | 11.1 (R1) | HTML 编辑器图片选择器用错 COM 集合；多选被禁用 | `RegressionGuardsTests.FilePicker_MultiSelectUsesShellItemArray`（CI） |
@@ -53,4 +55,4 @@
 
 ---
 
-*最后更新：2026-10-28*
+*最后更新：2026-11-19*

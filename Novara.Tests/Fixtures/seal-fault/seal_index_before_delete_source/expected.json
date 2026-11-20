@@ -1,0 +1,7 @@
+{
+  "case": "seal_index_before_delete_source",
+  "setup": "entry indexed, original still on disk",
+  "actions": [
+    "OrphanSourceRemains"
+  ]
+}

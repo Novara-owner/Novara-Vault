@@ -38,8 +38,69 @@ public static class SyncService
     private static bool _keyWrapStale;
     private static bool _credentialUnavailable;
     private static SyncApiClient? _client;
+
+
+
+
+    private sealed class ClientScope
+    {
+        public readonly SyncApiClient Client;
+        public int Holders;
+        public bool Detached;
+        public ClientScope(SyncApiClient client) => Client = client;
+    }
+
+    private static ClientScope? _clientScope;
     private static Timer? _timer;
     private static int _busy;
+    private static CancellationTokenSource? _roundCts;
+
+
+
+    private static ClientScope? AcquireClientLocked()
+    {
+        if (!IsReady) return null;
+        _clientScope ??= new ClientScope(_client ??= BuildClient(_state, _deviceToken));
+        _clientScope.Holders++;
+        return _clientScope;
+    }
+
+
+
+
+    private static ClientScope? AcquirePendingClientLocked()
+    {
+        if (!_state.Enabled || _deviceToken is null) return null;
+        _clientScope ??= new ClientScope(_client ??= BuildClient(_state, _deviceToken));
+        _clientScope.Holders++;
+        return _clientScope;
+    }
+
+
+
+    private static void ReleaseClient(ClientScope? scope)
+    {
+        if (scope is null) return;
+        bool dispose = false;
+        lock (Gate)
+        {
+            scope.Holders--;
+            if (scope.Detached && scope.Holders == 0) dispose = true;
+        }
+        if (dispose) scope.Client.Dispose();
+    }
+
+
+    private static void DetachClientLocked()
+    {
+        if (_clientScope is { } scope)
+        {
+            scope.Detached = true;
+            if (scope.Holders == 0) scope.Client.Dispose();
+        }
+        _clientScope = null;
+        _client = null;
+    }
     private static SyncStateStore? _store;
     private static long _savedEpoch;
     private static NovaraStore? _savedStore;
@@ -106,8 +167,8 @@ public static class SyncService
 
         lock (Gate)
         {
-            _client?.Dispose();
-            _client = null;
+
+            DetachClientLocked();
             _state = state;
             _spaceKey = spaceKey;
             _deviceToken = token;
@@ -137,6 +198,11 @@ public static class SyncService
 
 
         if (state.Enabled && spaceKey is not null && token is not null) _ = SafeSyncNowAsync();
+
+
+
+        else if (state.Enabled && token is not null && !string.IsNullOrEmpty(state.PendingKeyWrapJson))
+            _ = Task.Run(() => TryPublishPendingAsync());
     }
 
 
@@ -182,8 +248,15 @@ public static class SyncService
         StopTimer();
         lock (Gate)
         {
-            _client?.Dispose();
-            _client = null;
+
+
+
+
+            _roundCts?.Cancel();
+
+
+
+            DetachClientLocked();
             _spaceKey = null;
             _deviceToken = null;
             _keyWrapStale = false;
@@ -322,8 +395,8 @@ public static class SyncService
 
             SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Pair, 0, deviceName));
 
-            _client?.Dispose();
-            _client = null;
+
+            DetachClientLocked();
             _state = state;
             _spaceKey = effectiveSpaceKey;
             _deviceToken = token;
@@ -396,12 +469,25 @@ public static class SyncService
     {
         if (string.IsNullOrEmpty(newPassword)) return RewrapOutcome.RoundTripFailed;
 
+
+
+
+        await TryPublishPendingAsync(waitForTurn: true).ConfigureAwait(false);
+
         SyncState state;
-        lock (Gate) state = _state;
-        if (string.IsNullOrEmpty(state.KeyWrapJson)) return RewrapOutcome.Ok;
+        string baseWrap;
+        string previousWrapJson;
+        lock (Gate)
+        {
+            state = _state;
+            var chained = !string.IsNullOrEmpty(state.PendingKeyWrapJson);
+            baseWrap = chained ? state.PendingKeyWrapJson! : state.KeyWrapJson;
+            previousWrapJson = chained
+                ? (state.PendingKeyWrapPrevious ?? state.KeyWrapJson)
+                : state.KeyWrapJson;
+        }
+        if (string.IsNullOrEmpty(baseWrap)) return RewrapOutcome.Ok;
 
-
-        var previousWrapJson = state.KeyWrapJson;
 
 
 
@@ -409,7 +495,7 @@ public static class SyncService
         string? rewrapped;
         try
         {
-            rewrapped = await Task.Run(() => SyncKeyWrap.Rewrap(previousWrapJson, oldPassword, newPassword)).ConfigureAwait(false);
+            rewrapped = await Task.Run(() => SyncKeyWrap.Rewrap(baseWrap, oldPassword, newPassword)).ConfigureAwait(false);
         }
         catch (InvalidDataException)
         {
@@ -431,56 +517,240 @@ public static class SyncService
 
 
 
+        RewrapOutcome? WriteLocal() => WriteKeyWrapLocal(state, rewrapped);
 
-
-
-
-
+        SyncApiClient? client;
+        ClientScope? scope;
         lock (Gate)
         {
+
+            if (!ReferenceEquals(_state, state))
+            {
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Error, 0, "session torn down during keywrap rewrap", false));
+                return RewrapOutcome.SessionTornDown;
+            }
+            scope = AcquireClientLocked();
+            client = scope?.Client;
+        }
+        try
+        {
+            if (client is null)
+            {
+
+
+                var localOnly = WriteLocal();
+                if (localOnly is not null) return localOnly.Value;
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "local only (no session client)", true));
+                NotifyKeyWrapLocalOnly();
+                return RewrapOutcome.OkLocalOnly;
+            }
+
+            var remote = await GetKeyWrapWithRetryAsync(client).ConfigureAwait(false);
+            if (!remote.Success || remote.Value is null)
+            {
+
+
+                RecordPending(state, rewrapped, previousWrapJson);
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "server record unavailable - publish pending", false));
+                return RewrapOutcome.RoundTripFailed;
+            }
+
+
+            if (!string.Equals(remote.Value.Json, previousWrapJson, StringComparison.Ordinal))
+            {
+
+                var differs = WriteLocal();
+                if (differs is not null) return differs.Value;
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "local only (server record differs)", true));
+                NotifyKeyWrapLocalOnly();
+                return RewrapOutcome.OkLocalOnly;
+            }
+
+            var put = await PutKeyWrapWithRetryAsync(client, rewrapped, remote.Value.Version).ConfigureAwait(false);
+            if (!put.Success)
+            {
+
+
+                RecordPending(state, rewrapped, previousWrapJson);
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "server publish failed - publish pending", false));
+                return RewrapOutcome.RoundTripFailed;
+            }
+
+
+
+            RecordPending(state, rewrapped, previousWrapJson);
+            var afterPut = WriteLocal();
+            if (afterPut is not null) return afterPut.Value;
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "local+remote", true));
+            return RewrapOutcome.Ok;
+        }
+        finally { ReleaseClient(scope); }
+    }
+
+
+
+
+
+    private static RewrapOutcome? WriteKeyWrapLocal(SyncState state, string rewrapped)
+    {
+        lock (Gate)
+        {
+
             if (!ReferenceEquals(_state, state))
             {
                 SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.Error, 0, "session torn down during keywrap rewrap", false));
                 return RewrapOutcome.SessionTornDown;
             }
             state.KeyWrapJson = rewrapped;
+            state.PendingKeyWrapJson = null;
+            state.PendingKeyWrapPrevious = null;
         }
-        if (!TrySaveState(state))
-        {
-            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.StateSaveFailed, 0, "keywrap rewrap", false));
-            return RewrapOutcome.StateWriteFailed;
-        }
+        if (TrySaveState(state)) return null;
 
-        SyncApiClient? client;
-        lock (Gate) client = _client;
-        if (client is null)
-        {
+
+        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.StateSaveFailed, 0, "keywrap rewrap", false));
+        return RewrapOutcome.StateWriteFailed;
+    }
 
 
 
-            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "local only (no session client)", true));
-            NotifyKeyWrapLocalOnly();
-            return RewrapOutcome.OkLocalOnly;
-        }
-
-        var remote = await client.GetKeyWrapAsync().ConfigureAwait(false);
 
 
-        if (!remote.Success || remote.Value is null ||
-            !string.Equals(remote.Value.Json, previousWrapJson, StringComparison.Ordinal))
+    private static void RecordPending(SyncState state, string rewrapped, string previousWrapJson)
+    {
+        lock (Gate)
         {
 
-
-
-
-            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "local only (server record differs)", true));
-            NotifyKeyWrapLocalOnly();
-            return RewrapOutcome.OkLocalOnly;
+            if (!ReferenceEquals(_state, state)) return;
+            state.PendingKeyWrapJson = rewrapped;
+            state.PendingKeyWrapPrevious = previousWrapJson;
         }
+        TrySaveState(state);
+    }
 
-        var put = await client.PutKeyWrapAsync(rewrapped, remote.Value.Version).ConfigureAwait(false);
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, put.Success ? "local+remote" : "local only", put.Success));
-        return put.Success ? RewrapOutcome.Ok : RewrapOutcome.RoundTripFailed;
+
+
+
+    private static void HealSessionAfterPendingLanded()
+    {
+        RefreshSessionSecrets();
+        if (IsReady) _ = SafeSyncNowAsync();
+    }
+
+    private static readonly SemaphoreSlim _pendingGate = new(1, 1);
+
+
+
+
+
+
+
+
+
+
+    private static async Task TryPublishPendingAsync(bool waitForTurn = false)
+    {
+
+
+
+
+
+        var acquired = waitForTurn
+            ? await _pendingGate.WaitAsync(3000).ConfigureAwait(false)
+            : _pendingGate.Wait(0);
+        if (!acquired) return;
+        try
+        {
+            SyncState state;
+            string pendingJson, pendingPrev;
+            lock (Gate)
+            {
+                state = _state;
+                if (string.IsNullOrEmpty(state.PendingKeyWrapJson)) return;
+                pendingJson = state.PendingKeyWrapJson!;
+                pendingPrev = state.PendingKeyWrapPrevious ?? state.KeyWrapJson;
+            }
+
+            ClientScope? scope;
+            SyncApiClient? client;
+            lock (Gate)
+            {
+                if (!ReferenceEquals(_state, state)) return;
+                scope = AcquirePendingClientLocked();
+                client = scope?.Client;
+            }
+            if (client is null) return;
+            try
+            {
+                var remote = await GetKeyWrapWithRetryAsync(client).ConfigureAwait(false);
+                if (!remote.Success || remote.Value is null) return;
+
+                if (string.Equals(remote.Value.Json, pendingPrev, StringComparison.Ordinal))
+                {
+                    var put = await PutKeyWrapWithRetryAsync(client, pendingJson, remote.Value.Version).ConfigureAwait(false);
+                    if (!put.Success) return;
+                    var landed = WriteKeyWrapLocal(state, pendingJson);
+                    if (landed is RewrapOutcome.SessionTornDown or RewrapOutcome.StateWriteFailed) return;
+                    HealSessionAfterPendingLanded();
+                    SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "pending publish: local+remote", true));
+                    return;
+                }
+
+                if (!string.Equals(remote.Value.Json, pendingJson, StringComparison.Ordinal))
+                {
+
+
+                    var localOnly = WriteKeyWrapLocal(state, pendingJson);
+                    if (localOnly is RewrapOutcome.SessionTornDown or RewrapOutcome.StateWriteFailed) return;
+
+
+                    HealSessionAfterPendingLanded();
+                    SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "pending publish: local only (server record differs)", true));
+                    NotifyKeyWrapLocalOnly();
+                    return;
+                }
+
+
+                var healed = WriteKeyWrapLocal(state, pendingJson);
+                if (healed is RewrapOutcome.SessionTornDown or RewrapOutcome.StateWriteFailed) return;
+                HealSessionAfterPendingLanded();
+                SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.KeyRewrap, 0, "pending publish: local landed (server already updated)", true));
+            }
+            finally { ReleaseClient(scope); }
+        }
+        catch (Exception ex)
+        {
+
+            SyncAuditLog.WriteOrdered(Audit(_state, SyncAuditEvents.Error, 0, "pending keywrap publish threw: " + ex.Message, false));
+        }
+        finally { _pendingGate.Release(); }
+    }
+
+
+
+
+
+    private static async Task<SyncApiResult<RemoteKeyWrap>> GetKeyWrapWithRetryAsync(SyncApiClient client)
+    {
+        var r = await client.GetKeyWrapAsync().ConfigureAwait(false);
+        for (var attempt = 1; attempt <= 2 && !r.Success && r.TransportFailure; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt)).ConfigureAwait(false);
+            r = await client.GetKeyWrapAsync().ConfigureAwait(false);
+        }
+        return r;
+    }
+
+
+    private static async Task<SyncApiResult<long>> PutKeyWrapWithRetryAsync(SyncApiClient client, string keyWrapJson, long ifMatchVersion)
+    {
+        var r = await client.PutKeyWrapAsync(keyWrapJson, ifMatchVersion).ConfigureAwait(false);
+        for (var attempt = 1; attempt <= 2 && !r.Success && r.TransportFailure; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt)).ConfigureAwait(false);
+            r = await client.PutKeyWrapAsync(keyWrapJson, ifMatchVersion).ConfigureAwait(false);
+        }
+        return r;
     }
 
 
@@ -536,10 +806,23 @@ public static class SyncService
 
 
 
+
+        if (!IsReady)
+        {
+            Interlocked.Exchange(ref _busy, 0);
+            return new SyncRoundOutcome(SyncRoundStatus.WaitUnlocked, "not ready");
+        }
+
+
+
         var startEpoch = Volatile.Read(ref _savedEpoch);
+        SyncApiClient? client = null;
+        ClientScope? clientScope = null;
+        var roundCts = new CancellationTokenSource();
+        lock (Gate) _roundCts = roundCts;
+        var ct = roundCts.Token;
         try
         {
-            SyncApiClient client;
             SyncState state;
             string? spaceKey;
             string? token;
@@ -548,8 +831,14 @@ public static class SyncService
                 state = _state;
                 spaceKey = _spaceKey;
                 token = _deviceToken;
-                client = _client ??= BuildClient(state, token);
+                clientScope = AcquireClientLocked();
+                client = clientScope?.Client;
             }
+
+
+
+            if (!string.IsNullOrEmpty(state.PendingKeyWrapJson))
+                await TryPublishPendingAsync().ConfigureAwait(false);
 
             var store = App.Store;
             if (store is null)
@@ -560,10 +849,10 @@ public static class SyncService
             var remindersBefore = ReminderSnapshot(store);
 
             var outcome = force
-                ? await SyncEngine.ForcePushAsync(store, state, spaceKey ?? "", client, DateTime.UtcNow).ConfigureAwait(false)
+                ? await SyncEngine.ForcePushAsync(store, state, spaceKey ?? "", client!, DateTime.UtcNow, ct).ConfigureAwait(false)
 
                 : await SyncEngine.RunRoundWithTransportRetryAsync(store, state, spaceKey ?? "",
-                    _ => Task.FromResult(client), DateTime.UtcNow).ConfigureAwait(false);
+                    _ => Task.FromResult(client!), DateTime.UtcNow, ct).ConfigureAwait(false);
 
 
 
@@ -598,6 +887,11 @@ public static class SyncService
         }
         finally
         {
+            lock (Gate) { if (ReferenceEquals(_roundCts, roundCts)) _roundCts = null; }
+            roundCts.Dispose();
+
+
+            ReleaseClient(clientScope);
             Interlocked.Exchange(ref _busy, 0);
 
 
@@ -839,38 +1133,48 @@ public static class SyncService
     public static async Task<ReadTokenOutcome> IssueReadTokenAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return ReadTokenOutcome.Local("Sync_ReadAccess_NeedsUnlocked");
+        try
+        {
+            var result = await client.IssueReadTokenAsync(ct).ConfigureAwait(false);
+            if (!result.Success) return ReadTokenOutcome.Failure(result.TransportFailure, result.Message);
 
-        var result = await client.IssueReadTokenAsync(ct).ConfigureAwait(false);
-        if (!result.Success) return ReadTokenOutcome.Failure(result.TransportFailure, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.ReadTokenCreate));
-        return ReadTokenOutcome.Success(result.Value!);
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.ReadTokenCreate));
+            return ReadTokenOutcome.Success(result.Value!);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
     public static async Task<(bool Ok, string Message)> RevokeReadTokenAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return (false, "Sync_ReadAccess_NeedsUnlocked");
+        try
+        {
+            var result = await client.RevokeReadTokenAsync(ct).ConfigureAwait(false);
+            if (!result.Success) return (false, result.Message);
 
-        var result = await client.RevokeReadTokenAsync(ct).ConfigureAwait(false);
-        if (!result.Success) return (false, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.ReadTokenRevoke));
-        return (true, "");
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.ReadTokenRevoke));
+            return (true, "");
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
@@ -880,11 +1184,19 @@ public static class SyncService
     public static async Task<(bool Ok, bool HasToken, string Message)> QueryReadTokenStateAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
-        lock (Gate) client = IsReady ? _client ??= BuildClient(_state, _deviceToken) : null;
+        ClientScope? scope;
+        lock (Gate)
+        {
+            scope = AcquireClientLocked();
+            client = scope?.Client;
+        }
         if (client is null) return (false, false, "Sync_ReadAccess_NeedsUnlocked");
-
-        var info = await client.GetInfoAsync(ct).ConfigureAwait(false);
-        return info.Success ? (true, info.Value!.HasReadToken, "") : (false, false, info.Message);
+        try
+        {
+            var info = await client.GetInfoAsync(ct).ConfigureAwait(false);
+            return info.Success ? (true, info.Value!.HasReadToken, "") : (false, false, info.Message);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
@@ -896,49 +1208,67 @@ public static class SyncService
     public static async Task<ReadTokenOutcome> IssueEditorDeviceAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return ReadTokenOutcome.Local("Sync_EditAccess_NeedsUnlocked");
+        try
+        {
+            var result = await client.IssueEditorDeviceAsync(ct).ConfigureAwait(false);
+            if (!result.Success) return ReadTokenOutcome.Failure(result.TransportFailure, result.Message);
 
-        var result = await client.IssueEditorDeviceAsync(ct).ConfigureAwait(false);
-        if (!result.Success) return ReadTokenOutcome.Failure(result.TransportFailure, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.EditorDeviceCreate));
-        return ReadTokenOutcome.Success(result.Value!.DeviceToken);
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.EditorDeviceCreate));
+            return ReadTokenOutcome.Success(result.Value!.DeviceToken);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
     public static async Task<(bool Ok, string Message)> RevokeEditorDeviceAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return (false, "Sync_EditAccess_NeedsUnlocked");
+        try
+        {
+            var result = await client.RevokeEditorDeviceAsync(ct).ConfigureAwait(false);
+            if (!result.Success) return (false, result.Message);
 
-        var result = await client.RevokeEditorDeviceAsync(ct).ConfigureAwait(false);
-        if (!result.Success) return (false, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.EditorDeviceRevoke));
-        return (true, "");
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.EditorDeviceRevoke));
+            return (true, "");
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
     public static async Task<(bool Ok, bool HasDevice, string Message)> QueryEditorDeviceStateAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
-        lock (Gate) client = IsReady ? _client ??= BuildClient(_state, _deviceToken) : null;
+        ClientScope? scope;
+        lock (Gate)
+        {
+            scope = AcquireClientLocked();
+            client = scope?.Client;
+        }
         if (client is null) return (false, false, "Sync_EditAccess_NeedsUnlocked");
-
-        var info = await client.GetInfoAsync(ct).ConfigureAwait(false);
-        return info.Success ? (true, info.Value!.HasEditorDevice, "") : (false, false, info.Message);
+        try
+        {
+            var info = await client.GetInfoAsync(ct).ConfigureAwait(false);
+            return info.Success ? (true, info.Value!.HasEditorDevice, "") : (false, false, info.Message);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
@@ -960,60 +1290,78 @@ public static class SyncService
     public static async Task<DeviceListOutcome> ListDevicesAsync(CancellationToken ct = default)
     {
         SyncApiClient? client;
-        lock (Gate) client = IsReady ? _client ??= BuildClient(_state, _deviceToken) : null;
+        ClientScope? scope;
+        lock (Gate)
+        {
+            scope = AcquireClientLocked();
+            client = scope?.Client;
+        }
         if (client is null) return DeviceListOutcome.Local("Sync_DeviceCenter_NeedsUnlocked");
+        try
+        {
+            var result = await client.ListDevicesAsync(ct).ConfigureAwait(false);
+            if (!result.Success) return DeviceListOutcome.Failure(result.TransportFailure, result.Message);
 
-        var result = await client.ListDevicesAsync(ct).ConfigureAwait(false);
-        if (!result.Success) return DeviceListOutcome.Failure(result.TransportFailure, result.Message);
-
-        var current = _state.DeviceId ?? "";
-        var devices = result.Value!
-            .OrderByDescending(d => d.LastSeenAt.HasValue)
-            .ThenByDescending(d => d.LastSeenAt)
-            .ThenBy(d => d.DeviceId == current ? 0 : 1)
-            .ToList();
-        foreach (var device in devices) device.Current = device.DeviceId == current;
-        return DeviceListOutcome.Success(devices);
+            var current = _state.DeviceId ?? "";
+            var devices = result.Value!
+                .OrderByDescending(d => d.LastSeenAt.HasValue)
+                .ThenByDescending(d => d.LastSeenAt)
+                .ThenBy(d => d.DeviceId == current ? 0 : 1)
+                .ToList();
+            foreach (var device in devices) device.Current = device.DeviceId == current;
+            return DeviceListOutcome.Success(devices);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
     public static async Task<(bool Ok, string Message)> RevokeDeviceAsync(string deviceId, CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             if (deviceId == _state.DeviceId)
                 return (false, "Sync_DeviceCenter_CannotRevokeSelf");
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return (false, "Sync_DeviceCenter_NeedsUnlocked");
+        try
+        {
+            var result = await client.RevokeDeviceAsync(deviceId, ct).ConfigureAwait(false);
+            if (!result.Success) return (false, result.Message);
 
-        var result = await client.RevokeDeviceAsync(deviceId, ct).ConfigureAwait(false);
-        if (!result.Success) return (false, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.DeviceRevoke, 0, deviceId));
-        return (true, "");
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.DeviceRevoke, 0, deviceId));
+            return (true, "");
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
     public static async Task<(bool Ok, string Message)> ResetTokenAsync(string deviceId, CancellationToken ct = default)
     {
         SyncApiClient? client;
+        ClientScope? scope;
         SyncState state;
         lock (Gate)
         {
             state = _state;
-            client = IsReady ? _client ??= BuildClient(state, _deviceToken) : null;
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
         if (client is null) return (false, "Sync_DeviceCenter_NeedsUnlocked");
+        try
+        {
+            var result = await client.ResetTokenAsync(deviceId, ct).ConfigureAwait(false);
+            if (!result.Success) return (false, result.Message);
 
-        var result = await client.ResetTokenAsync(deviceId, ct).ConfigureAwait(false);
-        if (!result.Success) return (false, result.Message);
-
-        SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.DeviceReset, 0, deviceId));
-        return (true, "");
+            SyncAuditLog.WriteOrdered(Audit(state, SyncAuditEvents.DeviceReset, 0, deviceId));
+            return (true, "");
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
@@ -1032,23 +1380,27 @@ public static class SyncService
 
 
 
-    public static Task<SyncConflictInspection> InspectConflictAsync(CancellationToken ct = default)
+    public static async Task<SyncConflictInspection> InspectConflictAsync(CancellationToken ct = default)
     {
-        SyncApiClient client;
+        SyncApiClient? client;
         SyncState state;
         string? spaceKey;
-        string? token;
+        ClientScope? scope;
         lock (Gate)
         {
             state = _state;
             spaceKey = _spaceKey;
-            token = _deviceToken;
-            client = _client ??= BuildClient(state, token);
+            scope = AcquireClientLocked();
+            client = scope?.Client;
         }
 
         var store = App.Store;
-        if (store is null) return Task.FromResult(SyncConflictInspection.Fail("no vault"));
-        return SyncConflictResolver.InspectAsync(store, state, spaceKey ?? "", client, ct);
+        if (store is null || client is null) { ReleaseClient(scope); return SyncConflictInspection.Fail("no vault"); }
+        try
+        {
+            return await SyncConflictResolver.InspectAsync(store, state, spaceKey ?? "", client, ct).ConfigureAwait(false);
+        }
+        finally { ReleaseClient(scope); }
     }
 
 
@@ -1152,9 +1504,12 @@ public static class SyncService
             return new SyncRoundOutcome(SyncRoundStatus.NoOp, "a round is already running", Busy: true);
 
         Dictionary<Guid, DateTime>? remindersBefore = null;
+        SyncApiClient? client = null;
+        ClientScope? scope = null;
+        var roundCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (Gate) _roundCts = roundCts;
         try
         {
-            SyncApiClient client;
             SyncState state;
             string? spaceKey;
             string? token;
@@ -1163,16 +1518,18 @@ public static class SyncService
                 state = _state;
                 spaceKey = _spaceKey;
                 token = _deviceToken;
-                client = _client ??= BuildClient(state, token);
+                scope = AcquireClientLocked();
+                client = scope?.Client;
             }
 
             var store = App.Store;
             if (store is null) return Publish(new SyncRoundOutcome(SyncRoundStatus.WaitUnlocked, "no vault"));
+            if (client is null) return Publish(new SyncRoundOutcome(SyncRoundStatus.WaitUnlocked, "not ready"));
 
 
             remindersBefore = ReminderSnapshot(store);
 
-            var outcome = await SyncEngine.PullAsync(store, state, spaceKey ?? "", client, DateTime.UtcNow, ct)
+            var outcome = await SyncEngine.PullAsync(store, state, spaceKey ?? "", client!, DateTime.UtcNow, roundCts.Token)
                 .ConfigureAwait(false);
 
 
@@ -1217,6 +1574,9 @@ public static class SyncService
         }
         finally
         {
+            lock (Gate) { if (ReferenceEquals(_roundCts, roundCts)) _roundCts = null; }
+            roundCts.Dispose();
+            ReleaseClient(scope);
             Interlocked.Exchange(ref _busy, 0);
         }
     }
@@ -1415,7 +1775,31 @@ public static class SyncService
 
 
         if (SyncViewRefresh.Required(outcome.Status))
-            App.UiQueue?.TryEnqueue(() => App.MainWindow?.RefreshAfterSyncPull());
+        {
+
+
+
+
+
+
+
+            var queued = App.UiQueue?.TryEnqueue(() =>
+            {
+
+
+
+                var theme = Services.StickySync.ResolveTheme();
+                var language = App.CurrentLanguage;
+                _ = System.Threading.Tasks.Task.Run(() =>
+                {
+                    if (!Services.StickySync.ReconcileDesktopCards(theme, language))
+                        Services.CrashLogger.LogNote("SyncPull", "desktop card reconcile failed - retried on the next pull");
+                    App.UiQueue?.TryEnqueue(() => App.MainWindow?.RefreshAfterSyncPull());
+                });
+            }) == true;
+            if (!queued)
+                Services.CrashLogger.LogNote("SyncPull", "UI queue unavailable - desktop card reconcile deferred to the next pull");
+        }
     }
 
     private static void SanitizePulledDiaryHtml()

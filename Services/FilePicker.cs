@@ -41,37 +41,66 @@ internal static class FilePicker
     public static string? PickSaveFile(string defaultName, (string Name, string[] Extensions)[] choices, string? title = null)
     {
         var dlg = (IFileSaveDialog)new FileSaveDialogRCW();
-        dlg.GetOptions(out var fos);
-        fos |= FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT;
-        dlg.SetOptions(fos);
-        if (choices is { Length: > 0 })
+        try
         {
-            dlg.SetFileTypes((uint)choices.Length, choices.Select(c => new FilterSpec { Name = c.Name, Spec = string.Join(";", c.Extensions) }).ToArray());
-            dlg.SetFileTypeIndex(1);
+            dlg.GetOptions(out var fos);
+            fos |= FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT;
+            dlg.SetOptions(fos);
+            if (choices is { Length: > 0 })
+            {
+                dlg.SetFileTypes((uint)choices.Length, choices.Select(c => new FilterSpec { Name = c.Name, Spec = string.Join(";", c.Extensions) }).ToArray());
+                dlg.SetFileTypeIndex(1);
+            }
+            if (!string.IsNullOrWhiteSpace(defaultName)) dlg.SetFileName(defaultName);
+
+
+
+            if (choices is { Length: > 0 } && choices[0].Extensions.Length > 0)
+                dlg.SetDefaultExtension(choices[0].Extensions[0].TrimStart('.'));
+            var hwnd = App.MainWindow is null ? nint.Zero : WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+            var hr = dlg.Show(hwnd);
+            if (hr == HR_CANCELLED) return null;
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+            dlg.GetResult(out var item);
+            var path = ItemPath(item);
+
+
+
+            if (path != null && choices is { Length: > 0 }
+                && string.IsNullOrEmpty(System.IO.Path.GetExtension(path)))
+            {
+                var selected = choices[0];
+                if (dlg.GetFileTypeIndex(out var typeIndex) == 0 && typeIndex >= 1 && typeIndex <= choices.Length)
+                    selected = choices[(int)typeIndex - 1];
+                if (selected.Extensions.Length > 0) path += selected.Extensions[0];
+            }
+            return path;
         }
-        if (!string.IsNullOrWhiteSpace(defaultName)) dlg.SetFileName(defaultName);
+        finally
+        {
 
-
-
-        if (choices is { Length: > 0 } && choices[0].Extensions.Length > 0)
-            dlg.SetDefaultExtension(choices[0].Extensions[0].TrimStart('.'));
-        var hwnd = App.MainWindow is null ? nint.Zero : WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
-        var hr = dlg.Show(hwnd);
-        if (hr == HR_CANCELLED) return null;
-        if (hr != 0) Marshal.ThrowExceptionForHR(hr);
-        dlg.GetResult(out var item);
-        var path = ItemPath(item);
-
-        if (path != null && choices is { Length: > 0 } && choices[0].Extensions.Length > 0
-            && string.IsNullOrEmpty(System.IO.Path.GetExtension(path)))
-            path += choices[0].Extensions[0];
-        return path;
+            Marshal.FinalReleaseComObject(dlg);
+        }
     }
 
     private static List<string> Core(bool folders, bool multi, string? filters, string? title, bool startAtDesktop = false)
     {
-        var result = new List<string>();
         var dlg = (IFileOpenDialog)new FileOpenDialogRCW();
+        try
+        {
+            return CoreWith(dlg, folders, multi, filters, title, startAtDesktop);
+        }
+        finally
+        {
+
+            Marshal.FinalReleaseComObject(dlg);
+        }
+    }
+
+    private static List<string> CoreWith(
+        IFileOpenDialog dlg, bool folders, bool multi, string? filters, string? title, bool startAtDesktop)
+    {
+        var result = new List<string>();
         dlg.GetOptions(out var fos);
         fos |= FOS_FORCEFILESYSTEM;
         if (folders) fos |= FOS_PICKFOLDERS;
@@ -84,8 +113,18 @@ internal static class FilePicker
             dlg.SetFileTypes(1, new[] { new FilterSpec { Name = spec, Spec = spec } });
             dlg.SetFileTypeIndex(1);
         }
-        if (startAtDesktop && SHCreateItemFromParsingName("shell:Desktop", 0, IID_IShellItem, out var folder) == 0)
-            dlg.SetFolder(folder);
+
+
+        if (startAtDesktop)
+        {
+            IShellItem? startFolder = null;
+            try
+            {
+                if (SHCreateItemFromParsingName("shell:Desktop", 0, IID_IShellItem, out startFolder) == 0)
+                    dlg.SetFolder(startFolder);
+            }
+            finally { ReleaseCom(startFolder); }
+        }
 
         var hwnd = App.MainWindow is null ? nint.Zero : WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
         var hr = dlg.Show(hwnd);
@@ -94,28 +133,51 @@ internal static class FilePicker
 
         if (!multi)
         {
-            dlg.GetResult(out var item);
-            var path = ItemPath(item);
-            if (path != null) result.Add(path);
+            IShellItem? item = null;
+            try
+            {
+                dlg.GetResult(out item);
+                var path = ItemPath(item);
+                if (path != null) result.Add(path);
+            }
+            finally { ReleaseCom(item); }
             return result;
         }
-        var hrResults = dlg.GetResults(out var items);
-        if (hrResults != 0) Marshal.ThrowExceptionForHR(hrResults);
-        items.GetCount(out var count);
-        for (uint i = 0; i < count; i++)
+        IShellItemArray? items = null;
+        try
         {
-            if (items.GetItemAt(i, out var one) != 0) continue;
-            var path = ItemPath(one);
-            if (path != null) result.Add(path);
+            var hrResults = dlg.GetResults(out items);
+            if (hrResults != 0) Marshal.ThrowExceptionForHR(hrResults);
+            items.GetCount(out var count);
+            for (uint i = 0; i < count; i++)
+            {
+                IShellItem? one = null;
+                try
+                {
+                    if (items.GetItemAt(i, out one) != 0) continue;
+                    var path = ItemPath(one);
+                    if (path != null) result.Add(path);
+                }
+                finally { ReleaseCom(one); }
+            }
         }
+        finally { ReleaseCom(items); }
         return result;
     }
 
-    private static string? ItemPath(IShellItem item)
+    private static string? ItemPath(IShellItem? item)
     {
+        if (item is null) return null;
         if (item.GetDisplayName(SIGDN_FILESYSPATH, out var p) != 0) return null;
         try { return Marshal.PtrToStringUni(p); }
         finally { Marshal.FreeCoTaskMem(p); }
+    }
+
+
+    private static void ReleaseCom(object? comObject)
+    {
+        if (comObject is null) return;
+        try { if (Marshal.IsComObject(comObject)) Marshal.FinalReleaseComObject(comObject); } catch { }
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

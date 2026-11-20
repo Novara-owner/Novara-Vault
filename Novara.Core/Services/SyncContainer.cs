@@ -249,6 +249,11 @@ public static class SyncContainer
     public static byte[] PartitionPid(byte[] partitionJson) => SHA256.HashData(partitionJson);
 
 
+
+
+    public const int MaxChunkBytes = 32 * 1024 * 1024;
+
+
     public static byte[] SealChunk(byte[] partitionJson, string spaceKeyBase64, byte[] pid)
     {
         var (key, nonce) = ChunkKeyAndNonce(spaceKeyBase64, pid);

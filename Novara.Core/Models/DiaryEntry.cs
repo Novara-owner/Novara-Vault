@@ -15,4 +15,7 @@ public class DiaryEntry
     public int Order { get; set; }
     public string Format { get; set; } = "html";
     public string WorkspaceId { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public DateTime PurgedAt { get; set; }
 }

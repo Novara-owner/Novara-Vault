@@ -75,6 +75,10 @@ public static class UpdateService
             var version = root.GetProperty("version").GetString() ?? "";
             var url = root.GetProperty("url").GetString() ?? "";
             var sha = root.GetProperty("sha256").GetString() ?? "";
+
+
+
+            if (!IsSha256Hex(sha)) return new CheckResult(null, false, "update manifest carries no usable sha256");
             string? date = root.TryGetProperty("date", out var d) ? d.GetString() : null;
             string? zh = null, en = null;
             if (root.TryGetProperty("notes", out var notes))
@@ -114,7 +118,8 @@ public static class UpdateService
 
 
 
-    public static async Task<string> DownloadAsync(LatestRelease rel, IProgress<double> progress, CancellationToken ct)
+    public static async Task<string> DownloadAsync(LatestRelease rel, IProgress<double> progress, CancellationToken ct,
+        string? expectedSha256 = null)
     {
         var activity = NetworkActivityService.Begin("NetActivity_Kind_Update", rel.Url);
         var ok = false;
@@ -163,6 +168,20 @@ public static class UpdateService
                     }
                 }
                 progress.Report(100);
+
+
+
+
+                if (!IsSha256Hex(expectedSha256))
+                    throw new InvalidDataException("a download requires the manifest sha256");
+                {
+                    var actual = Sha256Hex(dest);
+                    if (!string.Equals(actual, expectedSha256!.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { File.Delete(dest); } catch { }
+                        throw new InvalidDataException("update hash mismatch");
+                    }
+                }
                 ok = true;
                 return dest;
             }
@@ -192,8 +211,23 @@ public static class UpdateService
 
 
 
-    public static void LaunchInstaller(string path)
+
+
+    internal static bool IsSha256Hex(string? value)
+        => value is { Length: 64 } && value.All(Uri.IsHexDigit);
+
+    public static void LaunchInstaller(string path, string? expectedSha256 = null)
     {
+
+
+
+        if (!IsSha256Hex(expectedSha256))
+            throw new InvalidDataException("launching an update requires the manifest sha256");
+        {
+            var actual = Sha256Hex(path);
+            if (!string.Equals(actual, expectedSha256!.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("update hash mismatch");
+        }
         Process.Start(new ProcessStartInfo(path, "/VERYSILENT /SUPPRESSMSGBOXES /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /NORESTART")
         { UseShellExecute = true });
     }

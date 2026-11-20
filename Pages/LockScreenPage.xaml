@@ -137,28 +137,45 @@
                                             </Button>
                                         </Grid>
                                     </Border>
+
+
+
+
+                                    <Border x:Name="StateRing"
+                                            BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="{TemplateBinding CornerRadius}"
+                                            Opacity="0"
+                                            IsHitTestVisible="False" />
                                     <VisualStateManager.VisualStateGroups>
                                         <VisualStateGroup x:Name="CommonStates">
-                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="Normal">
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="0" Duration="0" />
+                                                </Storyboard>
+                                            </VisualState>
                                             <VisualState x:Name="PointerOver">
                                                 <Storyboard>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
                                                         <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextTertiaryBrush}" />
                                                     </ObjectAnimationUsingKeyFrames>
+                                                    <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
                                                 </Storyboard>
                                             </VisualState>
                                             <VisualState x:Name="Focused">
                                                 <Storyboard>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
                                                         <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonBrush}" />
                                                     </ObjectAnimationUsingKeyFrames>
+                                                    <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
                                                 </Storyboard>
                                             </VisualState>
                                             <VisualState x:Name="Disabled">
                                                 <Storyboard>
-                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
                                                         <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppBorderBrush}" />
                                                     </ObjectAnimationUsingKeyFrames>
+                                                    <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
                                                 </Storyboard>
                                             </VisualState>
                                         </VisualStateGroup>
@@ -168,6 +185,28 @@
                                                 <Storyboard>
                                                     <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RevealButton" Storyboard.TargetProperty="Visibility">
                                                         <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                        </VisualStateGroup>
+
+
+
+                                        <VisualStateGroup x:Name="ValidationStates">
+                                            <VisualState x:Name="Valid">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Invalid">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerTextBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="Collapsed" />
                                                     </ObjectAnimationUsingKeyFrames>
                                                 </Storyboard>
                                             </VisualState>
@@ -253,8 +292,9 @@
                     <Border.RenderTransform>
                         <CompositeTransform x:Name="ForgotDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
                     </Border.RenderTransform>
-                    <Grid Padding="28,24">
+                        <Grid Padding="28,24">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -285,7 +325,17 @@
                                    TextWrapping="Wrap"
                                    Margin="0,20,0,0"
                                    LineHeight="22" />
-                        <Grid Grid.Row="2" Margin="0,20,0,0">
+
+                        <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_PhraseLabel\')}"
+                                       FontSize="13" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <TextBlock Text="{x:Bind app:App.GetString(\'Lock_Forgot_Phrase\')}"
+                                       FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource AppTextPrimaryBrush}" IsTextSelectionEnabled="True" />
+                            <TextBox x:Name="ForgotPhraseBox" Style="{StaticResource NovaraTextBoxStyle}" FontSize="14"
+                                     TextChanged="ForgotPhraseBox_TextChanged" />
+                        </StackPanel>
+                        <Grid Grid.Row="3" Margin="0,20,0,0">
                             <Button HorizontalAlignment="Left" Width="160" Height="40"
                                     Style="{StaticResource NovaraOutlineButtonStyle}"
                                     CornerRadius="10" FontSize="14"

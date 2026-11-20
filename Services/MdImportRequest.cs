@@ -50,6 +50,8 @@ public static class MdImportRequest
         catch {  }
     }
 
+    internal static readonly TimeSpan PendingMaxAge = TimeSpan.FromMinutes(10);
+
 
     public static string? ReadPending()
     {
@@ -57,6 +59,12 @@ public static class MdImportRequest
         {
             if (File.Exists(PendingMd))
             {
+
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(PendingMd) > PendingMaxAge)
+                {
+                    try { File.Delete(PendingMd); } catch { }
+                    return null;
+                }
                 var json = File.ReadAllText(PendingMd);
                 var j = JsonSerializer.Deserialize<PendingMdFile>(json);
 

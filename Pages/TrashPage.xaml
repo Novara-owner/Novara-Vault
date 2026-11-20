@@ -78,15 +78,9 @@
         </StackPanel>
 
 
-        <StackPanel x:Name="EmptyState" Grid.Row="1" Visibility="Collapsed"
-                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
-                    Margin="0,-12,0,0">
-            <TextBlock Text="{x:Bind app:App.GetString(\'Trash_EmptyHint\')}"
-                       HorizontalAlignment="Center" TextAlignment="Center"
-                       FontSize="13" FontWeight="Light"
-                       Foreground="{ThemeResource AppTextTertiaryBrush}"
-                       Opacity="1" />
-        </StackPanel>
+        <ContentControl x:Name="EmptyState" IsTabStop="False" Grid.Row="1" Visibility="Collapsed"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="0,-12,0,0" />
 
 
         <Grid x:Name="DeleteForeverOverlay" Visibility="Collapsed" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">

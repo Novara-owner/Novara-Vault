@@ -12,4 +12,7 @@ public class FilePathEntry
     public bool IsDeleted { get; set; }
     public DateTime DeletedAt { get; set; }
     public string WorkspaceId { get; set; } = "";
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public DateTime PurgedAt { get; set; }
 }

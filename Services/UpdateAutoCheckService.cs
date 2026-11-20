@@ -35,10 +35,20 @@ public static class UpdateAutoCheckService
 
 
 
+
+
+
     private static bool IsEnabledNow()
-        => !App.McpBackground
-           && App.Store is { IsLoaded: true } store
-           && store.Database.AppSettings.AutoCheckUpdates;
+    {
+        if (App.McpBackground) return false;
+        var store = App.Store;
+        if (store is not { IsLoaded: true }) return false;
+        try { return store.Database.AppSettings.AutoCheckUpdates; }
+        catch (Exception ex) when (ex is NullReferenceException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
 
 
 
@@ -105,10 +115,29 @@ public static class UpdateAutoCheckService
 
     private static void RecordCheckUtc()
     {
-        if (App.Store is { IsLoaded: true } store)
+
+        var store = App.Store;
+        if (store is not { IsLoaded: true }) return;
+        try
         {
             store.Database.AppSettings.LastCheckUtc = DateTime.UtcNow;
-            _ = store.SaveAsync();
+            _ = SaveCheckUtcAsync(store);
+        }
+        catch (Exception ex) when (ex is NullReferenceException or InvalidOperationException)
+        {
+            CrashLogger.LogNote(LogTag, "check time not recorded: " + ex.GetType().Name);
+        }
+    }
+
+    private static async Task SaveCheckUtcAsync(NovaraStore store)
+    {
+        try
+        {
+            await store.SaveAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote(LogTag, ex.GetType().Name);
         }
     }
 

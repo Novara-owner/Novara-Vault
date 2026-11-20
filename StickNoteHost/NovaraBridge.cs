@@ -135,10 +135,23 @@ public static class NovaraBridge
             }
             else
             {
+
+
                 App.Log($"EditNote: NovaraExePath 无效 ({NovaraExePath})");
+                TryDeletePending(PendingPath);
             }
         }
-        catch (Exception ex) { App.Log($"EditNote 启动失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            App.Log($"EditNote 启动失败: {ex.Message}");
+            TryDeletePending(PendingPath);
+        }
+    }
+
+
+    private static void TryDeletePending(string path)
+    {
+        try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { }
     }
 
 
@@ -221,7 +234,16 @@ public static class NovaraBridge
                 App.Log($"EditReminder: 启动 Novara {NovaraExePath} id={id}");
                 Process.Start(new ProcessStartInfo { FileName = NovaraExePath, UseShellExecute = true });
             }
+            else
+            {
+                App.Log($"EditReminder: NovaraExePath 无效 ({NovaraExePath})");
+                TryDeletePending(ReminderPendingPath);
+            }
         }
-        catch (Exception ex) { App.Log($"EditReminder 启动失败: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            App.Log($"EditReminder 启动失败: {ex.Message}");
+            TryDeletePending(ReminderPendingPath);
+        }
     }
 }

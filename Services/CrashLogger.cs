@@ -43,6 +43,29 @@ public static class CrashLogger
     public static void LogNote(string source, string message) => Write(new Exception(message), source);
 
 
+
+
+    public static void LogPerf(string source, string message)
+    {
+        try
+        {
+            lock (Gate)
+            {
+                Directory.CreateDirectory(LogDir);
+                var file = Path.Combine(LogDir, "perf.log");
+                if (File.Exists(file) && new FileInfo(file).Length > 256 * 1024)
+                {
+                    var keep = File.ReadAllLines(file).Skip(1000).ToArray();
+                    File.WriteAllLines(file, keep);
+                }
+                File.AppendAllText(file,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{source}] {message}{Environment.NewLine}");
+            }
+        }
+        catch { }
+    }
+
+
     public static void Init()
     {
         if (_initialized) return;
@@ -60,12 +83,14 @@ public static class CrashLogger
         };
 
 
+
         try
         {
             Microsoft.UI.Xaml.Application.Current.UnhandledException += (_, e) =>
             {
                 Write(e.Exception, "Application");
-                e.Handled = true;
+                e.Handled = e.Exception is not (OutOfMemoryException or StackOverflowException
+                    or AccessViolationException);
             };
         }
         catch {  }

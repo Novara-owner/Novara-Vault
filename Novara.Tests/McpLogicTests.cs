@@ -82,10 +82,10 @@ public class McpLogicTests
             new() { Label = "证件号", Value = "110101199001011234", CanCopy = true }
         }, null, null);
 
-        Assert.NotEmpty(McpLogic.SearchItems(db, "主卡", null));
-        Assert.Empty(McpLogic.SearchItems(db, "6222000011112222", null));
-        Assert.Empty(McpLogic.SearchItems(db, "6222", null));
-        Assert.Empty(McpLogic.SearchItems(db, "110101199001011234", null));
+        Assert.NotEmpty(McpLogic.SearchItems(db, "主卡", null, McpPermissions.AllRead));
+        Assert.Empty(McpLogic.SearchItems(db, "6222000011112222", null, McpPermissions.AllRead));
+        Assert.Empty(McpLogic.SearchItems(db, "6222", null, McpPermissions.AllRead));
+        Assert.Empty(McpLogic.SearchItems(db, "110101199001011234", null, McpPermissions.AllRead));
     }
 
     [Fact]
@@ -143,6 +143,24 @@ public class McpLogicTests
 
 
     [Fact]
+    public void UpdateMemo_OmittingAnExistingSensitiveField_IsRefused()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateMemo(db, "GitHub", "账户", "alice", new List<McpFieldInput>
+        {
+            new() { Label = "密码", Value = "old-pass", CanCopy = true }
+        }, null, null);
+
+        Assert.Throws<McpError>(() => McpLogic.UpdateMemo(db, id, null, null, null, new List<McpFieldInput>
+        {
+            new() { Label = "备注", Value = "note", CanCopy = true }
+        }, null, null));
+        Assert.Contains(McpLogic.ReadItem(db, "memo", id).Fields!, f => f.Label == "密码");
+    }
+
+
+
+    [Fact]
     public void UpdateMemo_WhitespacePaddedSensitiveLabel_StillProtected()
     {
         var db = NewDb();
@@ -171,11 +189,79 @@ public class McpLogicTests
     {
         var db = NewDb();
         var id = McpLogic.CreateNote(db, "便签", "内容", null);
-        Assert.Single(McpLogic.ListItems(db, "note"));
+        Assert.Single(McpLogic.ListItems(db, "note", McpPermissions.AllRead));
 
         McpLogic.DeleteItem(db, "note", id);
-        Assert.Empty(McpLogic.ListItems(db, "note"));
+        Assert.Empty(McpLogic.ListItems(db, "note", McpPermissions.AllRead));
         Assert.True(db.NoteCards.Single().IsDeleted);
+    }
+
+    [Fact]
+    public void RestoreItem_UndeletesAndReturnsToList()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateNote(db, "便签", "内容", null);
+        McpLogic.DeleteItem(db, "note", id);
+
+        McpLogic.RestoreItem(db, "note", id);
+        Assert.False(db.NoteCards.Single().IsDeleted);
+        Assert.Equal(default, db.NoteCards.Single().DeletedAt);
+        Assert.Single(McpLogic.ListItems(db, "note", McpPermissions.AllRead));
+    }
+
+    [Fact]
+    public void RestoreItem_NotInTrash_Throws_NeverSilentSuccess()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateNote(db, "便签", "内容", null);
+        Assert.Throws<McpError>(() => McpLogic.RestoreItem(db, "note", id));
+        Assert.Throws<McpError>(() => McpLogic.RestoreItem(db, "note", Guid.NewGuid().ToString()));
+    }
+
+    [Fact]
+    public void RestoreItem_PurgedTombstone_Throws_NoGhostRow()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateNote(db, "便签", "内容", null);
+        McpLogic.DeleteItem(db, "note", id);
+        var note = db.NoteCards.Single();
+        note.Title = ""; note.Content = ""; note.PurgedAt = DateTime.Now;
+
+        Assert.Throws<McpError>(() => McpLogic.RestoreItem(db, "note", id));
+        Assert.True(note.IsDeleted);
+        Assert.NotEqual(default, note.PurgedAt);
+    }
+
+    [Fact]
+    public void RestoreItem_DeletedFlagWithoutPurge_StillRestores()
+    {
+        var db = NewDb();
+        var id = McpLogic.CreateNote(db, "便签", "内容", null);
+        McpLogic.DeleteItem(db, "note", id);
+        var note = db.NoteCards.Single();
+        note.IsDeleted = false;
+        note.PurgedAt = DateTime.Now;
+
+        Assert.Throws<McpError>(() => McpLogic.RestoreItem(db, "note", id));
+        Assert.False(note.IsDeleted);
+    }
+
+    [Fact]
+    public void RestoreItem_PermissionMapsToUpdateBit_NotDeleteBit()
+    {
+        Assert.Equal(McpPerm.NoteUpdate, McpPermissions.RequiredFor("restore_item", "note"));
+        Assert.True(McpPermissions.IsPermitted(McpPerm.NoteUpdate, "restore_item", "note"));
+        Assert.False(McpPermissions.IsPermitted(McpPerm.NoteDelete, "restore_item", "note"));
+        Assert.Equal(McpPerm.None, McpPermissions.RequiredFor("get_auth_status", null));
+        Assert.True(McpPermissions.IsPermitted(McpPerm.None, "get_auth_status", null));
+    }
+
+    [Fact]
+    public void AuthStatus_DescribesGrantedAndDeleteGate()
+    {
+        var st = McpLogic.AuthStatus(McpPerm.NoteRead | McpPerm.TodoRead, deleteGateOpen: false);
+        Assert.Equal("todo:read + note:read", st.Granted);
+        Assert.False(st.DeleteGateOpen);
     }
 
     [Fact]
@@ -188,8 +274,8 @@ public class McpLogicTests
             new() { Label = "密码", Value = "topsecret-mcp", CanCopy = true }
         }, null, null);
 
-        Assert.NotEmpty(McpLogic.SearchItems(db, "MCP", null));
-        Assert.Empty(McpLogic.SearchItems(db, "topsecret-mcp", null));
+        Assert.NotEmpty(McpLogic.SearchItems(db, "MCP", null, McpPermissions.AllRead));
+        Assert.Empty(McpLogic.SearchItems(db, "topsecret-mcp", null, McpPermissions.AllRead));
     }
 
     [Fact]
@@ -234,7 +320,7 @@ public class McpLogicTests
     public void ListItems_InvalidType_ReturnsEmpty()
     {
         var db = NewDb();
-        Assert.Empty(McpLogic.ListItems(db, "bogus"));
+        Assert.Empty(McpLogic.ListItems(db, "bogus", McpPermissions.AllRead));
     }
 
 
@@ -343,5 +429,48 @@ public class McpLogicTests
         var e = db.PathBackupItems.Single(x => x.Id.ToString() == id);
         Assert.Equal("原名", e.Name);
         Assert.Equal(@"C:\a.txt", e.Path);
+    }
+
+
+
+    [Fact]
+    public void ListItems_MixedForm_NarrowsToTheGrantedZones()
+    {
+        var db = NewDb();
+        McpLogic.CreateMemo(db, "备忘条目", "账户", "alice", null, null, null);
+        McpLogic.CreateTodo(db, "待办卡片", "正文", null, null);
+        McpLogic.CreateNote(db, "便签卡片", "内容", null);
+        McpLogic.CreateDiary(db, "日记文档", "内容", "markdown");
+        McpLogic.CreatePath(db, "路径条目", @"C:\data", "备注");
+
+
+        var d1 = McpPermissions.DefaultForNewClient;
+        var items = McpLogic.ListItems(db, null, d1);
+        Assert.Equal(4, items.Count);
+        Assert.DoesNotContain(items, i => i.Type == McpLogic.TypeMemo);
+        Assert.Single(items, i => i.Type == McpLogic.TypeTodo);
+        Assert.Single(items, i => i.Type == McpLogic.TypeNote);
+        Assert.Single(items, i => i.Type == McpLogic.TypeDiary);
+        Assert.Single(items, i => i.Type == McpLogic.TypePath);
+
+
+        Assert.Equal(5, McpLogic.ListItems(db, null, McpPermissions.AllRead).Count);
+    }
+
+    [Fact]
+    public void SearchItems_MixedForm_NarrowsToTheGrantedZones()
+    {
+        var db = NewDb();
+        McpLogic.CreateMemo(db, "目标备忘", "账户", "alice", null, null, null);
+        McpLogic.CreateNote(db, "目标便签", "内容", null);
+
+
+        var d1 = McpPermissions.DefaultForNewClient;
+        var hits = McpLogic.SearchItems(db, "目标", null, d1);
+        Assert.Single(hits);
+        Assert.Equal(McpLogic.TypeNote, hits[0].Type);
+
+
+        Assert.Equal(2, McpLogic.SearchItems(db, "目标", null, McpPermissions.AllRead).Count);
     }
 }

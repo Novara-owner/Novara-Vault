@@ -1,0 +1,7 @@
+{
+  "case": "take_after_remove",
+  "setup": "taken phase, entry already gone, complete target",
+  "actions": [
+    "FinalizeTake"
+  ]
+}

@@ -172,10 +172,22 @@ public static class SyncEndpoints
 
             var quota = auth.Value!.Space.QuotaBytes > 0 ? auth.Value.Space.QuotaBytes : service.Options.DefaultQuotaBytes;
             var chunkCeiling = quota > 0 ? quota + 64 * 1024 : service.Options.MaxPayloadBytes + 64 * 1024;
+
+            chunkCeiling = Math.Min(chunkCeiling, SpaceService.MaxChunkBytes);
             var sizeFeature = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
             if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = chunkCeiling;
             if (quota > 0 && ctx.Request.ContentLength is long declared && declared > quota)
                 return Error(SyncErrorCode.QuotaExceeded, "chunk exceeds the space quota", quota);
+
+
+
+
+
+            if (ctx.Request.ContentLength is long chunkDeclared && chunkDeclared > SpaceService.MaxChunkBytes)
+                return Error(SyncErrorCode.BadRequest,
+                    "chunk is larger than the per-chunk limit of " +
+                    (SpaceService.MaxChunkBytes / (1024 * 1024)).ToString(System.Globalization.CultureInfo.InvariantCulture) + " MiB",
+                    SpaceService.MaxChunkBytes);
 
 
 
@@ -202,9 +214,24 @@ public static class SyncEndpoints
 
             var containerV5 = ctx.Request.Headers[ContainerV5Header].ToString() == "1";
             var deviceAuth = !ctx.Request.Headers.Authorization.ToString().StartsWith(ReadPrefix, StringComparison.OrdinalIgnoreCase);
-            var result = service.GetChunk(auth.Value!, chunkId.ToLowerInvariant(), containerV5Capable: containerV5, deviceAuth: deviceAuth);
+
+
+            var result = service.GetChunkPath(auth.Value!, chunkId.ToLowerInvariant(), containerV5Capable: containerV5, deviceAuth: deviceAuth);
             if (!result.Success) return Map(result);
-            return Results.File(result.Value!, "application/octet-stream");
+            try
+            {
+
+
+
+
+                var stream = new FileStream(result.Value!, FileMode.Open, FileAccess.Read,
+                    FileShare.Read | FileShare.Delete);
+                return Results.Stream(stream, "application/octet-stream");
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return Error(SyncErrorCode.NotFound, "chunk not found");
+            }
         });
 
 
@@ -335,11 +362,20 @@ public static class SyncEndpoints
 
 
 
+    private const string AuthSnapshotKey = "novara.auth.snapshot";
+
+
+
 
 
 
     private static SyncResult<DeviceContext> ResolveDevice(HttpContext ctx, SpaceService service)
     {
+
+
+        if (ctx.Items.TryGetValue(AuthSnapshotKey, out var cached) && cached is SyncResult<DeviceContext> hit)
+            return hit;
+
 
 
 
@@ -354,13 +390,14 @@ public static class SyncEndpoints
         if (string.IsNullOrEmpty(deviceId))
             return SyncResult<DeviceContext>.Fail(SyncErrorCode.BadRequest, "device header is required");
 
-        var auth = service.Authorize(spaceId, deviceId, ReadBearer(ctx));
+
+
+        var auth = service.Authenticate(spaceId, deviceId, ReadBearer(ctx));
         if (!auth.Success) return SyncResult<DeviceContext>.Fail(auth.Error, auth.Message, auth.CurrentVersion);
 
-        var device = service.DeviceOf(spaceId, deviceId);
-        return device is null
-            ? SyncResult<DeviceContext>.Fail(SyncErrorCode.Unauthenticated, "device token is not valid")
-            : SyncResult<DeviceContext>.Ok(new DeviceContext(auth.Value!, device));
+        var result = SyncResult<DeviceContext>.Ok(new DeviceContext(auth.Value!.Space, auth.Value.Device));
+        ctx.Items[AuthSnapshotKey] = result;
+        return result;
     }
 
 

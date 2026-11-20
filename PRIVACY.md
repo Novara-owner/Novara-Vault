@@ -62,8 +62,9 @@ Files in that directory include:
 | `logs\` | Local log files (see Section 8) |
 | `sync-state.json` | Your device's sync identity and the last server version it saw — no space key |
 | `sync-credentials.dat` | The per-device server token, encrypted with Windows DPAPI under your account; never synced, never leaves this machine |
+| `seal\` | Novara Space (13.0+): sealed containers, its own encrypted index and key wrap — a separate store with its own password, never uploaded or synced |
 
-Nothing in this directory is uploaded anywhere by Novara on its own — the only exception is the sync feature you deliberately switch on (Section 5). Deleting this directory (or using the in-app "Reset" function) removes your data.
+Nothing in this directory is uploaded anywhere by Novara on its own — the only exception is the sync feature you deliberately switch on (Section 5). Deleting this directory (or using the in-app "Reset" function) removes your data. Novara Space (`seal\`) is deliberately outside the main database: it is not searched, not synced, not exposed to MCP, not included in snapshots or the recycle bin, and survives a library reset.
 
 > **If you run the bundled sync server**, it keeps a data directory of its own (`%LocalAppData%\Novara\Server\data` by default), separate from the one above. That directory holds ciphertext blobs, version metadata and a small SQLite index — no keys, no plaintext.
 
@@ -76,6 +77,7 @@ Encryption in Novara is **optional and turned OFF by default**.
 - **Password:** the lock password is **6 to 64 characters**. Only a salted, versioned **password hash** (PBKDF2-SHA256 since the hash format's second revision) is stored locally — the plaintext password is never written to disk.
 - **Windows Hello (since 5.0):** you can optionally unlock with Windows Hello biometrics or PIN. This never stores or transmits your biometric data; it delegates the check to the Windows Hello subsystem.
 - **No backdoor, no recovery:** there is deliberately no way to recover a forgotten password. If you forget it, the only option is to erase the database and start over.
+- **Novara Space (13.0):** a separate encrypted store with its own independent password and lockout. The space key is wrapped with an Argon2id-derived key (64 MiB, three passes); the index and every container are AES-256-GCM authenticated ciphertext. The space password cannot be recovered either; forgetting it means the sealed content is permanently lost. Exported `.novabundle` files are protected by the space password and, once outside Novara, are no longer time-locked.
 - **Brute-force protection:** after 5 consecutive wrong passwords, unlocking is blocked for 30 minutes. The failure count and lock deadline persist across restarts and use a monotonic clock to resist system-time rollback.
 - **Upgrade path:** databases created by Novara 2.0 used an older AES-CBC format. Novara 3.0 and later can read them and migrate them to the newer GCM format after one confirmation. Databases on the pre-5.3 GCM format (100,000-iteration KDF) upgrade to the hardened v3 parameters through a one-time opt-in prompt.
 

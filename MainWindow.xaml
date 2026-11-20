@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:Novara"
+    xmlns:services="using:Novara.Services"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Title="Novara"
     mc:Ignorable="d">
@@ -32,6 +33,172 @@
                                   BorderThickness="{TemplateBinding BorderThickness}"
                                   CornerRadius="{TemplateBinding CornerRadius}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+
+
+            <Style x:Key="SealTextButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource AppTextSecondaryBrush}" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextPrimaryBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppHoverBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled" />
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Foreground="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SealUnlockPasswordBoxStyle" TargetType="PasswordBox">
+                <Setter Property="Height" Value="48" />
+
+
+                <Setter Property="MaxLength" Value="128" />
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="Padding" Value="16,0,44,0" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="Background" Value="{ThemeResource AppSurfaceOverlayBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource AppBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="PasswordBox">
+                            <Grid>
+                                <Border x:Name="BorderElement"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="{TemplateBinding CornerRadius}">
+                                    <Grid>
+                                        <ScrollViewer x:Name="ContentElement"
+                                                      Margin="{TemplateBinding Padding}"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Center"
+                                                      FontSize="{TemplateBinding FontSize}"
+                                                      HorizontalScrollBarVisibility="Hidden"
+                                                      VerticalScrollBarVisibility="Hidden"
+                                                      IsTabStop="False" />
+                                        <TextBlock x:Name="PlaceholderTextBlock"
+                                                   Text="{TemplateBinding PlaceholderText}"
+                                                   Foreground="{ThemeResource AppTextTertiaryBrush}"
+                                                   FontSize="{TemplateBinding FontSize}"
+                                                   HorizontalAlignment="Stretch"
+                                                   VerticalAlignment="Center"
+                                                   Margin="{TemplateBinding Padding}"
+                                                   IsHitTestVisible="False"
+                                                   Visibility="Collapsed" />
+                                        <Button x:Name="RevealButton" Tag="A11y_RevealPassword"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Width="36" Height="36" Margin="0,0,4,0"
+                                                Background="Transparent" BorderThickness="0"
+                                                Visibility="Collapsed">
+                                            <FontIcon x:Name="RevealIcon" Glyph="&#xE890;" FontSize="14" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+
+
+
+                                <Border x:Name="StateRing"
+                                        BorderBrush="{ThemeResource AppPrimaryButtonBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="{TemplateBinding CornerRadius}"
+                                        Opacity="0"
+                                        IsHitTestVisible="False" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="0" Duration="0" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppTextTertiaryBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Focused">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppBorderBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <DoubleAnimation Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="PasswordStates">
+                                        <VisualState x:Name="RevealingHidden" />
+                                        <VisualState x:Name="Revealing">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RevealButton" Storyboard.TargetProperty="Visibility">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+
+
+                                    <VisualStateGroup x:Name="ValidationStates">
+                                        <VisualState x:Name="Valid">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Visibility">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Invalid">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BorderElement" Storyboard.TargetProperty="BorderBrush">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppDangerTextBrush}" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="StateRing" Storyboard.TargetProperty="Visibility">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="Collapsed" />
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
                             </Grid>
                         </ControlTemplate>
                     </Setter.Value>
@@ -74,6 +241,7 @@
                     </ControlTemplate>
                 </Button.Template>
                 <TextBlock
+                    x:Name="TitleBrandText"
                     Text="Novara"
                     FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
                     FontSize="15"
@@ -269,6 +437,65 @@
 
 
 
+        <Grid x:Name="SealNavBar" Grid.Row="1" Margin="64,0,64,8" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="SealNavShadowReceiver" Grid.ColumnSpan="3" IsHitTestVisible="False" />
+
+            <Border x:Name="SealNavIndicator" Grid.ColumnSpan="3" Height="26" VerticalAlignment="Bottom"
+                    HorizontalAlignment="Left" CornerRadius="16"
+                    IsHitTestVisible="False" Opacity="1">
+                <Border.Background>
+                    <RadialGradientBrush Center="0.5,0.35" RadiusX="0.5" RadiusY="0.65">
+                        <GradientStop Color="#8C7276FF" Offset="0" />
+                        <GradientStop Color="#667276FF" Offset="0.5" />
+                        <GradientStop Color="#2D7276FF" Offset="0.75" />
+                        <GradientStop Color="#007276FF" Offset="1" />
+                    </RadialGradientBrush>
+                </Border.Background>
+                <Border.RenderTransform><TranslateTransform x:Name="SealNavIndicatorTranslate" Y="8" /></Border.RenderTransform>
+            </Border>
+            <Grid x:Name="SealNavSpaceHost" Grid.Column="0">
+                <Button x:Name="SealNavSpaceButton" Style="{StaticResource NovaraNavButtonStyle}"
+                        Background="{ThemeResource NavFaceRaisedBrush}" IsTabStop="False" Click="SealNavSpace_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Path x:Name="SealNavSpacePath" Width="20" Height="20" Stretch="Uniform"
+                              Fill="{ThemeResource AppPrimaryButtonBrush}" />
+                        <TextBlock x:Name="SealNavSpaceText" Text="私密空间" Tag="Seal_Tab_Space" VerticalAlignment="Center"
+                                   FontSize="14" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Grid x:Name="SealNavCapsuleHost" Grid.Column="1">
+                <Button x:Name="SealNavCapsule" Style="{StaticResource NovaraNavButtonStyle}" IsTabStop="False" Opacity="0.6" Click="SealNavCapsule_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Path x:Name="SealNavCapsulePath" Width="20" Height="20" Stretch="Uniform" Opacity="0.6"
+                              Fill="{ThemeResource IconForegroundBrush}" />
+                        <TextBlock x:Name="SealNavCapsuleText" Text="时间胶囊" Tag="Seal_Tab_Capsule" VerticalAlignment="Center"
+                                   FontSize="14" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+            <Grid x:Name="SealNavSettingsHost" Grid.Column="2">
+                <Button x:Name="SealNavSettings" Style="{StaticResource NovaraNavButtonStyle}" IsTabStop="False" Opacity="0.6" Click="SealNavSettings_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Path x:Name="SealNavSettingsPath" Width="20" Height="20" Stretch="Uniform" Opacity="0.6"
+                              Fill="{ThemeResource IconForegroundBrush}" />
+                        <TextBlock x:Name="SealNavSettingsText" Text="设置" Tag="Setting_Title_Page" VerticalAlignment="Center"
+                                   FontSize="14" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Grid>
+
+
+
+
+
 
         <Grid x:Name="ChromeScrim" Grid.Row="0" Grid.RowSpan="2"
               IsHitTestVisible="False" Opacity="0" Visibility="Collapsed">
@@ -283,50 +510,51 @@
 
                 <Grid.Resources>
 
+
+
+
+
                     <Storyboard x:Name="WelcomeEntryAnimation">
                         <DoubleAnimation Storyboard.TargetName="WelcomeLogo" Storyboard.TargetProperty="Opacity"
-                                         From="0" To="1" Duration="0:0:1.8" BeginTime="0:0:0.3">
+                                         From="0" To="1" Duration="0:0:0.9" BeginTime="0:0:0.1">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetName="WelcomeTitleTransform" Storyboard.TargetProperty="X"
-                                         From="-100" To="0" Duration="0:0:1.5" BeginTime="0:0:0.7">
+                        <DoubleAnimation Storyboard.TargetName="WelcomeLogoTransform" Storyboard.TargetProperty="ScaleX"
+                                         From="0.94" To="1" Duration="0:0:1.1" BeginTime="0:0:0.1">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut" />
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                        <DoubleAnimation Storyboard.TargetName="WelcomeLogoTransform" Storyboard.TargetProperty="ScaleY"
+                                         From="0.94" To="1" Duration="0:0:1.1" BeginTime="0:0:0.1">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetName="WelcomeTitleGroup" Storyboard.TargetProperty="Opacity"
-                                         From="0" To="1" Duration="0:0:1.2" BeginTime="0:0:0.7">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseOut" />
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetName="WelcomeSubtitleTransform" Storyboard.TargetProperty="X"
-                                         From="100" To="0" Duration="0:0:1.5" BeginTime="0:0:1.1">
+                                         From="0" To="1" Duration="0:0:0.8" BeginTime="0:0:0.45">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetName="WelcomeSubtitle" Storyboard.TargetProperty="Opacity"
-                                         From="0" To="1" Duration="0:0:1.2" BeginTime="0:0:1.1">
+                                         From="0" To="1" Duration="0:0:0.8" BeginTime="0:0:0.7">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetName="WelcomeHint" Storyboard.TargetProperty="Opacity"
-                                         From="0" To="0.5" Duration="0:0:1.6" BeginTime="0:0:1.7">
+                        <DoubleAnimation Storyboard.TargetName="WelcomeHintGroup" Storyboard.TargetProperty="Opacity"
+                                         From="0" To="1" Duration="0:0:0.8" BeginTime="0:0:0.95">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
-                    </Storyboard>
-
-                    <Storyboard x:Name="WelcomeHintBreathing" RepeatBehavior="Forever" AutoReverse="True">
-                        <DoubleAnimation Storyboard.TargetName="WelcomeHint" Storyboard.TargetProperty="Opacity"
-                                         From="0.3" To="0.7" Duration="0:0:3.0">
+                        <DoubleAnimation Storyboard.TargetName="WelcomeVersionBadge" Storyboard.TargetProperty="Opacity"
+                                         From="0" To="0.55" Duration="0:0:0.6" BeginTime="0:0:1.2">
                             <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseInOut" />
+                                <CubicEase EasingMode="EaseOut" />
                             </DoubleAnimation.EasingFunction>
                         </DoubleAnimation>
                     </Storyboard>
@@ -335,13 +563,13 @@
 
                 <Image x:Name="WelcomeLogo"
                        Source="ms-appx:///Assets/Novara-R.png"
-                       Width="80" Height="80"
+                       Width="96" Height="96"
                        Stretch="Uniform"
                        Opacity="0"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center">
                     <Image.RenderTransform>
-                        <TranslateTransform x:Name="WelcomeLogoTransform" Y="0" />
+                        <CompositeTransform x:Name="WelcomeLogoTransform" ScaleX="1" ScaleY="1" TranslateY="0" />
                     </Image.RenderTransform>
                 </Image>
 
@@ -352,27 +580,30 @@
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="WelcomeTitleTransform" X="0" Y="0" />
                     </Grid.RenderTransform>
+
                     <TextBlock x:Name="WelcomeTitleShadowText"
                                Text="Novara"
                                FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
-                               FontSize="80"
+                               FontSize="32"
                                Foreground="{ThemeResource AppTextPrimaryBrush}"
                                Opacity="0.06"
-                               Margin="2,2,0,0" />
+                               Margin="1,1,0,0" />
                     <TextBlock x:Name="WelcomeTitleText"
                                Text="Novara"
                                FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
-                               FontSize="80"
+                               FontSize="32"
                                Foreground="{ThemeResource AppTextPrimaryBrush}" />
                 </Grid>
 
+
+
                 <TextBlock x:Name="WelcomeSubtitle"
-                           Text="本地保管每一份私密备忘" Tag="Welcome_Subtitle"
+                           Text="本地优先 · 为你与 AI 保管" Tag="Welcome_Subtitle"
                            FontFamily="Segoe UI Variable Text, Segoe UI"
-                           FontSize="34"
-                           FontWeight="ExtraLight"
+                           FontSize="16"
+                           FontWeight="Normal"
                            Foreground="{ThemeResource AppTextSecondaryBrush}"
-                           CharacterSpacing="850"
+                           CharacterSpacing="180"
                            Opacity="0"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center">
@@ -381,18 +612,37 @@
                     </TextBlock.RenderTransform>
                 </TextBlock>
 
-                <TextBlock x:Name="WelcomeHint"
-                           Text="点击任意处开始" Tag="Welcome_Hint_ClickToStart"
-                           FontFamily="Segoe UI Variable Text, Segoe UI"
-                           FontSize="14"
-                           Foreground="{ThemeResource AppTextTertiaryBrush}"
-                           Opacity="0"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center">
-                    <TextBlock.RenderTransform>
+
+
+                <StackPanel x:Name="WelcomeHintGroup"
+                            Orientation="Vertical" Spacing="10"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Opacity="0" IsHitTestVisible="False">
+                    <StackPanel.RenderTransform>
                         <TranslateTransform x:Name="WelcomeHintTransform" Y="0" />
-                    </TextBlock.RenderTransform>
-                </TextBlock>
+                    </StackPanel.RenderTransform>
+                    <Border x:Name="WelcomeHintLine"
+                            Width="28" Height="1.5" CornerRadius="1"
+                            HorizontalAlignment="Center"
+                            Background="{ThemeResource AppPrimaryButtonBrush}"
+                            Opacity="0.5" />
+                    <TextBlock x:Name="WelcomeHint"
+                               Text="点击任意处开始" Tag="Welcome_Hint_ClickToStart"
+                               FontFamily="Segoe UI Variable Text, Segoe UI"
+                               FontSize="12"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               Opacity="0.7" />
+                </StackPanel>
+
+
+                <TextBlock x:Name="WelcomeVersionBadge"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Margin="0,0,24,18"
+                           IsHitTestVisible="False"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="11"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           Opacity="0" />
             </Grid>
         </Grid>
 
@@ -412,7 +662,11 @@
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="MenuSidePanelTranslate" X="0" />
                 </Border.RenderTransform>
-                <StackPanel x:Name="MenuSideItems" Spacing="2" />
+                <StackPanel>
+
+                    <StackPanel x:Name="MenuSideItems" Spacing="2" />
+                    <StackPanel x:Name="SealSideItems" Spacing="2" Visibility="Collapsed" />
+                </StackPanel>
             </Border>
             <Border x:Name="MenuHandleBar" Width="6" Height="56"
                     HorizontalAlignment="Left" VerticalAlignment="Bottom"
@@ -466,7 +720,7 @@
                         <Button x:Name="QcModeTodo" Grid.Column="1" HorizontalAlignment="Stretch" Style="{StaticResource NovaraOutlineButtonStyle}" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
                         <Button x:Name="QcModeNote" Grid.Column="2" HorizontalAlignment="Stretch" Style="{StaticResource NovaraOutlineButtonStyle}" Height="36" CornerRadius="10" FontSize="13" Click="QcModeButton_Click" />
                     </Grid>
-                    <TextBox x:Name="QuickCaptureBox" Grid.Row="1" Style="{StaticResource NovaraSearchBoxStyle}" Margin="0,18,0,0"
+                    <TextBox x:Name="QuickCaptureBox" Grid.Row="1" Style="{StaticResource NovaraTextBoxStyle}" Margin="0,18,0,0"
                              MaxLength="500" KeyDown="QuickCaptureBox_KeyDown" />
                     <TextBlock x:Name="QuickCaptureHint" Grid.Row="2" HorizontalAlignment="Center" Margin="0,14,0,0"
                                FontSize="12" Foreground="{ThemeResource AppTextTertiaryBrush}" TextWrapping="Wrap" />
@@ -560,7 +814,7 @@
             <Grid x:Name="StoreCorruptScrim" Background="#2E000000" />
             <Border x:Name="StoreCorruptDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform>
-                    <CompositeTransform x:Name="StoreCorruptDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                    <CompositeTransform x:Name="StoreCorruptDialogTransform" ScaleX="0.94" ScaleY="0.94" TranslateY="24" />
                 </Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
@@ -599,7 +853,7 @@
             <Grid x:Name="SaveFailedScrim" Background="#2E000000" />
             <Border x:Name="SaveFailedDialog" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" CornerRadius="24" Background="{ThemeResource AppDialogBgBrush}" BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
                 <Border.RenderTransform>
-                    <CompositeTransform x:Name="SaveFailedDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                    <CompositeTransform x:Name="SaveFailedDialogTransform" ScaleX="0.94" ScaleY="0.94" TranslateY="24" />
                 </Border.RenderTransform>
                 <Grid Padding="28,24">
                     <Grid.RowDefinitions>
@@ -717,11 +971,20 @@
             </Border>
         </Grid>
 
+
+
+        <Grid x:Name="SealDropVeil" Grid.RowSpan="4" Visibility="Collapsed" IsHitTestVisible="False">
+            <Border Background="{ThemeResource AppPrimaryButtonBrush}" Opacity="0.08" />
+        </Grid>
+
         <Grid x:Name="ToastHost" Grid.RowSpan="3" IsHitTestVisible="False" />
 
 
 
 
+
+
+        <Grid x:Name="WelcomeShatterHost" Grid.RowSpan="4" IsHitTestVisible="False" Visibility="Collapsed" />
         <Grid x:Name="WelcomeMeltLayer" Grid.RowSpan="4" IsHitTestVisible="False" Visibility="Collapsed">
             <Ellipse x:Name="WelcomeMeltBlob0" Width="160" Height="160" Opacity="0"
                      HorizontalAlignment="Left" VerticalAlignment="Top" />
@@ -731,7 +994,583 @@
                      HorizontalAlignment="Left" VerticalAlignment="Top" />
         </Grid>
 
-<Grid x:Name="WelcomeCarousel" Visibility="Collapsed" Grid.RowSpan="4"
+
+
+
+
+
+<Grid x:Name="SealGuideOverlay" Grid.RowSpan="4" Visibility="Collapsed" Background="Transparent"
+      PointerWheelChanged="SealGuide_WheelChanged">
+    <Border Background="{ThemeResource AppSurfaceBrush}" IsHitTestVisible="False" />
+
+
+    <Button x:Name="SealFocusSink" Width="0" Height="0" Opacity="0" IsTabStop="True" />
+
+
+    <Grid x:Name="SealGuideBleed" IsHitTestVisible="False">
+        <Grid x:Name="SealGuideP2Field" Visibility="Collapsed">
+            <Grid x:Name="SealGuideMarqueeHost" Height="336" VerticalAlignment="Center" Margin="0,0,0,60">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="56" />
+                    <RowDefinition Height="56" />
+                </Grid.RowDefinitions>
+                <Grid x:Name="SealGuideMarqueeRow0" Grid.Row="0" Height="56" HorizontalAlignment="Stretch" />
+                <Grid x:Name="SealGuideMarqueeRow1" Grid.Row="1" Height="56" HorizontalAlignment="Stretch" />
+                <Grid x:Name="SealGuideMarqueeRow2" Grid.Row="2" Height="56" HorizontalAlignment="Stretch" />
+                <Grid x:Name="SealGuideMarqueeRow3" Grid.Row="3" Height="56" HorizontalAlignment="Stretch" />
+                <Grid x:Name="SealGuideMarqueeRow4" Grid.Row="4" Height="56" HorizontalAlignment="Stretch" />
+                <Grid x:Name="SealGuideMarqueeRow5" Grid.Row="5" Height="56" HorizontalAlignment="Stretch" />
+            </Grid>
+
+            <Grid VerticalAlignment="Center" Margin="0,0,0,60">
+                <Border Width="580" Height="210" CornerRadius="999"
+                        Background="{ThemeResource AppSurfaceBrush}" Opacity="0.35" />
+                <Border Width="530" Height="180" CornerRadius="999"
+                        Background="{ThemeResource AppSurfaceBrush}" Opacity="0.72" />
+                <Border Width="480" Height="135" CornerRadius="999"
+                        Background="{ThemeResource AppSurfaceBrush}" Opacity="0.98" />
+                <TextBlock x:Name="SealGuideP2Sentence" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="24" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"
+                           MaxWidth="520" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+            </Grid>
+
+            <StackPanel VerticalAlignment="Bottom" MaxWidth="640" HorizontalAlignment="Center"
+                        Spacing="6" Margin="0,0,0,108">
+                <TextBlock x:Name="SealGuideP2Subline" FontSize="15" TextAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+            </StackPanel>
+        </Grid>
+
+
+        <Grid x:Name="SealGuideP3Field" Visibility="Collapsed">
+            <Grid VerticalAlignment="Center" Margin="0,0,0,60">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="SealGuideP3Kicker" Grid.Row="0" FontSize="12" TextAlignment="Center"
+                           HorizontalAlignment="Center" Margin="0,0,0,10"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                <TextBlock x:Name="SealGuideP3Title" Grid.Row="1" FontSize="24" FontWeight="SemiBold"
+                           TextAlignment="Center" HorizontalAlignment="Center"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+
+
+                <Grid Grid.Row="2" Margin="0,44,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="64" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="14" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border x:Name="SealGuideP3Tick1" Grid.Row="0" Grid.Column="1" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border x:Name="SealGuideP3Tick2" Grid.Row="0" Grid.Column="2" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border x:Name="SealGuideP3Tick3" Grid.Row="0" Grid.Column="3" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border x:Name="SealGuideP3Tick4" Grid.Row="0" Grid.Column="4" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border x:Name="SealGuideP3Tick5" Grid.Row="0" Grid.Column="5" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border x:Name="SealGuideP3Tick6" Grid.Row="0" Grid.Column="6" Width="2" Height="14"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                            Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border Grid.Row="1" Grid.ColumnSpan="8" Height="4" VerticalAlignment="Center"
+                            Background="{ThemeResource AppPrimaryButtonBrush}" />
+                    <TextBlock x:Name="SealGuideP3Start" Grid.Row="2" Grid.Column="0" FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L1" Grid.Row="2" Grid.Column="1" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L2" Grid.Row="2" Grid.Column="2" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L3" Grid.Row="2" Grid.Column="3" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L4" Grid.Row="2" Grid.Column="4" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L5" Grid.Row="2" Grid.Column="5" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3L6" Grid.Row="2" Grid.Column="6" FontSize="12"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    <TextBlock x:Name="SealGuideP3End" Grid.Row="2" Grid.Column="7" FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                </Grid>
+                <TextBlock x:Name="SealGuideP3Body" Grid.Row="3" FontSize="15" TextAlignment="Center" TextWrapping="Wrap"
+                           MaxWidth="560" HorizontalAlignment="Center" Margin="0,36,0,0"
+                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+            </Grid>
+        </Grid>
+    </Grid>
+
+
+
+    <Grid x:Name="SealGuidePages" MaxWidth="880" Margin="56,64,56,132"
+          HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid x:Name="SealGuidePage1" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+
+            <TextBlock x:Name="SealGuideP1Title" Grid.Row="0" FontSize="24" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" Margin="0,4,0,28" TextAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{ThemeResource AppTextPrimaryBrush}" />
+            <Grid Grid.Row="1" VerticalAlignment="Center" ColumnSpacing="56">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+
+
+                <StackPanel Grid.Column="0" Spacing="24" MaxWidth="420" HorizontalAlignment="Center">
+                    <Grid Width="223" HorizontalAlignment="Center">
+                        <Border x:Name="SealGuideP1GlowSpace" Height="26" CornerRadius="16" Opacity="0.5"
+                                VerticalAlignment="Bottom" IsHitTestVisible="False">
+                            <Border.Background>
+                                <RadialGradientBrush Center="0.5,0.35" RadiusX="0.5" RadiusY="0.65">
+                                    <GradientStop Color="#8C7276FF" Offset="0" />
+                                    <GradientStop Color="#667276FF" Offset="0.5" />
+                                    <GradientStop Color="#2D7276FF" Offset="0.75" />
+                                    <GradientStop Color="#007276FF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Border.Background>
+                            <Border.RenderTransform><TranslateTransform Y="8" /></Border.RenderTransform>
+                        </Border>
+                        <Button IsTabStop="False" IsHitTestVisible="False" Style="{StaticResource NovaraNavButtonStyle}"
+                                Background="{ThemeResource NavFaceRaisedBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path x:Name="SealGuideP1TabSpaceIcon" Width="20" Height="20" Stretch="Uniform"
+                                      Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="SealGuideP1TabSpaceText" Tag="Seal_Tab_Space" FontSize="14"
+                                           VerticalAlignment="Center"
+                                           Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="10" MaxWidth="380" HorizontalAlignment="Center">
+                        <TextBlock x:Name="SealGuideP1S1" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBlock x:Name="SealGuideP1S2" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBlock x:Name="SealGuideP1S3" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+
+
+                <StackPanel Grid.Column="1" Spacing="24" MaxWidth="420" HorizontalAlignment="Center">
+                    <Grid Width="223" HorizontalAlignment="Center">
+                        <Border x:Name="SealGuideP1GlowCapsule" Height="26" CornerRadius="16" Opacity="0.5"
+                                VerticalAlignment="Bottom" IsHitTestVisible="False">
+                            <Border.Background>
+                                <RadialGradientBrush Center="0.5,0.35" RadiusX="0.5" RadiusY="0.65">
+                                    <GradientStop Color="#8C7276FF" Offset="0" />
+                                    <GradientStop Color="#667276FF" Offset="0.5" />
+                                    <GradientStop Color="#2D7276FF" Offset="0.75" />
+                                    <GradientStop Color="#007276FF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Border.Background>
+                            <Border.RenderTransform><TranslateTransform Y="8" /></Border.RenderTransform>
+                        </Border>
+                        <Button IsTabStop="False" IsHitTestVisible="False" Style="{StaticResource NovaraNavButtonStyle}"
+                                Background="{ThemeResource NavFaceRaisedBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Path x:Name="SealGuideP1TabCapsuleIcon" Width="20" Height="20" Stretch="Uniform"
+                                      Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                <TextBlock x:Name="SealGuideP1TabCapsuleText" Tag="Seal_Tab_Capsule" FontSize="14"
+                                           VerticalAlignment="Center"
+                                           Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="10" MaxWidth="380" HorizontalAlignment="Center">
+                        <TextBlock x:Name="SealGuideP1S4" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBlock x:Name="SealGuideP1S5" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBlock x:Name="SealGuideP1S6" FontSize="15" TextWrapping="Wrap" TextAlignment="Center"
+                                   LineHeight="21" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Grid>
+        <Grid x:Name="SealGuidePage2" Visibility="Collapsed">
+
+        </Grid>
+        <Grid x:Name="SealGuidePage3" Visibility="Collapsed">
+
+        </Grid>
+        <Grid x:Name="SealGuidePage4" Visibility="Collapsed">
+
+
+
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                <TextBlock x:Name="SealGuideP4Kicker" FontSize="12" TextAlignment="Center"
+                           HorizontalAlignment="Center" Margin="0,0,0,12"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                <TextBlock x:Name="SealGuideP4Title" FontSize="24" FontWeight="SemiBold"
+                           TextAlignment="Center" HorizontalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                <TextBlock x:Name="SealGuideP4Lead" FontSize="12" TextAlignment="Center"
+                           HorizontalAlignment="Center" Margin="0,12,0,40"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+
+
+                <Grid x:Name="SealGuideP4InputPanel" Width="398" HorizontalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <PasswordBox x:Name="SealGuideP4PasswordBox" Grid.Column="0" Width="340" Height="48" Style="{StaticResource SealUnlockPasswordBoxStyle}" PasswordRevealMode="Hidden" IsTabStop="False" IsHitTestVisible="False" />
+                    <Button x:Name="SealGuideP4GoButton" Grid.Column="1" Tag="A11y_Unlock" Width="48" Height="48" Margin="10,0,0,0" CornerRadius="24" Background="{ThemeResource AppPrimaryButtonBrush}" BorderThickness="0" IsTabStop="False" IsHitTestVisible="False">
+                        <FontIcon Glyph="&#xE72A;" FontSize="18" Foreground="#FFFFFFFF" />
+                    </Button>
+                </Grid>
+
+
+                <Border Width="2" Height="18" HorizontalAlignment="Center" Background="{ThemeResource AppTextTertiaryBrush}" />
+                <Grid Width="340" Height="12" HorizontalAlignment="Center">
+                    <Border Width="340" Height="2" VerticalAlignment="Top" Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border Width="2" Height="12" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{ThemeResource AppTextTertiaryBrush}" />
+                    <Border Width="2" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource AppTextTertiaryBrush}" />
+                </Grid>
+
+
+                <Grid Width="680" HorizontalAlignment="Center" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="7">
+                        <TextBlock Text="Novara" FontSize="18" FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa" HorizontalAlignment="Center" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        <TextBlock x:Name="SealGuideP4LeftCap" FontSize="12" TextAlignment="Center" HorizontalAlignment="Center" MaxWidth="300" TextWrapping="Wrap" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="7">
+                        <TextBlock x:Name="SealGuideP4RightName" FontSize="18" FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa" HorizontalAlignment="Center" Foreground="{ThemeResource AppPrimaryButtonBrush}" />
+                        <TextBlock x:Name="SealGuideP4RightCap" FontSize="12" TextAlignment="Center" HorizontalAlignment="Center" MaxWidth="300" TextWrapping="Wrap" Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="SealGuideP4Foot1" FontSize="12" TextAlignment="Center" TextWrapping="Wrap"
+                           MaxWidth="660" HorizontalAlignment="Center" Margin="0,64,0,0"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+                <TextBlock x:Name="SealGuideP4Foot2" FontSize="12" TextAlignment="Center" TextWrapping="Wrap"
+                           MaxWidth="660" HorizontalAlignment="Center" Margin="0,8,0,0"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+            </StackPanel>
+        </Grid>
+        <Grid x:Name="SealGuidePage5" Visibility="Collapsed">
+
+
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Stretch">
+
+
+                <TextBlock x:Name="SealGuideP5Brand" FontSize="36" FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
+                           HorizontalAlignment="Center" TextAlignment="Center"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                <TextBlock x:Name="SealGuideP5Sub" FontSize="18" HorizontalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" MaxWidth="680" Margin="0,10,0,36"
+                           Foreground="{ThemeResource AppTextSecondaryBrush}" />
+
+
+                <Grid ColumnSpacing="16" RowSpacing="16" HorizontalAlignment="Center" MaxWidth="842">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="92" />
+                        <RowDefinition Height="92" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Grid.Column="0" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C1T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C1D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="0" Grid.Column="1" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C2T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C2D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="0" Grid.Column="2" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C3T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C3D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Grid.Column="0" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C4T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C4D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Grid.Column="1" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C5T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C5D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="1" Grid.Column="2" CornerRadius="12" BorderThickness="1" Padding="18,14"
+                            BorderBrush="{ThemeResource AppBorderBrush}" Background="{ThemeResource AppSurfaceOverlayBrush}">
+                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                            <TextBlock x:Name="SealGuideP5C6T" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource AppTextPrimaryBrush}" />
+                            <TextBlock x:Name="SealGuideP5C6D" FontSize="13" LineHeight="18" TextWrapping="Wrap" Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <TextBlock x:Name="SealGuideP5Note" FontSize="12" HorizontalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" MaxWidth="680" Margin="0,24,0,0"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+
+
+    <Grid x:Name="SealGuideBottomBar" Height="120" HorizontalAlignment="Stretch" VerticalAlignment="Bottom">
+        <Button x:Name="SealGuideSkipButton" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Margin="48,0,0,44" Padding="0" MinWidth="0"
+                Style="{StaticResource SealTextButtonStyle}" Click="SealGuideSkip_Click" />
+
+        <Button x:Name="SealGuideImportButton" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,48,44" Padding="0" MinWidth="0"
+                Style="{StaticResource SealTextButtonStyle}" Click="SealGuideImport_Click" />
+        <Button x:Name="SealGuidePrimaryButton" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                MinWidth="300" Height="54" FontSize="16" CornerRadius="16" Margin="0,0,0,36"
+                Style="{StaticResource NovaraPrimaryButtonStyle}" Click="SealGuidePrimary_Click">
+            <Button.KeyboardAccelerators>
+                <KeyboardAccelerator Key="Enter" />
+            </Button.KeyboardAccelerators>
+        </Button>
+    </Grid>
+
+
+
+
+            <StackPanel x:Name="SealGateFooterPanel"
+                        Orientation="Horizontal"
+                        Spacing="32"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,0,30"
+                        Visibility="Collapsed">
+
+                <TextBlock x:Name="SealGateBackText"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="14"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           Opacity="0"
+                           Tapped="SealGateBack_Tapped" />
+
+                <TextBlock x:Name="SealForgotText"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="14"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           Opacity="0"
+                           Tapped="SealForgot_Tapped" />
+            </StackPanel>
+
+
+
+            <StackPanel x:Name="SealUnlockContent" Visibility="Collapsed"
+                        MaxWidth="560" HorizontalAlignment="Center" VerticalAlignment="Center">
+
+                <TextBlock x:Name="SealUnlockTitle" FontSize="44" FontWeight="SemiBold" CharacterSpacing="0"
+                           FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
+                           Foreground="{ThemeResource AppTextPrimaryBrush}"
+                           Opacity="0"
+                           HorizontalAlignment="Center" Margin="0,0,0,48">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform x:Name="SealUnlockTitleTransform" X="0" Y="0" />
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+                <Grid x:Name="SealUnlockPanel" Width="398" HorizontalAlignment="Center" Opacity="0">
+                    <Grid.RenderTransform>
+                        <TranslateTransform x:Name="SealUnlockPanelTransform" X="0" />
+                    </Grid.RenderTransform>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <PasswordBox x:Name="SealUnlockPasswordBox" Grid.Column="0" Width="340" Height="48"
+                                 Style="{StaticResource SealUnlockPasswordBoxStyle}"
+                                 PasswordChanged="SealUnlockPassword_PasswordChanged"
+                                 KeyDown="SealUnlockPassword_KeyDown" />
+                    <Button x:Name="SealUnlockButton" Grid.Column="1" Tag="A11y_Unlock"
+                            Width="48" Height="48" Margin="10,0,0,0" CornerRadius="24"
+                            Background="{ThemeResource AppPrimaryButtonBrush}" BorderThickness="0"
+                            Click="SealUnlock_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Grid x:Name="Root" Background="{TemplateBinding Background}"
+                                      CornerRadius="{TemplateBinding CornerRadius}">
+                                    <VisualStateManager.VisualStateGroups>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="PointerOver">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonHoverBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Pressed">
+                                                <Storyboard>
+                                                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
+                                                        <DiscreteObjectKeyFrame KeyTime="0" Value="{ThemeResource AppPrimaryButtonPressedBrush}" />
+                                                    </ObjectAnimationUsingKeyFrames>
+                                                </Storyboard>
+                                            </VisualState>
+                                            <VisualState x:Name="Disabled" />
+                                        </VisualStateGroup>
+                                    </VisualStateManager.VisualStateGroups>
+                                    <ContentPresenter Content="{TemplateBinding Content}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Grid>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <FontIcon Glyph="&#xE72A;" FontSize="18" Foreground="#FFFFFFFF" />
+                    </Button>
+                </Grid>
+                <TextBlock x:Name="SealUnlockHint" FontSize="13" TextWrapping="Wrap" MaxWidth="398"
+                           HorizontalAlignment="Center" TextAlignment="Center"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}" Margin="0,14,0,0"
+                           Visibility="Collapsed" />
+                <TextBlock x:Name="SealUnlockError" FontSize="13" TextWrapping="Wrap" MaxWidth="398"
+                           HorizontalAlignment="Center" TextAlignment="Center"
+                           Foreground="{ThemeResource AppDangerTextBrush}" Margin="0,10,0,0"
+                           Visibility="Collapsed" />
+            </StackPanel>
+
+
+
+
+            <Grid x:Name="SealLockedView" Visibility="Collapsed" Opacity="0"
+                  Background="{ThemeResource AppSurfaceBrush}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-51,0,0">
+                    <TextBlock x:Name="SealLockedTitle"
+                               FontFamily="Segoe UI Variable Text, Segoe UI"
+                               FontSize="40" FontWeight="SemiBold"
+                               Foreground="{ThemeResource AppTextPrimaryBrush}"
+                               HorizontalAlignment="Center" Margin="0,-8,0,0" />
+                    <TextBlock x:Name="SealLockedDesc" FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                               Foreground="{ThemeResource AppTextSecondaryBrush}"
+                               MaxWidth="420" LineHeight="22"
+                               HorizontalAlignment="Center" Margin="0,19,0,0" />
+                    <TextBlock x:Name="SealLockCountdown"
+                               FontFamily="Segoe UI Variable Text, Segoe UI"
+                               FontSize="64" FontWeight="Bold"
+                               Foreground="{ThemeResource AppDangerTextBrush}"
+                               HorizontalAlignment="Center" Margin="0,30,0,0" />
+                    <TextBlock x:Name="SealLockWaitHint" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                               Foreground="{ThemeResource AppTextTertiaryBrush}"
+                               MaxWidth="420" LineHeight="20"
+                               HorizontalAlignment="Center" Margin="0,28,0,0" />
+                </StackPanel>
+                <TextBlock x:Name="SealLockFooter" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                           Foreground="{ThemeResource AppTextTertiaryBrush}"
+                           MaxWidth="520" LineHeight="18"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                           Margin="40,0,40,36" />
+            </Grid>
+
+
+
+            <Grid x:Name="SealForgotOverlay" Visibility="Collapsed"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                <Grid x:Name="SealForgotScrim" Background="#2E000000" Tapped="SealForgotScrim_Tapped" />
+                <Border x:Name="SealForgotDialog" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Width="440" CornerRadius="24"
+                        Background="{ThemeResource AppDialogBgBrush}"
+                        BorderBrush="{ThemeResource AppDialogBorderBrush}" BorderThickness="1" Opacity="0">
+                    <Border.RenderTransform>
+                        <CompositeTransform x:Name="SealForgotDialogTransform" ScaleX="0.92" ScaleY="0.92" TranslateY="20" />
+                    </Border.RenderTransform>
+                    <Grid Padding="28,24">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                <Viewbox Width="18" Height="18" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <PathIcon x:Name="SealForgotDangerIcon" Foreground="{ThemeResource AppDangerTextBrush}" />
+                                </Viewbox>
+                                <TextBlock x:Name="SealForgotTitle" VerticalAlignment="Center"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AppDangerTextBrush}" />
+                            </StackPanel>
+                            <Button Tag="Common_Button_Close" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Width="28" Height="28"
+                                    Style="{StaticResource NovaraIconButtonStyle}"
+                                    Click="SealForgotClose_Click">
+                                <Path Data="M278.528 278.528L745.472 745.472M745.472 278.528L278.528 745.472"
+                                      Stroke="{ThemeResource IconForegroundBrush}"
+                                      StrokeThickness="1.8" Stretch="Uniform" Width="16" Height="16" />
+                            </Button>
+                        </Grid>
+                        <TextBlock x:Name="SealForgotWarning" Grid.Row="1" FontSize="14"
+                                   Foreground="{ThemeResource AppDangerTextBrush}"
+                                   TextWrapping="Wrap" Margin="0,20,0,0" LineHeight="22" />
+                        <StackPanel Grid.Row="2" Spacing="8" Margin="0,16,0,0">
+                            <TextBlock x:Name="SealForgotPhraseLabel" FontSize="13"
+                                       Foreground="{ThemeResource AppTextSecondaryBrush}" />
+                            <TextBlock x:Name="SealForgotPhrase" FontSize="14" FontWeight="SemiBold"
+                                       TextWrapping="Wrap" Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                       IsTextSelectionEnabled="True" />
+                            <TextBox x:Name="SealForgotPhraseBox" Style="{StaticResource NovaraTextBoxStyle}"
+                                     FontSize="14" TextChanged="SealForgotPhraseBox_TextChanged" />
+                        </StackPanel>
+                        <Grid Grid.Row="3" Margin="0,20,0,0">
+                            <Button x:Name="SealForgotCancelButton" HorizontalAlignment="Left" Width="160" Height="40"
+                                    Style="{StaticResource NovaraOutlineButtonStyle}"
+                                    CornerRadius="10" FontSize="14" Click="SealForgotCancel_Click" />
+                            <services:CountdownBorder x:Name="SealForgotCd" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button Style="{StaticResource NovaraDangerButtonStyle}" x:Name="SealForgotConfirmButton"
+                                        HorizontalAlignment="Center" Width="160" Height="40" FontSize="14"
+                                        Click="SealForgotConfirm_Click" />
+                            </services:CountdownBorder>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="WelcomeCarousel" Visibility="Collapsed" Grid.RowSpan="4"
               Background="Transparent"
               PointerWheelChanged="WelcomeCarousel_WheelChanged">
 
@@ -821,47 +1660,85 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock x:Name="CarouselP1Title" Grid.Row="0"
                                    FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
                                    Foreground="{ThemeResource AppTextPrimaryBrush}"
                                    HorizontalAlignment="Center" />
 
-                        <Border x:Name="CarouselP1ShadowReceiver" Grid.Row="1" IsHitTestVisible="False" />
-                        <StackPanel Orientation="Horizontal" Spacing="48" Grid.Row="1"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button x:Name="CarouselP1BtnMemo" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Memo"
-                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
-                                <Button.RenderTransform>
-                                    <TranslateTransform x:Name="CarouselP1FloatT0" />
-                                </Button.RenderTransform>
-                            </Button>
-                            <Button x:Name="CarouselP1BtnFile" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Path"
-                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
-                                <Button.RenderTransform>
-                                    <TranslateTransform x:Name="CarouselP1FloatT1" />
-                                </Button.RenderTransform>
-                            </Button>
-                            <Button x:Name="CarouselP1BtnPlan" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Plan"
-                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
-                                <Button.RenderTransform>
-                                    <TranslateTransform x:Name="CarouselP1FloatT2" />
-                                </Button.RenderTransform>
-                            </Button>
-                            <Button x:Name="CarouselP1BtnDiary" Style="{StaticResource NovaraNavButtonStyle}" Tag="Carousel_P1_Diary"
-                                    Width="104" Height="58" CornerRadius="26" HorizontalContentAlignment="Center" Click="CarouselP1Tab_Click">
-                                <Button.RenderTransform>
-                                    <TranslateTransform x:Name="CarouselP1FloatT3" />
-                                </Button.RenderTransform>
-                            </Button>
-                        </StackPanel>
 
-                        <TextBlock x:Name="CarouselP1Intro" Grid.Row="2" FontSize="15"
-                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
-                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="560"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,0,0,30" Height="46" />
+
+                        <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ColumnSpacing="20" RowSpacing="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="330" />
+                                <ColumnDefinition Width="330" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border x:Name="CarouselP1CardMemo" Grid.Row="0" Grid.Column="0" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1"
+                                   >
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP1IconMemo" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP1NameMemo" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP1DescMemo" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="CarouselP1CardFile" Grid.Row="0" Grid.Column="1" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1"
+                                   >
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP1IconFile" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP1NameFile" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP1DescFile" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="CarouselP1CardPlan" Grid.Row="1" Grid.Column="0" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1"
+                                   >
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP1IconPlan" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP1NamePlan" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP1DescPlan" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="CarouselP1CardDiary" Grid.Row="1" Grid.Column="1" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1"
+                                   >
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselP1IconDiary" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselP1NameDiary" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselP1DescDiary" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Grid>
 
 
@@ -889,8 +1766,8 @@
 
                                 <Grid x:Name="CarouselDemoToolbar" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                                       Margin="0,0,0,70" Width="130" Height="170">
-                                    <Border x:Name="CarouselDemoSidePanel" Width="118" VerticalAlignment="Bottom"
-                                            Background="{ThemeResource AppPrimaryButtonBrush}" CornerRadius="0,12,12,0" Padding="10,8">
+                            <Border x:Name="CarouselDemoSidePanel" Width="118" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                    Background="{ThemeResource AppPrimaryButtonBrush}" CornerRadius="0,12,12,0" Padding="10,8">
                                         <Border.RenderTransform>
                                             <TranslateTransform x:Name="CarouselDemoPanelTranslate" X="-118" />
                                         </Border.RenderTransform>
@@ -1017,6 +1894,96 @@
                         <TextBlock x:Name="CarouselP3Body" Grid.Row="2" FontSize="15"
                                    Foreground="{ThemeResource AppTextSecondaryBrush}"
                                    TextWrapping="Wrap" TextAlignment="Center" MaxWidth="640"
+                                   HorizontalAlignment="Center"
+                                   Margin="0,0,0,34" />
+                    </Grid>
+
+
+
+
+                    <Grid x:Name="CarouselPageSeal" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+
+                        <TextBlock x:Name="CarouselSealTitle" Grid.Row="0"
+                                   FontSize="24" FontWeight="SemiBold" Margin="0,4,0,12"
+                                   FontFamily="Assets/Fonts/Comfortaa.ttf#Comfortaa"
+                                   Foreground="{ThemeResource AppTextPrimaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              ColumnSpacing="20" RowSpacing="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="330" />
+                                <ColumnDefinition Width="330" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Grid.Column="0" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselSealIcon1" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselSealB1Title" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselSealB1Body" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Row="0" Grid.Column="1" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselSealIcon2" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselSealB2Title" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselSealB2Body" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Row="1" Grid.Column="0" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselSealIcon3" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselSealB3Title" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselSealB3Body" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Row="1" Grid.Column="1" CornerRadius="14" Padding="20,16"
+                                    Background="{ThemeResource AppSurfaceOverlayBrush}"
+                                    BorderBrush="{ThemeResource AppBorderBrush}" BorderThickness="1">
+                                <StackPanel Spacing="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path x:Name="CarouselSealIcon4" Width="18" Height="18" Stretch="Uniform"
+                                              Fill="{ThemeResource AppPrimaryButtonBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="CarouselSealB4Title" FontSize="16" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource AppTextPrimaryBrush}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="CarouselSealB4Body" FontSize="13" LineHeight="19"
+                                               Foreground="{ThemeResource AppTextSecondaryBrush}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <TextBlock x:Name="CarouselSealBody" Grid.Row="2" FontSize="15"
+                                   Foreground="{ThemeResource AppTextSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="660"
                                    HorizontalAlignment="Center"
                                    Margin="0,0,0,34" />
                     </Grid>
@@ -1156,10 +2123,11 @@
                 </Grid>
 
 
-                <TextBlock x:Name="CarouselSkipButton" FontSize="14"
-                           Foreground="{ThemeResource AppTextTertiaryBrush}"
-                           HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="48,0,0,44"
-                           Tapped="CarouselSkip_Tapped" />
+
+                <Button x:Name="CarouselSkipButton" Style="{StaticResource NovaraTextButtonStyle}" FontSize="14"
+                        Foreground="{ThemeResource AppTextTertiaryBrush}"
+                        HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="48,0,0,44"
+                        Click="CarouselSkip_Click" />
                 <Button x:Name="CarouselNextButton" Style="{StaticResource NovaraPrimaryButtonStyle}"
                         MinWidth="300" Height="54" FontSize="16" CornerRadius="16"
                         HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,36"

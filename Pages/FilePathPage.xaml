@@ -12,7 +12,8 @@
     <Page.Resources>
     </Page.Resources>
 
-    <Grid x:Name="ContentRoot" Background="{ThemeResource AppSurfaceBrush}" ContextRequested="RootGrid_ContextRequested">
+    <Grid x:Name="ContentRoot" Background="{ThemeResource AppSurfaceBrush}" ContextRequested="RootGrid_ContextRequested"
+          AllowDrop="True" DragOver="ContentRoot_DragOver" DragLeave="ContentRoot_DragLeave" Drop="ContentRoot_Drop">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="0" />
@@ -29,18 +30,12 @@
 
         <Canvas x:Name="DragLayer" IsHitTestVisible="False" Grid.RowSpan="3" />
 
-        <TextBlock x:Name="EmptyHint"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   TextAlignment="Center"
-                   Grid.Row="2"
-                   FontSize="13"
-                   FontWeight="Light"
-                   Foreground="{ThemeResource AppTextTertiaryBrush}"
-                   Opacity="1"
-                   TextWrapping="NoWrap"
-                   MaxWidth="600"
-                   Visibility="Visible" />
+
+        <ContentControl x:Name="EmptyHint" IsTabStop="False"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Grid.Row="2"
+                        Visibility="Visible" />
 
         <Grid x:Name="NewPathOverlay"
               Grid.RowSpan="3"
@@ -91,7 +86,7 @@
                     </Grid>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="16" Margin="0,16,0,0"> 
+                    <StackPanel Spacing="16" Margin="0,16,0,0">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{x:Bind app:App.GetString(\'Common_Label_Name\')}"
                                    FontSize="12" FontWeight="Medium"

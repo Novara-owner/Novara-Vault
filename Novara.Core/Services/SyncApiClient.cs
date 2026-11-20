@@ -178,6 +178,16 @@ public sealed class SyncApiClient : IDisposable
         if (reported is null)
             return SyncApiResult<RemoteEnvelope>.Fail(SyncErrorCode.BadRequest,
                 "the sync server did not report its version", null, reply.Status);
+
+
+
+
+
+
+        if (TryReadSignedVersion(reply.Body, out var signed) && signed != reported.Value)
+            return SyncApiResult<RemoteEnvelope>.Fail(SyncErrorCode.BadRequest,
+                "the reported version disagrees with the signed envelope - possible tampering", null, reply.Status);
+
         return SyncApiResult<RemoteEnvelope>.Ok(new RemoteEnvelope(reply.Body, reported.Value), reply.Status);
     }
 
@@ -200,6 +210,19 @@ public sealed class SyncApiClient : IDisposable
             return SyncApiResult<long>.Fail(SyncErrorCode.BadRequest,
                 "the sync server accepted the push but did not report the new version", null, reply.Status);
         return SyncApiResult<long>.Ok(version.Value, reply.Status);
+    }
+
+
+    private static bool TryReadSignedVersion(string body, out long version)
+    {
+        version = 0;
+        try
+        {
+            version = SyncEnvelopeCodec.Deserialize(body).Version;
+            return true;
+        }
+        catch (InvalidDataException) { return false; }
+        catch (JsonException) { return false; }
     }
 
     public Task<SyncApiResult<List<VersionInfo>>> ListVersionsAsync(CancellationToken ct = default)
@@ -340,7 +363,7 @@ public sealed class SyncApiClient : IDisposable
 
 
 
-    private const int MaxChunkBytes = 512 * 1024 * 1024;
+    private const int MaxChunkBytes = SyncContainer.MaxChunkBytes + 4096;
 
     private static async Task<byte[]> ReadBytesCappedAsync(HttpContent content, int maxBytes, CancellationToken ct)
     {
@@ -475,6 +498,12 @@ public sealed class SyncApiClient : IDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         { return SyncApiResult<bool>.Unreachable("the sync server did not respond in time"); }
+        catch (ObjectDisposedException)
+        {
+
+
+            return SyncApiResult<bool>.Unreachable("the sync session was torn down (locked or unpaired)");
+        }
         catch (HttpRequestException e)
         { return SyncApiResult<bool>.Unreachable($"the sync server is unreachable: {e.Message}"); }
         finally { NetworkActivityService.End(activity, ok); }
@@ -519,6 +548,12 @@ public sealed class SyncApiClient : IDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         { return SyncApiResult<byte[]>.Unreachable("the sync server did not respond in time"); }
+        catch (ObjectDisposedException)
+        { return SyncApiResult<byte[]>.Unreachable("the sync session was torn down (locked or unpaired)"); }
+
+
+        catch (InvalidOperationException)
+        { return SyncApiResult<byte[]>.Unreachable("the chunk response exceeds the 32 MiB safety limit"); }
         catch (HttpRequestException e)
         { return SyncApiResult<byte[]>.Unreachable($"the sync server is unreachable: {e.Message}"); }
         finally { NetworkActivityService.End(activity, ok); }
@@ -571,6 +606,13 @@ public sealed class SyncApiClient : IDisposable
         {
             return (null, new Failure(null, "the sync server did not respond in time", null, 0));
         }
+        catch (ObjectDisposedException)
+        {
+
+
+
+            return (null, new Failure(null, "the sync session was torn down (locked or unpaired)", null, 0));
+        }
         catch (HttpRequestException e)
         {
             return (null, new Failure(null, $"the sync server is unreachable: {e.Message}", null, 0));
@@ -592,6 +634,11 @@ public sealed class SyncApiClient : IDisposable
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 return (null, new Failure(null, "the sync server did not respond in time", null, 0));
+            }
+            catch (ObjectDisposedException)
+            {
+
+                return (null, new Failure(null, "the sync session was torn down (locked or unpaired)", null, 0));
             }
             if (response.IsSuccessStatusCode) return (new Reply(status, body, response.Headers), null);
             return (null, ParseError(body, status));

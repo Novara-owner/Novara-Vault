@@ -13,10 +13,16 @@ public static class DatabaseHealth
 
 
     public static int CountOrphanMemoEntries(NovaraDatabase db)
+        => db == null ? 0
+            : CountOrphanMemoEntries(db.MemoGroups.Select(g => g.Id), db.MemoEntries.Select(e => e.GroupId));
+
+
+
+
+    public static int CountOrphanMemoEntries(IEnumerable<Guid> groupIds, IEnumerable<Guid?> entryGroupIds)
     {
-        if (db == null) return 0;
-        var groupIds = new HashSet<Guid>(db.MemoGroups.Select(g => g.Id));
-        return db.MemoEntries.Count(e => e.GroupId != null && !groupIds.Contains(e.GroupId.Value));
+        var known = new HashSet<Guid>(groupIds);
+        return entryGroupIds.Count(g => g != null && !known.Contains(g.Value));
     }
 
 

@@ -60,6 +60,9 @@ public sealed partial class BasicMemoPage : Page
     private List<(string label, string value)> _editOrigFields = new();
     private string _editGroupOrigName = "";
     private Border _pendingMoveEntry = null!;
+
+
+    private readonly Dictionary<Border, int> _pinnedGroupPriorSlots = new();
     private Dictionary<Border, FrameworkElement> _entryPinIcons = new();
     private HashSet<Border> _starredEntries = new();
     private Dictionary<Border, FrameworkElement> _entryStarIcons = new();
@@ -245,7 +248,8 @@ private MenuFlyout BuildContextMenu()
             Text = App.GetString("Menu_New_Entry"),
             Icon = new PathIcon { Data = App.CreateGeometry(IconData.NewEntry[0] + " " + IconData.NewEntry[1]), Foreground = App.GetBrush("IconForegroundBrush") }
         };
-        newEntryItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; _targetGroupCard = card; OpenNewEntryDialog(); };
+
+        newEntryItem.Click += (s, e) => { if (!IsLiveGroupCard(card)) return; _targetGroupCard = card; OpenNewEntryDialog(keepTargetGroup: true); };
 
         var pinItem = new MenuFlyoutItem
         {
@@ -473,8 +477,9 @@ private MenuFlyout BuildContextMenu()
         if (type == "自定义")
         {
 
+            bool hasPreservedTotp = _editingEntryCard != null && _editOrigFields.Any(f => f.Item1 == "TOTP");
             valid = !string.IsNullOrWhiteSpace(CustomNameTextBox.Text)
-                 && !string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text);
+                 && (!string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text) || hasPreservedTotp);
         }
         else if (!string.IsNullOrWhiteSpace(type))
         {
@@ -543,6 +548,10 @@ private MenuFlyout BuildContextMenu()
 
         var groups = db.MemoGroups.ToList();
         var entries = db.MemoEntries.Where(x => !x.IsDeleted).ToList();
+
+
+
+
         _appliedDisplayMode = MemoDisplayMode.Normalize(db.AppSettings.MemoCardDisplayMode);
         _totpRows.Clear();
 
@@ -559,6 +568,10 @@ private MenuFlyout BuildContextMenu()
             InitializeGroupCollapsed(card, expandNew: false);
             if (g.IsStarred) { _starredCards.Add(card); if (_starIcons.TryGetValue(card, out var si)) si.Visibility = Visibility.Visible; }
             if (g.IsPinned && _pinnedGroupCard == null) { _pinnedGroupCard = card; if (_pinIcons.TryGetValue(card, out var pi)) pi.Visibility = Visibility.Visible; }
+
+
+
+            else if (g.IsPinned) g.IsPinned = false;
             GroupsContainer.Children.Add(card);
             if (playEntrance && entIdx < 10) App.PlayCardEntrance(card, entIdx); entIdx++;
         }
@@ -571,19 +584,61 @@ private MenuFlyout BuildContextMenu()
         }
 
 
+
+        bool hasGroups = groups.Count > 0;
+        bool anyStandalone = false;
+        if (hasGroups)
+        {
+            var groupIds = _groupIds.Values.ToHashSet();
+            anyStandalone = entries.Any(en => en.GroupId is not Guid gid || !groupIds.Contains(gid));
+        }
+        if (hasGroups && anyStandalone)
+        {
+            _uncategorizedCard = CreateUncategorizedCard();
+            _uncategorizedCard.Visibility = Visibility.Collapsed;
+            GroupsContainer.Children.Add(_uncategorizedCard);
+            InitializeGroupCollapsed(_uncategorizedCard, expandNew: false);
+        }
+        bool uncategorizedEntrancePlayed = false;
+
+
+
+
+
+        var renderEntries = entries;
+        if (hasGroups && anyStandalone)
+        {
+            var renderGroupIds = _groupIds.Values.ToHashSet();
+            bool IsUncategorized(MemoEntry en) => en.GroupId is not Guid rgid || !renderGroupIds.Contains(rgid);
+            if (entries.Any(en => !IsUncategorized(en)))
+            {
+                var ordered = new List<MemoEntry>(entries.Count);
+                ordered.AddRange(entries.Where(IsUncategorized));
+                ordered.AddRange(entries.Where(en => !IsUncategorized(en)));
+                renderEntries = ordered;
+            }
+        }
+
+
         _renderInProgress = true;
 
         _renderCts?.Cancel();
         var renderCts = _renderCts = new System.Threading.CancellationTokenSource();
         try
         {
-            await ChunkedRender.RunAsync(entries.Count, 6, DispatcherQueue, (s, e) =>
+            await ChunkedRender.RunAsync(renderEntries.Count, 6, DispatcherQueue, (s, e) =>
             {
+
+            var renderWorkspaceId = App.CurrentWorkspaceId;
+            bool renderWorkspaceActive = !string.IsNullOrEmpty(renderWorkspaceId);
             for (int i = s; i < e; i++)
             {
-                var en = entries[i];
+                var en = renderEntries[i];
                 var fields = en.Fields.Select(f => (f.Label, f.Value, f.CanCopy || f.Label == "备注")).ToList();
                 var card = CreateEntryCard(en.Type, en.Name, en.KeyInfo, fields, en.IconKey);
+                bool entryInWorkspace = !renderWorkspaceActive
+                    || string.Equals(en.WorkspaceId ?? "", renderWorkspaceId, StringComparison.Ordinal);
+                if (!entryInWorkspace) card.Visibility = Visibility.Collapsed;
                 _entryIds[card] = en.Id;
                 _entryIconKeys[card] = en.IconKey;
                 _entryCreatedAt[card] = en.CreatedAt;
@@ -606,6 +661,22 @@ private MenuFlyout BuildContextMenu()
                         continue;
                     }
 
+                }
+                if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } uStack)
+                {
+
+
+                    if (en.IsPinned) uStack.Children.Insert(0, card); else uStack.Children.Add(card);
+                    if (EmptyHintOf(_uncategorizedCard) is { } ueh) ueh.Visibility = Visibility.Collapsed;
+                    UpdateGroupCount(_uncategorizedCard);
+                    if (!uncategorizedEntrancePlayed && entryInWorkspace)
+                    {
+                        uncategorizedEntrancePlayed = true;
+                        _uncategorizedCard.Visibility = Visibility.Visible;
+                        if (playEntrance) App.PlayCardEntrance(_uncategorizedCard, Math.Min(entIdx, 9));
+                        entIdx++;
+                    }
+                    continue;
                 }
                 if (en.IsPinned)
                 {
@@ -646,11 +717,45 @@ private MenuFlyout BuildContextMenu()
         _entrancePlayed = true;
 
 
-        if (_standaloneEntries.Count > 0) SyncUncategorizedCard(playEntrance ? entIdx : -1);
+
+        NormalizePinnedEntriesPerRegion();
+        UpdateHintVisibility();
+
+
         _initialLoadCompleted = true;
         ApplyMemoDisplayMode(_appliedDisplayMode, animate: false);
         ApplyCardFilters();
         if (_persistAfterRender) { _persistAfterRender = false; PersistAll(); }
+    }
+
+
+
+    private void NormalizePinnedEntriesPerRegion()
+    {
+        var db = App.Store?.Database;
+        if (db == null) return;
+        void Normalize(IEnumerable<Border> cards)
+        {
+            Border? kept = null;
+            foreach (var card in cards)
+            {
+                if (!_pinnedEntryCards.Contains(card)) continue;
+                if (kept is null) { kept = card; continue; }
+                _pinnedEntryCards.Remove(card);
+                if (_entryPinIcons.TryGetValue(card, out var icon)) icon.Visibility = Visibility.Collapsed;
+                if (_entryIds.TryGetValue(card, out var id))
+                {
+                    var entity = db.MemoEntries.FirstOrDefault(x => x.Id == id);
+                    if (entity != null) entity.IsPinned = false;
+                }
+            }
+        }
+        Normalize(GroupsContainer.Children.OfType<Border>().Where(b => _entryIds.ContainsKey(b)).ToList());
+        foreach (var group in GroupsContainer.Children.OfType<Border>())
+            if (EntryStackOf(group) is { } stack)
+                Normalize(stack.Children.OfType<Border>().ToList());
+        if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } ustack)
+            Normalize(ustack.Children.OfType<Border>().ToList());
     }
 
 
@@ -700,6 +805,12 @@ private MenuFlyout BuildContextMenu()
 
 
 
+        var groupKnownIds = groups.Select(x => x.Id).ToHashSet();
+        var groupOrphans = groupById.Values.Where(x => !groupKnownIds.Contains(x.Id)).ToList();
+        db.MemoGroups.AddRange(groupOrphans);
+
+
+
 
         var memoKnownIds = entries.Select(x => x.Id).Concat(softDeleted.Select(x => x.Id)).ToHashSet();
         var memoOrphans = entryById.Values.Where(x => !x.IsDeleted && !memoKnownIds.Contains(x.Id)).ToList();
@@ -719,41 +830,16 @@ private MenuFlyout BuildContextMenu()
     private MemoGroup? FindGroup(Guid id)
         => App.Store?.Database.MemoGroups.FirstOrDefault(x => x.Id == id);
 
-    private void FloatInHint()
-    {
-        HintText.Visibility = Visibility.Visible;
-
-        if (!App.IsAnimationsEnabled)
-        {
-            HintText.Opacity = 1;
-            if (HintText.RenderTransform is TranslateTransform st) st.Y = 0;
-            return;
-        }
-        HintText.Opacity = 0;
-        if (HintText.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            HintText.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(oa, HintText); Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, tt); Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
-    }
-
     private void ContentGrid_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
         if (args.TryGetPosition(sender, out var point))
             _contextMenu.ShowAt(sender, point);
     }
 
-    private void OpenNewGroupDialog()
+    private void OpenNewGroupDialog(bool keepPendingMove = false)
     {
+
+        if (!keepPendingMove) _pendingMoveEntry = null!;
         DialogHideAnimation.Stop();
         NewGroupDialogTransform.ScaleX = 0.94; NewGroupDialogTransform.ScaleY = 0.94; NewGroupDialogTransform.TranslateY = 24;
         NewGroupDialog.Opacity = 0; DialogScrim.Opacity = 0;
@@ -945,10 +1031,13 @@ private MenuFlyout BuildContextMenu()
         var entries = new List<Border>();
         if (!singleMove)
         {
-            entries.AddRange(_standaloneEntries);
+
+
+
+            entries.AddRange(_standaloneEntries.Where(b => b.Visibility == Visibility.Visible));
             if (_uncategorizedCard != null && EntryStackOf(_uncategorizedCard) is { } sp)
                 foreach (var child in sp.Children)
-                    if (child is Border b && !entries.Contains(b))
+                    if (child is Border b && b.Visibility == Visibility.Visible && !entries.Contains(b))
                         entries.Add(b);
         }
 
@@ -1182,6 +1271,16 @@ private MenuFlyout BuildContextMenu()
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, groupName);
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            OnCardHeaderClick(card);
+        };
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto, MinHeight = 28 });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1339,12 +1438,23 @@ private MenuFlyout BuildContextMenu()
 
     private void UpdateHintVisibility()
     {
+
+
+        if (_renderInProgress) { HintText.Visibility = Visibility.Collapsed; return; }
         bool anyVisible = false;
         foreach (var c in GroupsContainer.Children)
             if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
         if (anyVisible) { HintText.Visibility = Visibility.Collapsed; return; }
-        HintText.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : App.GetString("Memo_Empty_Tip");
-        if (HintText.Visibility != Visibility.Visible) FloatInHint();
+
+
+
+        var inWorkspace = !string.IsNullOrEmpty(App.CurrentWorkspaceId);
+        var title = inWorkspace ? App.GetString("Workspace_EmptyHint") : App.GetString("Memo_Empty_Tip");
+        var sub = inWorkspace ? App.GetString("Workspace_EmptySub") : App.GetString("Memo_Empty_Sub");
+        HintText.Content = Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.EmptyStateArt.ClickBody, Novara.Services.EmptyStateArt.ClickAccent, 1024, 1024,
+            title, sub);
+        HintText.Visibility = Visibility.Visible;
     }
 
 
@@ -1468,6 +1578,15 @@ private MenuFlyout BuildContextMenu()
 
         var typeIconGeom = App.CreateGeometry(type switch { "邮箱" => IconData.Email, "账户" => IconData.Account[0] + " " + IconData.Account[1], "API Key" => "M640.45 480.574c17.496 0 31.713 14.041 31.996 31.47l0.004 0.53V811.05c0 88.338-71.612 159.95-159.95 159.95-87.454 0-158.516-70.187-159.929-157.305l-0.021-2.645v-43.29c0-17.673 14.327-32 32-32 17.496 0 31.713 14.042 31.996 31.47l0.004 0.53v43.29c0 52.991 42.958 95.95 95.95 95.95 52.462 0 95.09-42.104 95.937-94.364l0.013-1.586V512.574c0-17.674 14.327-32 32-32zM256.357 352.55c17.673 0 32 14.327 32 32 0 17.496-14.042 31.713-31.47 31.995l-0.53 0.005h-42.745c-52.786 0-95.612 42.94-95.612 95.95 0 52.48 41.974 95.09 94.031 95.938l1.581 0.012H512.5c17.673 0 32 14.327 32 32 0 17.497-14.042 31.714-31.47 31.996l-0.53 0.004H213.612c-88.17 0-159.612-71.63-159.612-159.95 0-87.436 70.02-158.516 156.972-159.929l2.64-0.021h42.745z m554.454 0C899.268 352.55 971 424.15 971 512.5c0 87.468-70.305 158.517-157.54 159.929l-2.649 0.021h-40.997c-17.673 0-32-14.327-32-32 0-17.496 14.042-31.713 31.47-31.995l0.53-0.005h40.997c53.137 0 96.189-42.971 96.189-95.95 0-52.449-42.195-95.09-94.598-95.937l-1.59-0.013H512.5c-17.673 0-32-14.327-32-32 0-17.497 14.042-31.713 31.47-31.996l0.53-0.004h298.311zM512.5 54c87.454 0 158.516 70.187 159.929 157.305l0.021 2.645v42.772c0 17.673-14.327 32-32 32-17.496 0-31.713-14.042-31.996-31.47l-0.004-0.53V213.95c0-52.992-42.958-95.95-95.95-95.95-52.462 0-95.09 42.104-95.937 94.364l-0.013 1.586v297.212c0 17.673-14.327 32-32 32-17.496 0-31.713-14.042-31.996-31.471l-0.004-0.53v-297.21C352.55 125.611 424.162 54 512.5 54z", "网站" => IconData.Website, "银行卡" => IconData.BankCard, "WiFi" => string.Join(" ", IconData.WiFi), "证件" => string.Join(" ", IconData.IdCard), _ => !string.IsNullOrEmpty(iconKey) ? IconData.GetGroupPath(iconKey) : IconData.Custom });
         var card = new Border { CornerRadius = new CornerRadius(14), Background = App.GetBrush("AppSurfaceOverlayBrush"), BorderBrush = new SolidColorBrush(App.GetBrush("AppBorderBrush").Color), BorderThickness = new Thickness(1), Padding = new Thickness(12, 10, 12, 10), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top };
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, name);
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            OnCardHeaderClick(card);
+        };
         var rootGrid = new Grid(); rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var mainRow = new Grid(); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); mainRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var typeIconViewbox = new Viewbox { Width = 24, Height = 24, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 10, 0), Child = new PathIcon { Data = typeIconGeom, Foreground = App.GetBrush("IconForegroundBrush") } };
@@ -1626,7 +1745,7 @@ private MenuFlyout BuildContextMenu()
                 _selectedEntryType = d.type;
                 NewEntryDialogTitle.Text = App.GetString("Memo_Entry_EditTitle");
                 EntryTypeSection.Visibility = Visibility.Collapsed;
-                OpenNewEntryDialog();
+                OpenNewEntryDialog(keepEditing: true);
 
                 _selectedEntryType = d.type;
                 EntryTypeButtonText.Text = TypeLabel(d.type);
@@ -1640,7 +1759,13 @@ private MenuFlyout BuildContextMenu()
                 if (d.type == "自定义")
                 {
                     CustomNameTextBox.Text = d.name;
-                    if (d.fields.Count > 0) CustomInfoTextBox_0.Text = d.fields[0].Item2;
+
+
+
+
+                    var infoFields = d.fields.Where(f => f.Item1 != "TOTP").ToList();
+                    CustomInfoTextBox_0.Text = infoFields.Count > 0 ? infoFields[0].Item2 : "";
+                    TotpTextBox.Text = d.fields.FirstOrDefault(f => f.Item1 == "TOTP").Item2 ?? "";
 
 
                     ClearEntryIconSelection();
@@ -1654,11 +1779,10 @@ private MenuFlyout BuildContextMenu()
 
                     CustomInfoDynamicPanel.Children.Clear();
                     _customInfoCount = 1;
-                    for (int i = 1; i < d.fields.Count; i++)
+                    for (int i = 1; i < infoFields.Count; i++)
                     {
-                        if (d.fields[i].Item1 == "TOTP") { TotpTextBox.Text = d.fields[i].Item2; continue; }
                         var dtb = CreateCustomInfoTextBox(_customInfoCount);
-                        dtb.Text = d.fields[i].Item2;
+                        dtb.Text = infoFields[i].Item2;
                         CustomInfoDynamicPanel.Children.Add(dtb);
                         _customInfoCount++;
                     }
@@ -1730,7 +1854,7 @@ private MenuFlyout BuildContextMenu()
                     {
                         _pendingMoveEntry = card;
                         UngroupedListSection.Visibility = Visibility.Collapsed;
-                        OpenNewGroupDialog();
+                        OpenNewGroupDialog(keepPendingMove: true);
                     };
                     moveSub.Items.Add(newGroupItem);
                 }
@@ -1838,6 +1962,18 @@ private MenuFlyout BuildContextMenu()
             Padding = new Thickness(16, 12, 16, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
+        };
+
+
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, App.GetString("Memo_Group_Uncategorized"));
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            OnCardHeaderClick(card);
         };
 
         var grid = new Grid();
@@ -2556,6 +2692,16 @@ private MenuFlyout BuildContextMenu()
 
     private void UpdateCustomInfoButtonVisibility() { CustomInfoAddButton.Visibility = (_customInfoCount >= MaxCustomInfoCount) ? Visibility.Collapsed : Visibility.Visible; }
 
+
+
+
+    private void CustomInfoAddButton_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var needed = Math.Max(CustomInfoAddButton.Margin.Left, Math.Ceiling(e.NewSize.Width * 0.01) + 2);
+        if (Math.Abs(CustomInfoAddButton.Margin.Left - needed) > 0.5)
+            CustomInfoAddButton.Margin = new Thickness(needed, 12, needed, 0);
+    }
+
     private void CustomInfoAddButton_Click(object sender, RoutedEventArgs e)
     {
         if (_customInfoCount >= MaxCustomInfoCount) return;
@@ -2578,10 +2724,13 @@ private MenuFlyout BuildContextMenu()
 
         if (type == "自定义")
         {
+
+
+            bool hasPreservedTotp = _editingEntryCard != null && _editOrigFields.Any(f => f.Item1 == "TOTP");
             name = CustomNameTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(name)) { _confirming = false; FlashTextBox(CustomNameTextBox); return; }
-            if (string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text)) { _confirming = false; FlashTextBox(CustomInfoTextBox_0); return; }
-            fields.Add(("信息", CustomInfoTextBox_0.Text.Trim(), true));
+            if (string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text) && !hasPreservedTotp) { _confirming = false; FlashTextBox(CustomInfoTextBox_0); return; }
+            if (!string.IsNullOrWhiteSpace(CustomInfoTextBox_0.Text)) fields.Add(("信息", CustomInfoTextBox_0.Text.Trim(), true));
             foreach (var child in CustomInfoDynamicPanel.Children)
                 if (child is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
                     fields.Add(("信息", tb.Text.Trim(), true));
@@ -2668,8 +2817,12 @@ private MenuFlyout BuildContextMenu()
         if (!string.IsNullOrEmpty(totpVal) && !fields.Any(f => f.Item1 == "TOTP")) fields.Add(("TOTP", totpVal, true));
 
 
-        var entryIconKey = type == "自定义" && !string.IsNullOrEmpty(_entrySelectedIcon) ? _entrySelectedIcon
-                         : type == "自定义" ? GetRandomIconKey() : "";
+
+
+        var entryIconKey = type == "自定义"
+            ? (!string.IsNullOrEmpty(_entrySelectedIcon) ? _entrySelectedIcon
+                : _editingEntryCard == null ? GetRandomIconKey() : "")
+            : "";
         var card = CreateEntryCard(type, name, keyInfo, fields, entryIconKey);
         if (type == "自定义") _entryIconKeys[card] = entryIconKey;
 
@@ -2906,8 +3059,13 @@ private MenuFlyout BuildContextMenu()
         App.ShowToast(App.GetString("Common_Toast_Created"));
     }
 
-    public void OpenNewEntryDialog()
+    public void OpenNewEntryDialog(bool keepEditing = false, bool keepTargetGroup = false)
     {
+
+
+
+        if (!keepEditing) _editingEntryCard = null!;
+        if (!keepTargetGroup) _targetGroupCard = null!;
         _confirming = false;
         NewEntryDialogHideAnimation.Stop();
         NewEntryDialogShowAnimation.Stop();
@@ -2944,6 +3102,8 @@ private MenuFlyout BuildContextMenu()
 
     private void PinGroupCard(Border card)
     {
+        if (!ReferenceEquals(_pinnedGroupCard, card) && GroupsContainer.Children.Contains(card))
+            _pinnedGroupPriorSlots[card] = GroupsContainer.Children.IndexOf(card);
         if (_pinnedGroupCard != null && _pinnedGroupCard != card && _pinIcons.ContainsKey(_pinnedGroupCard)) _pinIcons[_pinnedGroupCard].Visibility = Visibility.Collapsed;
         if (_pinIcons.ContainsKey(card)) _pinIcons[card].Visibility = Visibility.Visible;
         GroupsContainer.Children.Remove(card); GroupsContainer.Children.Insert(0, card);
@@ -2964,6 +3124,20 @@ private MenuFlyout BuildContextMenu()
     {
         if (_pinIcons.ContainsKey(card)) _pinIcons[card].Visibility = Visibility.Collapsed;
         if (_pinnedGroupCard == card) _pinnedGroupCard = null!;
+
+
+
+        if (GroupsContainer.Children.Contains(card))
+        {
+            GroupsContainer.Children.Remove(card);
+            int insert = _pinnedGroupPriorSlots.TryGetValue(card, out var slot) ? slot : -1;
+            _pinnedGroupPriorSlots.Remove(card);
+            if (insert < 0 || insert > GroupsContainer.Children.Count) insert = GroupsContainer.Children.Count;
+            if (_uncategorizedCard != null && GroupsContainer.Children.Contains(_uncategorizedCard)
+                && insert > GroupsContainer.Children.IndexOf(_uncategorizedCard))
+                insert = GroupsContainer.Children.IndexOf(_uncategorizedCard);
+            GroupsContainer.Children.Insert(insert, card);
+        }
         SyncGroupPins();
         PersistAll();
     }
@@ -3189,7 +3363,7 @@ private MenuFlyout BuildContextMenu()
                         _entryCreatedAt.Remove(delEntryCard);
                         _pinnedEntryCards.Remove(delEntryCard);
                         _currentEntryCard = null!;
-                        if (GroupsContainer.Children.Count == 0) FloatInHint();
+                        if (GroupsContainer.Children.Count == 0) UpdateHintVisibility();
                         SyncUncategorizedCard();
                         ApplyCardFilters();
                         PersistAll();
@@ -3222,7 +3396,7 @@ private MenuFlyout BuildContextMenu()
                         _entryCreatedAt.Remove(delEntryCard);
                         _pinnedEntryCards.Remove(delEntryCard);
                         _currentEntryCard = null!;
-                        if (GroupsContainer.Children.Count == 0) FloatInHint();
+                        if (GroupsContainer.Children.Count == 0) UpdateHintVisibility();
                         SyncUncategorizedCard();
                         ApplyCardFilters();
                         PersistAll();
@@ -3248,12 +3422,22 @@ private MenuFlyout BuildContextMenu()
                     if (EmptyHintOf(_currentGroupCard) is { } emptyHint)
                         emptyHint.Visibility = Visibility.Visible;
                     int idx = GroupsContainer.Children.IndexOf(_currentGroupCard);
+
+
+
+                    int standaloneIdx = 0;
+                    foreach (var sibling in GroupsContainer.Children)
+                    {
+                        if (ReferenceEquals(sibling, _currentGroupCard)) break;
+                        if (sibling is Border sb && _entryIds.ContainsKey(sb)) standaloneIdx++;
+                    }
+                    idx++;
                     foreach (var entry in rescued)
                     {
                         if (entry is Border eb)
                         {
                             eb.Margin = new Thickness(0);
-                            _standaloneEntries.Add(eb);
+                            _standaloneEntries.Insert(standaloneIdx++, eb);
                             _entriesInGroup.Remove(eb);
 
                             if (_entryIds.TryGetValue(eb, out var rid)) { var me = FindEntry(rid); if (me != null) me.GroupId = null; }
@@ -3286,7 +3470,7 @@ private MenuFlyout BuildContextMenu()
                     _groupCountTexts.Remove(delGroupCard);
                     if (_pinnedGroupCard == delGroupCard) _pinnedGroupCard = null!;
                     _currentGroupCard = null!;
-                    if (GroupsContainer.Children.Count == 0) FloatInHint();
+                    if (GroupsContainer.Children.Count == 0) UpdateHintVisibility();
                     SyncUncategorizedCard();
                     if (_uncategorizedCard != null) SetGroupCollapsed(_uncategorizedCard, false, animate: IsLoaded);
                     PersistAll();
@@ -3301,6 +3485,10 @@ private MenuFlyout BuildContextMenu()
 
     private void OnPageUnloaded(object sender, RoutedEventArgs e)
     {
+
+        _dialogMap.Clear();
+        _dialogWidthFit.Clear();
+        _dialogScrollFit.Clear();
         _totpTimer?.Stop();
         _apiCheckCts?.Cancel();
         _apiCheckCts?.Dispose();
@@ -3340,6 +3528,7 @@ private MenuFlyout BuildContextMenu()
         ApiProbeHistoryOverlay.Visibility = Visibility.Collapsed;
         DialogDepth.VeilClear();
         _targetGroupCard = null!;
+        _pinnedGroupPriorSlots.Clear();
         _editingEntryCard = null!;
         _currentEntryCard = null!;
         _currentGroupCard = null!;
@@ -4479,15 +4668,29 @@ private MenuFlyout BuildContextMenu()
 
 
 
-            App.ShowToast(App.GetString("Memo_RelayProbe_LoadedRestart"), ToastTone.Success);
-            await MainWindow.FlushPendingEditorForRestartAsync();
+
+
+            if (await MainWindow.FlushPendingEditorForRestartAsync())
+            {
+                App.ShowToast(App.GetString("Common_Restart_EditorDirty"), ToastTone.Error);
+                return;
+            }
+
+
             if (App.Store is { } store && !store.SaveSync())
             {
                 App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
                 return;
             }
+            App.ShowToast(App.GetString("Memo_RelayProbe_LoadedRestart"), ToastTone.Success);
             await System.Threading.Tasks.Task.Delay(800);
-            MainWindow.RestartNow();
+
+
+            var restartOutcome = MainWindow.RestartNow();
+            if (restartOutcome != MainWindow.RestartOutcome.Ok)
+                App.ShowToast(restartOutcome == MainWindow.RestartOutcome.EditorDirty
+                    ? App.GetString("Common_Restart_EditorDirty")
+                    : App.GetString("Common_Toast_Failed"), ToastTone.Error);
         }
         catch (Exception ex)
         {
@@ -4949,7 +5152,9 @@ private MenuFlyout BuildContextMenu()
         if (_dropIndex == index && _dropIndicator != null) return;
         if (_dropIndicator != null) _dragContainer.Children.Remove(_dropIndicator);
         else _dropIndicator = CreateDropIndicator();
-        _dragContainer.Children.Insert(index, _dropIndicator);
+
+
+        _dragContainer.Children.Insert(InsertIndexAfterVisibleSlot(index, _dragContainer), _dropIndicator);
         _dropIndex = index;
         _dropCacheDirty = true;
     }
@@ -5050,6 +5255,23 @@ private MenuFlyout BuildContextMenu()
 
         RestoreDragFolds(animate: true, card);
         _pressArmedCard = null;
+
+
+
+
+
+        if (ReferenceEquals(container, GroupsContainer))
+        {
+            var topLevel = GroupsContainer.Children.OfType<Border>()
+                .Where(b => _entryIds.ContainsKey(b))
+                .ToList();
+            if (topLevel.Count > 0)
+            {
+                var seen = topLevel.ToHashSet();
+                _standaloneEntries = topLevel.Concat(_standaloneEntries.Where(b => !seen.Contains(b))).ToList();
+            }
+        }
+
         PersistAll();
     }
 

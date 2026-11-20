@@ -60,6 +60,23 @@ public sealed class SyncState
 
 
 
+    public string? PendingKeyWrapJson { get; set; }
+
+
+
+
+
+
+    public string? PendingKeyWrapPrevious { get; set; }
+
+
+
+
+
+
+
+
+
 
 
 

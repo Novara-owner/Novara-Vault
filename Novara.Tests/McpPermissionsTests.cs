@@ -85,9 +85,21 @@ public class McpPermissionsTests
         var s = SettingsWithLegacy(new List<string> { @"C:\a.exe", @"C:\b.exe" });
         Assert.True(McpPermissions.EnsureMigrated(s));
         Assert.Equal(2, s.McpClientPermissions.Count);
-        Assert.All(s.McpClientPermissions, r => Assert.Equal((long)McpPermissions.LegacyFull, r.Permissions));
+
+
+        var expected = McpPermissions.LegacyFull & ~McpPermissions.AllDelete;
+        Assert.All(s.McpClientPermissions, r => Assert.Equal((long)expected, r.Permissions));
         Assert.False(McpPermissions.EnsureMigrated(s));
         Assert.Equal(2, s.McpClientPermissions.Count);
+    }
+
+    [Fact]
+    public void Migrate_LegacyPaths_KeepDeleteBitsWhenTheSwitchIsOn()
+    {
+        var s = SettingsWithLegacy(new List<string> { @"C:\a.exe" });
+        s.McpDeleteEnabled = true;
+        Assert.True(McpPermissions.EnsureMigrated(s));
+        Assert.All(s.McpClientPermissions, r => Assert.Equal((long)McpPermissions.LegacyFull, r.Permissions));
     }
 
     [Fact]
@@ -120,6 +132,38 @@ public class McpPermissionsTests
         Assert.Equal("all:read", McpPermissions.Describe(McpPermissions.AllRead));
         Assert.Equal("memo:read", McpPermissions.Describe(McpPerm.MemoRead));
         Assert.Equal("none", McpPermissions.Describe(McpPerm.None));
+    }
+
+    [Fact]
+    public void Describe_DistinguishesExplicitAllFromAnAuthorizedSubset()
+    {
+
+        Assert.Equal("all:read", McpPermissions.Describe(McpPermissions.AllRead));
+        Assert.Equal("path:read + todo:read + note:read + diary:read",
+            McpPermissions.Describe(McpPermissions.DefaultForNewClient));
+    }
+
+
+
+    [Fact]
+    public void MixedForm_AdmitsAnyReadBit_ButAnExplicitTypeStillDemandsItsZone()
+    {
+
+
+        var d1 = McpPermissions.DefaultForNewClient;
+        Assert.True(McpPermissions.IsPermitted(d1, "list_items", null));
+        Assert.True(McpPermissions.IsPermitted(d1, "search_items", null));
+        Assert.False(McpPermissions.IsPermitted(McpPerm.None, "list_items", null));
+
+
+        Assert.False(McpPermissions.IsPermitted(d1, "list_items", "memo"));
+        Assert.False(McpPermissions.IsPermitted(d1, "search_items", "memo"));
+        Assert.True(McpPermissions.IsPermitted(d1, "list_items", "path"));
+
+
+        Assert.False(McpPermissions.IsPermitted(d1, "read_item", null));
+        Assert.False(McpPermissions.IsPermitted(McpPermissions.LegacyFull, "read_item", null));
+        Assert.True(McpPermissions.IsPermitted(d1, "read_item", "path"));
     }
 
 

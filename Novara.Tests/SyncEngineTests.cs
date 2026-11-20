@@ -590,4 +590,143 @@ public class SyncEngineTests : IAsyncLifetime
         Assert.True(settings.AutoStart);
         Assert.Equal("AltN", settings.QuickCaptureHotkey);
     }
+
+
+
+    [Fact]
+    public void ASealedPartitionAtTheCeiling_IsAccepted_AndOneByteOver_IsNamed()
+    {
+
+
+
+        Assert.Null(SyncEngine.OversizedPartitionReason("diaries", SyncContainer.MaxChunkBytes));
+
+        var over = SyncEngine.OversizedPartitionReason("diaries", SyncContainer.MaxChunkBytes + 1);
+        Assert.NotNull(over);
+
+
+        Assert.Equal("diaries", over!.PartitionKey);
+        Assert.Equal(32, over.LimitMiB);
+        Assert.Contains("diaries", over.ToString());
+        Assert.Contains("32 MiB", over.ToString());
+        Assert.Contains("per-chunk limit", over.ToString());
+    }
+
+    [Fact]
+    public void TheClientAndServerAgreeOnTheChunkCeiling()
+    {
+
+        Assert.Equal(SyncContainer.MaxChunkBytes, Novara.Sync.Server.Storage.BlobLayout.MaxChunkBytes);
+    }
+
+
+
+    [Fact]
+    public async Task ConflictV5_AnEditMadeWhileDownloadingTheManifest_IsNotRecordedAsUploaded()
+    {
+        var created = await _server.CreateSpaceWithTokenAsync("download-window", "pc");
+        var a = new Device(created.Client, created.SpaceId, created.SpaceKey, created.DeviceId, created.EnrollmentSecret);
+        var b = await JoinAsync(a, "laptop");
+        var storeA = NewStore("window-a.novadb");
+        var storeB = NewStore("window-b.novadb");
+        var stateA = NewState(a);
+        var stateB = NewState(b);
+
+        AddMemo(storeB, "shared");
+        Assert.Equal(SyncRoundStatus.Push, (await RoundAsync(storeB, stateB, b)).Status);
+        Assert.Equal(SyncRoundStatus.Pull,
+            (await SyncEngine.PullAsync(storeA, stateA, a.SpaceKey, a.Client, Now)).Status);
+        var v1Sha = SyncEnvelopeCodec.HashPayload(SyncPayloadApplier.BuildPayloadJson(storeA.Database));
+
+        AddMemo(storeA, "a-edit");
+        AddMemo(storeB, "b-edit");
+        Assert.Equal(SyncRoundStatus.Push, (await RoundAsync(storeB, stateB, b)).Status);
+        Assert.Equal(SyncRoundStatus.Pull,
+            (await SyncEngine.PullAsync(storeA, stateA, a.SpaceKey, a.Client, Now)).Status);
+
+
+
+        stateA.BaseVersion = 1;
+        stateA.LastSeenVersion = 1;
+        stateA.LastPushedSha256 = v1Sha;
+
+
+
+
+        var hook = new EditOnNthDataGetHandler(2, () => AddMemo(storeA, "typed-while-downloading"));
+        using var http = new HttpClient(hook);
+        var hooked = new SyncApiClient(a.Client.BaseUrl, a.SpaceId, a.DeviceId, created.Token, http);
+
+        var outcome = await SyncEngine.RunRoundAsync(storeA, stateA, a.SpaceKey, hooked, Now);
+
+        Assert.Equal(SyncRoundStatus.Conflict, outcome.Status);
+        Assert.Equal(1, stateA.BaseVersion);
+        Assert.Contains(storeA.Database.MemoEntries, e => e.Name == "typed-while-downloading");
+    }
+
+
+
+    [Fact]
+    public async Task APurgedTombstone_PropagatesAsDeleted_AndNeverRevivesOnTheOtherDevice()
+    {
+
+
+        var a = await NewDeviceAsync();
+        var storeA = NewStore("a.novadb");
+        AddMemo(storeA, "doomed");
+        var stateA = NewState(a);
+        Assert.Equal(SyncRoundStatus.Push, (await RoundAsync(storeA, stateA, a)).Status);
+
+        var b = await JoinAsync(a, "pc2");
+        var storeB = NewStore("b.novadb");
+        var stateB = NewState(b);
+        Assert.Equal(SyncRoundStatus.Pull, (await RoundAsync(storeB, stateB, b)).Status);
+        Assert.Contains(storeB.Database.MemoEntries, e => e.Name == "doomed" && !e.IsDeleted);
+
+
+        var row = storeA.Database.MemoEntries.Single(e => e.Name == "doomed");
+        row.IsDeleted = true;
+        row.DeletedAt = DateTime.UtcNow;
+        row.PurgedAt = DateTime.UtcNow;
+        row.Name = "";
+        row.KeyInfo = "";
+        row.Fields = new List<EntryField>();
+        Assert.True(storeA.SaveSync());
+        Assert.Equal(SyncRoundStatus.Push, (await RoundAsync(storeA, stateA, a)).Status);
+
+
+        Assert.Equal(SyncRoundStatus.Pull, (await RoundAsync(storeB, stateB, b)).Status);
+        var onB = storeB.Database.MemoEntries.SingleOrDefault(e => e.Id == row.Id);
+        Assert.NotNull(onB);
+        Assert.True(onB!.IsDeleted);
+        Assert.NotEqual(default, onB.PurgedAt);
+        Assert.Equal("", onB.Name);
+    }
+
+
+    private sealed class EditOnNthDataGetHandler : DelegatingHandler
+    {
+        private readonly int _target;
+        private readonly Action _edit;
+        private int _seen;
+
+        public EditOnNthDataGetHandler(int target, Action edit) : base(new HttpClientHandler())
+        {
+            _target = target;
+            _edit = edit;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (request.Method == HttpMethod.Get
+                && request.RequestUri is { } uri
+                && uri.AbsolutePath.EndsWith("/space/data", StringComparison.Ordinal)
+                && Interlocked.Increment(ref _seen) == _target)
+            {
+                _edit();
+            }
+            return response;
+        }
+    }
 }

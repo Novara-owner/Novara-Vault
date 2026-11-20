@@ -52,6 +52,18 @@ public sealed class IconRing
             foreach (var tag in list)
             {
                 var b = makeBorder(tag);
+
+
+
+                b.IsTabStop = true;
+                if (string.IsNullOrEmpty(Microsoft.UI.Xaml.Automation.AutomationProperties.GetName(b)))
+                    Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(b, tag);
+                b.KeyDown += (_, e) =>
+                {
+                    if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+                    e.Handled = true;
+                    Tapped?.Invoke(b);
+                };
                 b.Tapped += (_, _) => Tapped?.Invoke(b);
                 _panel.Children.Add(b);
                 _borders.Add(b);

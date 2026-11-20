@@ -61,7 +61,7 @@ Core design principles:
 - **Five languages**: Simplified Chinese / Traditional Chinese / English / 한국어 / 日本語.
 - **Theme**: light / dark / follow system + Paper tier (four paper color schemes, since 9.0).
 - **Desktop sticky note**: a standalone `StickNoteHost` process, linked with the main app's "Send to desktop".
-- **MCP interface**: exposes a local MCP service with 14 tools for AI agents to read and write data.
+- **MCP interface**: exposes a local MCP service with 16 tools for AI agents to read and write data.
 - **Single-file distribution**: .NET self-contained + Inno Setup installer.
 
 ---
@@ -588,14 +588,14 @@ NovaraMCP.exe (pure forwarding stdio front end, hand-written JSON-RPC: initializ
 Main process McpService (unlock gate → token auth → process approval → permission matrix → redaction → CRUD)
 ```
 
-### 16.2 Tool list (14 tools)
+### 16.2 Tool list (16 tools)
 
 | Category | Tools |
 |------|------|
 | Create | create_memo / create_todo / create_note / create_diary / create_path |
 | Update | update_memo / update_todo / update_note / update_diary / update_path |
-| Query | list_items / read_item / search_items |
-| Delete | delete_item (soft delete; requires the client's delete bit AND the global master switch) |
+| Query | list_items / read_item / search_items / get_auth_status (zero-permission self-check) |
+| Delete / restore | delete_item (soft delete; requires the client's delete bit AND the global master switch) / restore_item (requires the client's update bit) |
 
 ### 16.3 Security model
 
@@ -605,7 +605,7 @@ Main process McpService (unlock gate → token auth → process approval → per
 - **Deletion master switch**: the global toggle is AND-ed with the client's own delete bit.
 - **Audit log**: every call — including denied attempts — is recorded locally (process / time / tool / target / result), with length-capped, credential-masked fields; viewable from the MCP card.
 - **Redaction**: sensitive fields (password / API Key) are redacted in output; `update` cannot tamper with existing sensitive fields, but can add new sensitive fields.
-- **Write boundary**: `create` / `update` / `delete` (soft delete); the recycle bin is not exposed; `format` cannot be changed.
+- **Write boundary**: `create` / `update` / `delete` (soft delete) / `restore_item` (update bit); the recycle bin is not exposed; `format` cannot be changed. Novara Space is not exposed through MCP at all — sealed items live in a separate encrypted store with its own password.
 
 ### 16.4 Settings page MCP card
 
@@ -911,6 +911,7 @@ The project follows the [Microsoft C# coding conventions](https://learn.microsof
 | 10.3 | 2026-10-11 | Fix — native save dialogs append the selected file type's default extension, with a final guard before writing, restoring extensions across all 12 export/backup paths (a 10.1–10.2 regression; files exported by those versions are intact and only need the extension added by hand) |
 | novara11 (11.0) | 2026-10-19 | **Hardened** — desktop on .NET 10; v5 database container (Argon2id + self-describing parameters + unlock-free SHA-256 precheck); partition-level incremental sync uploads; ECDSA-signed update manifests (fail-closed); snapshot integrity manifests with GFS-tiered retention; optional in-app auto update check (off by default); 96 dialogs converged on 5 adaptive width tiers; the deep-probe flow split into two dialogs; some 470 defects fixed in multiple codebase-wide review passes |
 | novara11.R1 (11.1) | 2026-10-22 | **Editor hotfix** — HTML image insertion restored (correct `IShellItemArray` + multi-select), multiple images insert in one go, image selection clears on outside/title/Esc, toolbar commands keep focus in the editor; no data, runtime or protocol changes |
+| novara13 (13.0) | 2026-11-19 | **Novara Space and time capsules** — a separate password-protected encrypted store under `%LocalAppData%\Novara\seal` (own Argon2id-wrapped key, AES-256-GCM containers, independent lockout, local-only; excluded from search, sync, MCP, snapshots and the recycle bin); time capsules from one minute to forty years with rollback detection; `.novabundle` export/import; 16 MCP tools (`restore_item`, `get_auth_status`); eight-page first-run guide; welcome sand-shatter with 100,072 particles; reliability pass across backups, sync, the space and the web reader |
 | novara12 (12.0) | 2026-10-28 | **Interaction rework ("mind and hand in concert")** — card folding capsules on the memo and plan pages (a 750 ms long-press separates title clicks from drags); display modes with follow memory, where manual folds persist across restarts and roam via encrypted sync as optional fields; live file/folder property lines on the path page (stall watchdog, three workers, hover details, open-file button); on-card API detection button; persistent "n todos · m done" progress on every todo card; press-continuity motion overhaul; plan-page drag computed from a layout cache |
 
 ---

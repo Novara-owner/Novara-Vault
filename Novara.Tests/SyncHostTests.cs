@@ -16,18 +16,29 @@ public class SyncHostTests
 
 
     [Theory]
-    [InlineData(true, "127.0.0.1", false)]
-    [InlineData(true, "203.0.113.7", false)]
-    [InlineData(false, "127.0.0.1", false)]
-    [InlineData(false, "::1", false)]
-    [InlineData(false, "203.0.113.7", true)]
-    [InlineData(false, "192.168.1.50", true)]
-    public void RequiresSecureTransport_RefusesPlaintextOffLoopback(bool isHttps, string remote, bool expected)
-        => Assert.Equal(expected, SyncHostSetup.RequiresSecureTransport(isHttps, IPAddress.Parse(remote)));
+
+    [InlineData(true, "127.0.0.1", false, "novara.example.com", false)]
+    [InlineData(true, "203.0.113.7", false, "novara.example.com", false)]
+
+    [InlineData(false, "127.0.0.1", false, "localhost", false)]
+    [InlineData(false, "::1", false, "127.0.0.1", false)]
+
+
+    [InlineData(false, "127.0.0.1", false, "novara.example.com", true)]
+
+    [InlineData(false, "127.0.0.1", true, "localhost", true)]
+
+    [InlineData(false, "203.0.113.7", false, "novara.example.com", true)]
+    [InlineData(false, "192.168.1.50", false, "nas.lan", true)]
+    public void RequiresSecureTransport_RefusesPlaintextUnlessTheConnectionIsLocal(
+        bool isHttps, string socketPeer, bool forwardedHeadersPresent, string host, bool expected)
+        => Assert.Equal(expected,
+            SyncHostSetup.RequiresSecureTransport(isHttps, IPAddress.Parse(socketPeer), forwardedHeadersPresent, host));
 
     [Fact]
     public void RequiresSecureTransport_TreatsAnUnknownPeerAsRemote()
-        => Assert.True(SyncHostSetup.RequiresSecureTransport(isHttps: false, remoteAddress: null));
+        => Assert.True(SyncHostSetup.RequiresSecureTransport(
+            isHttps: false, socketPeer: null, forwardedHeadersPresent: false, host: "localhost"));
 
 
 

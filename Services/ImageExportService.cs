@@ -132,6 +132,9 @@ public sealed class ImageExportSession
                     if (printed != true)
                     {
                         try { printCts.Cancel(); } catch { }
+
+
+                        ImageExportSession.ScheduleLatePdfCleanup(pdfPath);
                         Note($"slice {slice}: PrintToPdf returned false");
                         return (slice, false);
                     }
@@ -140,6 +143,7 @@ public sealed class ImageExportSession
                     if (bytes == null) return (slice, false);
                     var outPath = slice == 0 ? filePath : System.IO.Path.Combine(dir, stem + "_" + (slice + 1) + ext);
                     System.IO.File.WriteAllBytes(outPath, bytes);
+                    ImageExportService.RecordWrittenFile(filePath, outPath);
                     slice++;
                 }
             }
@@ -186,9 +190,9 @@ public sealed class ImageExportSession
             var pdfDoc = await WithTimeout(Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(pdfStorage).AsTask(), 20, "PdfDocument load");
             if (pdfDoc == null) return null;
             if (pdfDoc.PageCount < 1) { Note("PdfDocument: zero pages"); return null; }
-            var page = pdfDoc.GetPage(0);
 
-            var mem = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            using var page = pdfDoc.GetPage(0);
+            using var mem = new Windows.Storage.Streams.InMemoryRandomAccessStream();
             var opts = new Windows.Data.Pdf.PdfPageRenderOptions { DestinationWidth = (uint)(cssWidth * 2) };
             if (!await WithTimeout(page.RenderToStreamAsync(mem, opts).AsTask(), 45, "PdfPage render")) return null;
 
@@ -206,6 +210,16 @@ public sealed class ImageExportSession
             Note("RenderPdfPage exception: " + ex);
             return null;
         }
+    }
+
+
+    internal static void ScheduleLatePdfCleanup(string path)
+    {
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            await System.Threading.Tasks.Task.Delay(TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+            try { if (System.IO.File.Exists(path)) System.IO.File.Delete(path); } catch { }
+        });
     }
 
     private static void Remove(WebView2 webView)
@@ -303,28 +317,79 @@ public static class ImageExportService
 
 
 
+    private static string ManifestPath => System.IO.Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+        Novara.Services.CoreEnv.DataDirName, "image-export-groups.json");
+
+
 
     public static void CleanStaleGroupFiles(string basePath)
     {
         try
         {
             if (string.IsNullOrEmpty(basePath)) return;
-            var dir = System.IO.Path.GetDirectoryName(basePath) ?? "";
-            var stem = System.IO.Path.GetFileNameWithoutExtension(basePath);
-            var ext = System.IO.Path.GetExtension(basePath);
-            foreach (var f in System.IO.Directory.EnumerateFiles(string.IsNullOrEmpty(dir) ? "." : dir, stem + "*" + ext))
+            var full = System.IO.Path.GetFullPath(basePath);
+            var manifest = ReadGroupManifest();
+            if (!manifest.TryGetValue(full, out var files)) return;
+
+            foreach (var f in files)
             {
-                var name = System.IO.Path.GetFileNameWithoutExtension(f);
-                var tail = name.Length > stem.Length ? name[stem.Length..] : "";
-                if (tail == "_mobile"
-                    || System.Text.RegularExpressions.Regex.IsMatch(tail, @"^_mobile_\d{1,2}$")
-                    || System.Text.RegularExpressions.Regex.IsMatch(tail, @"^_\d{1,2}$"))
-                {
-                    try { System.IO.File.Delete(f); } catch (Exception ex) { CrashLogger.LogNote("ImageExport", "stale clean failed: " + ex.Message); }
-                }
+
+
+                if (string.Equals(System.IO.Path.GetFullPath(f), full, StringComparison.OrdinalIgnoreCase)) continue;
+                try { if (System.IO.File.Exists(f)) System.IO.File.Delete(f); }
+                catch (Exception ex) { CrashLogger.LogNote("ImageExport", "stale clean failed: " + ex.Message); }
             }
+
+            manifest.Remove(full);
+            WriteGroupManifest(manifest);
         }
         catch (Exception ex) { CrashLogger.LogNote("ImageExport", "stale clean failed: " + ex.Message); }
+    }
+
+
+    internal static void RecordWrittenFile(string basePath, string writtenPath)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(basePath) || string.IsNullOrEmpty(writtenPath)) return;
+            var full = System.IO.Path.GetFullPath(basePath);
+            var manifest = ReadGroupManifest();
+            if (!manifest.TryGetValue(full, out var files))
+                manifest[full] = files = new System.Collections.Generic.List<string>();
+            var written = System.IO.Path.GetFullPath(writtenPath);
+            if (!files.Contains(written, StringComparer.OrdinalIgnoreCase)) files.Add(written);
+            WriteGroupManifest(manifest);
+        }
+        catch (Exception ex) { CrashLogger.LogNote("ImageExport", "manifest write failed: " + ex.Message); }
+    }
+
+    private static System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>> ReadGroupManifest()
+    {
+        try
+        {
+            if (!System.IO.File.Exists(ManifestPath))
+                return new(StringComparer.OrdinalIgnoreCase);
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<
+                System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>>>(
+                System.IO.File.ReadAllText(ManifestPath));
+            return parsed is null
+                ? new(StringComparer.OrdinalIgnoreCase)
+                : new(parsed, StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return new(StringComparer.OrdinalIgnoreCase); }
+    }
+
+    private static void WriteGroupManifest(
+        System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>> manifest)
+    {
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(ManifestPath);
+            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.WriteAllText(ManifestPath, System.Text.Json.JsonSerializer.Serialize(manifest));
+        }
+        catch (Exception ex) { CrashLogger.LogNote("ImageExport", "manifest save failed: " + ex.Message); }
     }
 
 
@@ -333,9 +398,18 @@ public static class ImageExportService
     {
         try
         {
+
+
+
+            var cutoff = DateTime.UtcNow.AddHours(-24);
             foreach (var f in System.IO.Directory.EnumerateFiles(System.IO.Path.GetTempPath(), "novara-imgexp-*.pdf"))
             {
-                try { System.IO.File.Delete(f); } catch { }
+                try
+                {
+                    if (System.IO.File.GetLastWriteTimeUtc(f) > cutoff) continue;
+                    System.IO.File.Delete(f);
+                }
+                catch { }
             }
         }
         catch { }

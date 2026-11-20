@@ -71,14 +71,26 @@ public class RegressionGuardsTests
 
 
 
+
+
     [Fact]
     public void DiaryEditor_ToolbarKeepsEditorFocus()
     {
         var xaml = Read("Pages", "DiaryEditorPage.xaml");
         Assert.Contains("<Setter Property=\"AllowFocusOnInteraction\" Value=\"False\" />", xaml);
         Assert.Equal(3, Regex.Matches(xaml, "AllowFocusOnInteraction").Count);
+
         var cs = Read("Pages", "DiaryEditorPage.xaml.cs");
-        Assert.Contains("action.StartsWith(\"exec\", StringComparison.Ordinal) || action == \"insertImage\"", cs);
+
+
+        var imageAction = Regex.Match(cs, @"var imageAction = action is (?<set>[^;]+);");
+        Assert.True(imageAction.Success, "imageAction set not found");
+        foreach (var action in new[] { "insertImage", "insertImageBegin", "insertImageChunk", "insertImageEnd" })
+            Assert.Contains("\"" + action + "\"", imageAction.Groups["set"].Value);
+
+
+        Assert.Contains("|| imageAction) _userEditedSinceRender = true;", cs);
+        Assert.Contains("|| action.StartsWith(\"exec\", StringComparison.Ordinal) || imageAction)", cs);
         Assert.Contains("RefocusEditorAfterToolbarCommand();", cs);
     }
 

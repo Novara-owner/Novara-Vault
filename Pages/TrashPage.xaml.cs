@@ -89,15 +89,73 @@ public sealed partial class TrashPage : Page
         var cutoff = DateTime.Now.AddDays(-7);
 
 
-        foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.DeletedAt < cutoff)) Services.StickySync.RemoveNote(n.Id.ToString());
-        foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.DeletedAt < cutoff)) Services.StickySync.RemoveNote(t.Id.ToString());
+
+
         bool changed = false;
-        changed |= db.MemoEntries.RemoveAll(x => x.IsDeleted && x.DeletedAt < cutoff) > 0;
-        changed |= db.PathBackupItems.RemoveAll(x => x.IsDeleted && x.DeletedAt < cutoff) > 0;
-        changed |= db.TodoCards.RemoveAll(x => x.IsDeleted && x.DeletedAt < cutoff) > 0;
-        changed |= db.NoteCards.RemoveAll(x => x.IsDeleted && x.DeletedAt < cutoff) > 0;
-        changed |= db.DiaryItems.RemoveAll(x => x.IsDeleted && x.DeletedAt < cutoff) > 0;
+
+
+
+        foreach (var e in db.MemoEntries.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt == default)) { e.DeletedAt = DateTime.Now; changed = true; }
+        foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt == default)) { p.DeletedAt = DateTime.Now; changed = true; }
+        foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt == default)) { t.DeletedAt = DateTime.Now; changed = true; }
+        foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt == default)) { n.DeletedAt = DateTime.Now; changed = true; }
+        foreach (var d in db.DiaryItems.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt == default)) { d.DeletedAt = DateTime.Now; changed = true; }
+        foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt != default && x.DeletedAt < cutoff))
+        {
+            Services.StickySync.RemoveNote(n.Id.ToString());
+            PurgeNote(n); changed = true;
+        }
+        foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt != default && x.DeletedAt < cutoff))
+        {
+            Services.StickySync.RemoveNote(t.Id.ToString());
+            PurgeTodo(t); changed = true;
+        }
+        foreach (var e in db.MemoEntries.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt != default && x.DeletedAt < cutoff)) { PurgeMemo(e); changed = true; }
+        foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt != default && x.DeletedAt < cutoff)) { PurgePath(p); changed = true; }
+        foreach (var d in db.DiaryItems.Where(x => x.IsDeleted && x.PurgedAt == default && x.DeletedAt != default && x.DeletedAt < cutoff)) { PurgeDiary(d); changed = true; }
         if (changed) App.Store?.SaveAsync();
+    }
+
+
+
+
+
+    private static void PurgeMemo(MemoEntry e)
+    {
+        e.Type = ""; e.Name = ""; e.KeyInfo = ""; e.Fields = new(); e.Protocol = "";
+        e.IconKey = ""; e.WorkspaceId = ""; e.GroupId = null;
+        e.IsStarred = false; e.IsPinned = false;
+        e.PurgedAt = DateTime.Now;
+    }
+
+    private static void PurgePath(FilePathEntry p)
+    {
+        p.Name = ""; p.Path = ""; p.Note = ""; p.WorkspaceId = "";
+        p.IsStarred = false; p.IsPinned = false;
+        p.PurgedAt = DateTime.Now;
+    }
+
+    private static void PurgeTodo(TodoCard t)
+    {
+        t.Title = ""; t.MainText = ""; t.SubTexts.Clear(); t.CheckedStates.Clear();
+        t.IconKey = ""; t.WorkspaceId = ""; t.ReminderAt = null; t.ReminderSetAt = null;
+        t.IsStarred = false; t.IsPinned = false; t.IsExpanded = null;
+        t.PurgedAt = DateTime.Now;
+    }
+
+    private static void PurgeNote(NoteCard n)
+    {
+        n.Title = ""; n.Content = ""; n.IconKey = ""; n.WorkspaceId = "";
+        n.ReminderAt = null; n.ReminderSetAt = null;
+        n.IsStarred = false; n.IsPinned = false;
+        n.PurgedAt = DateTime.Now;
+    }
+
+    private static void PurgeDiary(DiaryEntry d)
+    {
+        d.Title = ""; d.Content = ""; d.WorkspaceId = "";
+        d.IsStarred = false; d.IsPinned = false;
+        d.PurgedAt = DateTime.Now;
     }
 
     private async void BuildList()
@@ -117,19 +175,20 @@ public sealed partial class TrashPage : Page
 
 
         var rows = new List<(string Kind, string Title, DateTime DeletedAt, object Entity, string Format)>();
-        foreach (var e in db.MemoEntries.Where(x => x.IsDeleted))
+
+        foreach (var e in db.MemoEntries.Where(x => x.IsDeleted && x.PurgedAt == default))
 
 
 
 
             rows.Add(("memo", string.IsNullOrEmpty(e.Name) ? MemoFieldMask.MaskedKeyInfo(e.Type, e.KeyInfo) : e.Name, e.DeletedAt, e, ""));
-        foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted))
+        foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted && x.PurgedAt == default))
             rows.Add(("path", p.Name, p.DeletedAt, p, ""));
-        foreach (var t in db.TodoCards.Where(x => x.IsDeleted))
+        foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default))
             rows.Add(("todo", t.Title, t.DeletedAt, t, ""));
-        foreach (var n in db.NoteCards.Where(x => x.IsDeleted))
+        foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default))
             rows.Add(("note", n.Title, n.DeletedAt, n, ""));
-        foreach (var d in db.DiaryItems.Where(x => x.IsDeleted))
+        foreach (var d in db.DiaryItems.Where(x => x.IsDeleted && x.PurgedAt == default))
             rows.Add(("diary", d.Title, d.DeletedAt, d, d.Format));
 
         rows = rows.OrderByDescending(r => r.DeletedAt).ToList();
@@ -162,40 +221,18 @@ public sealed partial class TrashPage : Page
             return;
         }
 
-        EmptyState.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (rows.Count == 0)
+        {
+
+            EmptyState.Content = Novara.Services.EmptyHintBuilder.Build(
+                Novara.Services.EmptyStateArt.TrashBody, Novara.Services.EmptyStateArt.TrashAccent, 1024, 1024,
+                App.GetString("Trash_EmptyTitle"), App.GetString("Trash_EmptyHint"));
+            EmptyState.Visibility = Visibility.Visible;
+        }
+        else EmptyState.Visibility = Visibility.Collapsed;
 
         RestoreAllButton.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         ClearAllButton.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (rows.Count == 0) PlayEmptyStateEntrance();
-    }
-
-
-    private void PlayEmptyStateEntrance()
-    {
-
-        if (!App.IsAnimationsEnabled)
-        {
-            EmptyState.Opacity = 1;
-            if (EmptyState.RenderTransform is TranslateTransform st) st.Y = 0;
-            return;
-        }
-        EmptyState.Opacity = 0;
-        if (EmptyState.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            EmptyState.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
-        var oa = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(oa, EmptyState);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new Microsoft.UI.Xaml.Media.Animation.CubicEase { EasingMode = Microsoft.UI.Xaml.Media.Animation.EasingMode.EaseOut } };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(ya, tt);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
     }
 
     private Border BuildCard((string Kind, string Title, DateTime DeletedAt, object Entity, string Format) row)
@@ -268,13 +305,13 @@ public sealed partial class TrashPage : Page
 
         var brandBlue = App.GetBrush("AppPrimaryButtonBrush");
         var dangerRed = App.GetBrush("AppDangerTextBrush");
-        var restoreBtn = MakeIconButton(IconData.RestoreTrash, (_, _) => Restore(row.Entity), brandBlue, brandBlue, bold: true);
+        var restoreBtn = MakeIconButton(IconData.RestoreTrash, (_, _) => Restore(row.Entity), App.GetString("Trash_Restore"), brandBlue, brandBlue, bold: true);
 
         var delBtn = MakeIconButton(IconData.Delete, (_, _) =>
         {
             _pendingDeleteForever = row.Entity;
             ShowDeleteForeverDialog();
-        }, dangerRed, dangerRed, style: (Style)Application.Current.Resources["NovaraCardActionButtonDangerStyle"]);
+        }, App.GetString("Trash_DeleteForever"), dangerRed, dangerRed, style: (Style)Application.Current.Resources["NovaraCardActionButtonDangerStyle"]);
         actions.Children.Add(restoreBtn);
         actions.Children.Add(delBtn);
         Grid.SetColumn(actions, 2);
@@ -284,7 +321,7 @@ public sealed partial class TrashPage : Page
         return card;
     }
 
-    private Button MakeIconButton(string iconData, RoutedEventHandler click, Brush? foreground = null, Brush? borderBrush = null, bool bold = false, Style? style = null)
+    private Button MakeIconButton(string iconData, RoutedEventHandler click, string a11yName, Brush? foreground = null, Brush? borderBrush = null, bool bold = false, Style? style = null)
     {
         var cv = Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue;
         var btn = new Button
@@ -294,6 +331,10 @@ public sealed partial class TrashPage : Page
             Style = style ?? (Style)Application.Current.Resources["NovaraCardActionButtonStyle"],
             CornerRadius = new CornerRadius(12),
         };
+
+
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(btn, a11yName);
+        ToolTipService.SetToolTip(btn, new ToolTip { Content = a11yName, Style = (Style)Application.Current.Resources["BrandToolTipStyle"] });
         if (borderBrush != null) btn.BorderBrush = borderBrush;
         var fg = foreground ?? App.GetBrush("IconForegroundBrush");
         if (bold)
@@ -332,10 +373,22 @@ public sealed partial class TrashPage : Page
     private void Restore(object entity)
     {
         if (_restoring) return;
+
+
+
+
+        if (ResolveCurrent(entity) is not { } live) { Refresh(); return; }
+
+        if (!StillInTrash(live))
+        {
+            Refresh();
+            App.ShowToast(App.GetString("Trash_Stale_Changed"));
+            return;
+        }
         _restoring = true;
         try
         {
-            RestoreEntity(entity);
+            RestoreEntity(live);
             App.Store?.SaveAsync();
             App.MainWindow?.MarkTrashChanged();
             BuildList();
@@ -348,26 +401,59 @@ public sealed partial class TrashPage : Page
     }
 
 
+
+
+    private static object? ResolveCurrent(object entity)
+    {
+        var db = App.Store?.Database;
+        if (db == null) return null;
+        return entity switch
+        {
+            MemoEntry me => db.MemoEntries.FirstOrDefault(x => x.Id == me.Id),
+            FilePathEntry pe => db.PathBackupItems.FirstOrDefault(x => x.Id == pe.Id),
+            TodoCard tc => db.TodoCards.FirstOrDefault(x => x.Id == tc.Id),
+            NoteCard nc => db.NoteCards.FirstOrDefault(x => x.Id == nc.Id),
+            DiaryEntry de => db.DiaryItems.FirstOrDefault(x => x.Id == de.Id),
+            _ => null,
+        };
+    }
+
+
+
+
+    private static bool StillInTrash(object live) => live switch
+    {
+        MemoEntry me => me.IsDeleted && me.PurgedAt == default,
+        FilePathEntry pe => pe.IsDeleted && pe.PurgedAt == default,
+        TodoCard tc => tc.IsDeleted && tc.PurgedAt == default,
+        NoteCard nc => nc.IsDeleted && nc.PurgedAt == default,
+        DiaryEntry de => de.IsDeleted && de.PurgedAt == default,
+        _ => false,
+    };
+
+
     private static void RestoreEntity(object entity)
     {
         var db = App.Store?.Database;
+
+
         switch (entity)
         {
             case MemoEntry me:
-                me.IsDeleted = false; me.DeletedAt = default; me.IsStarred = false; me.IsPinned = false;
+                me.IsDeleted = false; me.DeletedAt = default; me.PurgedAt = default; me.IsStarred = false; me.IsPinned = false;
                 if (me.GroupId.HasValue && db != null && db.MemoGroups.All(g => g.Id != me.GroupId.Value)) me.GroupId = null;
                 break;
             case FilePathEntry pe:
-                pe.IsDeleted = false; pe.DeletedAt = default; pe.IsStarred = false; pe.IsPinned = false;
+                pe.IsDeleted = false; pe.DeletedAt = default; pe.PurgedAt = default; pe.IsStarred = false; pe.IsPinned = false;
                 break;
             case TodoCard tc:
-                tc.IsDeleted = false; tc.DeletedAt = default; tc.IsStarred = false; tc.IsPinned = false;
+                tc.IsDeleted = false; tc.DeletedAt = default; tc.PurgedAt = default; tc.IsStarred = false; tc.IsPinned = false;
                 break;
             case NoteCard nc:
-                nc.IsDeleted = false; nc.DeletedAt = default; nc.IsStarred = false; nc.IsPinned = false;
+                nc.IsDeleted = false; nc.DeletedAt = default; nc.PurgedAt = default; nc.IsStarred = false; nc.IsPinned = false;
                 break;
             case DiaryEntry de:
-                de.IsDeleted = false; de.DeletedAt = default; de.IsStarred = false; de.IsPinned = false;
+                de.IsDeleted = false; de.DeletedAt = default; de.PurgedAt = default; de.IsStarred = false; de.IsPinned = false;
                 break;
         }
     }
@@ -382,11 +468,14 @@ public sealed partial class TrashPage : Page
             var db = App.Store?.Database;
             if (db == null) return;
 
-            foreach (var e in db.MemoEntries.Where(x => x.IsDeleted).ToList()) RestoreEntity(e);
-            foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted).ToList()) RestoreEntity(p);
-            foreach (var t in db.TodoCards.Where(x => x.IsDeleted).ToList()) RestoreEntity(t);
-            foreach (var n in db.NoteCards.Where(x => x.IsDeleted).ToList()) RestoreEntity(n);
-            foreach (var d in db.DiaryItems.Where(x => x.IsDeleted).ToList()) RestoreEntity(d);
+
+
+
+            foreach (var e in db.MemoEntries.Where(x => x.IsDeleted && x.PurgedAt == default).ToList()) RestoreEntity(e);
+            foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted && x.PurgedAt == default).ToList()) RestoreEntity(p);
+            foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default).ToList()) RestoreEntity(t);
+            foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default).ToList()) RestoreEntity(n);
+            foreach (var d in db.DiaryItems.Where(x => x.IsDeleted && x.PurgedAt == default).ToList()) RestoreEntity(d);
 
             App.Store?.SaveAsync();
             App.MainWindow?.MarkTrashChanged();
@@ -404,24 +493,35 @@ public sealed partial class TrashPage : Page
     private void DeleteForever(object entity)
     {
         if (_restoring) return;
+
+
+        if (ResolveCurrent(entity) is not { } live) { Refresh(); return; }
+
+
+        if (!StillInTrash(live))
+        {
+            Refresh();
+            App.ShowToast(App.GetString("Trash_Stale_Changed"));
+            return;
+        }
         _restoring = true;
         try
         {
             var db = App.Store?.Database;
             if (db == null) return;
-            switch (entity)
+            switch (live)
             {
-                case MemoEntry me: db.MemoEntries.Remove(me); break;
-                case FilePathEntry pe: db.PathBackupItems.Remove(pe); break;
+                case MemoEntry me: PurgeMemo(me); break;
+                case FilePathEntry pe: PurgePath(pe); break;
                 case TodoCard tc:
-                    db.TodoCards.Remove(tc);
+                    PurgeTodo(tc);
                     Services.StickySync.RemoveNote(tc.Id.ToString());
                     break;
                 case NoteCard nc:
-                    db.NoteCards.Remove(nc);
+                    PurgeNote(nc);
                     Services.StickySync.RemoveNote(nc.Id.ToString());
                     break;
-                case DiaryEntry de: db.DiaryItems.Remove(de); break;
+                case DiaryEntry de: PurgeDiary(de); break;
             }
             App.Store?.SaveAsync();
             App.MainWindow?.MarkTrashChanged();
@@ -445,13 +545,14 @@ public sealed partial class TrashPage : Page
 
 
 
-            var removedTodoIds = db.TodoCards.Where(x => x.IsDeleted).Select(x => x.Id.ToString()).ToList();
-            var removedNoteIds = db.NoteCards.Where(x => x.IsDeleted).Select(x => x.Id.ToString()).ToList();
-            db.MemoEntries.RemoveAll(x => x.IsDeleted);
-            db.PathBackupItems.RemoveAll(x => x.IsDeleted);
-            db.TodoCards.RemoveAll(x => x.IsDeleted);
-            db.NoteCards.RemoveAll(x => x.IsDeleted);
-            db.DiaryItems.RemoveAll(x => x.IsDeleted);
+
+            var removedTodoIds = db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default).Select(x => x.Id.ToString()).ToList();
+            var removedNoteIds = db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default).Select(x => x.Id.ToString()).ToList();
+            foreach (var e in db.MemoEntries.Where(x => x.IsDeleted && x.PurgedAt == default)) PurgeMemo(e);
+            foreach (var p in db.PathBackupItems.Where(x => x.IsDeleted && x.PurgedAt == default)) PurgePath(p);
+            foreach (var t in db.TodoCards.Where(x => x.IsDeleted && x.PurgedAt == default)) PurgeTodo(t);
+            foreach (var n in db.NoteCards.Where(x => x.IsDeleted && x.PurgedAt == default)) PurgeNote(n);
+            foreach (var d in db.DiaryItems.Where(x => x.IsDeleted && x.PurgedAt == default)) PurgeDiary(d);
             foreach (var id in removedTodoIds) Services.StickySync.RemoveNote(id);
             foreach (var id in removedNoteIds) Services.StickySync.RemoveNote(id);
             App.Store?.SaveAsync();
@@ -488,10 +589,12 @@ public sealed partial class TrashPage : Page
 
     private void HideDeleteForeverDialog()
     {
-        DeleteForeverCd.Reset();
+        DeleteForeverCd.Stop();
+        var cdGen = DeleteForeverCd.Generation;
         _pendingDeleteForever = null;
 
-        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, DeleteForeverOverlay, DeleteForeverDialog, DeleteForeverDialogTransform, () => { });
+        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, DeleteForeverOverlay, DeleteForeverDialog, DeleteForeverDialogTransform,
+            () => DeleteForeverCd.ResetAfterHide(cdGen));
     }
 
     private void ReclampVisibleDialogs()
@@ -520,9 +623,11 @@ public sealed partial class TrashPage : Page
 
     private void HideClearAllDialog()
     {
-        ClearAllCd.Reset();
+        ClearAllCd.Stop();
+        var cdGen = ClearAllCd.Generation;
 
-        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, ClearAllOverlay, ClearAllDialog, ClearAllDialogTransform, () => { });
+        DialogUi.HideOverlay(TrashRoot, _dialogGens, _dialogMap, ClearAllOverlay, ClearAllDialog, ClearAllDialogTransform,
+            () => ClearAllCd.ResetAfterHide(cdGen));
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => App.MainWindow?.CloseTrashPage();

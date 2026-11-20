@@ -53,6 +53,8 @@ public sealed partial class DiaryPage : Page
         private Border? _dropIndicator;
         private int _dropIndex;
         private int _dragOriginIndex;
+    private List<(FrameworkElement fe, double top, double half)>? _dropCache;
+    private bool _dropCacheDirty;
     private Point _lastPointerInRoot;
     private int _autoScrollDir;
     private int _autoScrollFrame;
@@ -71,7 +73,7 @@ public sealed partial class DiaryPage : Page
         Novara.Services.DialogDepth.AttachContainer((Grid)Content);
         KeyDown += Page_KeyDown;
 
-        _diaries = (App.Store?.Database.DiaryItems ?? new List<DiaryEntry>()).Where(x => !x.IsDeleted).ToList();
+        _diaries = (App.Store?.Database.DiaryItems ?? new List<DiaryEntry>()).Where(x => !x.IsDeleted && x.PurgedAt == default).ToList();
         _emptyAreaMenu = BuildEmptyAreaMenu();
         _cardContextMenu = BuildCardContextMenu();
         RootGrid.SizeChanged += (_, _) => ReclampVisibleDialogs();
@@ -155,7 +157,7 @@ public sealed partial class DiaryPage : Page
 
 
 
-        var diaries = _diaries.Where(d => !d.IsDeleted).ToList();
+        var diaries = _diaries.Where(d => !d.IsDeleted && d.PurgedAt == default).ToList();
         if (diaries.Count == 0) { cts.Dispose(); _loadCts = null; _hasLoaded = true; UpdateEmptyHint(); return; }
 
         var sorted = diaries
@@ -228,6 +230,17 @@ public sealed partial class DiaryPage : Page
         };
 
         AttachCardHover(card);
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, App.DiaryTitleText(entry.Title));
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            if (ReferenceEquals(card, _dragEndCard) && (DateTime.Now - _dragEndTime).TotalMilliseconds < 300) return;
+            App.MainWindow?.NavigateToEditor(entry);
+        };
 
         card.Tapped += (s, _) =>
         {
@@ -473,6 +486,7 @@ public sealed partial class DiaryPage : Page
         _dragging = true;
         _dragCard = card;
         _grabOffset = grabOffset;
+        _dropCache = null; _dropCacheDirty = true;
         _dropIndex = _dragOriginIndex = CountVisibleBefore(card);
 
         App.StopCardEntrance(card);
@@ -516,20 +530,33 @@ public sealed partial class DiaryPage : Page
 
     private int ComputeDropIndex(Point ptInList)
     {
+
+
+        if (_dropCache == null || _dropCacheDirty) RebuildDropCache();
+        if (_dropCache == null) return 0;
         int count = 0;
+        foreach (var (_, top, half) in _dropCache)
+        {
+            if (ptInList.Y < top + half) break;
+            count++;
+        }
+        return count;
+    }
+
+    private void RebuildDropCache()
+    {
+        _dropCache = new List<(FrameworkElement fe, double top, double half)>();
         foreach (var child in DiaryList.Children)
         {
             if (ReferenceEquals(child, _dropIndicator)) continue;
 
-
             if (child is FrameworkElement fe && fe.Visibility == Visibility.Visible)
             {
                 var top = fe.TransformToVisual(DiaryList).TransformPoint(new Point(0, 0)).Y;
-                if (ptInList.Y < top + fe.ActualHeight / 2) break;
-                count++;
+                _dropCache.Add((fe, top, fe.ActualHeight / 2));
             }
         }
-        return count;
+        _dropCacheDirty = false;
     }
 
     private void UpdateDropIndicator(int index)
@@ -544,14 +571,17 @@ public sealed partial class DiaryPage : Page
 
         if (index == _dragOriginIndex || index == _dragOriginIndex + 1)
         {
-            if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropIndicator = null; }
+            if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropIndicator = null; _dropCacheDirty = true; }
             _dropIndex = _dragOriginIndex;
             return;
         }
-        if (_dropIndicator != null) DiaryList.Children.Remove(_dropIndicator);
+
+        if (_dropIndex == index && _dropIndicator != null) return;
+        if (_dropIndicator != null) { DiaryList.Children.Remove(_dropIndicator); _dropCacheDirty = true; }
         _dropIndicator = CreateDropIndicator();
-        DiaryList.Children.Insert(index, _dropIndicator);
+        DiaryList.Children.Insert(PhysicalIndexForVisibleSlot(index), _dropIndicator);
         _dropIndex = index;
+        _dropCacheDirty = true;
     }
 
     private Border CreateDropIndicator()
@@ -724,14 +754,17 @@ public sealed partial class DiaryPage : Page
         bool anyVisible = false;
         foreach (var c in DiaryList.Children) if (c.Visibility == Visibility.Visible) { anyVisible = true; break; }
         if (anyVisible) { EmptyHint.Visibility = Visibility.Collapsed; return; }
-        EmptyHint.Visibility = Visibility.Visible;
-        EmptyHint.Text = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch
+
+        var title = !string.IsNullOrEmpty(App.CurrentWorkspaceId) ? App.GetString("Workspace_EmptyHint") : _currentFilter switch
         {
             "diary" => App.GetString("Diary_Filter_Diary_Empty"),
             "document" => App.GetString("Diary_Filter_Document_Empty"),
-            _ => App.GetString("Diary_Empty_Tip")
+            _ => App.GetString("Diary_Empty_Tip"),
         };
-        FloatInHint();
+        EmptyHint.Content = Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.EmptyStateArt.ClickBody, Novara.Services.EmptyStateArt.ClickAccent, 1024, 1024,
+            title, App.GetString("Diary_Empty_Sub"));
+        EmptyHint.Visibility = Visibility.Visible;
     }
 
 
@@ -756,26 +789,6 @@ public sealed partial class DiaryPage : Page
             b.Visibility = (typeMatch && wsMatch) ? Visibility.Visible : Visibility.Collapsed;
         }
         UpdateEmptyHint();
-    }
-
-    private void FloatInHint()
-    {
-        EmptyHint.Opacity = 0;
-        if (!App.IsAnimationsEnabled) { EmptyHint.Opacity = 1; if (EmptyHint.RenderTransform is TranslateTransform st) st.Y = 0; return; }
-        if (EmptyHint.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            EmptyHint.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(oa, EmptyHint); Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, tt); Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
     }
 
 
@@ -1009,6 +1022,10 @@ public sealed partial class DiaryPage : Page
         var existing = all?.Find(d => d.Id == entry.Id);
         if (existing != null)
         {
+
+
+
+            if (existing.PurgedAt != default) return;
             existing.Title = entry.Title;
             existing.Content = entry.Content;
             existing.Format = entry.Format;

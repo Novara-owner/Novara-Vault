@@ -19,6 +19,7 @@
   var createKind = 'memo';
   var drafts = {};
   var conflictServerVersion = 0;
+  var conflictReturnFocus = null;
   var listenersWired = false;
 
 
@@ -28,7 +29,7 @@
 
   function t(key) { return VIEWER.t(key); }
 
-  function canEdit() { return !!ctx && editorCredential; }
+  function canEdit() { return !!ctx && editorCredential && ctx.containerVersion !== 5; }
 
   function failWith(key) { var e = new Error(key); e.i18nKey = key; return e; }
 
@@ -141,7 +142,8 @@
 
     if (hint) {
       hint.hidden = !hasContext;
-      hint.textContent = !canEdit() ? t('editReadOnlyHint')
+
+      hint.textContent = !canEdit() ? (ctx && ctx.containerVersion === 5 ? t('editUpgradeRequired') : t('editReadOnlyHint'))
         : conflictServerVersion !== 0 ? t('editConflictBar')
         : dirty ? t('editDirtyHint') : t('editCleanHint');
     }
@@ -560,7 +562,13 @@
 
 
   async function upload() {
-    if (!ctx || uploading || !dirty || conflictServerVersion !== 0) return;
+    if (!ctx || uploading || conflictServerVersion !== 0) return;
+
+
+
+
+    if (!commitDiaryEdit()) return;
+    if (!dirty) return;
     uploading = true;
     renderSyncBar();
     try {
@@ -606,7 +614,12 @@
         showToast(failure);
         return;
       }
-      ctx.baseVersion = ctx.baseVersion + 1;
+
+
+
+      var created = await response.json().catch(function () { return null; });
+      var written = created && Number(created.version);
+      ctx.baseVersion = Number.isFinite(written) && written > 0 ? written : ctx.baseVersion + 1;
       dirty = false;
       showToast(t('editUploaded'));
     } catch (e) {
@@ -636,11 +649,44 @@
     var force = document.getElementById('editConflictForce');
     if (force) force.hidden = conflictServerVersion <= 0;
     panel.hidden = false;
+
+
+    document.body.setAttribute('data-modal-open', '1');
+    conflictReturnFocus = document.activeElement;
+    var first = panel.querySelector('button:not([hidden]):not([disabled])');
+    if (first) first.focus();
   }
 
   function closeConflictPanel() {
     var panel = document.getElementById('editConflictOverlay');
     if (panel) panel.hidden = true;
+
+
+
+    conflictServerVersion = 0;
+    renderSyncBar();
+    document.body.removeAttribute('data-modal-open');
+    if (conflictReturnFocus && document.contains(conflictReturnFocus)) conflictReturnFocus.focus();
+    conflictReturnFocus = null;
+  }
+
+
+  function onConflictKeyDown(event) {
+    var panel = document.getElementById('editConflictOverlay');
+    if (!panel || panel.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeConflictPanel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusables = panel.querySelectorAll('button:not([hidden]):not([disabled])');
+    if (!focusables.length) return;
+    var first = focusables[0];
+    var last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
 
@@ -651,6 +697,12 @@
   }
 
   async function copyEdits() {
+
+
+    if (!commitDiaryEdit()) return;
+
+
+    if (!window.confirm(t('editCopyConfirm'))) return;
     try {
       await navigator.clipboard.writeText(JSON.stringify(data()));
       showToast(t('editCopied'));
@@ -669,6 +721,8 @@
 
 
 
+    if (!commitDiaryEdit()) return;
+
 
 
     try {
@@ -683,6 +737,8 @@
   function exportPlain() {
     if (!window.confirm(t('editExportPlainConfirm'))) return;
 
+    if (!commitDiaryEdit()) return;
+
 
     try {
       download('novara-conflict.json', utf8.encode(JSON.stringify(data())), 'application/json');
@@ -695,6 +751,8 @@
   async function forceOverwrite() {
     if (uploading || conflictServerVersion <= 0) return;
     if (!window.confirm(t('editForceConfirm'))) return;
+
+    if (!commitDiaryEdit()) return;
     uploading = true;
     renderSyncBar();
     try {
@@ -770,12 +828,42 @@
       button.textContent = t(KIND_LABEL_KEYS[button.dataset.editorKind] || ('kind' + button.dataset.editorKind.charAt(0).toUpperCase() + button.dataset.editorKind.slice(1)));
     });
     refreshCreateDialog();
-    document.getElementById('editCreateOverlay').hidden = false;
+    var panel = document.getElementById('editCreateOverlay');
+    panel.hidden = false;
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+
+
+    document.body.setAttribute('data-modal-open', '1');
+    createReturnFocus = document.activeElement;
     document.getElementById('editCreateName').focus();
+  }
+
+  var createReturnFocus = null;
+
+  function onCreateKeyDown(event) {
+    var panel = document.getElementById('editCreateOverlay');
+    if (!panel || panel.hidden) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCreateDialog();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    var focusables = panel.querySelectorAll('button:not([hidden]):not([disabled]), input:not([hidden]):not([disabled]), textarea:not([hidden]):not([disabled])');
+    if (!focusables.length) return;
+    var first = focusables[0];
+    var last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 
   function closeCreateDialog() {
     document.getElementById('editCreateOverlay').hidden = true;
+    document.body.removeAttribute('data-modal-open');
+    if (createReturnFocus && document.contains(createReturnFocus)) createReturnFocus.focus();
+    createReturnFocus = null;
   }
 
   function refreshCreateDialog() {
@@ -831,6 +919,7 @@
       editForceDone: '已用本机版本覆盖云端',
       editExportFail: '导出失败，请重试',
       editCopied: '改动已复制到剪贴板', editCopyFail: '复制失败',
+      editCopyConfirm: '复制的是整库明文 JSON（含全部密码字段），会写入系统剪贴板并可能被剪贴板历史保留。仍要复制吗？',
       newMemo: '新建备忘', newTodo: '新建待办', newNote: '新建便签',
       newName: '名称', newInfo: '信息（可留空）', newNoteContent: '内容', newNameRequired: '请先填写名称',
       deleteItem: '删除', deleteConfirm: '删除后进入回收站，PC 端可在回收站恢复。确定删除吗？',
@@ -853,6 +942,7 @@
       editForceDone: 'Cloud overwritten with this device\'s version',
       editExportFail: 'Export failed - please try again',
       editCopied: 'Changes copied to the clipboard', editCopyFail: 'Copy failed',
+      editCopyConfirm: 'The copied text is the whole library as plain JSON (including every password field); clipboard history may keep it. Copy anyway?',
       newMemo: 'New entry', newTodo: 'New todo', newNote: 'New note',
       newName: 'Name', newInfo: 'Info (optional)', newNoteContent: 'Content', newNameRequired: 'Enter a name first',
       deleteItem: 'Delete', deleteConfirm: 'The item moves to the desktop recycle bin, where it can be restored. Delete it?',
@@ -875,6 +965,7 @@
       editForceDone: '已用本機版本覆蓋雲端',
       editExportFail: '匯出失敗，請重試',
       editCopied: '改動已複製到剪貼簿', editCopyFail: '複製失敗',
+      editCopyConfirm: '複製的是整庫明文 JSON（含全部密碼欄位），會寫入系統剪貼簿並可能被剪貼簿歷史保留。仍要複製嗎？',
       newMemo: '新增備忘', newTodo: '新增待辦', newNote: '新增便籤',
       newName: '名稱', newInfo: '資訊（可留空）', newNoteContent: '內容', newNameRequired: '請先填寫名稱',
       deleteItem: '刪除', deleteConfirm: '刪除後進入回收站，PC 端可在回收站復原。確定刪除嗎？',
@@ -897,6 +988,7 @@
       editForceDone: '이 기기의 버전으로 클라우드를 덮어썼습니다',
       editExportFail: '내보내기에 실패했습니다. 다시 시도하세요',
       editCopied: '변경 사항이 클립보드에 복사되었습니다', editCopyFail: '복사 실패',
+      editCopyConfirm: '복사되는 내용은 전체 라이브러리의 평문 JSON(모든 비밀번호 필드 포함)이며 클립보드 기록에 남을 수 있습니다. 계속 복사할까요?',
       newMemo: '새 메모', newTodo: '새 할 일', newNote: '새 노트',
       newName: '이름', newInfo: '정보(비워 둘 수 있음)', newNoteContent: '내용', newNameRequired: '이름을 먼저 입력하세요',
       deleteItem: '삭제', deleteConfirm: '삭제하면 데스크톱 휴지통으로 이동하며 복원할 수 있습니다. 삭제하시겠습니까?',
@@ -919,6 +1011,7 @@
       editForceDone: 'この端末のバージョンでクラウドを上書きしました',
       editExportFail: '書き出しに失敗しました。もう一度お試しください',
       editCopied: '変更をクリップボードにコピーしました', editCopyFail: 'コピー失敗',
+      editCopyConfirm: 'コピーする内容はライブラリ全体の平文 JSON（すべてのパスワード フィールドを含む）で、クリップボード履歴に残る可能性があります。コピーしますか？',
       newMemo: '新規メモ', newTodo: '新規ToDo', newNote: '新規ノート',
       newName: '名前', newInfo: '情報（空欄可）', newNoteContent: '内容', newNameRequired: '先に名前を入力してください',
       deleteItem: '削除', deleteConfirm: '削除するとデスクトップのゴミ箱に入り、復元できます。削除しますか？',
@@ -947,6 +1040,7 @@
       },
       spaceKey: context.spaceKey,
       baseVersion: context.version,
+      containerVersion: context.containerVersion,
     };
     VIEWER.addTranslations(TRANSLATIONS);
     VIEWER.setEditHooks({ entryFieldsHtml: entryFieldsHtml, todoHtml: todoHtml, noteHtml: noteHtml, diaryReaderHtml: diaryReaderHtml, readerNavExtra: readerNavExtra, beforeLeaveReader: beforeLeaveReader, onLock: onLock });
@@ -985,6 +1079,8 @@
       main.addEventListener('click', onMainContentClick);
       main.addEventListener('keydown', onMainContentKeyDown);
       document.addEventListener('click', onDocumentClick);
+      document.addEventListener('keydown', onConflictKeyDown, true);
+      document.addEventListener('keydown', onCreateKeyDown, true);
 
 
       window.addEventListener('resize', growDiaryBody);

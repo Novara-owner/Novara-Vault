@@ -57,6 +57,11 @@ public sealed record NewSpaceCredentials(string SpaceId, string EnrollmentSecret
 public sealed record NewDeviceCredentials(string DeviceId, string DeviceToken);
 
 
+
+
+public sealed record AuthContext(SpaceRecord Space, DeviceRecord Device);
+
+
 public sealed record StoredEnvelope(string Json, VersionRecord Version);
 
 
@@ -89,10 +94,21 @@ public sealed record SpaceSummary(
 
 public sealed class SpaceService
 {
+
+    public const int MaxChunkBytes = BlobLayout.MaxChunkBytes;
     private readonly ISpaceStore _store;
     private readonly SyncServerOptions _options;
     private readonly FailureRateLimiter _limiter;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.Ordinal);
+
+
+
+
+
+
+
+
+    private readonly ConcurrentDictionary<string, DateTime> _pendingChunks = new(StringComparer.OrdinalIgnoreCase);
 
     public SpaceService(ISpaceStore store, SyncServerOptions? options = null)
     {
@@ -206,9 +222,14 @@ public sealed class SpaceService
             if (fresh is null) return SyncResult<NewSpaceCredentials>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
 
             var enrollmentSecret = TokenAuth.NewEnrollmentSecret();
-            fresh.EnrollmentHash = TokenAuth.Hash(enrollmentSecret);
-            fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh, requireExisting: true);
+
+
+
+            _store.UpdateSpace(spaceId, s =>
+            {
+                s.EnrollmentHash = TokenAuth.Hash(enrollmentSecret);
+                s.UpdatedAt = DateTime.UtcNow;
+            });
 
             return SyncResult<NewSpaceCredentials>.Ok(new NewSpaceCredentials(fresh.SpaceId, enrollmentSecret));
         }
@@ -344,25 +365,29 @@ public sealed class SpaceService
     }
 
 
-    public SyncResult<DeviceRecord> Authenticate(string spaceId, string? deviceId, string? token)
+    public SyncResult<AuthContext> Authenticate(string spaceId, string? deviceId, string? token)
     {
         if (_limiter.IsBlocked("auth:" + spaceId))
-            return SyncResult<DeviceRecord>.Fail(SyncErrorCode.RateLimited, "too many failed attempts");
+            return SyncResult<AuthContext>.Fail(SyncErrorCode.RateLimited, "too many failed attempts");
 
         var space = _store.GetSpace(spaceId);
-        if (space is null) return SyncResult<DeviceRecord>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
+        if (space is null) return SyncResult<AuthContext>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
 
         var device = string.IsNullOrEmpty(deviceId) ? null : _store.GetDevice(spaceId, deviceId);
         if (device is null || !TokenAuth.Verify(token, device.TokenHash))
         {
             _limiter.RecordFailure("auth:" + spaceId);
-            return SyncResult<DeviceRecord>.Fail(SyncErrorCode.Unauthenticated, "device token is not valid");
+            return SyncResult<AuthContext>.Fail(SyncErrorCode.Unauthenticated, "device token is not valid");
         }
 
         if (device.Revoked)
         {
-            _limiter.RecordFailure("auth:" + spaceId);
-            return SyncResult<DeviceRecord>.Fail(SyncErrorCode.Forbidden, "device has been revoked");
+
+
+
+
+            _limiter.RecordFailure("auth-revoked:" + spaceId + ":" + device.DeviceId);
+            return SyncResult<AuthContext>.Fail(SyncErrorCode.Forbidden, "device has been revoked");
         }
 
         _limiter.Reset("auth:" + spaceId);
@@ -374,14 +399,16 @@ public sealed class SpaceService
 
 
 
-
         var seenAt = DateTime.UtcNow;
         device.LastSeenAt = seenAt;
-        var gate = _locks.GetOrAdd(spaceId, _ => new SemaphoreSlim(1, 1));
-        gate.Wait();
-        try { _store.TouchDevice(spaceId, device.DeviceId, seenAt); }
-        finally { gate.Release(); }
-        return SyncResult<DeviceRecord>.Ok(device);
+
+
+
+        _store.TouchDevice(spaceId, device.DeviceId, seenAt);
+
+
+
+        return SyncResult<AuthContext>.Ok(new AuthContext(space, device));
     }
 
 
@@ -390,12 +417,11 @@ public sealed class SpaceService
     public SyncResult<SpaceRecord> Authorize(string spaceId, string? deviceId, string? token)
     {
         var auth = Authenticate(spaceId, deviceId, token);
-        if (!auth.Success) return SyncResult<SpaceRecord>.Fail(auth.Error, auth.Message, auth.CurrentVersion);
 
-        var space = _store.GetSpace(spaceId);
-        return space is null
-            ? SyncResult<SpaceRecord>.Fail(SyncErrorCode.SpaceNotFound, "space not found")
-            : SyncResult<SpaceRecord>.Ok(space);
+
+        return auth.Success
+            ? SyncResult<SpaceRecord>.Ok(auth.Value!.Space)
+            : SyncResult<SpaceRecord>.Fail(auth.Error, auth.Message, auth.CurrentVersion);
     }
 
 
@@ -450,9 +476,11 @@ public sealed class SpaceService
             var fresh = _store.GetSpace(space.SpaceId);
             if (fresh is null) return SyncResult<string>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
 
-            fresh.ReadTokenHash = TokenAuth.Hash(token);
-            fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh, requireExisting: true);
+            _store.UpdateSpace(space.SpaceId, s =>
+            {
+                s.ReadTokenHash = TokenAuth.Hash(token);
+                s.UpdatedAt = DateTime.UtcNow;
+            });
             return SyncResult<string>.Ok(token);
         }
         finally { gate.Release(); }
@@ -470,9 +498,11 @@ public sealed class SpaceService
             var fresh = _store.GetSpace(space.SpaceId);
             if (fresh is null) return SyncResult<bool>.Fail(SyncErrorCode.SpaceNotFound, "space not found");
 
-            fresh.ReadTokenHash = "";
-            fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh, requireExisting: true);
+            _store.UpdateSpace(space.SpaceId, s =>
+            {
+                s.ReadTokenHash = "";
+                s.UpdatedAt = DateTime.UtcNow;
+            });
             return SyncResult<bool>.Ok(true);
         }
         finally { gate.Release(); }
@@ -528,6 +558,10 @@ public sealed class SpaceService
         if (!IsValidChunkId(chunkId)) return SyncResult<bool>.Fail(SyncErrorCode.BadRequest, "chunk id must be 64 hex chars");
         if (data is null || data.Length == 0) return SyncResult<bool>.Fail(SyncErrorCode.BadRequest, "chunk body is empty");
 
+
+        if (data.Length > BlobLayout.MaxChunkBytes)
+            return SyncResult<bool>.Fail(SyncErrorCode.BadRequest, "chunk is larger than the per-chunk limit");
+
         var gate = _locks.GetOrAdd(space.SpaceId, _ => new SemaphoreSlim(1, 1));
         gate.Wait();
         try
@@ -537,19 +571,149 @@ public sealed class SpaceService
 
             var existing = _store.ChunkSizes(space.SpaceId);
             var alreadyThere = existing.TryGetValue(chunkId, out var sameSize) && sameSize == data.Length;
-            if (!alreadyThere && fresh.QuotaBytes > 0)
+
+
+
+            var previousSize = existing.TryGetValue(chunkId, out var oldSize) ? oldSize : 0;
+            var netGrowth = data.Length - previousSize;
+            if (!alreadyThere && fresh.QuotaBytes > 0 && netGrowth > 0)
             {
-                var used = existing.Values.Sum() + data.Length;
+                var used = existing.Values.Sum() + netGrowth;
                 if (used > fresh.QuotaBytes)
-                    return SyncResult<bool>.FailSized(SyncErrorCode.QuotaExceeded,
-                        "space quota exceeded (chunks)", fresh.QuotaBytes, used, fresh.CurrentVersion);
+                {
+
+
+
+                    if (TryReclaimForChunk(space.SpaceId, fresh, netGrowth))
+                    {
+                        existing = _store.ChunkSizes(space.SpaceId);
+                        used = existing.Values.Sum() + netGrowth;
+                    }
+                    if (used > fresh.QuotaBytes)
+                        return SyncResult<bool>.FailSized(SyncErrorCode.QuotaExceeded,
+                            "space quota exceeded (chunks)", fresh.QuotaBytes, used, fresh.CurrentVersion);
+                }
             }
 
             _store.WriteChunk(space.SpaceId, chunkId, data);
+            RememberPendingChunk(space.SpaceId, chunkId);
             return SyncResult<bool>.Ok(true);
         }
         finally { gate.Release(); }
     }
+
+
+
+
+
+
+
+
+
+
+
+
+    private bool TryReclaimForChunk(string spaceId, SpaceRecord space, long incomingBytes)
+    {
+        if (space.QuotaBytes <= 0) return false;
+        if (_store.ChunkSizes(spaceId).Values.Sum() + incomingBytes <= space.QuotaBytes) return false;
+
+        var reclaimed = false;
+        while (true)
+        {
+            var sizes = _store.ChunkSizes(spaceId);
+            var used = sizes.Values.Sum();
+            if (used + incomingBytes <= space.QuotaBytes) break;
+
+            var versions = _store.GetVersions(spaceId);
+
+
+            var victims = RetentionPolicy.PlanEviction(versions, space.CurrentVersion, space.MaxVersions, 1);
+            var pending = PendingChunkIds(spaceId);
+
+            VersionRecord? selected = null;
+            HashSet<string>? liveAfter = null;
+            foreach (var victim in victims)
+            {
+
+
+
+
+
+                var others = versions
+                    .Where(v => v.Retained && !(v.Version == victim.Version && v.IsConflict == victim.IsConflict))
+                    .SelectMany(v => v.ChunkIds)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var unique = victim.ChunkIds
+                    .Where(id => !others.Contains(id) && !pending.Contains(id))
+                    .ToList();
+                if (unique.Count == 0) continue;
+
+                selected = victim;
+                liveAfter = others;
+                break;
+            }
+
+
+            if (selected is null) break;
+
+
+            var row = versions.FirstOrDefault(v => v.Version == selected.Version && v.IsConflict == selected.IsConflict);
+            if (row is not null) row.Retained = false;
+
+
+
+            _store.SaveVersions(spaceId, versions);
+            try { _store.DeleteBlob(spaceId, selected); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "reclaim: could not delete blob for version " + selected.Version + ": " + ex.Message);
+            }
+
+            var keep = liveAfter ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in pending) keep.Add(id);
+            _store.PruneChunks(spaceId, keep);
+
+            var after = _store.ChunkSizes(spaceId).Values.Sum();
+            if (after >= used) break;
+            reclaimed = true;
+        }
+
+        return reclaimed;
+    }
+
+    private void RememberPendingChunk(string spaceId, string chunkId)
+        => _pendingChunks[PendingKey(spaceId, chunkId)] = DateTime.UtcNow;
+
+    private void ForgetPendingChunks(string spaceId, IEnumerable<string> chunkIds)
+    {
+        foreach (var id in chunkIds) _pendingChunks.TryRemove(PendingKey(spaceId, id), out _);
+    }
+
+
+    private HashSet<string> PendingChunkIds(string spaceId)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var prefix = spaceId + "/";
+
+
+        var cutoff = DateTime.UtcNow.AddMinutes(-10);
+        foreach (var entry in _pendingChunks)
+        {
+            if (entry.Value < cutoff)
+            {
+                _pendingChunks.TryRemove(entry.Key, out _);
+                continue;
+            }
+            if (entry.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                result.Add(entry.Key[prefix.Length..]);
+        }
+        return result;
+    }
+
+    private static string PendingKey(string spaceId, string chunkId)
+        => spaceId + "/" + chunkId.ToLowerInvariant();
 
 
     public SyncResult<byte[]> GetChunk(SpaceRecord space, string chunkId, bool containerV5Capable, bool deviceAuth)
@@ -563,6 +727,21 @@ public sealed class SpaceService
         return data is null
             ? SyncResult<byte[]>.Fail(SyncErrorCode.NotFound, "chunk not found")
             : SyncResult<byte[]>.Ok(data);
+    }
+
+
+
+    public SyncResult<string> GetChunkPath(SpaceRecord space, string chunkId, bool containerV5Capable, bool deviceAuth)
+    {
+        if (space.ContainerGeneration == 5 && deviceAuth && !containerV5Capable)
+            return SyncResult<string>.Fail(SyncErrorCode.UpgradeRequired,
+                "this space has been upgraded to the v5 container format — update this client");
+        if (!IsValidChunkId(chunkId)) return SyncResult<string>.Fail(SyncErrorCode.BadRequest, "chunk id is not valid");
+
+        var path = _store.ChunkPath(space.SpaceId, chunkId);
+        return path is null
+            ? SyncResult<string>.Fail(SyncErrorCode.NotFound, "chunk not found")
+            : SyncResult<string>.Ok(path);
     }
 
 
@@ -633,6 +812,14 @@ public sealed class SpaceService
         if (!string.Equals(envelope.Device, device.DeviceId, StringComparison.Ordinal))
             return SyncResult<long>.Fail(SyncErrorCode.BadRequest, "envelope device does not match the authenticated device");
 
+
+
+
+        var payload = System.Text.Encoding.UTF8.GetBytes(envelopeJson).AsMemory();
+        if (payload.Length > _options.MaxPayloadBytes)
+            return SyncResult<long>.FailSized(SyncErrorCode.PayloadTooLarge,
+                "payload exceeds the server limit", _options.MaxPayloadBytes);
+
         var gate = _locks.GetOrAdd(space.SpaceId, _ => new SemaphoreSlim(1, 1));
         gate.Wait();
         try
@@ -652,7 +839,11 @@ public sealed class SpaceService
             {
                 fresh.CurrentVersion = highestStored;
                 fresh.UpdatedAt = DateTime.UtcNow;
-                _store.SaveSpace(fresh, requireExisting: true);
+                _store.UpdateSpace(space.SpaceId, s =>
+                {
+                    s.CurrentVersion = highestStored;
+                    s.UpdatedAt = DateTime.UtcNow;
+                });
             }
 
 
@@ -670,7 +861,6 @@ public sealed class SpaceService
                 return SyncResult<long>.Fail(SyncErrorCode.BadRequest,
                     "envelope version must be base + 1", fresh.CurrentVersion);
 
-            var payload = System.Text.Encoding.UTF8.GetBytes(envelopeJson);
             var newVersion = envelope.Version;
 
 
@@ -726,6 +916,11 @@ public sealed class SpaceService
                 return SyncResult<long>.FailSized(SyncErrorCode.QuotaExceeded,
                     "space quota exceeded", fresh.QuotaBytes, bytesAfterRotation, fresh.CurrentVersion);
 
+
+
+
+
+            var superseded = new List<long>();
             if (force)
             {
                 foreach (var previous in versions.Where(v => v.Version == fresh.CurrentVersion))
@@ -736,14 +931,23 @@ public sealed class SpaceService
 
 
                     var preservedPayload = previous.IsConflict ? null : _store.ReadBlob(space.SpaceId, previous);
+
+
+
+
+                    if (preservedPayload is null)
+                    {
+
+                        System.Diagnostics.Debug.WriteLine(
+                            "force push: version " + previous.Version + " has no readable blob - not marking it as a conflict copy");
+                        previous.Retained = false;
+                        continue;
+                    }
+
                     previous.IsConflict = true;
                     previous.ConflictOf = newVersion;
-
-                    if (preservedPayload is not null)
-                    {
-                        _store.WriteBlob(space.SpaceId, previous, preservedPayload);
-                        _store.DeleteBlob(space.SpaceId, new VersionRecord { Version = previous.Version });
-                    }
+                    _store.WriteBlob(space.SpaceId, previous, preservedPayload);
+                    superseded.Add(previous.Version);
                 }
             }
 
@@ -764,22 +968,54 @@ public sealed class SpaceService
             versions.Add(row);
             _store.WriteBlob(space.SpaceId, row, payload);
 
-            foreach (var victim in RetentionPolicy.PlanEviction(versions, newVersion, fresh.MaxVersions, fresh.QuotaBytes))
+
+
+
+
+            var evicted = RetentionPolicy.PlanEviction(versions, newVersion, fresh.MaxVersions, fresh.QuotaBytes).ToList();
+            foreach (var victim in evicted) victim.Retained = false;
+            _store.SaveVersions(space.SpaceId, versions);
+
+
+
+
+            foreach (var supersededVersion in superseded)
+                _store.DeleteBlob(space.SpaceId, new VersionRecord { Version = supersededVersion });
+
+            foreach (var victim in evicted)
             {
-                _store.DeleteBlob(space.SpaceId, victim);
-                victim.Retained = false;
+
+
+                try { _store.DeleteBlob(space.SpaceId, victim); }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        "retention: could not delete blob for version " + victim.Version + ": " + ex.Message);
+                }
             }
 
 
             var liveChunks = versions.Where(v => v.Retained)
                 .SelectMany(v => v.ChunkIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+
+
+
+            foreach (var id in PendingChunkIds(space.SpaceId)) liveChunks.Add(id);
             foreach (var removedId in _store.PruneChunks(space.SpaceId, liveChunks)) { }
             chunkIds = null;
 
-            _store.SaveVersions(space.SpaceId, versions);
+            ForgetPendingChunks(space.SpaceId, registeredChunkIds);
             fresh.CurrentVersion = newVersion;
             fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh, requireExisting: true);
+
+
+            _store.UpdateSpace(space.SpaceId, s =>
+            {
+                s.CurrentVersion = newVersion;
+                s.ContainerGeneration = fresh.ContainerGeneration;
+                s.UpdatedAt = DateTime.UtcNow;
+            });
 
             return SyncResult<long>.Ok(newVersion);
         }
@@ -874,11 +1110,14 @@ public sealed class SpaceService
             if (ifMatchVersion != fresh.KeyWrapVersion)
                 return SyncResult<long>.Fail(SyncErrorCode.VersionConflict, "keywrap version is stale", fresh.KeyWrapVersion);
 
-            fresh.KeyWrapJson = keyWrapJson;
-            fresh.KeyWrapVersion = fresh.KeyWrapVersion + 1;
-            fresh.UpdatedAt = DateTime.UtcNow;
-            _store.SaveSpace(fresh, requireExisting: true);
-            return SyncResult<long>.Ok(fresh.KeyWrapVersion);
+            var nextKeyWrapVersion = fresh.KeyWrapVersion + 1;
+            _store.UpdateSpace(space.SpaceId, s =>
+            {
+                s.KeyWrapJson = keyWrapJson;
+                s.KeyWrapVersion = nextKeyWrapVersion;
+                s.UpdatedAt = DateTime.UtcNow;
+            });
+            return SyncResult<long>.Ok(nextKeyWrapVersion);
         }
         finally { gate.Release(); }
     }

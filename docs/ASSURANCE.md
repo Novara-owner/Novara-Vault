@@ -6,7 +6,7 @@ This page assembles the project's security case: what the software claims, again
 
 ## 1. System overview and security claims
 
-Novara is a local-first personal knowledge tool for Windows: memos, file-path bookmarks, plans and diary records in a single local file, with optional end-to-end encrypted sync to a server you host, a read-only web companion, and a permission-gated agent (MCP) interface. There is no account, no telemetry and no vendor-operated server that can read your data.
+Novara is a local-first personal knowledge tool for Windows: memos, file-path bookmarks, plans and diary records in a single local file, with optional end-to-end encrypted sync to a server you host, a read-only web companion, a permission-gated agent (MCP) interface, and — since 13.0 — a separate password-protected sealed store (Novara Space) with time capsules. There is no account, no telemetry and no vendor-operated server that can read your data.
 
 The case rests on these claims:
 
@@ -18,6 +18,7 @@ The case rests on these claims:
 | C4 | Release artifacts are reproducible to check: checksums, pinned image digests, an SBOM, Sigstore keyless signatures, and a signed update manifest | [docs/VERIFYING.md](VERIFYING.md); [docs/PROVENANCE.md](PROVENANCE.md); [docs/CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) |
 | C5 | The desktop application exposes no listening ports and makes only outbound connections the user triggers | [threat-model.md](threat-model.md) §6 (last row); the in-app network-activity panel |
 | C6 | The server holds ciphertext only, authenticates devices with hashed tokens under rate limiting, and never learns the space key | [security-architecture.md](security-architecture.md) §4; [threat-model.md](threat-model.md) §3 (A4) |
+| C7 | Novara Space is a separate encrypted store with its own password, key and lockout; it is outside search, sync, snapshots, MCP and the recycle bin, and its only exit is a deliberate password-protected export | [security-architecture.md](security-architecture.md) §5; [threat-model.md](threat-model.md) §2, §6; [SECURITY.md](../SECURITY.md) §4 |
 
 ## 2. Threat model summary
 
@@ -37,6 +38,7 @@ The threat model is maintained as part of the code base: "a threat model that co
 2. **Agent access** — the MCP chain: unlock gate → per-client approval → permission matrix → field redaction → deletion master switch → audit log.
 3. **Snapshot export** — the connected chain: a mandatory export password, credentials stripped before sealing, a versioned container.
 4. **Cross-device sync** — the two-way chain: keywrap sealed per space, a versioned ciphertext envelope with a plaintext version stamp the server can route on, optimistic concurrency (If-Match), and a generation lock that protects legacy clients from a format they cannot read.
+5. **Novara Space** — the sealed-store chain: space password → Argon2id → wrapped space key → AES-256-GCM index and containers; an independent lockout, no path into search/sync/snapshots/MCP, and explicit `.novabundle` exports as the only exit.
 
 Trust boundaries on the wire: the sync server validates every request against the space/device binding and never parses payload bodies; the web reader keeps decrypted data in memory only; the update channel verifies a signature over the manifest bytes before parsing.
 

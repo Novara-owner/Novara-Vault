@@ -604,6 +604,96 @@ public class SyncServerTests : IDisposable
 
 
 
+
+    [Fact]
+    public void ForceOverwrite_WhenTheReplacementCannotBeWritten_LeavesTheCurrentVersionReadable()
+    {
+        var (service, store, spaceKey, spaceId, deviceId) = NewPairedServer();
+        var device = service.DeviceOf(spaceId, deviceId)!;
+
+        var first = SealedEnvelope(spaceKey, spaceId, deviceId, 0, "{\"round\":1}");
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device, first, 0, force: false).Success);
+
+
+        var blobs = Path.Combine(_dir, "spaces", spaceId, "blobs");
+        var blocked = Path.Combine(blobs, "2");
+        Directory.CreateDirectory(blocked);
+
+        var second = SealedEnvelope(spaceKey, spaceId, deviceId, 1, "{\"round\":2}");
+        Assert.NotNull(Record.Exception(() => service.PutData(store.GetSpace(spaceId)!, device, second, 1, force: true)));
+
+
+        Assert.True(File.Exists(Path.Combine(blobs, "1")));
+        Assert.True(service.GetData(store.GetSpace(spaceId)!, 1).Success);
+        var untouched = Assert.Single(store.GetVersions(spaceId), v => v.Version == 1);
+        Assert.False(untouched.IsConflict);
+        Assert.Equal(1, store.GetSpace(spaceId)!.CurrentVersion);
+
+
+        Directory.Delete(blocked);
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device, second, 1, force: true).Success);
+        Assert.True(File.Exists(Path.Combine(blobs, "1.conflict")));
+        Assert.False(File.Exists(Path.Combine(blobs, "1")));
+        Assert.Equal(2, store.GetSpace(spaceId)!.CurrentVersion);
+    }
+
+
+
+
+
+
+    [Fact]
+    public void RevokedDevice_DoesNotConsumeTheSpaceWideAuthBudget()
+    {
+        var service = NewService(maxAuthFailures: 3);
+        var created = service.CreateSpace("test");
+        Assert.True(created.Success);
+        var space = created.Value!;
+        var revoked = service.RegisterDevice(space.SpaceId, space.EnrollmentSecret, "pc").Value!;
+        var other = service.RegisterDevice(space.SpaceId, space.EnrollmentSecret, "phone").Value!;
+        Assert.True(service.RevokeDevice(space.SpaceId, revoked.DeviceId).Success);
+
+        for (int i = 0; i < 6; i++)
+        {
+
+            var denied = service.Authenticate(space.SpaceId, revoked.DeviceId, revoked.DeviceToken);
+            Assert.Equal(SyncErrorCode.Forbidden, denied.Error);
+        }
+
+        Assert.True(service.Authenticate(space.SpaceId, other.DeviceId, other.DeviceToken).Success);
+    }
+
+
+
+
+
+
+    [Fact]
+    public void Retention_WhenTheBlobCannotBeDeleted_StillReleasesTheRow()
+    {
+        var (service, store, spaceKey, spaceId, deviceId) = NewPairedServer(maxVersions: 1);
+        var device = store.GetDevice(spaceId, deviceId)!;
+
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedEnvelope(spaceKey, spaceId, deviceId, 0), 0, force: false).Success);
+
+
+        var blobs = Path.Combine(_dir, "spaces", spaceId, "blobs");
+        File.Delete(Path.Combine(blobs, "1"));
+        Directory.CreateDirectory(Path.Combine(blobs, "1"));
+
+        Assert.True(service.PutData(store.GetSpace(spaceId)!, device,
+            SealedEnvelope(spaceKey, spaceId, deviceId, 1), 1, force: false).Success);
+
+        var evicted = Assert.Single(store.GetVersions(spaceId), v => v.Version == 1);
+        Assert.False(evicted.Retained);
+    }
+
+
+
+
+
+
     [Fact]
     public void IssueReadToken_DoesNotRollBackAVersionAdvanceInBetween()
     {
@@ -774,6 +864,108 @@ public class SyncServerTests : IDisposable
         var pushed = service.PutData(store.GetSpace(spaceId)!, device, SealedEnvelope(spaceKey, spaceId, deviceId, 0), 0, false);
 
         Assert.Equal(SyncErrorCode.VersionConflict, pushed.Error);
+        Assert.Equal(1, store.GetSpace(spaceId)!.CurrentVersion);
+        Assert.Single(store.GetVersions(spaceId));
+    }
+
+
+
+
+
+    private sealed class CountingSpaceStore : ISpaceStore
+    {
+        private readonly ISpaceStore _inner;
+        public int SpaceReads;
+        public int DeviceReads;
+        public CountingSpaceStore(ISpaceStore inner) => _inner = inner;
+
+        public SpaceRecord? GetSpace(string spaceId) { SpaceReads++; return _inner.GetSpace(spaceId); }
+        public DeviceRecord? GetDevice(string spaceId, string deviceId) { DeviceReads++; return _inner.GetDevice(spaceId, deviceId); }
+
+        public bool SpaceExists(string spaceId) => _inner.SpaceExists(spaceId);
+        public void SaveSpace(SpaceRecord space, bool requireExisting = false) => _inner.SaveSpace(space, requireExisting);
+        public void UpdateSpace(string spaceId, Action<SpaceRecord> mutate) => _inner.UpdateSpace(spaceId, mutate);
+        public IReadOnlyList<SpaceRecord> ListSpaces() => _inner.ListSpaces();
+        public void DeleteSpace(string spaceId) => _inner.DeleteSpace(spaceId);
+        public IReadOnlyList<DeviceRecord> GetDevices(string spaceId) => _inner.GetDevices(spaceId);
+        public void SaveDevice(string spaceId, DeviceRecord device, bool requireExisting = true) => _inner.SaveDevice(spaceId, device, requireExisting);
+        public void TouchDevice(string spaceId, string deviceId, DateTime lastSeenAt) => _inner.TouchDevice(spaceId, deviceId, lastSeenAt);
+        public IReadOnlyList<VersionRecord> GetVersions(string spaceId) => _inner.GetVersions(spaceId);
+        public void SaveVersions(string spaceId, IReadOnlyList<VersionRecord> versions, bool requireExisting = true) => _inner.SaveVersions(spaceId, versions, requireExisting);
+        public void WriteBlob(string spaceId, VersionRecord version, ReadOnlyMemory<byte> payload) => _inner.WriteBlob(spaceId, version, payload);
+        public byte[]? ReadBlob(string spaceId, VersionRecord version) => _inner.ReadBlob(spaceId, version);
+        public void WriteChunk(string spaceId, string chunkId, byte[] data) => _inner.WriteChunk(spaceId, chunkId, data);
+        public bool ChunkExists(string spaceId, string chunkId) => _inner.ChunkExists(spaceId, chunkId);
+        public byte[]? ReadChunk(string spaceId, string chunkId) => _inner.ReadChunk(spaceId, chunkId);
+        public string? ChunkPath(string spaceId, string chunkId) => _inner.ChunkPath(spaceId, chunkId);
+        public Dictionary<string, long> ChunkSizes(string spaceId) => _inner.ChunkSizes(spaceId);
+        public List<string> PruneChunks(string spaceId, ISet<string> keepChunkIds) => _inner.PruneChunks(spaceId, keepChunkIds);
+        public void DeleteBlob(string spaceId, VersionRecord version) => _inner.DeleteBlob(spaceId, version);
+    }
+
+    [Fact]
+    public void RequestAuth_ReadsSpaceAndDeviceOnce_TheLockRevalidatesOnce()
+    {
+        var counting = new CountingSpaceStore(new FileSpaceStore(_dir));
+        var service = new SpaceService(counting, new SyncServerOptions
+        {
+            StorageRoot = _dir,
+            DefaultQuotaBytes = 500L * 1024 * 1024,
+            DefaultMaxVersions = 10,
+            MaxAuthFailures = 10,
+        });
+        var created = service.CreateSpace("t");
+        Assert.True(created.Success);
+        var spaceKey = SyncKeyWrap.CreateSpaceKey();
+        var registered = service.RegisterDevice(created.Value!.SpaceId, created.Value.EnrollmentSecret, "pc");
+        Assert.True(registered.Success);
+
+        counting.SpaceReads = 0;
+        counting.DeviceReads = 0;
+
+
+
+        var auth = service.Authenticate(created.Value.SpaceId, registered.Value!.DeviceId, registered.Value.DeviceToken);
+        Assert.True(auth.Success);
+        Assert.NotNull(auth.Value!.Space);
+        Assert.NotNull(auth.Value.Device);
+        Assert.Equal(1, counting.SpaceReads);
+        Assert.Equal(1, counting.DeviceReads);
+
+
+
+        counting.SpaceReads = 0;
+        counting.DeviceReads = 0;
+        var json = SealedEnvelope(spaceKey, created.Value.SpaceId, registered.Value.DeviceId, baseVersion: 0);
+        var pushed = service.PutData(auth.Value.Space, auth.Value.Device, json, baseVersion: 0, force: false);
+        Assert.True(pushed.Success);
+        Assert.Equal(1, counting.SpaceReads);
+        Assert.Equal(0, counting.DeviceReads);
+    }
+
+    [Fact]
+    public void PutData_ConcurrentSameBase_ExactlyOnePushWins()
+    {
+
+
+        var (service, store, spaceKey, spaceId, deviceId) = NewPairedServer();
+        var device = store.GetDevice(spaceId, deviceId)!;
+
+        var gate = new ManualResetEventSlim(false);
+        var results = new SyncResult<long>[2];
+        var threads = Enumerable.Range(0, 2).Select(i => new Thread(() =>
+        {
+            gate.Wait();
+            results[i] = service.PutData(store.GetSpace(spaceId)!, device,
+                SealedEnvelope(spaceKey, spaceId, deviceId, 0), 0, false);
+        })).ToList();
+        foreach (var t in threads) t.Start();
+        gate.Set();
+        foreach (var t in threads) t.Join();
+
+        Assert.Equal(1, results.Count(r => r.Success));
+        var loser = results.Single(r => !r.Success);
+        Assert.Equal(SyncErrorCode.VersionConflict, loser.Error);
         Assert.Equal(1, store.GetSpace(spaceId)!.CurrentVersion);
         Assert.Single(store.GetVersions(spaceId));
     }

@@ -29,6 +29,11 @@ public class AppSettings
     public bool ContextMenu { get; set; } = true;
     public string CloseBehavior { get; set; } = "直接退出";
     public List<string> VisibleTabs { get; set; } = new() { "备忘", "文件", "计划", "日记" };
+
+
+
+
+    public bool UsageCardEnabled { get; set; } = true;
     public bool PrivacyLockEnabled { get; set; }
 
     public int AutoLockSeconds { get; set; }
@@ -42,6 +47,7 @@ public class AppSettings
     public string AppLanguage { get; set; } = "";
     public bool HasCompletedWelcome { get; set; }
     public bool HasCompletedCarousel { get; set; }
+    public bool SpaceGuideSeen { get; set; }
     public bool WelcomeOnLaunch { get; set; } = true;
 
     public string EdgeMenuSide { get; set; } = "左侧";

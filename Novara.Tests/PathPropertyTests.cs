@@ -124,6 +124,23 @@ public class PathPropertyTests : IDisposable
         Assert.Equal(5000, r.Files);
     }
 
+
+
+
+
+    [Fact]
+    public void Read_WithoutACallback_DoesNotArmTheStallWatchdog()
+    {
+        var d = Directory.CreateDirectory(Path.Combine(_root, "no-callback"));
+        for (int i = 0; i < 5000; i++) File.WriteAllText(Path.Combine(d.FullName, $"f{i}.txt"), "x");
+
+        var r = PathPropertyReader.Read(
+            d.FullName, TimeSpan.FromMilliseconds(5), null, CancellationToken.None);
+
+        Assert.Equal(PathPropertyState.Ready, r.State);
+        Assert.Equal(5000, r.Files);
+    }
+
     [Fact]
     public void Read_Stall_BeforeFirstEntry_Unavailable()
     {

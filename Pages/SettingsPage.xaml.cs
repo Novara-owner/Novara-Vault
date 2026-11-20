@@ -75,8 +75,8 @@ public sealed partial class SettingsPage : Page
 
     private static readonly string[] TabNames = { "备忘", "文件", "计划", "日记" };
 
-    private readonly Dictionary<TextBox, System.Threading.CancellationTokenSource> _flashCtsMap = new();
-    private readonly Dictionary<TextBox, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
+    private readonly Dictionary<Control, System.Threading.CancellationTokenSource> _flashCtsMap = new();
+    private readonly Dictionary<Control, Microsoft.UI.Xaml.Media.Brush> _flashOriginalBgs = new();
 
 
     internal async void ScrollToMain()
@@ -143,6 +143,14 @@ public sealed partial class SettingsPage : Page
 
 
             _animWarnShow = false;
+
+
+            SetPasswordBox.Password = "";
+            SetPasswordConfirmBox.Password = "";
+            ChangePasswordOldBox.Password = "";
+            ChangePasswordNewBox.Password = "";
+            ChangePasswordConfirmBox.Password = "";
+            ClosePrivacyLockPasswordBox.Password = "";
         };
         Loaded += (_, _) =>
         {
@@ -200,7 +208,32 @@ public sealed partial class SettingsPage : Page
     }
 
 
-    private void FlashTextBox(TextBox tb) => DialogUi.FlashTextBox(_flashCtsMap, _flashOriginalBgs, tb);
+    private void FlashTextBox(Control tb) => DialogUi.FlashTextBox(_flashCtsMap, _flashOriginalBgs, tb);
+
+
+
+    private static void ShowPasswordError(PasswordBox box, TextBlock error, string message)
+    {
+
+
+        PasswordFeedback.ShowError(box);
+        error.Text = message;
+        error.Visibility = Visibility.Visible;
+        box.Focus(FocusState.Programmatic);
+    }
+
+    private static void ClearPasswordError(PasswordBox box, TextBlock error)
+    {
+
+        PasswordFeedback.ClearError(box);
+        error.Visibility = Visibility.Collapsed;
+    }
+
+    private void ChangePasswordOldBox_PasswordChanged(object sender, RoutedEventArgs e)
+        => ClearPasswordError(ChangePasswordOldBox, ChangePasswordOldError);
+
+    private void ClosePrivacyLockPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        => ClearPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError);
 
     private void ApplyToggleState(Button btn, bool on)
     {
@@ -365,7 +398,7 @@ private void ShowThemeRestartOverlay()
         ThemeRestartDialog.Opacity = 0;
 
 
-        ThemeRestartDialogTransform.ScaleX = 0.92; ThemeRestartDialogTransform.ScaleY = 0.92; ThemeRestartDialogTransform.TranslateY = 20;
+        ThemeRestartDialogTransform.ScaleX = 0.94; ThemeRestartDialogTransform.ScaleY = 0.94; ThemeRestartDialogTransform.TranslateY = 24;
         RegisterDialogClamp(ThemeRestartOverlay, ThemeRestartDialog);
         ThemeRestartOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -375,15 +408,7 @@ private void ShowThemeRestartOverlay()
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, ThemeRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogShowTransform(sb, ThemeRestartDialogTransform);
         sb.Completed += (_, _) => _themeRestartAnimating = false;
         sb.Begin();
     }
@@ -404,15 +429,7 @@ private void ShowThemeRestartOverlay()
         var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(da, ThemeRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, ThemeRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogHideTransform(sb, ThemeRestartDialogTransform);
         sb.Completed += (_, _) => { ThemeRestartOverlay.Visibility = Visibility.Collapsed; _themeRestartHiding = false; };
         sb.Begin();
     }
@@ -424,7 +441,7 @@ private void ShowThemeRestartOverlay()
 
 
 
-        await MainWindow.FlushPendingEditorForRestartAsync();
+        if (await MainWindow.FlushPendingEditorForRestartAsync()) { _restarting = false; return; }
 
 
         if (ThemeRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; }
@@ -483,7 +500,14 @@ private void ShowThemeRestartOverlay()
 
     private void RestartAppNow()
     {
-        if (!MainWindow.RestartNow()) _restarting = false;
+        var outcome = MainWindow.RestartNow();
+        if (outcome == MainWindow.RestartOutcome.Ok) return;
+        _restarting = false;
+
+        if (outcome == MainWindow.RestartOutcome.EditorDirty)
+            App.ShowToast(App.GetString("Common_Restart_EditorDirty"), ToastTone.Error);
+        else if (outcome == MainWindow.RestartOutcome.SaveFailed)
+            App.ShowToast(App.GetString("Common_Toast_Failed"), ToastTone.Error);
     }
 
     private void ThemeRestartCancel_Click(object sender, RoutedEventArgs e)
@@ -797,8 +821,8 @@ private void ShowSetPasswordDialog()
     {
         _animSetPwd = false;
 
-        SetPasswordBox.Text = "";
-        SetPasswordConfirmBox.Text = "";
+        SetPasswordBox.Password = "";
+        SetPasswordConfirmBox.Password = "";
         SetPasswordLockoutCheckBox.IsChecked = PasswordService.IsLockoutEnabled();
         SetPasswordDialogTransform.ScaleX = 0.94; SetPasswordDialogTransform.ScaleY = 0.94; SetPasswordDialogTransform.TranslateY = 24;
         SetPasswordDialog.Opacity = 0;
@@ -834,8 +858,8 @@ private void ShowSetPasswordDialog()
             SetPasswordOverlay.Visibility = Visibility.Collapsed;
 
 
-            SetPasswordBox.Text = "";
-            SetPasswordConfirmBox.Text = "";
+            SetPasswordBox.Password = "";
+            SetPasswordConfirmBox.Password = "";
             _animSetPwd = false;
         };
         sb.Begin();
@@ -843,15 +867,15 @@ private void ShowSetPasswordDialog()
 
 
 
-    private void SetPasswordBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void SetPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
         => UpdateLockPasswordStrength(SetPasswordBox, SetPasswordStrengthText);
 
-    private void ChangePasswordNewBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void ChangePasswordNewBox_PasswordChanged(object sender, RoutedEventArgs e)
         => UpdateLockPasswordStrength(ChangePasswordNewBox, ChangePasswordStrengthText);
 
-    private static void UpdateLockPasswordStrength(TextBox box, TextBlock text)
+    private static void UpdateLockPasswordStrength(PasswordBox box, TextBlock text)
     {
-        var pw = box.Text;
+        var pw = box.Password;
         if (pw.Length == 0) { text.Visibility = Visibility.Collapsed; return; }
         text.Visibility = Visibility.Visible;
         switch (Novara.Services.PasswordStrength.RateLockPassword(pw))
@@ -886,9 +910,10 @@ private void ShowSetPasswordDialog()
     private void ChangePasswordButton_Click(object sender, RoutedEventArgs e)
     {
         _animChangePwd = false;
-        ChangePasswordOldBox.Text = "";
-        ChangePasswordNewBox.Text = "";
-        ChangePasswordConfirmBox.Text = "";
+        ChangePasswordOldBox.Password = "";
+        ChangePasswordNewBox.Password = "";
+        ChangePasswordConfirmBox.Password = "";
+        ClearPasswordError(ChangePasswordOldBox, ChangePasswordOldError);
         ChangePasswordDialogTransform.ScaleX = 0.94; ChangePasswordDialogTransform.ScaleY = 0.94; ChangePasswordDialogTransform.TranslateY = 24;
         ChangePasswordDialog.Opacity = 0;
         ChangePasswordScrim.Opacity = 0;
@@ -918,9 +943,10 @@ private void ShowSetPasswordDialog()
             ChangePasswordOverlay.Visibility = Visibility.Collapsed;
 
 
-            ChangePasswordOldBox.Text = "";
-            ChangePasswordNewBox.Text = "";
-            ChangePasswordConfirmBox.Text = "";
+            ChangePasswordOldBox.Password = "";
+            ChangePasswordNewBox.Password = "";
+            ChangePasswordConfirmBox.Password = "";
+            ClearPasswordError(ChangePasswordOldBox, ChangePasswordOldError);
             _animChangePwd = false;
         };
         sb.Begin();
@@ -940,13 +966,13 @@ private void ShowSetPasswordDialog()
 
     private async void ChangePasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
-        var oldPw = ChangePasswordOldBox.Text.Trim();
-        var newPw = ChangePasswordNewBox.Text.Trim();
-        var confirmPw = ChangePasswordConfirmBox.Text.Trim();
+        var oldPw = ChangePasswordOldBox.Password.Trim();
+        var newPw = ChangePasswordNewBox.Password.Trim();
+        var confirmPw = ChangePasswordConfirmBox.Password.Trim();
 
         if (oldPw.Length < 6)
         {
-            FlashTextBox(ChangePasswordOldBox);
+            ShowPasswordError(ChangePasswordOldBox, ChangePasswordOldError, App.GetString("Store_Err_WrongPassword"));
             return;
         }
         if (newPw.Length < 6)
@@ -962,6 +988,14 @@ private void ShowSetPasswordDialog()
         if (newPw != confirmPw)
         {
             FlashTextBox(ChangePasswordConfirmBox);
+            return;
+        }
+
+
+        if (await System.Threading.Tasks.Task.Run(() => SealService.Current.MatchesSpacePassword(newPw)))
+        {
+            App.ShowToast(App.GetString("Seal_MainPwd_SameAsSpace"), ToastTone.Error);
+            FlashTextBox(ChangePasswordNewBox);
             return;
         }
 
@@ -1018,8 +1052,8 @@ private void ShowSetPasswordDialog()
             ChangePasswordCancelButton.IsEnabled = true;
         }
 
-        if (changeStage == 6) { App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error); FlashTextBox(ChangePasswordOldBox); return; }
-        if (changeStage == 1) { FlashTextBox(ChangePasswordOldBox); return; }
+        if (changeStage == 6) { App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error); ShowPasswordError(ChangePasswordOldBox, ChangePasswordOldError, App.GetString("Lock_Locked_Title")); return; }
+        if (changeStage == 1) { ShowPasswordError(ChangePasswordOldBox, ChangePasswordOldError, App.GetString("Store_Err_WrongPassword")); return; }
 
         if (changeStage == 2 || changeStage == 3) { FlashTextBox(ChangePasswordConfirmBox); return; }
         if (changeStage == 4)
@@ -1035,7 +1069,7 @@ private void ShowSetPasswordDialog()
 
 
             Services.CrashLogger.LogNote("ChangePasswordRollbackFailed", "数据库与密码文件不一致（暂存记录保留，启动时可恢复）");
-            FlashTextBox(ChangePasswordOldBox);
+            ShowPasswordError(ChangePasswordOldBox, ChangePasswordOldError, App.GetString("Store_Err_WrongPassword"));
             FlashTextBox(ChangePasswordConfirmBox);
             return;
         }
@@ -1076,7 +1110,8 @@ private void ShowSetPasswordDialog()
     private void DisablePrivacyLockButton_Click(object sender, RoutedEventArgs e)
     {
         _animCloseLock = false;
-        ClosePrivacyLockPasswordBox.Text = "";
+        ClosePrivacyLockPasswordBox.Password = "";
+        ClearPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError);
         ClosePrivacyLockDialogTransform.ScaleX = 0.94; ClosePrivacyLockDialogTransform.ScaleY = 0.94; ClosePrivacyLockDialogTransform.TranslateY = 24;
         ClosePrivacyLockDialog.Opacity = 0;
         ClosePrivacyLockScrim.Opacity = 0;
@@ -1101,7 +1136,7 @@ private void ShowSetPasswordDialog()
         var d = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(d, ClosePrivacyLockDialog); Storyboard.SetTargetProperty(d, "Opacity"); sb.Children.Add(d);
         Motion.AddDialogHideTransform(sb, ClosePrivacyLockDialogTransform);
-        sb.Completed += (_, _) => { ClosePrivacyLockOverlay.Visibility = Visibility.Collapsed; _animCloseLock = false; ClosePrivacyLockPasswordBox.Text = ""; };
+        sb.Completed += (_, _) => { ClosePrivacyLockOverlay.Visibility = Visibility.Collapsed; _animCloseLock = false; ClosePrivacyLockPasswordBox.Password = ""; ClearPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError); };
         sb.Begin();
     }
 
@@ -1115,18 +1150,18 @@ private void ShowSetPasswordDialog()
     private async void ClosePrivacyLockConfirm_Click(object sender, RoutedEventArgs e)
     {
         if (_closeLockVerifyInFlight) return;
-        var oldPw = ClosePrivacyLockPasswordBox.Text.Trim();
+        var oldPw = ClosePrivacyLockPasswordBox.Password.Trim();
 
         if (oldPw.Length < 6)
         {
-            FlashTextBox(ClosePrivacyLockPasswordBox);
+            ShowPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError, App.GetString("Store_Err_WrongPassword"));
             return;
         }
 
         if (PasswordService.IsLockoutActive(out _))
         {
             App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error);
-            FlashTextBox(ClosePrivacyLockPasswordBox);
+            ShowPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError, App.GetString("Lock_Locked_Title"));
             return;
         }
 
@@ -1148,7 +1183,7 @@ private void ShowSetPasswordDialog()
             PasswordService.RegisterFailedAttempt();
             if (PasswordService.IsLockoutActive(out _))
                 App.ShowToast(App.GetString("Lock_Locked_Title"), ToastTone.Error);
-            FlashTextBox(ClosePrivacyLockPasswordBox);
+            ShowPasswordError(ClosePrivacyLockPasswordBox, ClosePrivacyLockPasswordError, App.GetString("Store_Err_WrongPassword"));
             return;
         }
         PasswordService.RegisterSuccessfulAttempt();
@@ -1370,7 +1405,7 @@ private void ShowPrivacyLockWarningDialog()
 
         LanguageRestartDialog.Opacity = 0;
 
-        LanguageRestartDialogTransform.ScaleX = 0.92; LanguageRestartDialogTransform.ScaleY = 0.92; LanguageRestartDialogTransform.TranslateY = 20;
+        LanguageRestartDialogTransform.ScaleX = 0.94; LanguageRestartDialogTransform.ScaleY = 0.94; LanguageRestartDialogTransform.TranslateY = 24;
         RegisterDialogClamp(LanguageRestartOverlay, LanguageRestartDialog);
         LanguageRestartOverlay.Visibility = Visibility.Visible;
         var sb = new Storyboard();
@@ -1380,15 +1415,7 @@ private void ShowPrivacyLockWarningDialog()
         var da = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(300) };
         Storyboard.SetTarget(da, LanguageRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogShowTransform(sb, LanguageRestartDialogTransform);
         sb.Completed += (_, _) => _languageRestartAnimating = false;
         sb.Begin();
     }
@@ -1406,15 +1433,7 @@ private void ShowPrivacyLockWarningDialog()
         var da = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(200) };
         Storyboard.SetTarget(da, LanguageRestartDialog); Storyboard.SetTargetProperty(da, "Opacity");
         sb.Children.Add(da);
-        var xa = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(xa, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(xa, "ScaleX");
-        sb.Children.Add(xa);
-        var ya = new DoubleAnimation { To = 0.92, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(ya, "ScaleY");
-        sb.Children.Add(ya);
-        var ty = new DoubleAnimation { To = 20, Duration = TimeSpan.FromMilliseconds(250), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ty, LanguageRestartDialogTransform); Storyboard.SetTargetProperty(ty, "TranslateY");
-        sb.Children.Add(ty);
+        Motion.AddDialogHideTransform(sb, LanguageRestartDialogTransform);
         sb.Completed += (_, _) => { LanguageRestartOverlay.Visibility = Visibility.Collapsed; _languageRestartHiding = false; };
         sb.Begin();
     }
@@ -1425,7 +1444,7 @@ private void ShowPrivacyLockWarningDialog()
         _restarting = true;
 
 
-        await MainWindow.FlushPendingEditorForRestartAsync();
+        if (await MainWindow.FlushPendingEditorForRestartAsync()) { _restarting = false; return; }
 
         if (LanguageRestartOverlay.Visibility != Visibility.Visible) { _restarting = false; return; }
         if (_pendingLanguage == null) { _restarting = false; return; }
@@ -1521,7 +1540,9 @@ private void ShowPrivacyLockWarningDialog()
         AutoLockButtonText.Text = _autoLockSeconds > 0
 
 
-            ? ("" + _autoLockSeconds + "s").Replace("3600s", "60min").Replace("1800s", "30min").Replace("600s", "10min").Replace("300s", "5min").Replace("60s", "1min")
+            ? (_autoLockSeconds < 60
+                ? string.Format(App.GetString("Setting_AutoLock_Seconds"), _autoLockSeconds)
+                : string.Format(App.GetString("Setting_AutoLock_Minutes"), _autoLockSeconds / 60))
             : App.GetString("Setting_AutoLock_Never");
 
 
@@ -1900,8 +1921,8 @@ private void ShowPrivacyLockWarningDialog()
 
     private async void SetPasswordConfirm_Click(object sender, RoutedEventArgs e)
     {
-        var pw = SetPasswordBox.Text.Trim();
-        var confirm = SetPasswordConfirmBox.Text.Trim();
+        var pw = SetPasswordBox.Password.Trim();
+        var confirm = SetPasswordConfirmBox.Password.Trim();
 
         if (pw.Length < 6)
         {
@@ -1916,6 +1937,14 @@ private void ShowPrivacyLockWarningDialog()
         if (pw != confirm)
         {
             FlashTextBox(SetPasswordConfirmBox);
+            return;
+        }
+
+
+        if (await System.Threading.Tasks.Task.Run(() => SealService.Current.MatchesSpacePassword(pw)))
+        {
+            App.ShowToast(App.GetString("Seal_MainPwd_SameAsSpace"), ToastTone.Error);
+            FlashTextBox(SetPasswordBox);
             return;
         }
 
@@ -2203,7 +2232,7 @@ private void ShowPrivacyLockWarningDialog()
                 UpdateProgressBar.Value = v;
                 UpdateStatusText.Text = string.Format(App.GetString("Update_Downloading"), v);
             });
-            var file = await Novara.Services.UpdateService.DownloadAsync(_latestRelease, progress, _updateDownloadCts.Token);
+            var file = await Novara.Services.UpdateService.DownloadAsync(_latestRelease, progress, _updateDownloadCts.Token, _latestRelease.Sha256);
             _updateDownloading = false;
 
 
@@ -2221,10 +2250,17 @@ private void ShowPrivacyLockWarningDialog()
             }
             UpdateStatusText.Text = App.GetString("Update_Launching");
             await System.Threading.Tasks.Task.Delay(400);
-            if (App.Store != null) App.Store.SaveSync();
+
+
+
+            if (App.Store != null && !App.Store.SaveSync())
+            {
+                ResetUpdateInstallUi();
+                return;
+            }
             try
             {
-                Novara.Services.UpdateService.LaunchInstaller(file);
+                Novara.Services.UpdateService.LaunchInstaller(file, _latestRelease.Sha256);
             }
             catch (Exception launchEx)
             {

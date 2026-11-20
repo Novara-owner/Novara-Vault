@@ -64,6 +64,31 @@ public class AuditSanitizerTests
         Assert.Equal(expected, AuditSanitizer.Clean(input));
     }
 
+    [Theory]
+
+
+    [InlineData("error writing C:\\Users\\x\\AppData\\Local\\Novara\\seal",
+                "error writing <seal>")]
+    [InlineData("open /home/x/.local/share/Novara/seal failed", "open <seal> failed")]
+
+    [InlineData("open /home/x/.local/share/Novara/seal/index.nseal failed", "open <seal> failed")]
+    [InlineData("seal C:\\x\\Novara\\seal\\items\\a.novaseal done", "seal <seal> done")]
+    public void Clean_MasksSealRootsBareOrNested(string input, string expected)
+    {
+        Assert.Equal(expected, AuditSanitizer.Clean(input));
+    }
+
+    [Theory]
+
+
+    [InlineData("seal the envelope before noon", "seal the envelope before noon")]
+    [InlineData("the report is at C:\\docs\\seal-report.txt", "the report is at C:\\docs\\seal-report.txt")]
+    [InlineData("we unsealed the shipment", "we unsealed the shipment")]
+    public void Clean_LeavesPlainSealWordsAlone(string input, string expected)
+    {
+        Assert.Equal(expected, AuditSanitizer.Clean(input));
+    }
+
     [Fact]
     public void Clean_FlattensNewlinesAndCapsTheLength()
     {

@@ -22,7 +22,24 @@ public class SyncHostPipelineTests
     }
 
     [Fact]
-    public async Task ForwardedHeaders_AreProcessed_SoARemoteClaimedPeerCannotSkipTheTransportGuard()
+    public async Task PlainHttp_ToAPublicHost_IsRefused_EvenOnLoopback()
+    {
+
+
+        await using var server = await HostedSyncServer.StartAsync();
+        using var http = new HttpClient();
+
+        var req = new HttpRequestMessage(HttpMethod.Get, server.BaseUrl + "/api/v1/__host-probe");
+        req.Headers.Host = "novara.example.com";
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.SendAsync(req)).StatusCode);
+
+
+        var local = await http.GetAsync(server.BaseUrl + "/api/v1/__host-probe");
+        Assert.NotEqual(HttpStatusCode.Forbidden, local.StatusCode);
+    }
+
+    [Fact]
+    public async Task ForwardedProto_FromTheTrustedLoopbackProxy_ProvidesTheScheme()
     {
 
 
@@ -30,15 +47,29 @@ public class SyncHostPipelineTests
         await using var server = await HostedSyncServer.StartAsync();
         using var http = new HttpClient();
 
-
-        var plain = await http.GetAsync(server.BaseUrl + "/api/v1/__host-probe");
-        Assert.NotEqual(HttpStatusCode.Forbidden, plain.StatusCode);
-
         var req = new HttpRequestMessage(HttpMethod.Get, server.BaseUrl + "/api/v1/__host-probe");
-        req.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.9");
-        var forged = await http.SendAsync(req);
+        req.Headers.Host = "novara.example.com";
+        req.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
+        var forwarded = await http.SendAsync(req);
+        Assert.NotEqual(HttpStatusCode.Forbidden, forwarded.StatusCode);
+    }
 
-        Assert.Equal(HttpStatusCode.Forbidden, forged.StatusCode);
+    [Fact]
+    public void RemoteSocket_WithoutForwardedHeaders_RequiresSecureTransport()
+    {
+
+        Assert.True(SyncHostSetup.RequiresSecureTransport(false, IPAddress.Parse("203.0.113.5"), false, "novara.example.com"));
+        Assert.False(SyncHostSetup.RequiresSecureTransport(true, IPAddress.Parse("203.0.113.5"), false, "novara.example.com"));
+    }
+
+    [Fact]
+    public void LoopbackIsExemptOnly_ForLocalHosts_WithoutProxyEvidence()
+    {
+
+        Assert.False(SyncHostSetup.RequiresSecureTransport(false, IPAddress.Loopback, false, "localhost"));
+        Assert.True(SyncHostSetup.RequiresSecureTransport(false, IPAddress.Loopback, false, "novara.example.com"));
+        Assert.True(SyncHostSetup.RequiresSecureTransport(false, IPAddress.Loopback, true, "localhost"));
+        Assert.True(SyncHostSetup.RequiresSecureTransport(false, null, false, "localhost"));
     }
 
     [Fact]
@@ -84,6 +115,7 @@ public class SyncHostPipelineTests
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, server.BaseUrl + "/api/v1/__host-probe");
             request.Headers.TryAddWithoutValidation("Host", host);
+            request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
             using var response = await http.SendAsync(request);
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
@@ -93,6 +125,7 @@ public class SyncHostPipelineTests
 
         using var ported = new HttpRequestMessage(HttpMethod.Get, server.BaseUrl + "/api/v1/__host-probe");
         ported.Headers.TryAddWithoutValidation("Host", "novara.example.com:8080");
+        ported.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
         using var portedResponse = await http.SendAsync(ported);
         Assert.Equal(HttpStatusCode.NotFound, portedResponse.StatusCode);
     }

@@ -185,11 +185,14 @@ public static class SyncDiff
     private static bool IsDeleted(object item, bool hasTombstone)
         => hasTombstone && item switch
         {
-            MemoEntry e => e.IsDeleted,
-            DiaryEntry e => e.IsDeleted,
-            TodoCard e => e.IsDeleted,
-            NoteCard e => e.IsDeleted,
-            FilePathEntry e => e.IsDeleted,
+
+
+
+            MemoEntry e => e.IsDeleted || e.PurgedAt != default,
+            DiaryEntry e => e.IsDeleted || e.PurgedAt != default,
+            TodoCard e => e.IsDeleted || e.PurgedAt != default,
+            NoteCard e => e.IsDeleted || e.PurgedAt != default,
+            FilePathEntry e => e.IsDeleted || e.PurgedAt != default,
             _ => false,
         };
 

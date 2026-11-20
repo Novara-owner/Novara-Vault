@@ -6,7 +6,7 @@
 
 ## 1. 系统概述与安全主张
 
-Novara 是面向 Windows 的本地优先个人知识工具：备忘、路径收藏、计划与日记记录存于单一本地文件，附带可选的端到端加密同步（服务器自部署）、只读 Web 伴侣，以及带权限闸门的 Agent（MCP）接口。没有账号、没有遥测、没有任何能读你数据的官方服务器。
+Novara 是面向 Windows 的本地优先个人知识工具：备忘、路径收藏、计划与日记记录存于单一本地文件，附带可选的端到端加密同步（服务器自部署）、只读 Web 伴侣、带权限闸门的 Agent（MCP）接口，以及自 13.0 起的独立密码封存存储（Novara Space）与时间胶囊。没有账号、没有遥测、没有任何能读你数据的官方服务器。
 
 整个案例建立在以下主张上：
 
@@ -18,6 +18,7 @@ Novara 是面向 Windows 的本地优先个人知识工具：备忘、路径收�
 | C4 | 发布产物可复核校验：校验和、钉死的镜像摘要、SBOM、Sigstore 无钥签名、签名更新清单 | [docs/VERIFYING.zh-CN.md](VERIFYING.zh-CN.md)；[docs/PROVENANCE.zh-CN.md](PROVENANCE.zh-CN.md)；[docs/CODE_SIGNING_POLICY.zh-CN.md](CODE_SIGNING_POLICY.zh-CN.md) |
 | C5 | 桌面应用不开任何监听端口，只发起用户触发的出站连接 | [threat-model.zh-CN.md](threat-model.zh-CN.md) §6 末行；应用内网络活动面板 |
 | C6 | 服务器只持密文，以哈希令牌在限速下认证设备，永远不掌握空间密钥 | [security-architecture.zh-CN.md](security-architecture.zh-CN.md) §4；[threat-model.zh-CN.md](threat-model.zh-CN.md) §3（A4） |
+| C7 | Novara Space 是独立密码、独立密钥与独立锁定的加密存储；位于搜索、同步、快照、MCP 与回收站之外，唯一出口是显式的密码保护导出 | [security-architecture.zh-CN.md](security-architecture.zh-CN.md) §5；[threat-model.zh-CN.md](threat-model.zh-CN.md) §2、§6；[SECURITY.zh-CN.md](../SECURITY.zh-CN.md) §4 |
 
 ## 2. 威胁模型摘要
 
@@ -37,6 +38,7 @@ Novara 是面向 Windows 的本地优先个人知识工具：备忘、路径收�
 2. **Agent 访问** —— MCP 链：解锁闸 → 按客户端批准 → 权限矩阵 → 字段脱敏 → 删除总闸 → 审计日志。
 3. **快照导出** —— 互联链：强制导出密码、封包前剥除凭据、版本化容器。
 4. **跨设备同步** —— 双向链：按空间密封的 keywrap、带明文版本戳的密文信封（服务端据此路由）、乐观并发（If-Match），以及保护旧客户端免受不可读格式冲击的世代锁。
+5. **Novara Space** —— 封存存储链：空间密码 → Argon2id → 包裹的空间密钥 → AES-256-GCM 索引与容器；独立锁定，不进入搜索/同步/快照/MCP，唯一出口是显式的 `.novabundle` 导出。
 
 链路上的信任边界：同步服务器对每个请求做空间/设备绑定校验、绝不解析载荷本体；Web 阅读器只在内存持有解密数据；更新渠道对清单字节先验签后解析。
 

@@ -6,6 +6,26 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [novara13] - 2026-11-19
+
+A release themed "Give what matters to time": **Novara Space**, a separate password-protected place where files and folders can be sealed away, and **time capsules** that open only at a chosen future moment. Around it: a welcome page that shatters into nearly a hundred thousand real-colour grains, an eight-page first-run guide, two new MCP tools, calmer empty states, and a reliability pass across backups, sync, the space and the web reader.
+
+### Added
+
+- **Novara Space** — a separate, independently password-protected store opened from the hamburger menu, with its own five-attempt lockout and an optional direct entry from the lock screen when the privacy lock is on. Sealing moves the original out of its location (never through the recycle bin), stores it as an encrypted container that cannot be previewed or edited, and taking it back writes, verifies the whole file, then removes the sealed copy; name conflicts never overwrite. Items can be exported to a standalone `.novabundle` protected by the space password and imported on another machine. Space content stays out of search, sync, MCP, snapshots and the recycle bin, and survives library reset and corruption rebuild.
+- **Time capsules** — seal something until a future moment from one minute to forty years (presets or a custom value and unit). Capsules show “locked” or “expired”, expired ones rise to the top, and expiry is evaluated on entry rather than by background polling; clock rollbacks are detected.
+- **Sand-shatter welcome exit** — tapping the welcome page shatters the brand mark into 100,072 real-colour grains that fall away and reveal the app underneath; the first tap no longer waits on a cold frame.
+- **Eight-page first-run guide** — the guide now covers Novara Space alongside the four main tabs and teaches what each page actually does; skipping goes to the last page instead of leaving the guide.
+- **Two MCP tools** — `restore_item` brings a soft-deleted item back from the recycle bin, and `get_auth_status` lets an agent check its permissions without trial and error.
+
+### Changed
+
+- **One empty-state language** — all six lists share a quiet icon, a main line and a short second line, with no decorative animation.
+- **Honest permission errors** — a refusal names the missing permission and what the client already has.
+- **Setup guidance** — the MCP guide says to restart the client and open a new conversation before checking tools, and no longer invites pasting a key-bearing configuration into a chat.
+- **Quieter interactions** — the search index is built off the UI thread; a path filter no longer leaves cards grey; the plan-page drop indicator no longer points at the last drag's slot; multiple pinned entries in one memo group are normalised; the ungrouped memo card joins the first entrance pass instead of arriving a beat late.
+- **Reliability** — snapshots refuse to run while an unfinished restore journal is pending and quarantine an unreadable one instead of blocking automatic backups forever; a re-published key wrap heals the session immediately; the 32 MiB chunk ceiling is enforced on both ends; changing the password no longer blocks the UI thread; the web viewer scopes body ids and removes SVG/MathML blocks as a whole; restart is honest about unsaved editor changes and a successful restore is no longer rolled back for an unrelated refusal.
+
 ## [novara12] - 2026-10-28
 
 An interaction release, themed "mind and hand in concert": novara11 made every existing feature more dependable; novara12 stands on that stability and reworks how daily use feels — cards that fold away and return at a click, remember how you left them, and report their own state at a glance.

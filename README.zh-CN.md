@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="images/Chinese-WelcomePage-v12.png" alt="Novara 欢迎页" width="720" />
+  <img src="images/Chinese-WelcomePage-v13.png" alt="Novara 欢迎页" width="720" />
 </p>
 
 ---
@@ -35,7 +35,7 @@ Novara 是一个**本地优先的个人数据控制层——为你，也为你�
 
 不是密码管理器，也不是笔记软件——**AI 时代的个人数据控制层：你和你的 AI 都能使用数据，但钥匙只在你的手里。**
 
-今天，这层数据控制以备忘（内置 API Key 连通检测）、路径备份、待办、桌面便签与富文本记录的形态工作，全部装在一个快速、原生、完全离线可用的应用里。数据保存在 `%LocalAppData%\Novara\` 下的便携单文件数据库中，可选 **AES-256-GCM 认证加密**保护，密码最长 64 位。
+今天，这层数据控制以备忘（内置 API Key 连通检测）、路径备份、待办、桌面便签与富文本记录的形态工作，全部装在一个快速、原生、完全离线可用的应用里。自 13.0 起还新增 **Novara Space**——一个独立密码保护的空间，用于封存文件与时间胶囊。数据保存在 `%LocalAppData%\Novara\` 下的便携单文件数据库中，可选 **AES-256-GCM 认证加密**保护，密码最长 64 位。
 
 ---
 
@@ -48,7 +48,26 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 安全机制还包括 **连续 5 次输错锁定 30 分钟**——计数与锁定状态跨重启持久化，并用单调时钟抵御系统时间回拨。自 5.0 起，你还可用 **Windows Hello**（生物识别 / PIN）解锁；自 5.1 起，保险库也能自己锁上：按需（**Ctrl+Shift+L**）、按你选择的空闲时长、或 Windows 锁屏时联动锁定。锁屏跟随系统主题、全屏遮挡应用、窗口失焦自动清空输入框。
 
 <p align="center">
-  <img src="images/Chinese-UnlockPage-v12.png" alt="隐私锁屏" width="420" />
+  <img src="images/Chinese-UnlockPage-v13.png" alt="隐私锁屏" width="420" />
+</p>
+
+## Novara Space 与时间胶囊
+
+Novara 内部一个独立的、密码保护的空间——可选开启、只在本机，并与其余一切都隔开。
+
+- **独立空间，独立密码**——从汉堡菜单进入；它有自己的密码与连续 5 次错误锁定，开启隐私锁后可在锁屏用空间密码直接进入
+- **封存不是复制**——拖入文件或文件夹即移入空间：原件从原位置移走（不经过回收站），以加密容器存放，封存期间不可预览、不可修改
+- **取出要验真**——取出时先写到你选择的位置并完成全文件校验，通过后才移除箱内副本；重名绝不覆盖，文件夹可按文件夹还原或取出为归档
+- **时间胶囊**——把东西封到 1 分钟至 40 年后的任意时刻。胶囊显示「锁定中 / 已期满」，期满项置顶；到期在进入空间时判定，不做后台轮询，时钟回拨会被识别
+- **与其它出口隔离**——空间内容不进入搜索、同步、MCP、快照与回收站，也不受资料库重置与损坏重建影响；需要带走时单独导出受空间密码保护的 `.novabundle`
+
+<p align="center">
+  <img src="images/Chinese-Private%20Space-v13.png" alt="Novara Space" width="720" />
+  <img src="images/Chinese-Time%20Capsule-v13.png" alt="时间胶囊" width="720" />
+</p>
+<p align="center">
+  <img src="images/Chinese-Space%20Settings-v13.png" alt="空间设置" width="420" />
+  <img src="images/Chinese-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space 解锁页" width="420" />
 </p>
 
 ## 备忘管理
@@ -71,7 +90,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 邮箱、账户、网站、WiFi 条目还可写入 **TOTP 密钥**（粘贴 `otpauth://` URI 或 Base32 密钥）：卡片即显示实时 6 位动态码、剩余秒数、倒计时进度条与一键复制——不掏手机也能有两步验证。
 
 <p align="center">
-  <img src="images/Chinese-MemoPage-v12.png" alt="备忘管理" width="720" />
+  <img src="images/Chinese-MemoPage-v13.png" alt="备忘管理" width="720" />
 </p>
 
 ### API Key 管理与检测
@@ -87,7 +106,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 中转站探针是 Novara 面向 API 中转时代的招牌能力：它发送随机化、带 nonce 的测试提示，交叉校验**身份真伪**、**能力基准**、**格式遵从**、**token 计费**、**工具调用**、**隐藏注入**、**响应投毒**、**长上下文截断**八项，再产出加权风险结论（可信 / 基本可信 / 疑似风险 / 高风险）。探针数据存放在本地可更新的 `ProbeDataSet.json` 中，所有结果都附固定免责声明——这是概率性自查，不构成法律凭证。
 
 <p align="center">
-  <img src="images/Chinese-API-v12.png" alt="API 连通检测与中转站探针" width="720" />
+  <img src="images/Chinese-API-v13.png" alt="API 连通检测与中转站探针" width="720" />
 </p>
 
 ## 路径备份
@@ -97,7 +116,7 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
 Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色边框**表示存在，**红色边框**表示缺失或不可访问。检测在五种场景自动触发：新建/编辑、30 分钟定时、启动、空白区全量检测、单卡右键。
 
 <p align="center">
-  <img src="images/Chinese-FilePage-v12.png" alt="路径备份" width="720" />
+  <img src="images/Chinese-FilePage-v13.png" alt="路径备份" width="720" />
 </p>
 
 ## 任务面板
@@ -109,11 +128,11 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **系统提醒**：空白处右键添加倒计时卡片，到点响铃、脉冲、自动关闭，主程序关闭也能工作。
 
 <p align="center">
-  <img src="images/Chinese-PlanPage-v12.png" alt="任务面板" width="720" />
+  <img src="images/Chinese-PlanPage-v13.png" alt="任务面板" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/Plan Reminder-v12.png" alt="计划卡片的提醒渐变" width="720" />
+  <img src="images/Plan Reminder-v13.png" alt="计划卡片的提醒渐变" width="720" />
 </p>
 
 ## 桌面便签
@@ -128,7 +147,7 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **待办双向同步**：桌面勾选写回主程序，主程序始终是唯一数据权威
 
 <p align="center">
-  <img src="images/DesktopCard-v12.png" alt="桌面便签" width="560" />
+  <img src="images/DesktopCard-v13.png" alt="桌面便签" width="560" />
 </p>
 
 ## 记录页
@@ -142,12 +161,12 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 筛选栏（混合 / 日记 / 文档）与格式徽标让一切井井有条。标题以纯文本渲染，限 120 字。
 
 <p align="center">
-  <img src="images/Chinese-RecordPage-v12.png" alt="记录页列表" width="720" />
+  <img src="images/Chinese-RecordPage-v13.png" alt="记录页列表" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/HtmlEditor-v12.png" alt="富文本 HTML 编辑器" width="420" />
-  <img src="images/Markdown Editor - Split Preview Mode-v12.png" alt="Markdown 编辑器分屏预览" width="420" />
+  <img src="images/HtmlEditor-v13.png" alt="富文本 HTML 编辑器" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode-v13.png" alt="Markdown 编辑器分屏预览" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -159,15 +178,16 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **密码是唯一的钥匙** —— 密码不存储、不发送、无法找回；拿到文件的人面对锁着的快照，看到的只是一堆噪声
 - **只读是设计而非限制** —— 字段默认掩码、点击显示、一键复制、动态码在浏览器本地实时计算；不能编辑、不上传、不持久化（刷新后明文即从内存消失）
 - **诚实的数据截至** —— 查看器明确标注快照时间；更新数据 = 重新导出
+- **空间不随快照走** —— Novara Space 内容从不进入快照；需要带走时单独导出 `.novabundle`
 
 自己托管，或发给你信任的人——文件和密码分开两条路走。
 
 <p align="center">
-  <img src="images/Snapshot-PC-v12.png" alt="Snapshot 电脑端查看器" width="720" />
+  <img src="images/Snapshot-PC-v13.png" alt="Snapshot 电脑端查看器" width="720" />
 </p>
 <p align="center">
-  <img src="images/Snapshot-MB-v12.png" alt="Snapshot 手机端查看器" width="300" />
-  <img src="images/Snapshot-UnlockPage-PC-v12.png" alt="Snapshot 电脑端解锁页" width="420" />
+  <img src="images/Snapshot-MB-v13.png" alt="Snapshot 手机端查看器" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC-v13.png" alt="Snapshot 电脑端解锁页" width="420" />
 </p>
 
 ## 跨设备同步
@@ -181,6 +201,7 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 - **冲突，如实相告** —— 两台设备改动同一版本时后写者胜；先写的那一版保留为冲突副本，不会有任何东西静默消失
 - **设备与历史** —— 设备中心列出已配对设备的信任状态与最后同步时间，可撤销设备或重置其 token；每次同步事件都写进本地审计日志
 - **离线能力永不倒退** —— 同步是增强，不是依赖
+- **空间只在本机** —— Novara Space 从不参与同步；它是独立密码的本地存储
 
 ## 工作区
 
@@ -193,8 +214,8 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命令模式——新建备忘 / 待办 / 便签 / 日记、打开回收站或设置、立即锁定。
 
 <p align="center">
-  <img src="images/Search%20Page-v12.png" alt="全局搜索" width="720" />
-  <img src="images/Chinese-Search%20Page-Command%20Tools-v12.png" alt="命令面板工具" width="720" />
+  <img src="images/Search%20Page-v13.png" alt="全局搜索" width="720" />
+  <img src="images/Chinese-Search%20Page-Command%20Tools-v13.png" alt="命令面板工具" width="720" />
 </p>
 
 ## 回收站
@@ -202,18 +223,21 @@ Ctrl+K 同时是**命令面板**：输入 `>` 后同一个输入框切换为命�
 删除的卡片不会瞬间消失——移入**回收站**并支持 **7 天自动清理**，一周内可恢复，超期后下次启动永久删除。支持恢复、永久删除（红色二次确认）、清空，以及按时间倒序混合展示。回收站数据不参与导出。
 
 <p align="center">
-  <img src="images/RecycleBin-v12.png" alt="回收站" width="720" />
+  <img src="images/RecycleBin-v13.png" alt="回收站" width="720" />
 </p>
 
 ## MCP Agent 接口
 
 Novara 内置原生 **MCP 服务器**（Model Context Protocol），让任何 AI 助手——Claude、编程助手或自定义 Agent——都能作为一等客户端操作你的知识库。它以独立的 **`NovaraMCP.exe`** 形式发布，使用 stdio JSON-RPC 2.0 协议，把每个调用转发给运行中的 Novara 主程序（唯一数据权威）。
 
-**14 个工具**，覆盖五类数据（`memo` / `todo` / `note` / `diary` / `path`）：
+**16 个工具**，覆盖五类数据（`memo` / `todo` / `note` / `diary` / `path`）：
 
 - `create_memo` · `create_todo` · `create_note` · `create_diary` · `create_path`
 - `update_memo` · `update_todo` · `update_note` · `update_diary` · `update_path`
-- `delete_item` · `list_items` · `read_item` · `search_items`
+- `delete_item` · `restore_item` · `list_items` · `read_item` · `search_items`
+- `get_auth_status`
+
+Novara Space 刻意**不对 MCP 暴露**：封存条目完全在 Agent 的可达范围之外。
 
 **安全模型**（在设置页 → MCP 卡片开启）：
 
@@ -238,16 +262,16 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 浅色、深色、跟随系统三套主题，统一品牌按钮体系（主蓝 / 幽灵描边 / 危险红），全应用每个弹窗保持一致。9.0 起新增四款类纸主题——Cream、Almond、Kraft、Newsprint——整程序（含编辑器与桌面便签）一并换装，全新安装默认淡杏。品牌强调色亦随主题自适应：深色与浅色保留经典品牌蓝，类纸各款使用各自的柔化品牌色。
 
 <p align="center">
-  <img src="images/Light%20Mode-v12.png" alt="浅色主题" width="420" />
-  <img src="images/Dark%20Mode-v12.png" alt="深色主题" width="420" />
+  <img src="images/Light%20Mode-v13.png" alt="浅色主题" width="420" />
+  <img src="images/Dark%20Mode-v13.png" alt="深色主题" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Cream-v12.png" alt="类纸主题 - Cream" width="420" />
-  <img src="images/Paper・Almond-v12.png" alt="类纸主题 - Almond" width="420" />
+  <img src="images/Paper・Cream-v13.png" alt="类纸主题 - Cream" width="420" />
+  <img src="images/Paper・Almond-v13.png" alt="类纸主题 - Almond" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Kraft-v12.png" alt="类纸主题 - Kraft" width="420" />
-  <img src="images/Paper・Newsprint-v12.png" alt="类纸主题 - Newsprint" width="420" />
+  <img src="images/Paper・Kraft-v13.png" alt="类纸主题 - Kraft" width="420" />
+  <img src="images/Paper・Newsprint-v13.png" alt="类纸主题 - Newsprint" width="420" />
 </p>
 
 ## 设置、工具与数据概览
@@ -257,8 +281,8 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 - **数据概览** —— 加密状态、最近备份、快照份数、文件完整性与孤儿引用一览无余
 
 <p align="center">
-  <img src="images/Chinese-SettingsPage-v12.png" alt="设置页" width="420" />
-  <img src="images/Chinese-Tools-v12.png" alt="工具页" width="420" />
+  <img src="images/Chinese-Settings-v13.png" alt="设置页" width="420" />
+  <img src="images/Chinese-Tools-v13.png" alt="工具页" width="420" />
 </p>
 
 ## 数据导入与导出
@@ -289,6 +313,7 @@ Novara 内置**五种完整界面语言**——简体中文、繁體中文、Eng
 - **便携单文件**：`data.novadb` 承载全部七个分区；可选密码保护整个数据库
 - **健康检查**：加密状态、最近备份、快照份数、文件完整性与孤儿引用一览无余
 - **可恢复删除**：回收站给你一周时间，任何内容才真正消失
+- **封存空间**：可选的 Novara Space 使用独立密码——只在本机，不进入同步、快照、MCP 与回收站
 - **Agent 就绪而不泄密**：MCP 接口自身绝不把你的数据发往任何地方
 
 ## 隐私与安全

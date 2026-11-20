@@ -14,6 +14,10 @@ public sealed class FileSpaceStore : ISpaceStore
     private const string VersionsFile = "versions.json";
     private const string BlobDir = "blobs";
 
+
+    private const string SpaceLockFile = "space.lock";
+    private const string DevicesLockFile = "devices.lock";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -56,6 +60,41 @@ public sealed class FileSpaceStore : ISpaceStore
             throw new SpaceGoneException($"space no longer exists: {space.SpaceId}");
         Directory.CreateDirectory(SpaceDir(space.SpaceId));
         WriteAtomic(Path.Combine(SpaceDir(space.SpaceId), SpaceFile), JsonSerializer.Serialize(space, Options));
+    }
+
+    public void UpdateSpace(string spaceId, Action<SpaceRecord> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+        RequireSafeId(spaceId);
+        Directory.CreateDirectory(SpaceDir(spaceId));
+
+        using var lease = AcquireMetadataLock(spaceId, SpaceLockFile);
+        var path = Path.Combine(SpaceDir(spaceId), SpaceFile);
+        var space = Read<SpaceRecord>(path)
+                    ?? throw new SpaceGoneException($"space no longer exists: {spaceId}");
+        mutate(space);
+        WriteAtomic(path, JsonSerializer.Serialize(space, Options));
+    }
+
+
+
+
+
+    private FileStream AcquireMetadataLock(string spaceId, string fileName)
+    {
+        var path = Path.Combine(SpaceDir(spaceId), fileName);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(25);
+            }
+        }
     }
 
 
@@ -150,11 +189,12 @@ public sealed class FileSpaceStore : ISpaceStore
         if (requireExisting && !SpaceExists(spaceId))
             throw new SpaceGoneException($"space no longer exists: {spaceId}");
 
+        Directory.CreateDirectory(SpaceDir(spaceId));
+        using var lease = AcquireMetadataLock(spaceId, DevicesLockFile);
         var devices = GetDevices(spaceId).ToList();
         var index = devices.FindIndex(d => string.Equals(d.DeviceId, device.DeviceId, StringComparison.Ordinal));
         if (index >= 0) devices[index] = device; else devices.Add(device);
 
-        Directory.CreateDirectory(SpaceDir(spaceId));
         WriteAtomic(Path.Combine(SpaceDir(spaceId), DevicesFile), JsonSerializer.Serialize(devices, Options));
     }
 
@@ -167,12 +207,13 @@ public sealed class FileSpaceStore : ISpaceStore
     {
         RequireSafeId(spaceId);
 
+        Directory.CreateDirectory(SpaceDir(spaceId));
+        using var lease = AcquireMetadataLock(spaceId, DevicesLockFile);
         var devices = GetDevices(spaceId).ToList();
         var index = devices.FindIndex(d => string.Equals(d.DeviceId, deviceId, StringComparison.Ordinal));
         if (index < 0) return;
 
         devices[index].LastSeenAt = lastSeenAt;
-        Directory.CreateDirectory(SpaceDir(spaceId));
         WriteAtomic(Path.Combine(SpaceDir(spaceId), DevicesFile), JsonSerializer.Serialize(devices, Options));
     }
 
@@ -193,10 +234,9 @@ public sealed class FileSpaceStore : ISpaceStore
         WriteAtomic(Path.Combine(SpaceDir(spaceId), VersionsFile), JsonSerializer.Serialize(ordered, Options));
     }
 
-    public void WriteBlob(string spaceId, VersionRecord version, byte[] payload)
+    public void WriteBlob(string spaceId, VersionRecord version, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(version);
-        ArgumentNullException.ThrowIfNull(payload);
         RequireSafeId(spaceId);
 
         var dir = Path.Combine(SpaceDir(spaceId), BlobDir);
@@ -210,7 +250,21 @@ public sealed class FileSpaceStore : ISpaceStore
         if (!IsSafeId(spaceId)) return null;
 
         var path = BlobPath(spaceId, version);
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        if (!File.Exists(path)) return null;
+        try
+        {
+
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            return buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+
+            return null;
+        }
     }
 
     public void DeleteBlob(string spaceId, VersionRecord version)
@@ -247,19 +301,41 @@ public sealed class FileSpaceStore : ISpaceStore
     private static T? Read<T>(string path) where T : class
     {
         if (!File.Exists(path)) return null;
-        try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options); }
+        try
+        {
+
+
+
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.Read | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return JsonSerializer.Deserialize<T>(reader.ReadToEnd(), Options);
+        }
         catch (JsonException e) { throw new SpaceStoreException($"corrupt metadata: {Path.GetFileName(path)}", e); }
     }
 
     private static void WriteAtomic(string path, string content)
         => WriteAtomicBytes(path, System.Text.Encoding.UTF8.GetBytes(content));
 
-    private static void WriteAtomicBytes(string path, byte[] content)
+    private static void WriteAtomicBytes(string path, ReadOnlyMemory<byte> content)
     {
-        var temp = path + ".tmp";
-        File.WriteAllBytes(temp, content);
 
-        File.Move(temp, path, overwrite: true);
+
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+
+            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                stream.Write(content.Span);
+
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+            throw;
+        }
     }
 
 
@@ -275,6 +351,13 @@ public sealed class FileSpaceStore : ISpaceStore
     public bool ChunkExists(string spaceId, string chunkId)
         => BlobLayout.IsSafeId(spaceId) && BlobLayout.IsSafeChunkId(chunkId)
             && BlobLayout.ChunkExists(_root, spaceId, chunkId.ToLowerInvariant());
+
+    public string? ChunkPath(string spaceId, string chunkId)
+    {
+        if (!BlobLayout.IsSafeId(spaceId) || !BlobLayout.IsSafeChunkId(chunkId)) return null;
+        var id = chunkId.ToLowerInvariant();
+        return BlobLayout.ChunkExists(_root, spaceId, id) ? BlobLayout.ChunkPath(_root, spaceId, id) : null;
+    }
 
     public Dictionary<string, long> ChunkSizes(string spaceId)
         => BlobLayout.IsSafeId(spaceId) ? BlobLayout.ChunkSizes(_root, spaceId) : new Dictionary<string, long>();

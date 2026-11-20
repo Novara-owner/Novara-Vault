@@ -83,6 +83,58 @@ public class HeaderV5Tests : IDisposable
 
 
     [Fact]
+    public void V5WriteClamp_BoundsArgon2idButLeavesPbkdf2Alone()
+    {
+        Assert.Equal((10, 512 * 1024),
+            NovaraStore.ClampV5ParamsForWrite(CryptoService.V5KdfArgon2id, 100, 4 * 1024 * 1024));
+        Assert.Equal((3, 64 * 1024),
+            NovaraStore.ClampV5ParamsForWrite(CryptoService.V5KdfArgon2id, 3, 64 * 1024));
+        Assert.Equal((3_000_000, 0),
+            NovaraStore.ClampV5ParamsForWrite(CryptoService.V5KdfPbkdf2Sha256, 3_000_000, 0));
+    }
+
+    [Fact]
+    public void V5ReadGate_RejectsAHeaderThatNeedsMoreMemoryThanTheMachineHas()
+    {
+        NewV5Store("v5-too-expensive.novadb");
+        var path = Path.Combine(_root, "v5-too-expensive.novadb");
+        var bytes = File.ReadAllBytes(path);
+        BitConverter.TryWriteBytes(bytes.AsSpan(11, 4), 4 * 1024 * 1024);
+        OverwriteFile(path, bytes);
+
+        NovaraStore.AvailableMemoryBytesForTests = 1L << 30;
+        try
+        {
+            var reopened = new NovaraStore(path);
+            Assert.Equal(LoadStatus.Encrypted, reopened.Load().Status);
+            Assert.Equal(LoadStatus.KdfTooExpensive, reopened.LoadWithPassword(LockPassword).Status);
+        }
+        finally
+        {
+            NovaraStore.AvailableMemoryBytesForTests = 0;
+        }
+    }
+
+    [Fact]
+    public void V5Save_ReKeysAHighCostHeaderDownToTheWriteCeiling()
+    {
+        var store = NewV5Store("v5-clamp.novadb");
+        AddMemo(store, "clamp");
+        store.SetV5KdfParamsForTests(100, 1024 * 1024);
+        Assert.True(store.SaveSync());
+
+        var path = Path.Combine(_root, "v5-clamp.novadb");
+        var bytes = File.ReadAllBytes(path);
+        Assert.Equal(10, BitConverter.ToInt32(bytes.AsSpan(7, 4)));
+        Assert.Equal(512 * 1024, BitConverter.ToInt32(bytes.AsSpan(11, 4)));
+
+        var reopened = new NovaraStore(path);
+        Assert.Equal(LoadStatus.Ok, reopened.LoadWithPassword(LockPassword).Status);
+    }
+
+
+
+    [Fact]
     public void V5RoundTrip_SecondSaveAndCrossInstanceUnlock_PreserveData()
     {
         var store = NewV5Store("v5-a.novadb");

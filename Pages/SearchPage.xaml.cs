@@ -26,6 +26,10 @@ public sealed partial class SearchPage : Page
 {
     private readonly List<SearchItem> _items = new();
     private readonly List<SearchItem> _index = new();
+    private int _searchGen;
+    private int _indexGen;
+    private bool _indexBuilding;
+    private string? _pendingQuery;
     private System.Threading.CancellationTokenSource? _renderCts;
     private Border? _cancelSearchBtn;
     private Button? _filterButton;
@@ -45,6 +49,8 @@ public sealed partial class SearchPage : Page
         new("new_document", "Diary_New_Document", IconData.Document),
         new("open_settings", "Setting_Title_Page", string.Join(" ", IconData.Settings)),
         new("open_trash", "Trash_Title", IconData.Delete),
+
+        new("open_seal", "Menu_Seal", string.Join(" ", IconData.SealSpace)),
         new("lock_now", "Tray_LockNow", IconData.Lock),
     };
     private readonly List<PaletteCmd> _cmdMatched = new();
@@ -80,7 +86,10 @@ public sealed partial class SearchPage : Page
                 ShowBlankHint();
             }
             if (string.IsNullOrWhiteSpace(SearchBox.Text))
+            {
+                _pendingQuery = null;
                 ShowBlankHint();
+            }
         };
 
         SearchBox.KeyDown += (_, e) =>
@@ -121,8 +130,17 @@ public sealed partial class SearchPage : Page
             FocusSearch();
             ShowBlankHint();
         };
-        Unloaded += (_, _) => DisposeRenderCts();
+        Unloaded += (_, _) => { _searchGen++; DisposeRenderCts(); };
     }
+
+
+
+
+    private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+        => SearchCapsule.BorderBrush = App.GetBrush("AppPrimaryButtonBrush");
+
+    private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
+        => SearchCapsule.BorderBrush = App.GetBrush("AppBorderBrush");
 
 
     private void CreateCancelButton()
@@ -236,9 +254,7 @@ public sealed partial class SearchPage : Page
         if (_cmdMatched.Count == 0)
         {
             _cmdIndex = 0;
-            ShowNoResultHint();
-            EmptyHintText.Text = App.GetString("Cmd_NoMatch");
-            EmptyHintIconBox.Visibility = Visibility.Collapsed;
+            ShowHintText(App.GetString("Cmd_NoMatch"));
             return;
         }
         if (_cmdIndex >= _cmdMatched.Count) _cmdIndex = _cmdMatched.Count - 1;
@@ -272,6 +288,16 @@ public sealed partial class SearchPage : Page
             Foreground = App.GetBrush("AppTextPrimaryBrush"), VerticalAlignment = VerticalAlignment.Center,
         });
         card.Child = panel;
+
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, App.GetString(cmd.LabelKey));
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            ExecuteCommandAt(index);
+        };
         card.Tapped += (_, _) => ExecuteCommandAt(index);
         card.PointerEntered += (_, _) => { _cmdIndex = index; RefreshCmdHighlights(); };
         return card;
@@ -348,6 +374,9 @@ public sealed partial class SearchPage : Page
 
     private void RefreshResults()
     {
+
+
+        if (string.IsNullOrWhiteSpace(SearchBox.Text)) return;
         if (_items.Count == 0) return;
         Render(_currentKey);
     }
@@ -366,6 +395,7 @@ public sealed partial class SearchPage : Page
 
     public void ResetSearch()
     {
+        _pendingQuery = null;
         SearchBox.Text = "";
 
 
@@ -388,8 +418,6 @@ public sealed partial class SearchPage : Page
     public void ApplyTexts()
     {
         SearchBox.PlaceholderText = App.GetString("Search_Placeholder");
-        EmptyHintText.Text = App.GetString("Search_Empty");
-        CmdHintText.Text = App.GetString("Cmd_Mode_Hint");
     }
 
     public void FocusSearch()
@@ -398,69 +426,182 @@ public sealed partial class SearchPage : Page
         SearchBox.Focus(FocusState.Programmatic);
     }
 
+    private sealed record MemoIndexSource(Guid Id, string Name, string Type, string KeyInfo, DateTime CreatedAt,
+        (string Label, string Value)[] Fields);
+    private sealed record PathIndexSource(Guid Id, string Name, string Path, string Note, DateTime CreatedAt);
+    private sealed record TodoIndexSource(Guid Id, string Title, string MainText, string[] SubTexts, DateTime CreatedAt);
+    private sealed record NoteIndexSource(Guid Id, string Title, string Content, DateTime CreatedAt);
+    private sealed record DiaryIndexSource(string Id, string Title, string Content, DateTime CreatedAt, DateTime ModifiedAt, string? Format);
+    private sealed record SearchIndexSource(List<MemoIndexSource> Memos, List<PathIndexSource> Paths,
+        List<TodoIndexSource> Todos, List<NoteIndexSource> Notes, List<DiaryIndexSource> Diaries);
+
+
+
+    private SearchIndexSource SnapshotIndexSource()
+    {
+        var db = App.Store?.Database;
+        if (db == null) return new(new(), new(), new(), new(), new());
+        return new(
+            db.MemoEntries.Where(x => !x.IsDeleted).Select(e => new MemoIndexSource(e.Id, e.Name, e.Type, e.KeyInfo,
+                e.CreatedAt, e.Fields.Where(f => f != null).Select(f => (f.Label, f.Value ?? "")).ToArray())).ToList(),
+            db.PathBackupItems.Where(x => !x.IsDeleted)
+                .Select(p => new PathIndexSource(p.Id, p.Name, p.Path, p.Note, p.CreatedAt)).ToList(),
+            db.TodoCards.Where(x => !x.IsDeleted)
+                .Select(t => new TodoIndexSource(t.Id, t.Title, t.MainText, t.SubTexts.Where(s => s != null).ToArray(), t.CreatedAt)).ToList(),
+            db.NoteCards.Where(x => !x.IsDeleted)
+                .Select(n => new NoteIndexSource(n.Id, n.Title, n.Content, n.CreatedAt)).ToList(),
+            db.DiaryItems.Where(x => !x.IsDeleted)
+                .Select(d => new DiaryIndexSource(d.Id, d.Title, d.Content, d.CreatedAt, d.ModifiedAt, d.Format)).ToList());
+    }
+
+    private static List<SearchItem> BuildIndex(SearchIndexSource src)
+    {
+        var index = new List<SearchItem>(src.Memos.Count + src.Paths.Count + src.Todos.Count + src.Notes.Count + src.Diaries.Count);
+        foreach (var e in src.Memos)
+        {
+
+
+
+
+
+
+            var sub = MemoFieldMask.MaskedKeyInfo(e.Type, e.KeyInfo, e.Fields.Select(f => (f.Label, f.Value)));
+
+
+
+            var searchable = new List<string> { e.Name };
+            if (!MemoFieldMask.IsMaskedKeyInfo(e.Type)) searchable.Add(e.KeyInfo);
+            foreach (var f in e.Fields)
+            {
+                searchable.Add(f.Label);
+                if (!MemoFieldMask.IsMaskedLabel(f.Label)) searchable.Add(f.Value);
+            }
+            var text = string.Join(" ", searchable).ToLowerInvariant();
+            index.Add(new SearchItem("memo", e.Id.ToString(), e.Name, sub, e.CreatedAt, "", text));
+        }
+        foreach (var p in src.Paths)
+        {
+            index.Add(new SearchItem("path", p.Id.ToString(), p.Name, p.Path, p.CreatedAt, "", (p.Name + " " + p.Path + " " + p.Note).ToLowerInvariant()));
+        }
+        foreach (var t in src.Todos)
+        {
+            index.Add(new SearchItem("todo", t.Id.ToString(), t.Title, t.MainText, t.CreatedAt, "", (t.Title + " " + t.MainText + " " + string.Join(" ", t.SubTexts)).ToLowerInvariant()));
+        }
+        foreach (var n in src.Notes)
+        {
+            index.Add(new SearchItem("note", n.Id.ToString(), n.Title, n.Content, n.CreatedAt, "", (n.Title + " " + n.Content).ToLowerInvariant()));
+        }
+        foreach (var d in src.Diaries)
+        {
+            string times = $"{App.GetString("Search_Created")} {d.CreatedAt:yyyy-MM-dd HH:mm}  ·  {App.GetString("Search_Modified")} {d.ModifiedAt:yyyy-MM-dd HH:mm}";
+
+
+            var text = SearchableDiaryText(d.Content);
+            if (text.Length > 200_000) text = text[..200_000];
+            index.Add(new SearchItem("diary", d.Id, d.Title, times, d.CreatedAt, d.Format ?? "", (d.Title + " " + text).ToLowerInvariant()));
+        }
+        return index;
+    }
+
+
+
 
 
 
 
     private void RebuildIndex()
     {
-        _index.Clear();
-        var db = App.Store?.Database;
-        if (db == null) return;
-
-        foreach (var e in db.MemoEntries.Where(x => !x.IsDeleted))
+        var gen = ++_indexGen;
+        _indexBuilding = true;
+        var source = SnapshotIndexSource();
+        _ = System.Threading.Tasks.Task.Run(() =>
         {
+            List<SearchItem> built;
+            try { built = BuildIndex(source); }
+            catch (Exception ex)
+            {
+                CrashLogger.LogNote("SearchIndex", ex.GetType().Name);
+                built = new List<SearchItem>();
+            }
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (gen != _indexGen) return;
+                _index.Clear();
+                _index.AddRange(built);
+                _indexBuilding = false;
+                var pending = _pendingQuery;
+                _pendingQuery = null;
 
 
-
-
-
-
-            var sub = MemoFieldMask.MaskedKeyInfo(e.Type, e.KeyInfo, e.Fields.Select(f => (f.Label, f.Value ?? "")));
-            var text = (e.Name + " " + e.KeyInfo + " " + string.Join(" ", e.Fields.Where(f => f != null).Select(f => f.Label + " " + f.Value))).ToLowerInvariant();
-            _index.Add(new SearchItem("memo", e.Id.ToString(), e.Name, sub, e.CreatedAt, "", text));
-        }
-        foreach (var p in db.PathBackupItems.Where(x => !x.IsDeleted))
-        {
-            _index.Add(new SearchItem("path", p.Id.ToString(), p.Name, p.Path, p.CreatedAt, "", (p.Name + " " + p.Path + " " + p.Note).ToLowerInvariant()));
-        }
-        foreach (var t in db.TodoCards.Where(x => !x.IsDeleted))
-        {
-            _index.Add(new SearchItem("todo", t.Id.ToString(), t.Title, t.MainText, t.CreatedAt, "", (t.Title + " " + t.MainText + " " + string.Join(" ", t.SubTexts.Where(s => s != null))).ToLowerInvariant()));
-        }
-        foreach (var n in db.NoteCards.Where(x => !x.IsDeleted))
-        {
-            _index.Add(new SearchItem("note", n.Id.ToString(), n.Title, n.Content, n.CreatedAt, "", (n.Title + " " + n.Content).ToLowerInvariant()));
-        }
-        foreach (var d in db.DiaryItems.Where(x => !x.IsDeleted))
-        {
-            string times = $"{App.GetString("Search_Created")} {d.CreatedAt:yyyy-MM-dd HH:mm}  ·  {App.GetString("Search_Modified")} {d.ModifiedAt:yyyy-MM-dd HH:mm}";
-            _index.Add(new SearchItem("diary", d.Id, d.Title, times, d.CreatedAt, d.Format, (d.Title + " " + d.Content).ToLowerInvariant()));
-        }
+                if (!string.IsNullOrWhiteSpace(pending) && IsLoaded
+                    && string.Equals(SearchBox.Text?.Trim(), pending, StringComparison.Ordinal))
+                    RunSearch(pending);
+            });
+        });
     }
 
-    private void RunSearch(string q)
+
+    private static string SearchableDiaryText(string? content)
     {
-        if (string.IsNullOrWhiteSpace(q)) { ShowBlankHint(); return; }
-        _items.Clear();
+        if (string.IsNullOrEmpty(content)) return "";
+
+
+
+        var noData = System.Text.RegularExpressions.Regex.Replace(
+            content, @"data:[^""'\s)]+", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var noTags = System.Text.RegularExpressions.Regex.Replace(noData, "<[^>]+>", " ");
+        return System.Net.WebUtility.HtmlDecode(noTags);
+    }
+
+    private async void RunSearch(string q)
+    {
+
+
+        var generation = ++_searchGen;
+        if (string.IsNullOrWhiteSpace(q)) { _pendingQuery = null; ShowBlankHint(); return; }
+
+        if (_indexBuilding) { _pendingQuery = q; return; }
         string key = q.ToLowerInvariant();
 
-        foreach (var it in _index)
-            if (SearchFuzzy.MatchesQuery(it.SearchText, key))
-                _items.Add(it);
 
 
-        var sortWords = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        _items.Sort((a, b) =>
+        var source = _index.ToList();
+        List<SearchItem> matched;
+        try
+        {
+        matched = await System.Threading.Tasks.Task.Run(() =>
+        {
+            var list = new List<SearchItem>();
+            foreach (var it in source)
+                if (SearchFuzzy.MatchesQuery(it.SearchText, key))
+                    list.Add(it);
+
+
+            var sortWords = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            list.Sort((a, b) =>
+            {
+
+                var titleA = a.Title ?? "";
+                var titleB = b.Title ?? "";
+                bool ta = sortWords.Any(w => titleA.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
+                bool tb = sortWords.Any(w => titleB.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (ta != tb) return ta ? -1 : 1;
+                return b.Time.CompareTo(a.Time);
+            });
+            return list;
+        });
+        }
+        catch (Exception ex)
         {
 
-            var titleA = a.Title ?? "";
-            var titleB = b.Title ?? "";
-            bool ta = sortWords.Any(w => titleA.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
-            bool tb = sortWords.Any(w => titleB.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0);
-            if (ta != tb) return ta ? -1 : 1;
-            return b.Time.CompareTo(a.Time);
-        });
+            CrashLogger.LogNote("SearchRun", ex.GetType().Name);
+            if (generation == _searchGen && IsLoaded) ShowBlankHint();
+            return;
+        }
+        if (generation != _searchGen || !IsLoaded) return;
+
+        _items.Clear();
+        _items.AddRange(matched);
         _currentKey = key;
         Render(key);
     }
@@ -519,50 +660,53 @@ public sealed partial class SearchPage : Page
 
     private void ShowBlankHint()
     {
+
+
+        _items.Clear();
+        _currentKey = "";
         ResultPanel.Children.Clear();
-        EmptyHintText.Text = App.GetString("Search_Empty");
-        EmptyHintIconBox.Visibility = Visibility.Collapsed;
-        CmdHintText.Visibility = Visibility.Visible;
+        EmptyHintPanel.Children.Clear();
+        EmptyHintPanel.Children.Add(Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.EmptyStateArt.SearchBody, Novara.Services.EmptyStateArt.SearchAccent, 1024, 1024,
+            App.GetString("Search_Empty")));
+        EmptyHintPanel.Children.Add(MakeCmdHintText());
         EmptyHintPanel.Visibility = Visibility.Visible;
-        FloatInHint();
     }
 
 
     private void ShowNoResultHint()
     {
         ResultPanel.Children.Clear();
-        EmptyHintText.Text = _currentFilter != "all" ? App.GetString("Search_Filter_NoResult") : App.GetString("Search_NoResult");
-        CmdHintText.Visibility = Visibility.Collapsed;
-        EmptyHintIconBox.Visibility = Visibility.Visible;
-        EmptyHintIcon.Data = (Geometry)Microsoft.UI.Xaml.Markup.XamlBindingHelper.ConvertValue(typeof(Geometry), IconData.SearchNoResult);
+        EmptyHintPanel.Children.Clear();
+        EmptyHintPanel.Children.Add(Novara.Services.EmptyHintBuilder.Build(
+            Novara.Services.EmptyStateArt.NoResultBody, Novara.Services.EmptyStateArt.NoResultAccent, 1027, 1024,
+            _currentFilter != "all" ? App.GetString("Search_Filter_NoResult") : App.GetString("Search_NoResult"),
+            App.GetString("Search_NoResult_Sub")));
         EmptyHintPanel.Visibility = Visibility.Visible;
-        FloatInHint();
     }
 
-    private void FloatInHint()
-    {
 
-        if (!App.IsAnimationsEnabled)
+    private void ShowHintText(string title)
+    {
+        ResultPanel.Children.Clear();
+        EmptyHintPanel.Children.Clear();
+        EmptyHintPanel.Children.Add(Novara.Services.EmptyHintBuilder.BuildText(title));
+        EmptyHintPanel.Visibility = Visibility.Visible;
+    }
+
+
+    private TextBlock MakeCmdHintText()
+    {
+        var block = new TextBlock
         {
-            EmptyHintPanel.Opacity = 1;
-            if (EmptyHintPanel.RenderTransform is TranslateTransform st) st.Y = 0;
-            return;
-        }
-        EmptyHintPanel.Opacity = 0;
-        if (EmptyHintPanel.RenderTransform is not TranslateTransform tt)
-        {
-            tt = new TranslateTransform { Y = 20 };
-            EmptyHintPanel.RenderTransform = tt;
-        }
-        else tt.Y = 20;
-        var sb = new Storyboard();
-        var oa = new DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(oa, EmptyHintPanel); Storyboard.SetTargetProperty(oa, "Opacity");
-        sb.Children.Add(oa);
-        var ya = new DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(400), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-        Storyboard.SetTarget(ya, tt); Storyboard.SetTargetProperty(ya, "Y");
-        sb.Children.Add(ya);
-        sb.Begin();
+            Text = App.GetString("Cmd_Mode_Hint"),
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+        };
+        block.Foreground = App.GetBrush("AppTextSecondaryBrush");
+        block.Opacity = Novara.Services.EmptyHintBuilder.Dim;
+        return block;
     }
 
 
@@ -608,6 +752,15 @@ public sealed partial class SearchPage : Page
         grid.Children.Add(content);
 
         card.Child = grid;
+
+        card.IsTabStop = true;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(card, string.IsNullOrEmpty(it.Title) ? it.SubText ?? "" : it.Title);
+        card.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)) return;
+            e.Handled = true;
+            App.MainWindow?.SearchJump(it.Kind, it.Id);
+        };
         card.Tapped += (_, _) => App.MainWindow?.SearchJump(it.Kind, it.Id);
         return card;
     }

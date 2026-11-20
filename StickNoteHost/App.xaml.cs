@@ -45,6 +45,17 @@ public partial class App : Application
         @"Local\StickNoteHost";
 #endif
 
+
+
+    public static string ExitingEventName =>
+#if DEBUG
+        @"Local\StickNoteHost.Exiting.Dev";
+#else
+        @"Local\StickNoteHost.Exiting";
+#endif
+
+    private static System.Threading.EventWaitHandle? _exitingEvent;
+
     public App()
     {
         InitializeComponent();
@@ -86,10 +97,16 @@ public partial class App : Application
             System.Environment.Exit(0);
             return;
         }
+        try { _exitingEvent = new System.Threading.EventWaitHandle(
+            false, System.Threading.EventResetMode.ManualReset, ExitingEventName); }
+        catch { }
         _uiQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        SyncNotes();
+
+
+
         StartWatching();
-        Log("SyncNotes 完成");
+        SyncNotes();
+        LogVerbose("SyncNotes 完成");
 
 
 
@@ -117,7 +134,21 @@ public partial class App : Application
             MenuActivation = PopupActivationMode.RightClick,
             NoLeftClickDelay = true,
         };
-        if (trayIcon != null) TrayIcon.Icon = trayIcon;
+
+
+
+        if (trayIcon == null)
+        {
+            try
+            {
+                var processPath = System.Environment.ProcessPath;
+                if (!string.IsNullOrEmpty(processPath))
+                    trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(processPath);
+            }
+            catch { }
+        }
+        trayIcon ??= System.Drawing.SystemIcons.Application;
+        TrayIcon.Icon = trayIcon;
         RebuildTrayMenu();
         TrayIcon.LeftClickCommand = new RelayCommand(ShowNote);
 
@@ -210,7 +241,10 @@ public partial class App : Application
 
             StickyData data;
             string theme;
-            using (StickiesLock.Enter())
+
+
+
+            using (StickiesLock.EnterForWrite())
             {
                 var loaded = Load();
                 if (loaded == null && !System.IO.File.Exists(JsonPath))
@@ -271,7 +305,7 @@ public partial class App : Application
                     {
                         w.SetContent(n.Title ?? "", n.Content ?? "", n.DueTime, n.Items, n.Color, n.W, n.H);
                         w.ApplyTheme(theme);
-                        Log($"SyncNotes: 更新便签窗口 id={n.Id}");
+                        LogVerbose($"SyncNotes: 更新便签窗口 id={n.Id}");
                     }
                     else
                     {
@@ -288,13 +322,13 @@ public partial class App : Application
                         nw.HideFromTaskbar();
                         nw.Closed += (_, _) => Log($"便签 {n.Id} Closed");
                         NoteWindows[n.Id] = nw;
-                        Log($"SyncNotes: 新建便签窗口 id={n.Id}");
+                        LogVerbose($"SyncNotes: 新建便签窗口 id={n.Id}");
                     }
                 }
                 catch (Exception ex) { Log($"SyncNotes: 便签 {n.Id} 同步失败已跳过: {ex.Message}"); }
                 idx++;
             }
-            Log($"SyncNotes: {NoteWindows.Count} 个便签窗口, theme={theme}");
+            LogVerbose($"SyncNotes: {NoteWindows.Count} 个便签窗口, theme={theme}");
 
 
 
@@ -308,7 +342,7 @@ public partial class App : Application
                     Log($"stickies.json 有 {data.Notes.Count} 张卡但建窗全部失败 - 保持运行，等待下一次事件重试");
                     return;
                 }
-                Log("stickies.json 无内容，Host 自动退出");
+                LogVerbose("stickies.json 无内容，Host 自动退出");
                 ExitApp();
                 return;
             }
@@ -376,7 +410,7 @@ public partial class App : Application
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null)
@@ -415,7 +449,7 @@ public partial class App : Application
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return false;
@@ -428,11 +462,27 @@ public partial class App : Application
 
 
 
+
+
                 var hostByLabel = new Dictionary<string, StickyTodoItem>();
+                var hostOrdinal = new Dictionary<string, int>();
                 foreach (var it in items)
-                    if (!string.IsNullOrEmpty(it.Label) && !hostByLabel.ContainsKey(it.Label)) hostByLabel[it.Label] = it;
+                {
+                    if (string.IsNullOrEmpty(it.Label)) continue;
+                    hostOrdinal.TryGetValue(it.Label, out var nth);
+                    hostOrdinal[it.Label] = nth + 1;
+                    var key = it.Label + "\u001F" + nth.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (!hostByLabel.ContainsKey(key)) hostByLabel[key] = it;
+                }
+                var existingOrdinal = new Dictionary<string, int>();
                 foreach (var ex in existing)
-                    if (!string.IsNullOrEmpty(ex.Label) && hostByLabel.TryGetValue(ex.Label, out var src)) ex.Checked = src.Checked;
+                {
+                    if (string.IsNullOrEmpty(ex.Label)) continue;
+                    existingOrdinal.TryGetValue(ex.Label, out var nth);
+                    existingOrdinal[ex.Label] = nth + 1;
+                    var key = ex.Label + "\u001F" + nth.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (hostByLabel.TryGetValue(key, out var src)) ex.Checked = src.Checked;
+                }
                 note.Items = existing;
                 _skipNextSync = true;
 
@@ -457,7 +507,7 @@ public partial class App : Application
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return false;
@@ -477,7 +527,7 @@ public partial class App : Application
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return false;
@@ -491,6 +541,13 @@ public partial class App : Application
         }
         catch (Exception ex) { _skipNextSync = false; Log($"UpdateNoteSize 失败: {ex.Message}"); return false; }
     }
+
+
+
+
+
+    [System.Diagnostics.Conditional("DEBUG")]
+    public static void LogVerbose(string msg) => Log(msg);
 
     public static void Log(string msg)
     {
@@ -542,6 +599,15 @@ public partial class App : Application
         {
             try { w.FlushPendingTodoSave(); } catch { }
         }
+
+
+        try { _exitingEvent?.Set(); } catch { }
+
+
+
+        try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+        try { _singleInstanceMutex?.Dispose(); } catch { }
+        _singleInstanceMutex = null;
         TrayIcon?.Dispose();
         System.Environment.Exit(0);
     }
@@ -607,7 +673,21 @@ internal static class StickiesLock
     {
 
 
-        bool acquired = false;
+        return EnterCore(out _);
+    }
+
+
+
+    public static IDisposable EnterForWrite()
+    {
+        var gate = EnterCore(out var acquired);
+        if (!acquired) throw new TimeoutException("stickies.json write lock was not acquired");
+        return gate;
+    }
+
+    private static IDisposable EnterCore(out bool acquired)
+    {
+        acquired = false;
         try { acquired = Mutex.WaitOne(TimeSpan.FromSeconds(3)); }
         catch (System.Threading.AbandonedMutexException) { acquired = true;  }
         return new Releaser(acquired ? Mutex : null);

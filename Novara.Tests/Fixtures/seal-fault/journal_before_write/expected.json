@@ -1,0 +1,5 @@
+{
+  "case": "journal_before_write",
+  "setup": "empty journal and index, nothing on disk",
+  "actions": []
+}

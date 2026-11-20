@@ -8,7 +8,7 @@
 
 > This document has two jobs: (1) tell security researchers **how to report a vulnerability** privately, and (2) explain to users **how Novara protects their data and what it does not protect**.
 >
-> **Effective date:** 2026-08-14 · **Last updated:** 2026-10-28 · **Applies to:** Novara novara12 / 12.0 (and earlier versions where noted)
+> **Effective date:** 2026-08-14 · **Last updated:** 2026-11-19 · **Applies to:** Novara novara13 / 13.0 (and earlier versions where noted)
 
 ---
 
@@ -18,7 +18,8 @@ Security fixes are provided for the versions below. We strongly recommend always
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| novara12 (12.0) | ✅ Supported | Current release — interaction-layer rework: card folding with follow memory, path properties, on-card API detection, todo progress; no security-model changes |
+| novara13 (13.0) | ✅ Supported | Current release — Novara Space: a separate password-protected encrypted store for sealed files and time capsules, local-only and outside sync, snapshots, MCP and the recycle bin; two new read-only/recovery MCP tools; reliability hardening (backup journal gate, sync heal, 32 MiB ceiling) |
+| novara12 (12.0) | ✅ Supported | Previous release — interaction-layer rework: card folding with follow memory, path properties, on-card API detection, todo progress; no security-model changes |
 | novara11.R1 (11.1) | ✅ Supported | Previous release — HTML editor image insertion, image selection and toolbar focus fixes |
 | novara11 (11.0) | ✅ Supported | Previous release — desktop on .NET 10, v5 database container (Argon2id), partition-level incremental sync, signed update manifests with an optional automatic check, and a codebase-wide hardening pass |
 | 10.3 | ✅ Supported | Save dialogs append the selected file type's extension again (10.1–10.2 regression) |
@@ -121,6 +122,17 @@ The connected era adds a new way for data to leave your machine — and the same
 - **Token handling** — the server stores only a SHA-256 of each device token, compares in constant time, and rate-limits repeated failures.
 - **Integrity and version discipline** — an upload declares the version it is based on; a mismatch is reported as a conflict instead of silently overwriting, and the overwritten version is retained on the server so a bad push can be rolled back.
 - **Local audit** — every upload, download, conflict detection and conflict resolution is recorded in a local audit log, and the device center shows each paired device's trust state and last sync.
+
+### Novara Space (13.0+)
+
+A separate encrypted store for sealed files and time capsules — opt-in, local-only, and outside every other trust chain.
+
+- **Independent key material** — the space has its own password, independent of the main database password. The space key is wrapped with an Argon2id-derived key (64 MiB, three passes); the index and every container are AES-256-GCM authenticated ciphertext. Nothing about the space is stored in the main database.
+- **Separate lockout** — five consecutive failed attempts lock the space for 30 minutes, with the same monotonic-clock discipline as the privacy lock.
+- **Fail closed on damage** — a mismatched data/security pair, an interrupted restore, or an unreadable journal is refused or quarantined and surfaced; backups and restores verify before replacing anything.
+- **Outside the other chains** — space content is never synced, never exposed to MCP, never included in snapshots or the recycle bin, and survives library reset and corruption rebuild. Exports are explicit `.novabundle` files protected by the space password; changing the password later does not re-protect old bundles.
+- **Time lock, stated honestly** — capsules refuse to open before their moment and detect clock rollbacks, but the lock stops casual clock changes, not someone who takes the container apart. It is a promise about self-honesty, not DRM.
+- **Forgetting the password** means the content is unrecoverable — there is no recovery path. The container format and a reference reader are public for verification.
 
 ## 5. Data integrity & reliability
 

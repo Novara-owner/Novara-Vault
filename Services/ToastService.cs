@@ -108,11 +108,16 @@ internal static class ShortcutHelper
         private readonly ushort _vt;
         private readonly ushort _wReserved1, _wReserved2, _wReserved3;
         private readonly IntPtr _ptr;
+
+
+
+        private readonly IntPtr _padding;
         public PropVariant(string value)
         {
             _vt = 31;
             _wReserved1 = _wReserved2 = _wReserved3 = 0;
             _ptr = Marshal.StringToCoTaskMemUni(value);
+            _padding = IntPtr.Zero;
         }
         public void Dispose() { if (_ptr != IntPtr.Zero) Marshal.FreeCoTaskMem(_ptr); }
     }

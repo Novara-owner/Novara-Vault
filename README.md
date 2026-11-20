@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="images/English-WelcomePage-v12.png" alt="Novara welcome page" width="720" />
+  <img src="images/English-WelcomePage-v13.png" alt="Novara welcome page" width="720" />
 </p>
 
 ---
@@ -35,7 +35,7 @@ Novara is a **local-first personal data control layer — for you, and for your 
 
 Not a password manager. Not a notes app. A data control layer for the AI era — **both you and your AI can use the data, but only you hold the keys.**
 
-Today that layer takes the shape of memos (with built-in API-key connectivity testing), file paths, to-dos, sticky notes, and rich-text records, in one fast, native application that works fully offline. Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters.
+Today that layer takes the shape of memos (with built-in API-key connectivity testing), file paths, to-dos, sticky notes, and rich-text records, in one fast, native application that works fully offline. Since 13.0 it also includes **Novara Space** — a separate, password-protected place for sealed files and time capsules. Your data lives in `%LocalAppData%\Novara\` as a portable single-file database, optionally protected by **AES-256-GCM authenticated encryption** with a password of up to 64 characters.
 
 ---
 
@@ -48,7 +48,26 @@ GCM adds **authenticated encryption**: any tampering with the encrypted file is 
 Security is reinforced by a **30-minute lockout after 5 consecutive failed attempts** — the counter and lock state persist across restarts and use a monotonic clock to resist system-time rollback. Since 5.0, you can also unlock with **Windows Hello** (biometrics / PIN). And since 5.1 the vault can lock itself: on demand (**Ctrl+Shift+L**), after an idle timeout of your choosing, or whenever Windows locks its session. The lock screen follows your system theme, covers the entire window, and clears its input automatically when the window loses focus.
 
 <p align="center">
-  <img src="images/English-UnlockPage-v12.png" alt="Privacy lock screen" width="420" />
+  <img src="images/English-UnlockPage-v13.png" alt="Privacy lock screen" width="420" />
+</p>
+
+## Novara Space & Time Capsules
+
+A separate, password-protected place inside Novara — opt-in, local-only, and sealed off from everything else.
+
+- **A separate space, a separate password** — open it from the hamburger menu. It has its own password, its own five-attempt lockout, and can be entered directly from the lock screen with the space password when the privacy lock is on
+- **Seal, don't copy** — dropping a file or folder moves it into the space: the original leaves its location (not through the recycle bin) and is stored as an encrypted container that can never be previewed or edited while sealed
+- **Take it back, verified** — taking something out writes it to the location you choose, verifies the whole file, and only then removes the sealed copy; name conflicts never overwrite, and folders return as folders or as an archive
+- **Time capsules** — seal something until a chosen future moment, from one minute to forty years. Capsules show “locked” or “expired”, expired ones rise to the top, and expiry is evaluated on entry rather than by background polling; clock rollbacks are detected
+- **Sealed from everything else** — Space content is not searched, not synced, not exposed to MCP, not included in snapshots or the recycle bin, and survives library reset and corruption rebuild. Export it deliberately as a standalone `.novabundle`, protected by the space password
+
+<p align="center">
+  <img src="images/English-Private%20Space-v13.png" alt="Novara Space" width="720" />
+  <img src="images/English-Time%20Capsule-v13.png" alt="Time capsules" width="720" />
+</p>
+<p align="center">
+  <img src="images/English-Space%20Settings-v13.png" alt="Space settings" width="420" />
+  <img src="images/English-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space unlock page" width="420" />
 </p>
 
 ## Memo Manager
@@ -71,7 +90,7 @@ Starred and pinned entries are lifted to the top, and every card displays its ke
 Email, account, website, and WiFi entries also accept a **TOTP secret** (paste an `otpauth://` URI or a Base32 key): the card then shows a live 6-digit code with remaining seconds, a countdown bar, and one-click copy — a proper two-factor companion without a phone.
 
 <p align="center">
-  <img src="images/English-MemoPage-v12.png" alt="Memo manager" width="720" />
+  <img src="images/English-MemoPage-v13.png" alt="Memo manager" width="720" />
 </p>
 
 ### API Key Management & Detection
@@ -87,7 +106,7 @@ Every API Key entry ships with a **three-tier detection** system, run entirely a
 The relay probe is Novara's standout feature for the API-relay era: it sends randomized, nonce-tagged test prompts and cross-checks **identity**, **capability benchmarks**, **format compliance**, **token billing**, **tool calling**, **hidden injection**, **response poisoning**, and **long-context truncation**, then produces a weighted risk verdict (trusted / mostly trusted / suspected risk / high risk). Probe data lives in a local, updatable `ProbeDataSet.json`, and all results carry a fixed disclaimer — this is a probabilistic self-check, not a legal proof.
 
 <p align="center">
-  <img src="images/English-API-v12.png" alt="API connectivity test and relay probe" width="720" />
+  <img src="images/English-API-v13.png" alt="API connectivity test and relay probe" width="720" />
 </p>
 
 ## File Path Manager
@@ -97,7 +116,7 @@ Save and organize file and folder paths you access frequently. One click copies 
 Novara continuously validates every saved path with instant visual feedback: a **green border** means the path exists, a **red border** means it is missing or inaccessible. Checks run on create/edit, on a 30-minute timer, on startup, on a full scan from the empty area, or via right-click on an individual card.
 
 <p align="center">
-  <img src="images/English-FilePage-v12.png" alt="File path manager" width="720" />
+  <img src="images/English-FilePage-v13.png" alt="File path manager" width="720" />
 </p>
 
 ## Task Dashboard
@@ -109,11 +128,11 @@ A lightweight productivity board that combines to-do lists, sticky notes, and ti
 - **System reminders** — right-click the empty board to add a countdown card that rings, pulses, and closes automatically, even when Novara is not running.
 
 <p align="center">
-  <img src="images/English-PlanPage-v12.png" alt="Task dashboard" width="720" />
+  <img src="images/English-PlanPage-v13.png" alt="Task dashboard" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/Plan Reminder-v12.png" alt="Reminder gradient on a plan card" width="720" />
+  <img src="images/Plan Reminder-v13.png" alt="Reminder gradient on a plan card" width="720" />
 </p>
 
 ## Desktop Sticky Notes
@@ -128,7 +147,7 @@ Send any note or todo card to your desktop with one click. A dedicated lightweig
 - **Bidirectional todo sync** — checking a todo on the desktop writes back to the main app, which stays the single source of truth
 
 <p align="center">
-  <img src="images/DesktopCard-v12.png" alt="Desktop sticky note" width="560" />
+  <img src="images/DesktopCard-v13.png" alt="Desktop sticky note" width="560" />
 </p>
 
 ## Records
@@ -142,12 +161,12 @@ A full-featured long-form platform that hosts two formats in one page:
 A filter bar (mixed / diary / documents) and per-card format badges keep everything organized. Titles are rendered as plain text and limited to 120 characters.
 
 <p align="center">
-  <img src="images/English-RecordPage-v12.png" alt="Records list" width="720" />
+  <img src="images/English-RecordPage-v13.png" alt="Records list" width="720" />
 </p>
 
 <p align="center">
-  <img src="images/HtmlEditor-v12.png" alt="Rich text HTML editor" width="420" />
-  <img src="images/Markdown Editor - Split Preview Mode-v12.png" alt="Markdown editor split preview" width="420" />
+  <img src="images/HtmlEditor-v13.png" alt="Rich text HTML editor" width="420" />
+  <img src="images/Markdown Editor - Split Preview Mode-v13.png" alt="Markdown editor split preview" width="420" />
 </p>
 
 ## Novara Snapshot
@@ -159,15 +178,16 @@ The first step of the connected era. Export your entire database — memos, path
 - **Your password, your only key** — the password is never stored, never sent, and cannot be recovered; a locked snapshot is just noise to anyone holding the file
 - **Read-only by design** — masked fields with tap-to-reveal, one-tap copy, and live TOTP codes computed locally in the browser; nothing edits, nothing uploads, nothing persists (refresh and the plaintext is gone from memory)
 - **Data-as-of, honestly** — the viewer shows exactly when the snapshot was taken; update by re-exporting
+- **Space stays behind** — Novara Space content is never part of a snapshot; export it deliberately as a standalone `.novabundle`
 
 Host it for yourself, or send the file to someone you trust — file and password travel separately.
 
 <p align="center">
-  <img src="images/Snapshot-PC-v12.png" alt="Snapshot viewer on desktop" width="720" />
+  <img src="images/Snapshot-PC-v13.png" alt="Snapshot viewer on desktop" width="720" />
 </p>
 <p align="center">
-  <img src="images/Snapshot-MB-v12.png" alt="Snapshot viewer on mobile" width="300" />
-  <img src="images/Snapshot-UnlockPage-PC-v12.png" alt="Snapshot unlock page on desktop" width="420" />
+  <img src="images/Snapshot-MB-v13.png" alt="Snapshot viewer on mobile" width="300" />
+  <img src="images/Snapshot-UnlockPage-PC-v13.png" alt="Snapshot unlock page on desktop" width="420" />
 </p>
 
 ## Cross-Device Sync
@@ -181,6 +201,7 @@ Sync keeps one encrypted state converging across your devices — and it is buil
 - **Conflicts, stated honestly** — when two devices change the same version the later write wins, and the earlier version is kept as a conflict copy so nothing disappears silently
 - **Devices and history** — the device center lists paired devices with trust state and last sync, revokes a device or resets its token, and every sync event lands in a local audit log
 - **Offline never degrades** — sync is an enhancement, not a dependency
+- **Space stays local** — Novara Space is never synced; it is a local-only store with its own password
 
 ## Workspaces
 
@@ -193,8 +214,8 @@ Press **Ctrl+K** anywhere to search memos, paths, todos, notes, and records in o
 Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands — create a memo / todo / note / diary, open the recycle bin or settings, lock the vault now.
 
 <p align="center">
-  <img src="images/Search%20Page-v12.png" alt="Global search" width="720" />
-  <img src="images/English-Search%20Page-Command%20Tools-v12.png" alt="Command palette tools" width="720" />
+  <img src="images/Search%20Page-v13.png" alt="Global search" width="720" />
+  <img src="images/English-Search%20Page-Command%20Tools-v13.png" alt="Command palette tools" width="720" />
 </p>
 
 ## Recycle Bin
@@ -202,18 +223,21 @@ Ctrl+K doubles as a **command palette**: type `>` and the same box runs commands
 Deleted cards are never lost instantly — they move to a **Recycle Bin** with a **7-day auto-purge**, recoverable for a week before permanent removal on the next startup. Supports restore, permanent delete (red double-confirmation), clear all, and a mixed chronological list. Recycled data is excluded from exports.
 
 <p align="center">
-  <img src="images/RecycleBin-v12.png" alt="Recycle bin" width="720" />
+  <img src="images/RecycleBin-v13.png" alt="Recycle bin" width="720" />
 </p>
 
 ## MCP Agent Interface
 
 Novara exposes a native **MCP server** (Model Context Protocol) so any AI agent — Claude, coding assistants, or custom agents — can work with your knowledge base as a first-class client. It ships as a separate **`NovaraMCP.exe`** that speaks stdio JSON-RPC 2.0 and forwards every call to the running Novara app (the single data authority).
 
-**14 tools** across five data types (`memo` / `todo` / `note` / `diary` / `path`):
+**16 tools** across five data types (`memo` / `todo` / `note` / `diary` / `path`):
 
 - `create_memo` · `create_todo` · `create_note` · `create_diary` · `create_path`
 - `update_memo` · `update_todo` · `update_note` · `update_diary` · `update_path`
-- `delete_item` · `list_items` · `read_item` · `search_items`
+- `delete_item` · `restore_item` · `list_items` · `read_item` · `search_items`
+- `get_auth_status`
+
+Novara Space is deliberately **not exposed** through MCP: sealed items are outside the agent surface entirely.
 
 **Security model** (enabled in Settings → MCP card):
 
@@ -238,16 +262,16 @@ Novara ships with **five complete interface languages** — 简体中文, 繁體
 Light, Dark, and Follow System themes with a unified brand-button system (primary blue / ghost outline / destructive red) consistent across every dialog. Since 9.0, four paper palettes — Cream, Almond, Kraft, and Newsprint — recolor the entire app, editors and desktop sticky notes included, and new installs start on Almond. Brand accents adapt to the theme as well: dark and light keep the classic brand blue, while each paper theme carries its own softened palette color.
 
 <p align="center">
-  <img src="images/Light%20Mode-v12.png" alt="Light theme" width="420" />
-  <img src="images/Dark%20Mode-v12.png" alt="Dark theme" width="420" />
+  <img src="images/Light%20Mode-v13.png" alt="Light theme" width="420" />
+  <img src="images/Dark%20Mode-v13.png" alt="Dark theme" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Cream-v12.png" alt="Paper theme - Cream" width="420" />
-  <img src="images/Paper・Almond-v12.png" alt="Paper theme - Almond" width="420" />
+  <img src="images/Paper・Cream-v13.png" alt="Paper theme - Cream" width="420" />
+  <img src="images/Paper・Almond-v13.png" alt="Paper theme - Almond" width="420" />
 </p>
 <p align="center">
-  <img src="images/Paper・Kraft-v12.png" alt="Paper theme - Kraft" width="420" />
-  <img src="images/Paper・Newsprint-v12.png" alt="Paper theme - Newsprint" width="420" />
+  <img src="images/Paper・Kraft-v13.png" alt="Paper theme - Kraft" width="420" />
+  <img src="images/Paper・Newsprint-v13.png" alt="Paper theme - Newsprint" width="420" />
 </p>
 
 ## Settings, Tools & Data Overview
@@ -257,8 +281,8 @@ Light, Dark, and Follow System themes with a unified brand-button system (primar
 - **Data overview** — encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 
 <p align="center">
-  <img src="images/English-Settings-v12.png" alt="Settings page" width="420" />
-  <img src="images/English-Tools-v12.png" alt="Tools page" width="420" />
+  <img src="images/English-Settings-v13.png" alt="Settings page" width="420" />
+  <img src="images/English-Tools-v13.png" alt="Tools page" width="420" />
 </p>
 
 ## Data Import & Export
@@ -289,6 +313,7 @@ Your data moves with you, freely and without vendor lock-in:
 - **Portable single file**: `data.novadb` holds all seven partitions; optional password protects the whole database
 - **Health check**: encryption status, latest backup, snapshot count, file integrity, and orphan references at a glance
 - **Recoverable deletes**: the recycle bin gives you a week before anything is truly gone
+- **A sealed space**: optional Novara Space with its own password — local-only, excluded from sync, snapshots, MCP and the recycle bin
 - **Agent-ready without data leaks**: the MCP interface never sends your data anywhere by itself
 
 ## Privacy & Security

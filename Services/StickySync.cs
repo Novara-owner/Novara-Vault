@@ -123,6 +123,19 @@ public static class StickySync
 
 
 
+
+
+    private static void ApplyThemeAndLanguage(StickyData data, string? theme = null, string? language = null)
+    {
+        if (App.MainWindow is null) return;
+
+
+        data.Theme = theme ?? ResolveTheme();
+        data.Language = language ?? App.CurrentLanguage;
+    }
+
+
+
     public static bool SendToDesktop(string id, string kind, string title, string content, List<StickyTodoItem>? items = null)
     {
         try
@@ -130,7 +143,7 @@ public static class StickySync
             var dir = Path.GetDirectoryName(JsonPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return false;
@@ -145,8 +158,7 @@ public static class StickySync
 
                     notes.Add(new StickyNote { Id = id, Kind = kind, Title = title, Content = content, Items = items, Color = PaperTheme.CurrentStickyColorKey });
                 }
-                data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage;
+                ApplyThemeAndLanguage(data);
                 data.Notes = notes;
                 Save(data);
             }
@@ -185,14 +197,13 @@ public static class StickySync
             var dir = Path.GetDirectoryName(JsonPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return (false, false);
                 var notes = data.Notes ?? new List<StickyNote>();
                 notes.Add(new StickyNote { Id = Guid.NewGuid().ToString(), Kind = "reminder", Title = "", Content = content, DueTime = dueTime });
-                data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage;
+                ApplyThemeAndLanguage(data);
                 data.Notes = notes;
                 Save(data);
             }
@@ -214,7 +225,7 @@ public static class StickySync
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null) return (false, false);
@@ -223,8 +234,7 @@ public static class StickySync
                 if (existing == null) return (false, false);
                 existing.Content = content;
                 existing.DueTime = dueTime;
-                data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage;
+                ApplyThemeAndLanguage(data);
                 data.Notes = notes;
                 Save(data);
             }
@@ -287,6 +297,14 @@ public static class StickySync
             try
             {
                 using var _ = System.Threading.Mutex.OpenExisting(HostMutexName);
+
+
+                try
+                {
+                    using var exiting = System.Threading.EventWaitHandle.OpenExisting(HostExitingEventName);
+                    if (exiting.WaitOne(0)) return false;
+                }
+                catch { }
                 return true;
             }
             catch { return false; }
@@ -300,6 +318,13 @@ public static class StickySync
         @"Local\StickNoteHost";
 #endif
 
+    private static string HostExitingEventName =>
+#if DEBUG
+        @"Local\StickNoteHost.Exiting.Dev";
+#else
+        @"Local\StickNoteHost.Exiting";
+#endif
+
 
     public static bool Contains(string id)
     {
@@ -311,85 +336,99 @@ public static class StickySync
     public static bool IsOnDesktop(string id) => Contains(id);
 
 
-    public static void UpdateNote(string id, string kind, string title, string content, List<StickyTodoItem>? items = null)
+
+    public static bool UpdateNote(string id, string kind, string title, string content, List<StickyTodoItem>? items = null)
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null) return false;
                 var notes = data.Notes ?? new List<StickyNote>();
                 var existing = notes.FirstOrDefault(n => n.Id == id);
-                if (existing == null) return;
+                if (existing == null) return true;
                 existing.Kind = kind; existing.Title = title; existing.Content = content; existing.Items = items;
-                data.Theme = ResolveTheme();
-                data.Language = App.CurrentLanguage;
+                ApplyThemeAndLanguage(data);
                 Save(data);
             }
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.UpdateNote 失败: {ex}");
+            CrashLogger.LogNote("StickySync.UpdateNote", ex.Message);
+            return false;
         }
     }
 
 
-    public static void RemoveNote(string id)
+    public static bool RemoveNote(string id)
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
-                if (data == null) return;
+                if (data == null) return false;
                 var notes = data.Notes ?? new List<StickyNote>();
-                if (notes.RemoveAll(n => n.Id == id) == 0) return;
+                if (notes.RemoveAll(n => n.Id == id) == 0) return true;
                 data.Notes = notes;
                 Save(data);
             }
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.RemoveNote 失败: {ex}");
+            CrashLogger.LogNote("StickySync.RemoveNote", ex.Message);
+            return false;
         }
     }
 
 
-    public static void UpdateTheme(string theme)
+    public static bool UpdateTheme(string theme)
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
-                if (data == null || (data.Notes?.Count ?? 0) == 0) return;
+                if (data == null) return false;
+                if ((data.Notes?.Count ?? 0) == 0) return true;
                 data.Theme = theme;
                 Save(data);
             }
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.UpdateTheme 失败: {ex}");
+            CrashLogger.LogNote("StickySync.UpdateTheme", ex.Message);
+            return false;
         }
     }
 
 
-    public static void UpdateLanguage(string lang)
+    public static bool UpdateLanguage(string lang)
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
-                if (data == null || (data.Notes?.Count ?? 0) == 0) return;
+                if (data == null) return false;
+                if ((data.Notes?.Count ?? 0) == 0) return true;
                 data.Language = lang;
                 Save(data);
             }
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"StickySync.UpdateLanguage failed: {ex}");
+            CrashLogger.LogNote("StickySync.UpdateLanguage", ex.Message);
+            return false;
         }
     }
 
@@ -411,7 +450,7 @@ public static class StickySync
     {
         try
         {
-            using (StickiesLock.Enter())
+            using (StickiesLock.EnterForWrite())
             {
                 var data = Load();
                 if (data == null || data.Notes is not { Count: > 0 }) return;
@@ -420,6 +459,70 @@ public static class StickySync
             }
         }
         catch { }
+    }
+
+
+
+
+
+
+    public static bool ReconcileDesktopCards(string? theme = null, string? language = null)
+    {
+        try
+        {
+            var db = App.Store?.Database;
+            if (db == null) return false;
+            using (StickiesLock.EnterForWrite())
+            {
+                var data = Load();
+                if (data == null) return false;
+                if (data.Notes is not { Count: > 0 }) return true;
+                var todos = db.TodoCards.Where(x => !x.IsDeleted).ToDictionary(x => x.Id.ToString(), StringComparer.Ordinal);
+                var notes = db.NoteCards.Where(x => !x.IsDeleted).ToDictionary(x => x.Id.ToString(), StringComparer.Ordinal);
+                var kept = new List<StickyNote>(data.Notes.Count);
+                var dropped = false;
+                foreach (var card in data.Notes)
+                {
+                    if (card.Kind == "todo" && todos.TryGetValue(card.Id, out var t))
+                    {
+                        card.Title = t.Title ?? "";
+                        card.Content = "";
+                        var items = new List<StickyTodoItem>
+                        {
+                            new() { Label = t.MainText ?? "", Checked = t.CheckedStates.Count > 0 && t.CheckedStates[0] },
+                        };
+                        for (int i = 0; i < t.SubTexts.Count; i++)
+                            items.Add(new StickyTodoItem
+                            {
+                                Label = t.SubTexts[i] ?? "",
+                                Checked = i + 1 < t.CheckedStates.Count && t.CheckedStates[i + 1],
+                            });
+                        card.Items = items;
+                        kept.Add(card);
+                    }
+                    else if (card.Kind == "note" && notes.TryGetValue(card.Id, out var n))
+                    {
+                        card.Title = n.Title ?? "";
+                        card.Content = n.Content ?? "";
+                        kept.Add(card);
+                    }
+                    else if (card.Kind is not ("todo" or "note"))
+                    {
+                        kept.Add(card);
+                    }
+                    else dropped = true;
+                }
+                if (dropped) data.Notes = kept;
+                ApplyThemeAndLanguage(data, theme, language);
+                Save(data);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.LogNote("StickySync.ReconcileDesktopCards", ex.Message);
+            return false;
+        }
     }
 
 
@@ -450,6 +553,9 @@ public static class StickySync
             _watcher.Created += OnFileChanged;
             _watcher.Deleted += OnFileChanged;
             _watcher.Renamed += OnFileChanged;
+
+
+            ApplyTodoChanges();
 
             _watcher.Error += (_, _) => App.UiQueue?.TryEnqueue(() =>
             {
@@ -496,7 +602,13 @@ public static class StickySync
             }
 
 
-            if (changed) App.Store?.SaveAsync();
+            if (changed)
+            {
+                App.Store?.SaveAsync();
+
+
+                App.MainWindow?.NotifyExternalDbMutation();
+            }
         }
         catch { }
         finally { _applying = false; }
@@ -556,6 +668,8 @@ public class StickyTodoItem
 
 
 
+
+
 internal static class StickiesLock
 {
     private static readonly Mutex Mutex = new(false, MutexName);
@@ -573,7 +687,22 @@ internal static class StickiesLock
 
 
 
-        bool acquired;
+        return EnterCore(out _);
+    }
+
+
+
+
+    public static IDisposable EnterForWrite()
+    {
+        var gate = EnterCore(out var acquired);
+        if (!acquired) throw new TimeoutException("stickies.json write lock was not acquired");
+        return gate;
+    }
+
+    private static IDisposable EnterCore(out bool acquired)
+    {
+        acquired = false;
         try { acquired = Mutex.WaitOne(TimeSpan.FromSeconds(3)); }
         catch (AbandonedMutexException) { acquired = true; }
         return new Releaser(acquired ? Mutex : null);
