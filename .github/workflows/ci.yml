@@ -106,10 +106,11 @@ jobs:
       - name: Audit license inventory
         shell: pwsh
         run: |
-          dotnet tool install --global dotnet-project-licenses
+          $tools = Join-Path $env:RUNNER_TEMP 'tools'
+          dotnet tool install dotnet-project-licenses --tool-path $tools --version 2.7.1
           $dir = Join-Path $env:RUNNER_TEMP 'licenses'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          dotnet-project-licenses -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
+          & (Join-Path $tools 'dotnet-project-licenses.exe') -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
           function Get-LicenseRows([string]$text) {
             ($text -split "`n") |
               Where-Object { $_ -match '^\s*\|' } |
