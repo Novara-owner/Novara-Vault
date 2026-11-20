@@ -24,7 +24,7 @@ public class SealFormatDocTests
         return path;
     }
 
-    private static string Document() => File.ReadAllText(DocumentPath);
+    private static string Document() => File.ReadAllText(DocumentPath).Replace("\r\n", "\n");
 
 
     private sealed record DocRow(string Section, string Field, int Offset, int Size);
