@@ -1378,6 +1378,7 @@ public void BeginUpdateExit()
 
     private bool _lockInProgress;
     private bool _carouselInterruptedByLock;
+    private bool _welcomeSkippedBySpaceDirect;
 
 
 
@@ -1516,6 +1517,7 @@ public void BeginUpdateExit()
 
     private void OnSealDirectUnlocked()
     {
+        _welcomeSkippedBySpaceDirect = true;
         LockScreenFrame.Visibility = Visibility.Collapsed;
         LockScreenFrame.Content = null;
 
@@ -1556,6 +1558,7 @@ public void BeginUpdateExit()
 
 
             if (App.LaunchedFromContextMenu
+                || _welcomeSkippedBySpaceDirect
                 || (!store.Database.AppSettings.WelcomeOnLaunch && store.Database.AppSettings.HasCompletedWelcome))
             {
                 WelcomeOverlay.Visibility = Visibility.Collapsed;
@@ -1568,6 +1571,12 @@ public void BeginUpdateExit()
 
 
                 WelcomeOverlay.Visibility = Visibility.Visible;
+
+
+
+                CustomTitleBar.Visibility = Visibility.Collapsed;
+                BottomToolbarPanel.Visibility = Visibility.Collapsed;
+                NavBar.Visibility = Visibility.Collapsed;
                 WarmWelcomeShatter();
                 WelcomeEntryAnimation.Begin();
             }
