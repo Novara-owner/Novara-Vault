@@ -5,7 +5,7 @@ English · [简体中文](REGRESSION_TESTS.zh-CN.md)
 How bugs fixed over the last six months map onto the automated regression surface. The project started in August 2026, so "the last six months" is the project's whole life. The bug sources are the [CHANGELOG](../CHANGELOG.md) "Fixed" entries and the verification-round summaries; the regression surface has two layers:
 
 1. **Unit / integration tests** — `Novara.Tests` (xUnit, 50+ files, 1,670 tests) covering the data, crypto, sync, Space/seal and server layers, which reference the shipping assemblies directly.
-2. **Static guards** — `Tools/page_lifecycle_guard.py` (1,785 checks), `Tools/sync_guard.py` (314 checks), `Tools/reverse_verify.py` (437 mutation-verified entries), `Tools/cooldown_guard.py`, `Tools/danger_red_guard.py`, `Tools/guards.py` (the suite that ties them together). WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
+2. **Static guards (internal development infrastructure, not shipped in this repository)** — the page-lifecycle guard (1,785 checks), the sync guard (314 checks), the mutation-verified reverse-verification suite (437 entries), the cooldown and danger-red guards, and the aggregate guard runner. WinUI pages cannot be referenced by the test project by construction, so page-level fixes are pinned as source-form invariants in these guards — each entry is verified by mutation (removing the fix must fail the guard).
 
 ## Mapping (named fixes in the changelog)
 
@@ -25,7 +25,7 @@ How bugs fixed over the last six months map onto the automated regression surfac
 | 10.1 | Pickers in elevated instances | `RegressionGuardsTests.FilePicker_UsesNativeWin32DialogsOnly` (CI) |
 | 9.4 | Password dialogs double-submitted | Guard: `page_lifecycle_guard` in-flight lock check |
 | 9.4 | Reminder border lost after drag | Guard: `page_lifecycle_guard` border-preservation check |
-| 9.4 | Server write fence against cross-process delete races | `SpaceAdminTests`, `SqliteSpaceStoreTests`; HTTP probe in `Tools/m3_e2e.py` |
+| 9.4 | Server write fence against cross-process delete races | `SpaceAdminTests`, `SqliteSpaceStoreTests`; HTTP probe in the internal HTTP probe |
 | 9.4 | Update download validates the manifest | `UpdateManifestVerifierTests` (5 tests) + `UpdatePolicyTests` |
 | 9.4 | Lock screen over the first-run wizard | Guard: `page_lifecycle_guard` lifecycle checks |
 | 9.3 | Editor failure diagnostics (missing WebView2 runtime) | Manual verification + diagnostics logging review |
@@ -37,7 +37,7 @@ How bugs fixed over the last six months map onto the automated regression surfac
 | 9.1 | Frozen TOTP live codes (GC of managed wrappers) | `RegressionGuardsTests.TotpRegistry_UsesStrongReferences` (CI) + local guard |
 | 9.1 | Cooldown confirm-key first-frame flash | `RegressionGuardsTests.CooldownHosts_KeepInlineButtonTemplates` (CI) + local guard |
 | 9.1 | Card drag stutter | `RegressionGuardsTests.DragAutoScroll_UsesTheCompositorFrameCallback` (CI) |
-| 9.0 | Container health check with host allowlist | HTTP-level probe in `Tools/m3_e2e.py` |
+| 9.0 | Container health check with host allowlist | HTTP-level probe in the internal HTTP probe |
 | 6.2 | Incremental verification round | Covered by the guard suite below |
 | 6.1 | New empty group vanished under the no-filter view | `RegressionGuardsTests.EmptyGroup_VisibilityIsWorkspaceConditional` (CI) + local guard |
 | 6.0 | ~250 issues from five verification rounds | The whole guard suite: 193 reverse-verify entries + 368 lifecycle checks + the guard family — these rounds are why the guards exist |
@@ -55,4 +55,4 @@ The contributing policy requires major functionality to arrive with tests, and t
 
 ---
 
-*Last updated: 2026-11-19*
+*Last updated: 2026-11-20*

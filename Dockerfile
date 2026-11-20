@@ -1,6 +1,5 @@
 # (syntax frontend removed 2026-09-28: every directive here is covered by BuildKit's built-in
-#  frontend, and fetching docker/dockerfile:1.7 requires an auth.docker.io round-trip that is
-#  unreachable from CN networks without a proxy - the image must build offline.)
+#  frontend, and the image must build offline.)
 #
 # NovaraSync - the server half of Novara Sync, as a container image.
 #
@@ -17,11 +16,8 @@
 # Build (amd64; arm64 is deliberately not built or tested here):
 #   docker buildx build --platform linux/amd64 -t novara-sync:latest .
 #
-# Behind a proxy, the two predefined build args are honoured by the restore and publish steps:
-#   docker buildx build --platform linux/amd64 \
-#     --build-arg HTTP_PROXY=http://host.docker.internal:7897 \
-#     --build-arg HTTPS_PROXY=http://host.docker.internal:7897 -t novara-sync:latest .
-# (With a TUN-style proxy the container is already routed and neither arg is needed.)
+# If your network requires a proxy, the predefined HTTP_PROXY / HTTPS_PROXY build args are
+# honoured by the restore and publish steps.
 
 # ---------- build ----------
 FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS build

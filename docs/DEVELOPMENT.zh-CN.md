@@ -102,10 +102,10 @@ Novara/
 
 **分层原则**：
 
-- `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv。无任何 WinUI 依赖，可独立单测。
+- `Novara.Core` 是「纯逻辑」层：Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv，以及封存子系统（`SealService`、`SealIndex`/`SealJournal`、`SealContainer*`/`SealBundle*`）。无任何 WinUI 依赖，可独立单测。
 - 主工程 `Services/` 是「UI 相关服务」：StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand 等。
 - `Novara.Sync.Server` 是同步服务端的逻辑：`TokenAuth`（token 哈希、常量时间比较、失败限速）、`SqliteSpaceStore` / `FileSpaceStore`（带版本号的密文存储）与 `RetentionPolicy`。`Novara.Server` 是它的薄 ASP.NET Core 宿主加 `space` 命令行。两者自 9.0 起面向 `net10.0`，无 WinUI 依赖；桌面端与 `Novara.Core` 自 novara11 起也迁移到 `net10.0`。
-- `Pages/` 是十大页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage。
+- `Pages/` 是十一个页面：BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage / SealPage。
 
 **核心解耦方式**：
 
@@ -266,17 +266,17 @@ Novara/
 - `WelcomeOnLaunch = false` + `HasCompletedWelcome = true`：跳过欢迎页直接进主内容。
 - 点击欢迎页后写 `HasCompletedWelcome = true` 并同步落盘。
 
-### 7.1 欢迎页墨滴（点击化开）
+### 7.1 欢迎页退场——沙堡击碎（墨滴与纯淡出为兜底）
 
-点击欢迎页任意位置：三滴品牌色墨滴从**点击位置**起爆（`PaintMeltBlob`：缩放 0.88 / 0.62 / 0.45、透明度 0.42 / 0.28 / 0.20），按 0 / 180 / 360ms 错峰扩散、时长 1650 / 1850 / 2050ms（`SpreadBlob`；墨滴淡入 240ms 错峰，峰值透明度 1.0 / 0.9 / 0.8）；欢迎层内容 200ms 起 1400ms Standard 曲线淡出，墨滴层 1600ms 起 300ms Decelerate 化尽收层 → 进入主内容。扩散半径按点击点到内容区最远角的距离推算（`MeltFarRadius`）。动效总控开启时走此路径；关闭时走 400ms 线性淡出兜底。
+点击欢迎页任意位置：品牌标碎成 **100,072 颗真彩色沙粒**（每颗取自 logo 像素；1024² 原图按 389×389 采样、alpha ≥ 120）。起爆按 logo 的实时矩形与点击位置为每颗沙粒给出径向外抛速度（300–940 DIP/s，叠加点击方向偏置），施以微重力（210）与阻力（1.25/s），在 1.4s 生命期的最后 0.7s 渐隐。引擎在欢迎页展示期暖机（像素、画布与首帧），沙粒飞出窗口 160 DIP 后剔除，帧距写入 `perf.log`。620ms 换幕时主内容在沙下显形；轮播只在沙尽后经低优先级派发出现。沙堡不可用时退回墨滴路径（`PaintMeltBlob` / `SpreadBlob`）；动效关闭时走 400ms 线性淡出兜底。
 
-### 7.2 首启向导（全屏七页 + 墨滴终章，9.3 起）
+### 7.2 首启向导（全屏八页 + 墨滴终章，9.3 起；13.0 新增 Novara Space 页）
 
-- **触发**：`HasCompletedCarousel = false` 时首启全屏展示；完成或「跳过向导」后置位，不再弹。
-- **七页**：入口（一切从右键菜单开始）→ 顶部四标签（备忘 / 路径 / 计划 / 记录四简介）→ 快捷呼出（边缘把手 + 搜索 / 捕获 / 锁定三热键，可自定义）→ 隐私锁与 Windows Hello → MCP 接口（适合谁 / 谁不需要 / 怎么开启）→ 互联（快照与同步）→ 终章（「开始使用」）。
+- **触发**：`HasCompletedCarousel = false` 时首启全屏展示；完成或「跳过」后置位，不再弹。
+- **八页**：入口（一切从右键菜单开始）→ 顶部四标签（备忘 / 路径 / 计划 / 记录四简介）→ 快捷呼出（边缘把手 + 搜索 / 捕获 / 锁定三热键）→ 隐私锁与 Windows Hello → **Novara Space**（封存、时间胶囊与什么留在外面）→ MCP 接口 → 互联（快照与同步）→ 终章（「开始使用」）。点「跳过」到末页，而不是直接退出向导。
 - **页间切换**：水平位移滑出滑入（300ms Accelerate；旧页 210ms 淡出，新页 30ms 延迟 200ms 淡入）。
-- **墨滴终章**：末页点「开始使用」→ 与 7.1 同构的三墨滴从按钮位置起爆扩散（同参数）；`CompositionBackdropBlur` 把向导层模糊化尽（BlurAmount 6→0，1800ms 起持续 420ms），主内容在化尽起点交叉淡入；完成后 `HasCompletedCarousel = true`。
-- **固定播放**：向导墨滴终章**不受动效总控 gating**（代码无 `IsAnimationsEnabled` 判断，首启仪式恒在）；欢迎页墨滴则受总控（关闭走兜底）。两处共享同一化层绘制管线（`PaintMeltBlob` / `SpreadBlob` / `ResetCarouselMeltLayer`）。
+- **墨滴终章**：末页点「开始使用」→ 三墨滴从按钮位置起爆扩散（与墨滴兜底同参数）；`CompositionBackdropBlur` 把向导层模糊化尽（BlurAmount 6→0），主内容交叉淡入；完成后 `HasCompletedCarousel = true`。
+- **固定播放**：向导终章**不受动效总控 gating**；欢迎页沙堡受总控（关闭走兜底）。
 
 ---
 
@@ -756,7 +756,7 @@ NovaraMCP.exe（纯转发 stdio 前端，手写 JSON-RPC：initialize / tools/li
 - **ApiDiagnoseService**：入口二，可达性 + 余额推断 + 元数据 + 延迟（见 21）。
 - **RelayProbeService**：入口三，8 探针 + 加权评分 + 四级判定 + 抗作弊（见 21）。
 - **ProbeDataSetLoader**：探针数据集加载 + 校验 + 内置兜底。
-- **McpLogic**：14 工具纯逻辑（token 鉴权 / 脱敏 / CRUD），可单测。
+- **McpLogic**：16 工具纯逻辑（token 鉴权 / 脱敏 / CRUD / 恢复 / 权限自查），可单测。
 - **CsvImportExportService**：导出 + 解析（自动识别三种方言表头 + 按类型模板建字段）。
 - **Loc**：i18n 注入委托。
 - **CoreEnv**：数据目录名（Debug/Release 隔离）。
@@ -911,7 +911,7 @@ Novara/
 | 10.3 | 2026-10-11 | 修复——原生保存对话框按所选文件类型追加默认扩展名，并在写盘前兜底补全，恢复全部 12 处导出/备份路径的扩展名（10.1–10.2 回归；那些版本导出的文件完好，手动补后缀即可） |
 | novara11 (11.0) | 2026-10-19 | **加固** —— 桌面端迁移 .NET 10；主库 v5 容器（Argon2id + 参数自描述 + SHA-256 免解锁预检）；同步分区增量上传；更新清单 ECDSA 签名（fail-closed）；备份快照完整性清单与 GFS 分层保留；应用内可选自动检查更新（默认关闭）；96 个弹窗宽度五档收敛与窗口自适应；深度检测双弹窗重构；多轮全量审查修复 470 余项 |
 | novara11.R1 (11.1) | 2026-10-22 | **编辑器热修复**——恢复 HTML 插图（正确 `IShellItemArray` + 多选）、多图一次插入、图片选中态可在点空白/标题/Esc 时取消、工具栏命令后焦点留在编辑器；无数据、运行时或协议变更 |
-| novara13 (13.0) | 2026-11-19 | **Novara Space 与时间胶囊**——`%LocalAppData%\Novara\seal` 下的独立密码加密空间（自有 Argon2id 包裹密钥、AES-256-GCM 容器、独立锁定、只在本机；不进入搜索、同步、MCP、快照与回收站）；时间胶囊 1 分钟–40 年并识别时钟回拨；`.novabundle` 导出导入；16 个 MCP 工具（`restore_item`、`get_auth_status`）；八页首启向导；欢迎页沙堡 100,072 颗粒子；贯穿备份、同步、空间与查看器的可靠性加固 |
+| novara13 (13.0) | 2026-11-20 | **Novara Space 与时间胶囊**——`%LocalAppData%\Novara\seal` 下的独立密码加密空间（自有 Argon2id 包裹密钥、AES-256-GCM 容器、独立锁定、只在本机；不进入搜索、同步、MCP、快照与回收站）；时间胶囊 1 分钟–40 年并识别时钟回拨；`.novabundle` 导出导入；16 个 MCP 工具（`restore_item`、`get_auth_status`）；八页首启向导；欢迎页沙堡 100,072 颗粒子；贯穿备份、同步、空间与查看器的可靠性加固 |
 | novara12 (12.0) | 2026-10-28 | **交互重构（「心手相应」）**——备忘/计划页卡片折叠胶囊（750 毫秒长按区分标题点击与拖拽）；展示模式三档与跟随记忆（手动折叠跨重启保留，并作为可选字段经加密同步漫游）；路径页实时属性行（停滞看门狗、三工位并发、悬浮详情、打开文件按钮）；API 条目卡上检测按钮；待办卡常驻「共 n 条 · 已完成 m」进度；按下连续性动效整修；计划页拖拽改布局缓存计算 |
 
 ---

@@ -102,10 +102,10 @@ Novara/
 
 **Layering principle**:
 
-- `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv. It has no WinUI dependency and can be unit-tested independently.
+- `Novara.Core` is the "pure logic" layer: Models / CryptoService / ApiProbeService / ApiChatClient / ApiDiagnoseService / RelayProbeService / ProbeDataSetLoader / PasswordService / NovaraStore / McpLogic / CsvImportExportService / Loc / CoreEnv, plus the sealed-store subsystem (`SealService`, `SealIndex`/`SealJournal`, `SealContainer*`/`SealBundle*`). It has no WinUI dependency and can be unit-tested independently.
 - The main project's `Services/` is the "UI-related services": StartupService / StickySync / ContextMenuService / CrashLogger / AutoBackupService / McpService / WindowsHelloService / ToastService / ReminderScheduler / ChunkedRender / HtmlSanitizer / DialogDepth / Motion / GlobalHotkeyService / NetworkActivityService / CountdownBorder / RelayCommand, etc.
 - `Novara.Sync.Server` is the sync server's logic: `TokenAuth` (token hashing, constant-time comparison, failure rate limiting), `SqliteSpaceStore` / `FileSpaceStore` (versioned ciphertext storage) and `RetentionPolicy`. `Novara.Server` is its thin ASP.NET Core host plus the `space` CLI. Both target `net10.0` (since 9.0) and have no WinUI dependency; the desktop side and `Novara.Core` moved to `net10.0` in novara11.
-- `Pages/` contains ten pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage.
+- `Pages/` contains eleven pages: BasicMemoPage / FilePathPage / PlanPage / DiaryPage / DiaryEditorPage / SettingsPage / LockScreenPage / SearchPage / TrashPage / ToolsPage / SealPage.
 
 **Core decoupling**:
 
@@ -266,17 +266,17 @@ The welcome page is a full-screen overlay shown on first launch (or when "show w
 - `WelcomeOnLaunch = false` + `HasCompletedWelcome = true`: skip the welcome page and go straight to the main content.
 - Clicking the welcome page writes `HasCompletedWelcome = true` and flushes to disk synchronously.
 
-### 7.1 Welcome ink-drop (click-to-melt)
+### 7.1 Welcome exit — sand shatter (melt and plain fade as fallbacks)
 
-Clicking anywhere on the welcome page: three brand-color ink drops burst from the **click position** (`PaintMeltBlob`: scale 0.88 / 0.62 / 0.45, opacity 0.42 / 0.28 / 0.20), spreading with 0 / 180 / 360ms staggers over 1650 / 1850 / 2050ms (`SpreadBlob`; drops fade in over 240ms staggered, peak opacity 1.0 / 0.9 / 0.8); the welcome content fades out over 1400ms with the Standard curve starting at 200ms, and the melt layer dissolves over 300ms with the Decelerate curve starting at 1600ms → the main content takes over. The spread radius is derived from the distance from the click point to the farthest corner of the content area (`MeltFarRadius`). This path runs when animations are enabled; with animations off, a linear 400ms fade is the fallback.
+Clicking anywhere on the welcome page shatters the brand mark into **100,072 real-colour grains** (each grain is a sampled logo pixel; sampling is 389×389 over the 1024² source, alpha ≥ 120). Burst takes the logo's live rectangle and the click point, gives every grain a radial outward velocity (300–940 DIP/s plus a click-direction bias), applies light gravity (210) and drag (1.25/s), and fades the tail over the last 0.7 s of a 1.4 s life. The engine warms during the welcome page (pixels, surface and a first render), culls grains once they leave the window by 160 DIP, and reports frame pacing to `perf.log`. The 620 ms swap shows the main content underneath; the carousel appears only after the sand finishes, via a low-priority dispatcher callback. If the sand engine is unavailable, the melt path (`PaintMeltBlob` / `SpreadBlob`) is the fallback; with animations off, a linear 400 ms fade is the final fallback.
 
-### 7.2 First-launch wizard (full-screen 7 pages + ink-drop finale, since 9.3)
+### 7.2 First-launch guide (full-screen eight pages + ink-drop finale, since 9.3; Novara Space page since 13.0)
 
-- **Trigger**: shown full-screen on first launch while `HasCompletedCarousel = false`; finishing or "skip wizard" sets the flag and it never shows again.
-- **Seven pages**: entry (everything starts in the right-click menu) → the four tabs (memo / paths / plan / records introductions) → quick invocation (edge handle + the search / capture / lock hotkeys, remappable) → privacy lock & Windows Hello → the MCP interface (who it is for / who does not need it / how to enable) → interconnect (snapshot & sync) → finale ("Get started").
-- **Page transition**: horizontal slide-out / slide-in (300ms Accelerate; the old page fades out over 210ms, the new page fades in over 200ms after a 30ms delay).
-- **Ink-drop finale**: clicking "Get started" on the last page bursts the same three ink drops from the button (same parameters); a `CompositionBackdropBlur` dissolves the wizard layer (BlurAmount 6→0, starting at 1800ms, lasting 420ms) while the main content cross-fades in at the start of the dissolve; on completion `HasCompletedCarousel = true`.
-- **Always plays**: the wizard ink-drop finale is **not gated** by the animation toggle (no `IsAnimationsEnabled` check in code — the first-run ritual always plays); the welcome-page melt is gated (fallback when off). Both share the same melt-paint pipeline (`PaintMeltBlob` / `SpreadBlob` / `ResetCarouselMeltLayer`).
+- **Trigger**: shown full-screen on first launch while `HasCompletedCarousel = false`; finishing or "skip" sets the flag and it never shows again.
+- **Eight pages**: entry (everything starts in the right-click menu) → the four tabs (memo / paths / plan / records introductions) → quick invocation (edge handle + the search / capture / lock hotkeys) → privacy lock & Windows Hello → **Novara Space** (seal, time capsules, and what stays outside) → the MCP interface → interconnect (snapshot & sync) → finale ("Get started"). "Skip" jumps to the last page, not out of the guide.
+- **Page transition**: horizontal slide-out / slide-in (300 ms Accelerate; the old page fades out over 210 ms, the new page fades in over 200 ms after a 30 ms delay).
+- **Ink-drop finale**: clicking "Get started" on the last page bursts three ink drops from the button (same parameters as the melt fallback); a `CompositionBackdropBlur` dissolves the guide layer (BlurAmount 6→0) while the main content cross-fades in; on completion `HasCompletedCarousel = true`.
+- **Always plays**: the guide finale is **not gated** by the animation toggle; the welcome-page sand is gated by it (fallbacks when off).
 
 ---
 
@@ -756,7 +756,7 @@ Memo-page API Key entries expose a three-tier detection system via right-click. 
 - **ApiDiagnoseService**: tier 2 — reachability + balance inference + metadata + latency (see 21).
 - **RelayProbeService**: tier 3 — 8 probes + weighted scoring + 4-tier verdict + anti-cheat (see 21).
 - **ProbeDataSetLoader**: probe dataset loading + validation + built-in fallback.
-- **McpLogic**: 14-tool pure logic (token auth / redaction / CRUD), unit-testable.
+- **McpLogic**: 16-tool pure logic (token auth / redaction / CRUD / restore / auth status), unit-testable.
 - **CsvImportExportService**: export + parse (auto-detect three dialect headers + build fields by type template).
 - **Loc**: i18n injection delegate.
 - **CoreEnv**: data directory name (Debug/Release isolation).
@@ -911,7 +911,7 @@ The project follows the [Microsoft C# coding conventions](https://learn.microsof
 | 10.3 | 2026-10-11 | Fix — native save dialogs append the selected file type's default extension, with a final guard before writing, restoring extensions across all 12 export/backup paths (a 10.1–10.2 regression; files exported by those versions are intact and only need the extension added by hand) |
 | novara11 (11.0) | 2026-10-19 | **Hardened** — desktop on .NET 10; v5 database container (Argon2id + self-describing parameters + unlock-free SHA-256 precheck); partition-level incremental sync uploads; ECDSA-signed update manifests (fail-closed); snapshot integrity manifests with GFS-tiered retention; optional in-app auto update check (off by default); 96 dialogs converged on 5 adaptive width tiers; the deep-probe flow split into two dialogs; some 470 defects fixed in multiple codebase-wide review passes |
 | novara11.R1 (11.1) | 2026-10-22 | **Editor hotfix** — HTML image insertion restored (correct `IShellItemArray` + multi-select), multiple images insert in one go, image selection clears on outside/title/Esc, toolbar commands keep focus in the editor; no data, runtime or protocol changes |
-| novara13 (13.0) | 2026-11-19 | **Novara Space and time capsules** — a separate password-protected encrypted store under `%LocalAppData%\Novara\seal` (own Argon2id-wrapped key, AES-256-GCM containers, independent lockout, local-only; excluded from search, sync, MCP, snapshots and the recycle bin); time capsules from one minute to forty years with rollback detection; `.novabundle` export/import; 16 MCP tools (`restore_item`, `get_auth_status`); eight-page first-run guide; welcome sand-shatter with 100,072 particles; reliability pass across backups, sync, the space and the web reader |
+| novara13 (13.0) | 2026-11-20 | **Novara Space and time capsules** — a separate password-protected encrypted store under `%LocalAppData%\Novara\seal` (own Argon2id-wrapped key, AES-256-GCM containers, independent lockout, local-only; excluded from search, sync, MCP, snapshots and the recycle bin); time capsules from one minute to forty years with rollback detection; `.novabundle` export/import; 16 MCP tools (`restore_item`, `get_auth_status`); eight-page first-run guide; welcome sand-shatter with 100,072 particles; reliability pass across backups, sync, the space and the web reader |
 | novara12 (12.0) | 2026-10-28 | **Interaction rework ("mind and hand in concert")** — card folding capsules on the memo and plan pages (a 750 ms long-press separates title clicks from drags); display modes with follow memory, where manual folds persist across restarts and roam via encrypted sync as optional fields; live file/folder property lines on the path page (stall watchdog, three workers, hover details, open-file button); on-card API detection button; persistent "n todos · m done" progress on every todo card; press-continuity motion overhaul; plan-page drag computed from a layout cache |
 
 ---

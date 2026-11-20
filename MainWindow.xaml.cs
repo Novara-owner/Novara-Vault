@@ -3383,7 +3383,7 @@ public void BeginUpdateExit()
     {
         ShowMainWindow();
         App.ShowToast(App.GetString("Common_Tab_Hidden_Toast"), ToastTone.Error);
-        System.Diagnostics.Debug.WriteLine($"N4W-03: action for hidden tab '{requestedTag}' dropped");
+        System.Diagnostics.Debug.WriteLine($"action for hidden tab '{requestedTag}' dropped");
     }
 
     private void WelcomeOverlay_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)

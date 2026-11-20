@@ -5,7 +5,7 @@
 近六个月修复的缺陷如何映射到自动化回归面。项目始于 2026 年 8 月，「近六个月」即项目全部历史。缺陷来源为 [CHANGELOG](../CHANGELOG.zh-CN.md) 的 Fixed 条目与验证轮次汇总；回归面有两层：
 
 1. **单元/集成测试** —— `Novara.Tests`（xUnit，50+ 文件，1,670 个测试），直接引用发行程序集，覆盖数据、加密、同步、Space/封存与服务端层。
-2. **静态守卫** —— `Tools/page_lifecycle_guard.py`（1,785 条判据）、`Tools/sync_guard.py`（314 条判据）、`Tools/reverse_verify.py`（437 条经变异验证的条目）、`Tools/cooldown_guard.py`、`Tools/danger_red_guard.py`、`Tools/guards.py`（汇总套件）。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
+2. **静态守卫（内部开发基础设施，不随公开仓库提供）** —— 页面生命周期守卫（1,785 条判据）、同步守卫（314 条判据）、经变异验证的反向验证套件（437 条条目）、冷却与危险红守卫，以及汇总守卫运行器。WinUI 页面在结构上无法被测试工程引用，因此页面级修复以源码形态不变量钉在这些守卫里——每条都经变异验证（移除修复必须使守卫失败）。
 
 ## 映射（更新日志中的具名修复）
 
@@ -25,7 +25,7 @@
 | 10.1 | 提权实例中的文件选择器 | `RegressionGuardsTests.FilePicker_UsesNativeWin32DialogsOnly`（CI） |
 | 9.4 | 密码弹窗可双提交 | 守卫：`page_lifecycle_guard` 进行中锁定判据 |
 | 9.4 | 提醒边框拖拽后丢失 | 守卫：`page_lifecycle_guard` 边框保留判据 |
-| 9.4 | 服务端写栅栏防跨进程删除竞态 | `SpaceAdminTests`、`SqliteSpaceStoreTests`；`Tools/m3_e2e.py` HTTP 探针 |
+| 9.4 | 服务端写栅栏防跨进程删除竞态 | `SpaceAdminTests`、`SqliteSpaceStoreTests`；内部 HTTP 探针 HTTP 探针 |
 | 9.4 | 更新下载校验清单 | `UpdateManifestVerifierTests`（5 项）+ `UpdatePolicyTests` |
 | 9.4 | 首启向导期间的锁屏 | 守卫：`page_lifecycle_guard` 生命周期判据 |
 | 9.3 | 编辑器失败诊断（缺 WebView2 运行时） | 人工验证 + 诊断日志审查 |
@@ -37,7 +37,7 @@
 | 9.1 | TOTP 动态码冻结（托管包装类 GC） | `RegressionGuardsTests.TotpRegistry_UsesStrongReferences`（CI）+ 本地守卫 |
 | 9.1 | 冷静期确认键首帧闪红 | `RegressionGuardsTests.CooldownHosts_KeepInlineButtonTemplates`（CI）+ 本地守卫 |
 | 9.1 | 卡片拖拽卡顿 | `RegressionGuardsTests.DragAutoScroll_UsesTheCompositorFrameCallback`（CI） |
-| 9.0 | 配置 host 白名单后的容器健康检查 | `Tools/m3_e2e.py` HTTP 级探针 |
+| 9.0 | 配置 host 白名单后的容器健康检查 | 内部 HTTP 探针 HTTP 级探针 |
 | 6.2 | 增量验证轮次 | 由下方守卫套件覆盖 |
 | 6.1 | 无筛选视图下新建空分组消失 | `RegressionGuardsTests.EmptyGroup_VisibilityIsWorkspaceConditional`（CI）+ 本地守卫 |
 | 6.0 | 五轮核验的约 250 项问题 | 全部守卫套件：193 条反向验证 + 368 条生命周期判据 + 守卫家族——这些守卫正是那几轮核验的产物 |
@@ -55,4 +55,4 @@
 
 ---
 
-*最后更新：2026-11-19*
+*最后更新：2026-11-20*

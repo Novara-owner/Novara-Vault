@@ -125,7 +125,7 @@ novara.lan {
 - [ ] 访问 `https://<host>/web`（**故意不带尾斜杠**）→ 跳转到 `https://<host>/web/`，**不是** `127.0.0.1`
  - 这个跳转是**相对地址**，与反代传什么 Host 无关；看不到内网地址即正确
 - [ ] 访问 `https://<host>/` → 跳到 `/web/`
-- [ ] 在跑脚本：`python Tools/web_selfcheck.py` → 全部通过
+- [ ] 站点静态自检通过（项目内部流程，不随公开仓库提供）
 - [ ] 响应头里有 CSP 等安全头 —— 它们现在由**服务端**发出，所以走不经 Caddy 的隧道（路径 C）时也在
 
 ### 2.2 解锁页
@@ -181,7 +181,7 @@ novara.lan {
 | 打开链接跳到 `127.0.0.1` | 旧版服务端或非本仓库反代用了绝对跳转（`/web` 的跳转现在是相对的，不再依赖转发头） | 新建链接用 `deploy/Caddyfile`；仍出现则确认服务端版本，与转发头无关 |
 | `/api` 返回 **403 "https is required for api requests"** | 请求在服务端看来不是 HTTPS：反代没传 `X-Forwarded-Proto`，或反代在另一台机器但没进 `NOVARA_SYNC_TRUSTED_PROXIES`，或直接明文暴露了 5180 端口 | 按 `deploy/Caddyfile` 补 `header_up X-Forwarded-Proto {http.request.scheme}`；跨机反代补 `NOVARA_SYNC_TRUSTED_PROXIES`；不要把明文端口开到网络上 |
 | 启动即退出，stderr 报 **refusing to start** | `NOVARA_SYNC_WEB_ROOT` 指向了包含数据目录的位置（例如整个应用根目录），或落在了 `<数据目录>/spaces` 之内；静态托管会把密文库、chunk 与 keywrap 暴露在 `/web` 下 | 指到纯站点目录（默认 `Novara.Web`），或把站点/数据目录改成不含对方的兄弟目录 |
-| 不能安装 PWA / manifest 报错 | 反代改写了 `application/manifest+json` | 跑 `python Tools/web_selfcheck.py` 定位 |
+| 不能安装 PWA / manifest 报错 | 反代改写了 `application/manifest+json` | 使用项目内部静态自检定位（不随公开仓库提供） |
 | Service Worker 未注册 | `sw.js` 的 MIME 不是 JavaScript；或缺 `viewer.js` 导致 `cache.addAll` 整体失败 | 同上 |
 
 ---

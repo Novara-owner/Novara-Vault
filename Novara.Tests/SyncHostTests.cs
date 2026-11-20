@@ -169,7 +169,7 @@ public class SyncHostTests
 
 
 
-        var data = Path.Combine(Path.GetTempPath(), "novara-data-v11-255");
+        var data = Path.Combine(Path.GetTempPath(), "novara-data-test");
 
         Assert.NotNull(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "spaces"), data));
         Assert.NotNull(SyncHostSetup.ValidateWebRoot(Path.Combine(data, "spaces", "sp1", "blobs"), data));

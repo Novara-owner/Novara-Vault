@@ -1,39 +1,39 @@
-# Novara 加密容器格式规范 v1
+# Novara Sealed Container Format Specification v1
 
 **Sealed item container, key wrap, index and export bundle — public format reference**
 
-本文件是**对外可公开的格式说明**：只描述字节，不描述 Novara 的内部实现。任何读懂本文的人，用任何语言、任何工具，都应当能把一个 `.novaseal` 文件解回原始明文，把一份 `keywrap.nskw` 用密码打开，把 `index.nseal` 读成一张表，把 `.novabundle` 拆成若干容器 —— 无需 Novara 程序，无需本文档之外的假设。
+This document is a **publicly publishable format description**: it describes bytes only, not Novara's internal implementation. Anyone who understands this document, in any language and with any tooling, should be able to decode a `.novaseal` file back to its original plaintext, open a `keywrap.nskw` with a password, read an `index.nseal` as a table, and split a `.novabundle` into its individual containers — with no Novara program and with no assumptions beyond this document.
 
-> 面向的读者是二十年后的人。因此文中不使用任何产品内部代号，也不依赖任何库的私有行为；一切"为什么"都写成可验证的规则。
+> The intended reader is someone twenty years from now. Therefore this text uses no internal product code names and relies on no library's private behavior; every "why" is written as a verifiable rule.
 
-格式版本：全部为 **v1**（首次发布版本）。文中所有偏移从文件或结构体的第一个字节起算。
+Format version: **v1** throughout (the first published version). All offsets in this document are counted from the first byte of the file or structure.
 
 ---
 
-## 1. 通用约定
+## 1. General conventions
 
-| 项目 | 约定 |
+| Item | Convention |
 |---|---|
-| 字节序 | 所有定长整数一律 **little-endian**（无符号写 `u32`/`u64`，有符号写 `i64`） |
-| 密钥长度 | 32 字节（AES-256） |
-| GCM nonce | 12 字节，每个密钥每次加密必须唯一 |
-| GCM tag | 16 字节，附在密文之后（`cipher‖tag`） |
-| 加密算法 | AES-256-GCM，v1 只定义这一种 |
-| 压缩 | 无。密文与明文等长，仅多出 nonce 与 tag |
-| 填充 | 无。所有结构都是紧排的 |
-| 文本编码 | UTF-8，无 BOM |
-| SHA-256 | 标准 FIPS 180-4，输出 32 字节；文中用小写十六进制表示 |
-| HEX 写法 | 本文所有 `hex` 均为小写、无分隔符；`base64` 为标准字母表带 `=` 填充 |
+| Byte order | All fixed-length integers are **little-endian** (unsigned written `u32`/`u64`, signed written `i64`) |
+| Key length | 32 bytes (AES-256) |
+| GCM nonce | 12 bytes, must be unique for every encryption under each key |
+| GCM tag | 16 bytes, appended after the ciphertext (`cipher‖tag`) |
+| Encryption algorithm | AES-256-GCM, the only one defined in v1 |
+| Compression | None. Ciphertext is the same length as plaintext, plus only the nonce and the tag |
+| Padding | None. All structures are tightly packed |
+| Text encoding | UTF-8, no BOM |
+| SHA-256 | Standard FIPS 180-4, 32-byte output; written in lowercase hexadecimal throughout this document |
+| HEX notation | Every `hex` in this document is lowercase and separator-free; `base64` uses the standard alphabet with `=` padding |
 
-**认证（AAD）规则**：本格式中每个 AEAD 调用都带 associated data，没有一处是"裸加密"。AAD 的作用是把结构位置绑进密文：同一把密钥加密同样的明文，换一个位置、换一个块序号、换一个包头，解密就会失败。读者必须按本文的原样构造 AAD，不能省略、不能补零；长度差一个字节即视为认证失败。
+**Authentication (AAD) rule**: every AEAD call in this format carries associated data; there is no "bare encryption" anywhere. The purpose of the AAD is to bind structural positions into the ciphertext: encrypting the same plaintext under the same key but at a different position, with a different block index, or against a different header will fail to decrypt. A reader must construct the AAD exactly as written here — no omission, no zero padding; a length difference of one byte counts as an authentication failure.
 
-**失败一律是失败**：任何校验不通过都不得"修复""猜测"或"跳过"。见 §8。
+**Failure is always failure**: no failed check may be "repaired", "guessed", or "skipped". See §8.
 
 ---
 
-## 2. `.novaseal` —— 单个加密文件（或打包成 ZIP 的文件夹）
+## 2. `.novaseal` — a single sealed file (or a folder packed as a ZIP)
 
-一个容器 = **128 字节定长头** + **0 个或多个块**。没有文件尾，也没有可选的扩展区：读完最后一个块即文件结束。
+A container = **a fixed 128-byte header** + **zero or more blocks**. There is no trailer and no optional extension area: the file ends as soon as the last block has been read.
 
 ```
 +--------------------------- 128 B header ---------------------------+
@@ -45,83 +45,83 @@
 +---------------------------------------------------------------------+
 ```
 
-### 2.1 头（128 字节）
+### 2.1 Header (128 bytes)
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 8 | magic | ASCII `NOVASEAL` | 容器标识。必须逐字节相等 |
-| 8 | 1 | version | u8 | 格式版本。v1 写 `1` |
-| 9 | 1 | algoId | u8 | 内容算法。v1 只定义 `1` = AES-256-GCM |
-| 10 | 1 | flags | u8 | bit0 = 1 表示明文是一个 ZIP（文件夹）；其余位在 v1 未定义 |
-| 11 | 1 | reserved | u8 | 必须为 `0` |
-| 12 | 16 | itemId | 16 B | 条目标识。同时是明文侧文件名与每个块 AAD 的第一段 |
-| 28 | 8 | plaintextLength | u64 | 明文总长度（字节）。`0` 合法 |
-| 36 | 8 | sealedAtUtc | i64 | 封存时刻，Unix epoch 秒（UTC），封存后不再改写 |
-| 44 | 4 | chunkSize | u32 | 每个块的明文上限。必须是 2 的幂，且在 [4096, 4194304] |
-| 48 | 64 | keySlot | 64 B | 内容密钥的封装，见 §2.2 |
-| 112 | 16 | reserved2 | 16 B | 必须全为 `0` |
+| 0 | 8 | magic | ASCII `NOVASEAL` | Container identifier. Must match byte for byte |
+| 8 | 1 | version | u8 | Format version. v1 writes `1` |
+| 9 | 1 | algoId | u8 | Content algorithm. v1 defines only `1` = AES-256-GCM |
+| 10 | 1 | flags | u8 | bit0 = 1 means the plaintext is a ZIP (a folder); the remaining bits are undefined in v1 |
+| 11 | 1 | reserved | u8 | Must be `0` |
+| 12 | 16 | itemId | 16 B | Item identifier. Also the plaintext-side file name and the first segment of every block's AAD |
+| 28 | 8 | plaintextLength | u64 | Total plaintext length in bytes. `0` is legal |
+| 36 | 8 | sealedAtUtc | i64 | Seal time, Unix epoch seconds (UTC); never rewritten after sealing |
+| 44 | 4 | chunkSize | u32 | Upper bound of plaintext per block. Must be a power of two and within [4096, 4194304] |
+| 48 | 64 | keySlot | 64 B | Wrapping of the content key, see §2.2 |
+| 112 | 16 | reserved2 | 16 B | Must be all `0` |
 
-固定长度汇总：
+Fixed-length summary:
 
-| Value | 值 | 说明 |
+| Constant | Value | Description |
 |---|---|---|
-| headerSize | 128 | 头的总长 |
-| authenticatedPrefix | 48 | 头的第 0..47 字节，keySlot 的 AAD 就是这 48 字节 |
+| headerSize | 128 | Total header length |
+| authenticatedPrefix | 48 | Bytes 0..47 of the header; the AAD of keySlot is exactly these 48 bytes |
 
-读取规则（顺序无关，全部必须成立）：
+Reader rules (order does not matter; all of them must hold):
 
-- `magic` 不等 → 不是本格式。
-- `version == 0` 或 `version > 1` → **版本不支持**。这不是损坏：文件大概率完好，只是读者太旧。用户应被提示"需要更新的版本"，而不是"数据已损坏"。
-- `algoId != 1` → 不支持的算法，拒绝。
-- `flags` 高于 bit0 的位非零 → 拒绝。`reserved` 与 `reserved2` 非零 → 拒绝。
-- `chunkSize` 不是 2 的幂或越界 → 拒绝（避免读者被要求分配任意大的缓冲）。
-- `sealedAtUtc` 必须落在 `946684799 … 253402300799`（即 1999-12-31T23:59:59Z 至 9999-12-31T23:59:59Z）。超出视为损坏。
-- `plaintextLength` 必须 ≤ 2^63−1。
+- `magic` not equal → not this format.
+- `version == 0` or `version > 1` → **unsupported version**. This is not corruption: the file is almost certainly intact, the reader is simply too old. The user should be told "a newer version is required", not "the data is corrupted".
+- `algoId != 1` → unsupported algorithm, reject.
+- Any bit of `flags` above bit0 set → reject. `reserved` or `reserved2` non-zero → reject.
+- `chunkSize` not a power of two or out of range → reject (so that a reader is never asked to allocate an arbitrarily large buffer).
+- `sealedAtUtc` must fall within `946684799 … 253402300799` (that is, 1999-12-31T23:59:59Z through 9999-12-31T23:59:59Z). Anything outside counts as corruption.
+- `plaintextLength` must be ≤ 2^63−1.
 
-### 2.2 密钥槽（头内 64 字节，偏移 48）
+### 2.2 Key slot (64 bytes inside the header, at offset 48)
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 12 | slotNonce | 12 B | 本次封装用的 GCM nonce |
-| 12 | 32 | wrappedKey | 32 B | 内容密钥的密文 |
+| 0 | 12 | slotNonce | 12 B | GCM nonce used for this wrapping |
+| 12 | 32 | wrappedKey | 32 B | Ciphertext of the content key |
 | 44 | 16 | slotTag | 16 B | GCM tag |
-| 60 | 4 | slotReserved | 4 B | 必须全为 `0`；**不在 tag 覆盖范围内**，只能结构校验 |
+| 60 | 4 | slotReserved | 4 B | Must be all `0`; **not covered by the tag**, so it can only be checked structurally |
 
-打开方式（伪代码）：
+How to open it (pseudocode):
 
 ```
-prefix = container[0:48]                       # 被认证的头前缀
+prefix = container[0:48]                       # the authenticated header prefix
 ck     = AES256GCM_decrypt(key   = VMK,
                            nonce = slot[0:12],
                            data  = slot[12:60],   # cipher‖tag
                            aad   = prefix)
 ```
 
-- `VMK` 是由密码封装出来的空间主密钥（见 §3），32 字节。
-- 因为 AAD 是头前缀，**改动头里任何一个被认证的字节**都会让槽打不开 —— 篡改表现为"打不开"，而不是"打开了另一个合法头"。
-- 四个保留字节在 tag 之外，读者必须另外检查其为 0；否则一个改成非零的槽仍能打开，校验就成了摆设。
-- 只有两种结果：打开（得到 32 字节 CK）或打不开。打不开时不要把原因细分给用户（密码错、头被改、槽被改三者不可区分）。
+- `VMK` is the space master key as wrapped by the password (see §3), 32 bytes.
+- Because the AAD is the header prefix, **changing any authenticated byte of the header** leaves the slot unable to open — tampering shows up as "will not open", never as "opened a different but legitimate header".
+- The four reserved bytes lie outside the tag, so a reader must check separately that they are 0; otherwise a slot with them changed to non-zero would still open and the check would be decoration.
+- There are only two outcomes: it opens (yielding the 32-byte CK) or it does not. When it does not, do not break the cause down for the user (a wrong password, an altered header, and an altered slot are indistinguishable).
 
-### 2.3 块
+### 2.3 Blocks
 
-每个块紧接前一个块，布局固定：
-
-| Offset | Size | Field | Encoding | Meaning |
-|---|---|---|---|---|
-| 0 | 4 | payloadLen | u32 | **nonce 起点到 tag 终点**的字节数，即 `12 + 明文块长 + 16` |
-| 4 | 12 | nonce | 12 B | 本块 GCM nonce |
-| 16 | payloadLen−28 | cipher | 同明文等长 | 本块密文 |
-| 16+(payloadLen−28) | 16 | tag | 16 B | 本块 GCM tag |
-
-块 AAD（37 字节）：
+Each block follows the previous one immediately, with a fixed layout:
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 16 | itemId | 16 B | 与头里的 itemId 相同 |
-| 16 | 4 | blockIndex | u32 | 从 `0` 开始的块序号 |
-| 20 | 1 | isFinal | u8 | 本块是否消耗了最后一个明文字节：`1` 是，`0` 否 |
+| 0 | 4 | payloadLen | u32 | Number of bytes **from the start of the nonce to the end of the tag**, i.e. `12 + plaintext block length + 16` |
+| 4 | 12 | nonce | 12 B | GCM nonce of this block |
+| 16 | payloadLen−28 | cipher | Same length as the plaintext | Ciphertext of this block |
+| 16+(payloadLen−28) | 16 | tag | 16 B | GCM tag of this block |
 
-解密：
+Block AAD (37 bytes):
+
+| Offset | Size | Field | Encoding | Meaning |
+|---|---|---|---|---|
+| 0 | 16 | itemId | 16 B | Same as the itemId in the header |
+| 16 | 4 | blockIndex | u32 | Block index starting at `0` |
+| 20 | 1 | isFinal | u8 | Whether this block consumed the last plaintext byte: `1` yes, `0` no |
+
+Decryption:
 
 ```
 plain_i = AES256GCM_decrypt(key = CK, nonce = block.nonce,
@@ -129,101 +129,101 @@ plain_i = AES256GCM_decrypt(key = CK, nonce = block.nonce,
                             aad  = itemId ‖ u32le(i) ‖ isFinal)
 ```
 
-规则：
+Rules:
 
-- 块序号必须从 0 连续递增；序号进 AAD，因此**调换两个块**会立刻失败，**从别的条目搬块进来**也会失败（itemId 不同）。
-- `isFinal` 只有一个块为 1，且必须是最后一个块；截断会让最后一个已知块仍是"非末块"或缺失末块，从而失败。
-- 明文恰好是 `chunkSize` 的整数倍时，**最后一个块是满块**，不额外补一个空块。
-- 明文长度为 0 时，**没有任何块**；只有 128 字节头就是合法容器。
-- 每块的明文长度由 `payloadLen − 28` 得出；累计必须恰好等于 `plaintextLength`。多一个字节或少一个字节都是损坏。
-- 解完之后重算明文的 SHA-256，与索引里记录的 `contentSha256` 比较（见 §4）。
+- Block indices must increase contiguously from 0; the index goes into the AAD, so **swapping two blocks** fails immediately, and **moving a block in from another item** fails as well (different itemId).
+- Exactly one block has `isFinal` = 1, and it must be the last block; truncation leaves the last known block still "not final", or removes the final block, and therefore fails.
+- When the plaintext is exactly a multiple of `chunkSize`, **the last block is a full block**; no additional empty block is appended.
+- When the plaintext length is 0, **there are no blocks at all**; the 128-byte header alone is a legal container.
+- The plaintext length of each block is `payloadLen − 28`; the running total must equal `plaintextLength` exactly. One byte more or one byte less is corruption.
+- After decoding, recompute the SHA-256 of the plaintext and compare it with the `contentSha256` recorded in the index (see §4).
 
-### 2.4 边界样例
+### 2.4 Boundary examples
 
-| 明文长度 | 块数 | 容器总长度 | 说明 |
+| Plaintext length | Blocks | Total container length | Notes |
 |---|---|---|---|
-| 0 | 0 | 128 | 只有头 |
+| 0 | 0 | 128 | Header only |
 | 1 | 1 | 161 | 128 + 4 + 12 + 1 + 16 |
-| 1048576（= chunkSize） | 1 | 1048736 | 满块，`isFinal = 1`，不补空块 |
-| 1048577 | 2 | 1048769 | 第二块 1 字节 |
+| 1048576 (= chunkSize) | 1 | 1048736 | Full block, `isFinal = 1`, no empty block appended |
+| 1048577 | 2 | 1048769 | Second block holds 1 byte |
 
 ---
 
-## 3. `keywrap.nskw` —— 用密码封装空间主密钥
+## 3. `keywrap.nskw` — wrapping the space master key with a password
 
-固定 **100 字节**：40 字节被认证的头，加 60 字节的 AEAD 数据。
+A fixed **100 bytes**: a 40-byte authenticated header plus 60 bytes of AEAD data.
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 8 | magic | ASCII `NOVAKWRP` | 密钥封装标识 |
-| 8 | 1 | version | u8 | v1 写 `1` |
+| 0 | 8 | magic | ASCII `NOVAKWRP` | Key-wrap identifier |
+| 8 | 1 | version | u8 | v1 writes `1` |
 | 9 | 1 | kdfId | u8 | `1` = Argon2id |
-| 10 | 2 | flags | 2 B | 必须全 `0` |
-| 12 | 12 | kdfParams | 12 B | 见 §3.1 |
-| 24 | 16 | salt | 16 B | KDF 盐，随机 |
-| 40 | 12 | nonce | 12 B | 本文件 GCM nonce |
-| 52 | 32 | wrappedVmk | 32 B | 空间主密钥的密文 |
+| 10 | 2 | flags | 2 B | Must be all `0` |
+| 12 | 12 | kdfParams | 12 B | See §3.1 |
+| 24 | 16 | salt | 16 B | KDF salt, random |
+| 40 | 12 | nonce | 12 B | GCM nonce of this file |
+| 52 | 32 | wrappedVmk | 32 B | Ciphertext of the space master key |
 | 84 | 16 | tag | 16 B | GCM tag |
 
-打开方式：
+How to open it:
 
 ```
 kek = Argon2id(password_utf8, salt, m = kdfParams.memoryKiB,
                t = kdfParams.iterations, p = 1, outLen = 32)
 vmk = AES256GCM_decrypt(key = kek, nonce = wrap[40:52],
                         data = wrap[52:100],       # cipher‖tag
-                        aad  = wrap[0:40])         # 整个头
+                        aad  = wrap[0:40])         # the entire header
 ```
 
-- AAD 是整个 40 字节头：改动记录的 KDF 代价、盐或版本号，都会让封装打不开，而不是让下次解锁悄悄换一套派生参数。
-- 密码字节 = **UTF-8 原文**，不做大小写折叠、不做 Unicode 归一化。同一串字符在别的语言里必须按同一编码喂进去。
-- 密码错、头被改、密文被改：一律同一个答案"打不开"。
+- The AAD is the entire 40-byte header: changing the recorded KDF cost, the salt, or the version number leaves the wrapping unable to open, rather than silently switching to a different derivation parameter set on the next unlock.
+- Password bytes = the **raw UTF-8** text, with no case folding and no Unicode normalization. The same string of characters must be fed in under the same encoding in any other language.
+- Wrong password, altered header, altered ciphertext: always the same answer, "will not open".
 
-### 3.1 KDF 参数（12 字节）
+### 3.1 KDF parameters (12 bytes)
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 4 | memoryKiB | u32 | Argon2id 的 m（单位 KiB） |
-| 4 | 4 | iterations | u32 | Argon2id 的 t |
-| 8 | 1 | parallelism | u8 | 必须为 `1` |
-| 9 | 3 | reserved | 3 B | 必须全 `0` |
+| 0 | 4 | memoryKiB | u32 | Argon2id's m (in KiB) |
+| 4 | 4 | iterations | u32 | Argon2id's t |
+| 8 | 1 | parallelism | u8 | Must be `1` |
+| 9 | 3 | reserved | 3 B | Must be all `0` |
 
-夹逼（读者必须在**派生之前**检查，避免被要求一次分配 1 GiB 或少到可猜的代价）：
+Clamping (a reader must check **before deriving**, so that it is never asked to allocate 1 GiB at once or to accept a cost low enough to be guessed):
 
-| 参数 | 下限 | 上限 | 默认（本版本写出） |
+| Parameter | Lower bound | Upper bound | Default (written by this version) |
 |---|---|---|---|
-| memoryKiB | 8192（8 MiB） | 1048576（1 GiB） | 65536（64 MiB） |
+| memoryKiB | 8192 (8 MiB) | 1048576 (1 GiB) | 65536 (64 MiB) |
 | iterations | 1 | 16 | 3 |
 | parallelism | 1 | 1 | 1 |
 
-- 越界即拒绝，不做截断。
-- 代价低于默认值（旧文件或手工文件）**仍然允许打开**——拒绝等于把用户锁在自己的旧文件之外——但调用方应当告知"此文件的保护强度低于当前默认"。
+- Out of range means reject; no truncation is performed.
+- A cost below the default (old files or hand-made files) **is still allowed to open** — rejecting would lock users out of their own old files — but the caller should report "this file's protection strength is below the current default".
 
 ---
 
-## 4. `index.nseal` —— 加密的条目表
+## 4. `index.nseal` — the encrypted item table
 
-这是空间里"有什么"的唯一权威记录。整个表加密存放；磁盘上每个条目的文件只有 `<itemId>.novaseal`，所以**文件名、原始路径、大小在不解锁时不可读**。
+This is the single authoritative record of "what exists" in a space. The entire table is stored encrypted; on disk, each item's file is only `<itemId>.novaseal`, so **file names, original paths, and sizes are unreadable while locked**.
 
 ```
-+-- 25 B clear header --+---------------- 至文件末尾 ----------------+
++-- 25 B clear header --+-------------- to end of file --------------+
 | magic | ver | count | nonce |            cipher ‖ tag              |
 +-----------------------+--------------------------------------------+
 ```
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 8 | magic | ASCII `NSEALIDX` | 索引标识 |
-| 8 | 1 | version | u8 | v1 写 `1` |
-| 9 | 4 | itemCount | u32 | 条目数量。同时进 AAD |
-| 13 | 12 | nonce | 12 B | 本文件 GCM nonce |
-| 25 | rest | body | cipher‖tag | 加密后的 JSON |
+| 0 | 8 | magic | ASCII `NSEALIDX` | Index identifier |
+| 8 | 1 | version | u8 | v1 writes `1` |
+| 9 | 4 | itemCount | u32 | Number of items. Also enters the AAD |
+| 13 | 12 | nonce | 12 B | GCM nonce of this file |
+| 25 | rest | body | cipher‖tag | The encrypted JSON |
 
-- 头总长 25 字节（8+1+4+12）。
-- AAD = 第 8..12 字节，即 `version ‖ itemCount`（5 字节）。这两个值正是攻击者最想改的东西：把条目数改小，一张被删过条目的表就能冒充一张"本来就这么短"的表。
-- 条目数在明文头里是**必要的**：AAD 需要它，而解密之前 JSON 不可读。它的可见性不泄漏额外信息 —— 密文长度本来就界定了条目数。
+- The header is 25 bytes total (8+1+4+12).
+- AAD = bytes 8..12, i.e. `version ‖ itemCount` (5 bytes). These two values are exactly what an attacker most wants to change: shrink the item count and a table whose items were removed can masquerade as a table that was "always that short".
+- The item count is **necessary** in the plaintext header: the AAD needs it, and the JSON is unreadable before decryption. Its visibility leaks nothing extra — the ciphertext length already bounds the number of items.
 
-解密后的明文是 UTF-8 JSON：
+The decrypted plaintext is UTF-8 JSON:
 
 ```json
 {
@@ -239,7 +239,7 @@ vmk = AES256GCM_decrypt(key = kek, nonce = wrap[40:52],
       "kind": "normal",
       "expiryUtc": null,
       "note": null,
-      "contentSha256": "…64 个小写十六进制…",
+      "contentSha256": "…64 lowercase hex digits…",
       "folderEntryCount": null,
       "flags": 0
     }
@@ -247,32 +247,32 @@ vmk = AES256GCM_decrypt(key = kek, nonce = wrap[40:52],
 }
 ```
 
-字段：
+Fields:
 
 | Field | Type | Meaning |
 |---|---|---|
-| observedMaxUtc | i64 | 本空间见过的最大封存时刻。**只升不降**，用于识别时钟回拨 |
-| items | array | 条目列表，顺序即序列化顺序 |
-| id | string | 16 字节的 32 位小写十六进制；也是容器文件名 |
-| displayName | string | 列表里显示的名字，允许在封存时改名 |
-| originalName | string | 封存前磁盘上的名字；取出时按它还原 |
-| sourcePath | string | 来源路径，仅用于显示，绝不用于搬回 |
-| size | u64 | 字节数；文件夹取打包前总大小 |
-| sealedAtUtc | i64 | 封存时刻（epoch 秒） |
-| kind | string | `normal` 或 `capsule` |
-| expiryUtc | i64 或 null | 时间胶囊的生效时刻；`normal` 必须为 null |
-| note | string 或 null | 备注 |
-| contentSha256 | string | 明文 SHA-256，64 位小写十六进制 |
-| folderEntryCount | i32 或 null | 非 null 表示这是文件夹（值是 ZIP 内文件+目录数） |
-| flags | i32 | v1 必须为 0 |
+| observedMaxUtc | i64 | Largest seal time ever seen in this space. **Rises, never falls**; used to detect clock rollback |
+| items | array | Item list; its order is the serialization order |
+| id | string | 32 lowercase hex digits representing 16 bytes; also the container file name |
+| displayName | string | Name shown in the list; may be changed at seal time |
+| originalName | string | The name on disk before sealing; restored from it on extraction |
+| sourcePath | string | Source path, for display only, never used to move anything back |
+| size | u64 | Size in bytes; for a folder, the total size before packing |
+| sealedAtUtc | i64 | Seal time (epoch seconds) |
+| kind | string | `normal` or `capsule` |
+| expiryUtc | i64 or null | Effective time of a time capsule; must be null for `normal` |
+| note | string or null | Note |
+| contentSha256 | string | SHA-256 of the plaintext, 64 lowercase hex digits |
+| folderEntryCount | i32 or null | Non-null means this is a folder (the value is the count of files plus directories inside the ZIP) |
+| flags | i32 | Must be 0 in v1 |
 
-读者必须执行的检查：条目数等于 `items` 长度；`id` 为 32 位十六进制且互不重复；`contentSha256` 为 64 位十六进制；`kind` 只能是两个字面值之一；`capsule` 必须有 `expiryUtc` 且大于 `sealedAtUtc`；`normal` 不得带 `expiryUtc`；`sealedAtUtc` 落在 §2.1 的时间窗内；`flags` 为 0。**出现未知字段即拒绝**（新版本加的字段必须伴随版本号提升，不能被静默丢弃）。
+Checks a reader must perform: the item count equals the length of `items`; every `id` is 32 hex digits and no two repeat; `contentSha256` is 64 hex digits; `kind` is exactly one of the two literals; `capsule` must carry an `expiryUtc` greater than its `sealedAtUtc`; `normal` must not carry an `expiryUtc`; `sealedAtUtc` falls inside the time window of §2.1; `flags` is 0. **Any unknown field is a rejection** (a field added by a later version must come with a version bump and must never be silently dropped).
 
-索引每次变更都整体重写（先写同名 `.tmp`、落盘、再替换），不做增量。
+The index is rewritten in full on every change (write a sibling `.tmp`, flush to disk, then replace); there is no incremental update.
 
 ---
 
-## 5. `.novabundle` v1 —— 一次导出的自包含包
+## 5. `.novabundle` v1 — a self-contained package for a single export
 
 ```
 +-- 64 B header --+-- body (bodyLength) --+-- tail 32 B --+
@@ -283,44 +283,44 @@ body:  keywrap(100) ‖ indexBlock(indexLength) ‖ [backup len+bytes] ‖ item 
 tail:  SHA-256(header ‖ body)
 ```
 
-### 5.1 头（64 字节）
+### 5.1 Header (64 bytes)
 
 | Offset | Size | Field | Encoding | Meaning |
 |---|---|---|---|---|
-| 0 | 8 | magic | ASCII `NVSEALBK` | 包标识 |
-| 8 | 1 | version | u8 | v1 写 `1` |
-| 9 | 1 | kind | u8 | `1` = 仅条目；`2` = 先带一份整库备份块 |
-| 10 | 2 | flags | 2 B | v1 全 `0` |
-| 12 | 16 | bundleId | 16 B | 包标识，随机。参与两处 AAD |
-| 28 | 4 | itemCount | u32 | 条目数 |
-| 32 | 4 | indexLength | u32 | indexBlock 的长度（含 12 字节 nonce） |
-| 36 | 8 | bodyLength | u64 | body 总长度 |
-| 44 | 8 | createdUtc | i64 | 创建时刻，epoch 秒 |
-| 52 | 4 | appVersion | u32 | 写入者的版本码（`major*1000 + minor`），仅供显示 |
-| 56 | 8 | reserved | 8 B | 必须全 `0` |
+| 0 | 8 | magic | ASCII `NVSEALBK` | Bundle identifier |
+| 8 | 1 | version | u8 | v1 writes `1` |
+| 9 | 1 | kind | u8 | `1` = items only; `2` = carries a full-vault backup block first |
+| 10 | 2 | flags | 2 B | All `0` in v1 |
+| 12 | 16 | bundleId | 16 B | Bundle identifier, random. Enters the AAD in two places |
+| 28 | 4 | itemCount | u32 | Number of items |
+| 32 | 4 | indexLength | u32 | Length of indexBlock (including the 12-byte nonce) |
+| 36 | 8 | bodyLength | u64 | Total length of body |
+| 44 | 8 | createdUtc | i64 | Creation time, epoch seconds |
+| 52 | 4 | appVersion | u32 | Version code of the writer (`major*1000 + minor`), for display only |
+| 56 | 8 | reserved | 8 B | Must be all `0` |
 
 ### 5.2 body
 
-1. **keywrap** —— 与 §3 完全相同的 100 字节结构，但 AAD 不同：`wrap[0:40] ‖ kind(1) ‖ bundleId(16)`（57 字节）。没有这一段，一个包里的密钥封装可以被搬到另一个包上仍然打得开，导入也就可能接受别人的索引。
-2. **indexBlock** —— `nonce(12) ‖ cipher ‖ tag`，长度 = `indexLength`。AAD（52 字节）= `bundleId(16) ‖ SHA-256(keywrap 100 字节)(32) ‖ u32le(itemCount)`。也就是说索引被绑在"这个包、这份密钥封装、这个条目数"上，换一处立即失败。明文与 §4 的 JSON 同构。
-3. **可选备份块**（仅 `kind = 2`）—— `u64le len ‖ bytes`。
-4. **条目容器** —— 每个条目一段：`u64le len ‖ 完整 .novaseal 字节`，顺序与索引条目顺序一致。
+1. **keywrap** — the very same 100-byte structure as §3, but with a different AAD: `wrap[0:40] ‖ kind(1) ‖ bundleId(16)` (57 bytes). Without this segment, the key wrap from one bundle could be moved onto another bundle and still open, and an import could therefore accept somebody else's index.
+2. **indexBlock** — `nonce(12) ‖ cipher ‖ tag`, length = `indexLength`. AAD (52 bytes) = `bundleId(16) ‖ SHA-256(keywrap 100 bytes)(32) ‖ u32le(itemCount)`. In other words, the index is bound to "this bundle, this key wrap, this item count"; change any one of them and it fails immediately. The plaintext is isomorphic to the JSON of §4.
+3. **Optional backup block** (`kind = 2` only) — `u64le len ‖ bytes`.
+4. **Item containers** — one segment per item: `u64le len ‖ complete .novaseal bytes`, in the same order as the index items.
 
-> 注意两处索引密文的差别：独立 `index.nseal` 的 AAD 是 `version‖itemCount`；包内 indexBlock 的 AAD 是 `bundleId‖sha256(keywrap)‖itemCount`。同一个条目表在两种容器里密文不可互换，这是有意的。
+> Note the difference between the two index ciphertexts: the standalone `index.nseal` has AAD `version‖itemCount`; the indexBlock inside a bundle has AAD `bundleId‖sha256(keywrap)‖itemCount`. The same item table is not interchangeable between the two containers, and this is intentional.
 
-### 5.3 尾
+### 5.3 Tail
 
-最后 32 字节 = `SHA-256(header ‖ body)`，不覆盖自身。文件总长必须恰好 `64 + bodyLength + 32`。这个哈希只用于**发现拷贝/存储过程中的损坏**，它不防伪：能改字节的人也能重算它。真正的防伪来自各处 GCM 认证。
+The last 32 bytes = `SHA-256(header ‖ body)`, which does not cover itself. The total file length must be exactly `64 + bodyLength + 32`. This hash only serves to **detect corruption during copying or storage**; it is not a forgery defense — whoever can change bytes can also recompute it. Real authenticity comes from the GCM authentication everywhere.
 
 ---
 
-## 6. 冻结向量
+## 6. Frozen vectors
 
-本节把"二十年后还能读"钉成可执行的事实：给定固定输入与固定 nonce 规则，容器的**每一个字节**都是确定的。
+This section pins "still readable twenty years from now" down to an executable fact: given fixed inputs and a fixed nonce rule, **every byte** of the container is determined.
 
-### 6.1 参数
+### 6.1 Parameters
 
-| 名称 | 值 |
+| Name | Value |
 |---|---|
 | itemId | `000102030405060708090a0b0c0d0e0f` |
 | vmk | `a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf` |
@@ -328,19 +328,19 @@ tail:  SHA-256(header ‖ body)
 | keySlotNonce | `101112131415161718191a1b` |
 | sealedAtUtc | 1790000000 |
 | chunkSize | 1048576 |
-| plaintextLength（主样本） | 3145728（3 MiB） |
-| 明文生成 | `b[i] = (i * 31 + 7) mod 256` |
-| 块 nonce 生成 | 12 字节，前 8 字节为 `u64le(块序号)`，后 4 字节为 0 |
+| plaintextLength (primary sample) | 3145728 (3 MiB) |
+| Plaintext generation | `b[i] = (i * 31 + 7) mod 256` |
+| Block nonce generation | 12 bytes: the first 8 bytes are `u64le(block index)`, the last 4 bytes are 0 |
 
-主样本（3 MiB）：容器 SHA-256 `184f6996beb14f497acb15e2a93257655b1e85ab009e8a1f1413afb88b492abd`，明文 SHA-256 `bfe74807c87a64433433238baa29cb800d0e4b5f3b8c96037ab15b620e9633c5`，块数 3，容器总长 3145952。
+Primary sample (3 MiB): container SHA-256 `184f6996beb14f497acb15e2a93257655b1e85ab009e8a1f1413afb88b492abd`, plaintext SHA-256 `bfe74807c87a64433433238baa29cb800d0e4b5f3b8c96037ab15b620e9633c5`, 3 blocks, total container length 3145952.
 
-### 6.2 空容器（0 字节明文，共 128 字节，hex 全量）
+### 6.2 Empty container (0-byte plaintext, 128 bytes in total, full hex)
 
 ```
 4e4f56415345414c01010000000102030405060708090a0b0c0d0e0f0000000000000000803bb16a0000000000001000101112131415161718191a1b5477b7cd1a82737552b0a6da55fe727b2383ce1c3b2a65158142d9f75b1aadf7db2019168becac6eb78d700ca9b438b40000000000000000000000000000000000000000
 ```
 
-同一串按字段切开（偏移见 §2.1、§2.2）：
+The same string split by field (offsets in §2.1 and §2.2):
 
 ```
 4e4f56415345414c                                  0..7    magic "NOVASEAL"
@@ -357,82 +357,82 @@ db2019168becac6eb78d700ca9b438b4                  92..107 slotTag
 00000000000000000000000000000000                  112..127 reserved2
 ```
 
-### 6.3 单字节明文（共 161 字节，hex 全量）
+### 6.3 One-byte plaintext (161 bytes in total, full hex)
 
 ```
 4e4f56415345414c01010000000102030405060708090a0b0c0d0e0f0100000000000000803bb16a0000000000001000101112131415161718191a1b5477b7cd1a82737552b0a6da55fe727b2383ce1c3b2a65158142d9f75b1aadf77ceb50b6fd003ab0806531906a4c763200000000000000000000000000000000000000001d00000000000000000000000000000098b683027f7946a15be60aee747a8a3976
 ```
 
-头的两个字段与空容器不同（`plaintextLength = 1`，且 keySlot 因 AAD 变化而不同），随后是唯一个块：
+Two header fields differ from the empty container (`plaintextLength = 1`, and keySlot differs because the AAD changed), followed by the single block:
 
 ```
-1d000000                                          块长前缀 payloadLen = 29
-000000000000000000000000                          块 nonce（序号 0）
-98                                                1 字节密文
-b683027f7946a15be60aee747a8a3976                  16 字节 tag
+1d000000                                          block length prefix payloadLen = 29
+000000000000000000000000                          block nonce (index 0)
+98                                                1-byte ciphertext
+b683027f7946a15be60aee747a8a3976                  16-byte tag
 ```
 
-两串都可以在任意语言里由 §6.1 的参数重新生成 —— 若做不到，说明实现偏离了本规范。
+Both strings can be regenerated in any language from the parameters in §6.1 — if that is not possible, the implementation has diverged from this specification.
 
-### 6.4 边界向量（头字节）
+### 6.4 Boundary vectors (header bytes)
 
-| 名称 | 明文长度 | 块数 | 容器总长 |
+| Name | Plaintext length | Blocks | Total container length |
 |---|---|---|---|
 | empty | 0 | 0 | 128 |
 | one-byte | 1 | 1 | 161 |
 | exact-chunk | 1048576 | 1 | 1048736 |
 | chunk-plus-one | 1048577 | 2 | 1048769 |
 
-四个边界各自的 128 字节头在仓库的向量清单里以 base64 给出；用本节参数与 §2.3 规则可逐字节重建，包括"零块"这种最小容器。
+The 128-byte header of each of the four boundaries is given in base64 in the repository's vector manifest; with the parameters of this section and the rules of §2.3 it can be rebuilt byte for byte, including the smallest container, the zero-block one.
 
 ---
 
-## 7. 参考实现
+## 7. Reference implementation
 
-`docs/seal_reference_reader.py` 是本文的可执行证据：单文件、只读、不使用 Novara 的任何代码。
+`docs/seal_reference_reader.py` is the executable evidence for this document: a single file, read-only, using none of Novara's code.
 
-- 依赖：Python 3.9+，标准库 `json/os/struct/sys/hashlib/base64`，AES-256-GCM 用 `cryptography`（`pip install cryptography`）。**不依赖** Novara、不依赖 .NET。
-- 能力：解开 `.novaseal`（需要 VMK）、读 `index.nseal`（需要 VMK）、拆 `.novabundle`（验尾哈希，读索引需 VMK）、对照向量自检。
-- 不做：写文件、派生密码密钥。要用密码打开 `keywrap.nskw`，需要 Argon2id（例如 `pip install argon2-cffi`）；本参考实现只验证记录下来的参数，不实现 Argon2id。
+- Dependencies: Python 3.9+, the standard library `json/os/struct/sys/hashlib/base64`, and `cryptography` for AES-256-GCM (`pip install cryptography`). It **does not depend** on Novara, nor on .NET.
+- Capabilities: open `.novaseal` (requires the VMK), read `index.nseal` (requires the VMK), split `.novabundle` (verifies the tail hash; reading the index requires the VMK), and self-check against the vectors.
+- Not done: writing files, deriving password keys. Opening `keywrap.nskw` with a password requires Argon2id (for example `pip install argon2-cffi`); this reference implementation only validates the recorded parameters and does not implement Argon2id.
 
-用法：
+Usage:
 
 ```
-# 跨语言自检：用向量清单里的 VMK 打开冻结容器，重算两个 SHA-256
+# Cross-language self-check: open the frozen container with the manifest VMK, recompute both SHA-256 values
 python docs/seal_reference_reader.py --vector Novara.Tests/Fixtures/seal-container-v1.json \
                                      --container Novara.Tests/Fixtures/seal-container-v1.bin
 
-# 打开任意容器（VMK 用 hex 或 base64）
+# Open an arbitrary container (VMK given as hex or base64)
 python docs/seal_reference_reader.py --container secret.novaseal --vmk a0a1…bebf --out plain.bin
 
-# 读索引
+# Read the index
 python docs/seal_reference_reader.py --index index.nseal --vmk a0a1…bebf
 
-# 拆包（先验尾哈希）
+# Split a bundle (verifying the tail hash first)
 python docs/seal_reference_reader.py --bundle Novara_Vault_20261030.novabundle --vmk a0a1…bebf
 ```
 
-自检模式会打印 `container sha256`、`plaintext sha256`，并与清单记录逐字比对；不一致即以非零状态退出。
+Self-check mode prints `container sha256` and `plaintext sha256` and compares them verbatim with the manifest records; any mismatch exits with a non-zero status.
 
 ---
 
-## 8. 读者规则（必须照做）
+## 8. Reader rules (mandatory)
 
-1. **先验结构，再解密**：任何长度、偏移、保留位、参数边界都在派生密钥与分配缓冲之前检查。
-2. **版本高 ≠ 损坏**：`version` 高于本读者支持的范围时，提示"需要更新的程序"，不要提示"文件损坏"。
-3. **认证失败不细分原因**：密码错、文件被改、参数被改，对外是同一个答案。
-4. **不猜测、不修复、不跳过**：缺块、多块、块序错、末块标记错，全都拒绝。
-5. **不信明文长度以外的元数据**：条目名只从解密后的索引里读，磁盘文件名不是元数据。
-6. **每次取出后重算 SHA-256** 与索引里的 `contentSha256` 比对；不一致即中止。
+1. **Validate the structure first, then decrypt**: every length, offset, reserved bit, and parameter bound is checked before keys are derived and buffers are allocated.
+2. **A higher version ≠ corruption**: when `version` is above what this reader supports, say "a newer program is required", not "the file is corrupted".
+3. **Do not break authentication failures down by cause**: a wrong password, an altered file, and altered parameters are one and the same answer externally.
+4. **Do not guess, do not repair, do not skip**: a missing block, an extra block, a wrong block order, a wrong final-block marker — all are rejected.
+5. **Trust no metadata beyond the plaintext length**: item names are read only from the decrypted index; an on-disk file name is not metadata.
+6. **Recompute the SHA-256 after every extraction** and compare it with `contentSha256` in the index; abort on any mismatch.
 
 ---
 
-## 9. 本格式不隐藏什么（如实说明）
+## 9. What this format does not hide (stated honestly)
 
-- **条目数量**可从 `index.nseal` 的明文头与密文长度推断。
-- **每个条目的大致大小**可从容器长度与块数推断（密文与明文等长）。
-- **封存时刻**在容器头里是明文的（这是特性：二十年后的人需要知道它何时被封存）。
-- 文件系统本身会暴露容器文件的创建/修改时间、总占用空间。
-- **时间胶囊的期限不受本格式强制**。容器里没有任何"到期之前读不出来"的机制：期限只是索引里的一个时刻，由 Novara 自己遵守。任何拿到文件与密码的人，按本文即可读取 —— 这与产品在导出时对用户说的话是同一句实话。
+- The **number of items** can be inferred from the plaintext header of `index.nseal` and from the ciphertext length.
+- The **approximate size of each item** can be inferred from the container length and the block count (ciphertext and plaintext are of equal length).
+- The **seal time** is plaintext in the container header (this is a feature: someone twenty years from now needs to know when it was sealed).
+- The file system itself exposes the creation/modification times of the container files and the total space they occupy.
+- **A time capsule's deadline is not enforced by this format**. There is no mechanism in the container that makes it unreadable before expiry: the deadline is merely a moment in the index, honored by Novara itself. Anyone holding the file and the password can read it by following this document — which is the same honest statement the product makes to users at export time.
 
-除此之外，文件名、原始路径、备注、内容本身，在不知道 VMK 的情况下均不可读。
+Beyond that, file names, original paths, notes, and the content itself are all unreadable without the VMK.

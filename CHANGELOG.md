@@ -6,7 +6,7 @@ All notable changes to Novara are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [novara13] - 2026-11-19
+## [novara13] - 2026-11-20
 
 A release themed "Give what matters to time": **Novara Space**, a separate password-protected place where files and folders can be sealed away, and **time capsules** that open only at a chosen future moment. Around it: a welcome page that shatters into nearly a hundred thousand real-colour grains, an eight-page first-run guide, two new MCP tools, calmer empty states, and a reliability pass across backups, sync, the space and the web reader.
 

@@ -251,7 +251,7 @@ Novara Space 刻意**不对 MCP 暴露**：封存条目完全在 Agent 的可达
 
 完整工具参考与客户端配置见 [`docs/MCP.zh-CN.md`](docs/MCP.zh-CN.md)。
 
-私密空间容器格式已公开，含冻结向量与独立参考实现：[`docs/seal-container-format.md`](docs/seal-container-format.md) 与 [`docs/seal_reference_reader.py`](docs/seal_reference_reader.py)。
+私密空间容器格式已公开，含冻结向量与独立参考实现：[`docs/seal-container-format.zh-CN.md`](docs/seal-container-format.zh-CN.md) 与 [`docs/seal_reference_reader.py`](docs/seal_reference_reader.py)。
 
 ## 五语言界面
 
