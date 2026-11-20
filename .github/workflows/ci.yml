@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -371,7 +371,7 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: sigstore/cosign-installer@v4.1.2
+      - uses: sigstore/cosign-installer@v4.1.3
       - name: Log in to GitHub Container Registry
         env:
           GHCR_TOKEN: ${{ github.token }}
