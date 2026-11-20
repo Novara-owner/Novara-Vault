@@ -107,10 +107,21 @@ jobs:
         shell: pwsh
         run: |
           $tools = Join-Path $env:RUNNER_TEMP 'tools'
-          dotnet tool install dotnet-project-licenses --tool-path $tools --version 2.7.1
+          $tool = Join-Path $tools 'dotnet-project-licenses.exe'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $installed = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            dotnet tool install dotnet-project-licenses --tool-path $tools --version 2.7.1
+            if (Test-Path $tool) { $installed = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $installed) {
+            Write-Error 'dotnet-project-licenses install failed after 3 attempts'
+            exit 1
+          }
           $dir = Join-Path $env:RUNNER_TEMP 'licenses'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          & (Join-Path $tools 'dotnet-project-licenses.exe') -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
+          & $tool -i . -m --outfile THIRD_PARTY_LICENSES.md -t --use-project-assets-json -u -f $dir --log-level Warning
           function Get-LicenseRows([string]$text) {
             ($text -split "`n") |
               Where-Object { $_ -match '^\s*\|' } |
