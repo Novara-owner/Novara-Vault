@@ -51,25 +51,6 @@ GCM 提供**认证加密**：加密文件被篡改会被密码学标签立即发
   <img src="images/Chinese-UnlockPage-v13.png" alt="隐私锁屏" width="420" />
 </p>
 
-## Novara Space 与时间胶囊
-
-Novara 内部一个独立的、密码保护的空间——可选开启、只在本机，并与其余一切都隔开。
-
-- **独立空间，独立密码**——从汉堡菜单进入；它有自己的密码与连续 5 次错误锁定，开启隐私锁后可在锁屏用空间密码直接进入
-- **封存不是复制**——拖入文件或文件夹即移入空间：原件从原位置移走（不经过回收站），以加密容器存放，封存期间不可预览、不可修改
-- **取出要验真**——取出时先写到你选择的位置并完成全文件校验，通过后才移除箱内副本；重名绝不覆盖，文件夹可按文件夹还原或取出为归档
-- **时间胶囊**——把东西封到 1 分钟至 40 年后的任意时刻。胶囊显示「锁定中 / 已期满」，期满项置顶；到期在进入空间时判定，不做后台轮询，时钟回拨会被识别
-- **与其它出口隔离**——空间内容不进入搜索、同步、MCP、快照与回收站，也不受资料库重置与损坏重建影响；需要带走时单独导出受空间密码保护的 `.novabundle`
-
-<p align="center">
-  <img src="images/Chinese-Private%20Space-v13.png" alt="Novara Space" width="720" />
-  <img src="images/Chinese-Time%20Capsule-v13.png" alt="时间胶囊" width="720" />
-</p>
-<p align="center">
-  <img src="images/Chinese-Space%20Settings-v13.png" alt="空间设置" width="420" />
-  <img src="images/Chinese-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space 解锁页" width="420" />
-</p>
-
 ## 备忘管理
 
 存放所有备忘的主页——Novara 的核心中枢。你可以把条目组织进自定义分组，星标或置顶重要条目以便快速访问，并通过右键菜单在分组间移动。
@@ -167,6 +148,25 @@ Novara 持续校验每条已保存路径并给出即时视觉反馈：**绿色�
 <p align="center">
   <img src="images/HtmlEditor-v13.png" alt="富文本 HTML 编辑器" width="420" />
   <img src="images/Markdown Editor - Split Preview Mode-v13.png" alt="Markdown 编辑器分屏预览" width="420" />
+</p>
+
+## Novara Space 与时间胶囊
+
+Novara 内部一个独立的、密码保护的空间——可选开启、只在本机，并与其余一切都隔开。
+
+- **独立空间，独立密码**——从汉堡菜单进入；它有自己的密码与连续 5 次错误锁定，开启隐私锁后可在锁屏用空间密码直接进入
+- **封存不是复制**——拖入文件或文件夹即移入空间：原件从原位置移走（不经过回收站），以加密容器存放，封存期间不可预览、不可修改
+- **取出要验真**——取出时先写到你选择的位置并完成全文件校验，通过后才移除箱内副本；重名绝不覆盖，文件夹可按文件夹还原或取出为归档
+- **时间胶囊**——把东西封到 1 分钟至 40 年后的任意时刻。胶囊显示「锁定中 / 已期满」，期满项置顶；到期在进入空间时判定，不做后台轮询，时钟回拨会被识别
+- **与其它出口隔离**——空间内容不进入搜索、同步、MCP、快照与回收站，也不受资料库重置与损坏重建影响；需要带走时单独导出受空间密码保护的 `.novabundle`
+
+<p align="center">
+  <img src="images/Chinese-Private%20Space-v13.png" alt="Novara Space" width="720" />
+  <img src="images/Chinese-Time%20Capsule-v13.png" alt="时间胶囊" width="720" />
+</p>
+<p align="center">
+  <img src="images/Chinese-Space%20Settings-v13.png" alt="空间设置" width="420" />
+  <img src="images/Chinese-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space 解锁页" width="420" />
 </p>
 
 ## Novara Snapshot

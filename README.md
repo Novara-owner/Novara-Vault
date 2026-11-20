@@ -51,25 +51,6 @@ Security is reinforced by a **30-minute lockout after 5 consecutive failed attem
   <img src="images/English-UnlockPage-v13.png" alt="Privacy lock screen" width="420" />
 </p>
 
-## Novara Space & Time Capsules
-
-A separate, password-protected place inside Novara — opt-in, local-only, and sealed off from everything else.
-
-- **A separate space, a separate password** — open it from the hamburger menu. It has its own password, its own five-attempt lockout, and can be entered directly from the lock screen with the space password when the privacy lock is on
-- **Seal, don't copy** — dropping a file or folder moves it into the space: the original leaves its location (not through the recycle bin) and is stored as an encrypted container that can never be previewed or edited while sealed
-- **Take it back, verified** — taking something out writes it to the location you choose, verifies the whole file, and only then removes the sealed copy; name conflicts never overwrite, and folders return as folders or as an archive
-- **Time capsules** — seal something until a chosen future moment, from one minute to forty years. Capsules show “locked” or “expired”, expired ones rise to the top, and expiry is evaluated on entry rather than by background polling; clock rollbacks are detected
-- **Sealed from everything else** — Space content is not searched, not synced, not exposed to MCP, not included in snapshots or the recycle bin, and survives library reset and corruption rebuild. Export it deliberately as a standalone `.novabundle`, protected by the space password
-
-<p align="center">
-  <img src="images/English-Private%20Space-v13.png" alt="Novara Space" width="720" />
-  <img src="images/English-Time%20Capsule-v13.png" alt="Time capsules" width="720" />
-</p>
-<p align="center">
-  <img src="images/English-Space%20Settings-v13.png" alt="Space settings" width="420" />
-  <img src="images/English-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space unlock page" width="420" />
-</p>
-
 ## Memo Manager
 
 The home page where all your memos live — the central hub of Novara. Organize entries into custom groups, star or pin important ones for instant access, and move entries between groups via the context menu.
@@ -167,6 +148,25 @@ A filter bar (mixed / diary / documents) and per-card format badges keep everyth
 <p align="center">
   <img src="images/HtmlEditor-v13.png" alt="Rich text HTML editor" width="420" />
   <img src="images/Markdown Editor - Split Preview Mode-v13.png" alt="Markdown editor split preview" width="420" />
+</p>
+
+## Novara Space & Time Capsules
+
+A separate, password-protected place inside Novara — opt-in, local-only, and sealed off from everything else.
+
+- **A separate space, a separate password** — open it from the hamburger menu. It has its own password, its own five-attempt lockout, and can be entered directly from the lock screen with the space password when the privacy lock is on
+- **Seal, don't copy** — dropping a file or folder moves it into the space: the original leaves its location (not through the recycle bin) and is stored as an encrypted container that can never be previewed or edited while sealed
+- **Take it back, verified** — taking something out writes it to the location you choose, verifies the whole file, and only then removes the sealed copy; name conflicts never overwrite, and folders return as folders or as an archive
+- **Time capsules** — seal something until a chosen future moment, from one minute to forty years. Capsules show “locked” or “expired”, expired ones rise to the top, and expiry is evaluated on entry rather than by background polling; clock rollbacks are detected
+- **Sealed from everything else** — Space content is not searched, not synced, not exposed to MCP, not included in snapshots or the recycle bin, and survives library reset and corruption rebuild. Export it deliberately as a standalone `.novabundle`, protected by the space password
+
+<p align="center">
+  <img src="images/English-Private%20Space-v13.png" alt="Novara Space" width="720" />
+  <img src="images/English-Time%20Capsule-v13.png" alt="Time capsules" width="720" />
+</p>
+<p align="center">
+  <img src="images/English-Space%20Settings-v13.png" alt="Space settings" width="420" />
+  <img src="images/English-Novara%20Space%20Unlock%20Page-v13.png" alt="Novara Space unlock page" width="420" />
 </p>
 
 ## Novara Snapshot
